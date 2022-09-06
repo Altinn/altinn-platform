@@ -10,5 +10,5 @@ Microservices hosted in [Altinn Platform](https://docs.altinn.studio/technology/
  - [Receipt](https://github.com/Altinn/altinn-receipt)
  - [Register](https://github.com/Altinn/altinn-register)
  - [Storage](https://github.com/Altinn/altinn-storage)
- - [Storage](https://github.com/Altinn/altinn-notifications)
+ - [Notifications](https://github.com/Altinn/altinn-notifications)
  
