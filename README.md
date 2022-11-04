@@ -1,14 +1,14 @@
 # Altinn Platform
 
-Microservices hosted in [Altinn Platform](https://docs.altinn.studio/technology/solutions/altinn-platform/):
+This repository is for the Platfrom Team to organize cross application issues and issues not easily placed on specific application.
 
- - [Authentication](https://github.com/Altinn/altinn-authentication)
- - [Authorization](https://github.com/Altinn/altinn-authorization)
  - [Events](https://github.com/Altinn/altinn-events)
+ - [Notifications](https://github.com/Altinn/altinn-notifications)
  - [PDF](https://github.com/Altinn/altinn-pdf)
  - [Profile](https://github.com/Altinn/altinn-profile)
  - [Receipt](https://github.com/Altinn/altinn-receipt)
  - [Register](https://github.com/Altinn/altinn-register)
  - [Storage](https://github.com/Altinn/altinn-storage)
- - [Notifications](https://github.com/Altinn/altinn-notifications)
+ 
+ The Team is also responsible for the operation of application owner infrastructure and Platform infrastructure. 
  
