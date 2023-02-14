@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Altinn.Platform.Models.Tests</name>
+    </assembly>
+    <members>
+        <member name="T:Altinn.Platform.Models.Tests.ModelValidator">
+            <summary>
+            Helper methods for model validation.
+            </summary>
+        </member>
+        <member name="M:Altinn.Platform.Models.Tests.ModelValidator.ValidateModel(System.Object)">
+            <summary>
+            Perform validation of an instance of a model.
+            </summary>
+            <param name="model">The model to validate.</param>
+            <returns>A list of identified issues.</returns>
+        </member>
+    </members>
+</doc>

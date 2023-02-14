@@ -1,0 +1,12 @@
+C:\Repos\temp\altinn-studio\Altinn.Platform.Models\Models\obj\Debug\netstandard2.1\Altinn.Platform.Models.csproj.AssemblyReference.cache
+C:\Repos\temp\altinn-studio\Altinn.Platform.Models\Models\obj\Debug\netstandard2.1\Altinn.Platform.Models.GeneratedMSBuildEditorConfig.editorconfig
+C:\Repos\temp\altinn-studio\Altinn.Platform.Models\Models\obj\Debug\netstandard2.1\Altinn.Platform.Models.AssemblyInfoInputs.cache
+C:\Repos\temp\altinn-studio\Altinn.Platform.Models\Models\obj\Debug\netstandard2.1\Altinn.Platform.Models.AssemblyInfo.cs
+C:\Repos\temp\altinn-studio\Altinn.Platform.Models\Models\obj\Debug\netstandard2.1\Altinn.Platform.Models.csproj.CoreCompileInputs.cache
+C:\Repos\temp\altinn-studio\Altinn.Platform.Models\Models\obj\Debug\netstandard2.1\Altinn.Platform.Models.dll
+C:\Repos\temp\altinn-studio\Altinn.Platform.Models\Models\obj\Debug\netstandard2.1\Altinn.Platform.Models.xml
+C:\Repos\temp\altinn-studio\Altinn.Platform.Models\Models\obj\Debug\netstandard2.1\Altinn.Platform.Models.pdb
+C:\Repos\temp\altinn-studio\Altinn.Platform.Models\Models\bin\Debug\netstandard2.1\Altinn.Platform.Models.deps.json
+C:\Repos\temp\altinn-studio\Altinn.Platform.Models\Models\bin\Debug\netstandard2.1\Altinn.Platform.Models.dll
+C:\Repos\temp\altinn-studio\Altinn.Platform.Models\Models\bin\Debug\netstandard2.1\Altinn.Platform.Models.pdb
+C:\Repos\temp\altinn-studio\Altinn.Platform.Models\Models\bin\Debug\netstandard2.1\Altinn.Platform.Models.xml

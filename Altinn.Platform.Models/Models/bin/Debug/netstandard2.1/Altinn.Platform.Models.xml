@@ -1,0 +1,427 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Altinn.Platform.Models</name>
+    </assembly>
+    <members>
+        <member name="T:Authorization.Platform.Authorization.Models.Role">
+            <summary>
+            Entity representing a Role
+            </summary>
+        </member>
+        <member name="P:Authorization.Platform.Authorization.Models.Role.Type">
+            <summary>
+            Gets or sets the role type
+            </summary>
+        </member>
+        <member name="P:Authorization.Platform.Authorization.Models.Role.Value">
+            <summary>
+            Gets or sets the role
+            </summary>
+        </member>
+        <member name="T:Altinn.Platform.Profile.Enums.UserType">
+            <summary>
+            Enumeration for the available user types
+            </summary>
+        </member>
+        <member name="F:Altinn.Platform.Profile.Enums.UserType.None">
+            <summary>
+            User type has not been specified
+            </summary>
+        </member>
+        <member name="F:Altinn.Platform.Profile.Enums.UserType.SSNIdentified">
+            <summary>
+            User Type is SSN Identified User.
+            </summary>
+        </member>
+        <member name="F:Altinn.Platform.Profile.Enums.UserType.SelfIdentified">
+            <summary>
+            User Type is Self Identified User.
+            </summary>
+        </member>
+        <member name="F:Altinn.Platform.Profile.Enums.UserType.EnterpriseIdentified">
+            <summary>
+            User Type is EnterpriseIdentified Identified User.
+            </summary>
+        </member>
+        <member name="F:Altinn.Platform.Profile.Enums.UserType.AgencyUser">
+            <summary>
+            User Type is Agency User
+            </summary>
+        </member>
+        <member name="F:Altinn.Platform.Profile.Enums.UserType.PSAN">
+            <summary>
+            User Type is PSAN User
+            </summary>
+        </member>
+        <member name="F:Altinn.Platform.Profile.Enums.UserType.PSA">
+            <summary>
+            User Type is PSA User
+            </summary>
+        </member>
+        <member name="T:Altinn.Platform.Profile.Models.ProfileSettingPreference">
+            <summary>
+            Class describing a users profile setting preferences.
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Profile.Models.ProfileSettingPreference.LanguageType">
+            <summary>
+            Sets the user's language preference in Altinn.
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Profile.Models.ProfileSettingPreference.Language">
+            <summary>
+            Gets or sets the user's language preference in Altinn.
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Profile.Models.ProfileSettingPreference.PreSelectedPartyId">
+            <summary>
+            Gets or sets the user's preselected party.
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Profile.Models.ProfileSettingPreference.DoNotPromptForParty">
+            <summary>
+            Gets or sets a value indicating whether the users want
+            to be asked for the party on every form submission.
+            </summary>
+        </member>
+        <member name="T:Altinn.Platform.Profile.Models.UserProfile">
+            <summary>
+            Class describing a user profile
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Profile.Models.UserProfile.UserId">
+            <summary>
+            Gets or sets the ID of the user
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Profile.Models.UserProfile.UserName">
+            <summary>
+            Gets or sets the username
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Profile.Models.UserProfile.ExternalIdentity">
+            <summary>
+            Gets or sets ExternalIdentity
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Profile.Models.UserProfile.PhoneNumber">
+            <summary>
+            Gets or sets the phone number
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Profile.Models.UserProfile.Email">
+            <summary>
+            Gets or sets the email address
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Profile.Models.UserProfile.PartyId">
+            <summary>
+            Gets or sets the party ID
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Profile.Models.UserProfile.Party">
+            <summary>
+            Gets or sets the <see cref="P:Altinn.Platform.Profile.Models.UserProfile.Party"/>
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Profile.Models.UserProfile.UserType">
+            <summary>
+            Gets or sets the <see cref="P:Altinn.Platform.Profile.Models.UserProfile.UserType"/>
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Profile.Models.UserProfile.ProfileSettingPreference">
+            <summary>
+            Gets or sets the <see cref="P:Altinn.Platform.Profile.Models.UserProfile.ProfileSettingPreference"/>
+            </summary>
+        </member>
+        <member name="T:Altinn.Platform.Register.Enums.PartyType">
+            <summary>
+            Enum containing values for the different types of parties
+            </summary>
+        </member>
+        <member name="F:Altinn.Platform.Register.Enums.PartyType.Person">
+            <summary>
+            Party Type is Person
+            </summary>
+        </member>
+        <member name="F:Altinn.Platform.Register.Enums.PartyType.Organisation">
+            <summary>
+            Party Type is Organization
+            </summary>
+        </member>
+        <member name="F:Altinn.Platform.Register.Enums.PartyType.SelfIdentified">
+            <summary>
+            Party Type is Self Identified user
+            </summary>
+        </member>
+        <member name="F:Altinn.Platform.Register.Enums.PartyType.SubUnit">
+            <summary>
+            Party Type is sub unit
+            </summary>
+        </member>
+        <member name="F:Altinn.Platform.Register.Enums.PartyType.BankruptcyEstate">
+            <summary>
+            Party Type is bankruptcy estate
+            </summary>
+        </member>
+        <member name="T:Altinn.Platform.Register.Models.Organization">
+            <summary>
+            Class representing an organization
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Organization.OrgNumber">
+            <summary>
+            Gets or sets the organization number
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Organization.Name">
+            <summary>
+            Gets or sets the name of the organization
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Organization.UnitType">
+            <summary>
+            Gets or sets the unit type
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Organization.TelephoneNumber">
+            <summary>
+            Gets or sets the telephone number
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Organization.MobileNumber">
+            <summary>
+            Gets or sets the mobile number
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Organization.FaxNumber">
+            <summary>
+            Gets or sets the fax number
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Organization.EMailAddress">
+            <summary>
+            Gets or sets the eMail address
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Organization.InternetAddress">
+            <summary>
+            Gets or sets the internet address
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Organization.MailingAddress">
+            <summary>
+            Gets or sets the mailing address
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Organization.MailingPostalCode">
+            <summary>
+            Gets or sets the mailing postal code 
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Organization.MailingPostalCity">
+            <summary>
+            Gets or sets the mailing postal city 
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Organization.BusinessAddress">
+            <summary>
+            Gets or sets the business address
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Organization.BusinessPostalCode">
+            <summary>
+            Gets or sets the postal code business
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Organization.BusinessPostalCity">
+            <summary>
+            Gets or sets the postal city business
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Organization.UnitStatus">
+            <summary>
+            Gets or sets the unit status
+            </summary>
+        </member>
+        <member name="T:Altinn.Platform.Register.Models.Party">
+            <summary>
+            Class representing a party
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Party.PartyId">
+            <summary>
+            Gets or sets the ID of the party
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Party.PartyTypeName">
+            <summary>
+            Gets or sets the type of party
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Party.OrgNumber">
+            <summary>
+            Gets the parties org number
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Party.SSN">
+            <summary>
+            Gets the parties ssn
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Party.UnitType">
+            <summary>
+            Gets or sets the UnitType
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Party.Name">
+            <summary>
+            Gets or sets the Name
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Party.IsDeleted">
+            <summary>
+            Gets or sets the IsDeleted
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Party.OnlyHierarchyElementWithNoAccess">
+            <summary>
+            Gets or sets a value indicating whether if the reportee in the list is only there for showing the hierarchy (a parent unit with no access)
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Party.Person">
+            <summary>
+            Gets or sets the person details for this party (will only be set if the party type is Person)
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Party.Organization">
+            <summary>
+            Gets or sets the organization details for this party (will only be set if the party type is Organization)
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Party.ChildParties">
+            <summary>
+            Gets or sets the value of ChildParties
+            </summary>
+        </member>
+        <member name="T:Altinn.Platform.Register.Models.PartyLookup">
+            <summary>
+            Represents a lookup criteria when looking for a Party. Only one of the properties can be used at a time.
+            If none or more than one property have a value the lookup operation will respond with bad request.
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.PartyLookup.Ssn">
+            <summary>
+            Gets or sets the social security number of the party to look for.
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.PartyLookup.OrgNo">
+            <summary>
+            Gets or sets the organization number of the party to look for.
+            </summary>
+        </member>
+        <member name="M:Altinn.Platform.Register.Models.PartyLookup.Validate(System.ComponentModel.DataAnnotations.ValidationContext)">
+            <summary>
+            Determines if this instance of the model is valid.
+            </summary>
+            <param name="validationContext">The current context of the validation check</param>
+            <returns>A list of validation results.</returns>
+        </member>
+        <member name="T:Altinn.Platform.Register.Models.Person">
+            <summary>
+            Class representing a person
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Person.SSN">
+            <summary>
+            Gets or sets the social security number
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Person.Name">
+            <summary>
+            Gets a persons name
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Person.FirstName">
+            <summary>
+            Gets or sets the first name
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Person.MiddleName">
+            <summary>
+            Gets or sets the middle name
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Person.LastName">
+            <summary>
+            Gets or sets the last name
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Person.TelephoneNumber">
+            <summary>
+            Gets a persons telephone number
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Person.MobileNumber">
+            <summary>
+            Gets a persons mobile number
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Person.MailingAddress">
+            <summary>
+            Gets a persons mailing address
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Person.MailingPostalCode">
+            <summary>
+            Gets a persons mailing postal code
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Person.MailingPostalCity">
+            <summary>
+            Gets a persons mailing postal city
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Person.AddressMunicipalNumber">
+            <summary>
+            Gets a persons address municipal number
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Person.AddressMunicipalName">
+            <summary>
+            Gets a persons address municipal name
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Person.AddressStreetName">
+            <summary>
+            Gets a persons address street name
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Person.AddressHouseNumber">
+            <summary>
+            Gets a persons address house number
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Person.AddressHouseLetter">
+            <summary>
+            Gets a persons address house letter
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Person.AddressPostalCode">
+            <summary>
+            Gets a persons address postal code
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Person.AddressCity">
+            <summary>
+            Gets a persons address city
+            </summary>
+        </member>
+        <member name="P:Altinn.Platform.Register.Models.Person.DateOfDeath">
+            <summary>
+            Gets a persons date of death. Null if not dead.
+            </summary>
+        </member>
+    </members>
+</doc>
