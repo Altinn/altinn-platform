@@ -1,6 +1,6 @@
 # Altinn Platform
 
-This repository is for the Platfrom Team to organize cross application issues and issues not easily placed on specific application.
+This repository is for the Platform Team to organize cross application issues and issues not easily placed on specific application.
 
  - [Events](https://github.com/Altinn/altinn-events)
  - [Notifications](https://github.com/Altinn/altinn-notifications)
@@ -9,6 +9,6 @@ This repository is for the Platfrom Team to organize cross application issues an
  - [Receipt](https://github.com/Altinn/altinn-receipt)
  - [Register](https://github.com/Altinn/altinn-register)
  - [Storage](https://github.com/Altinn/altinn-storage)
- 
- The Team is also responsible for the operation of application owner infrastructure and Platform infrastructure. 
- 
+
+ The Team is also responsible for the operation of application owner infrastructure and Platform infrastructure.
+
