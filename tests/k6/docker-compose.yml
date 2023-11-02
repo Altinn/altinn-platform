@@ -1,0 +1,14 @@
+version: '3'
+
+networks:
+  k6:
+
+services:
+  k6:
+    image: grafana/k6:0.47.0
+    networks:
+      - k6
+    ports:
+      - "6565:6565"
+    volumes:
+      - ./src:/src

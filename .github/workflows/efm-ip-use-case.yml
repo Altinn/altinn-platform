@@ -1,0 +1,38 @@
+name: Use case - TT02
+
+on:
+  workflow_dispatch:
+  schedule:
+  - cron: '*/15 * * * *'
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [TT02, PROD]
+    environment: ${{ matrix.environment }}
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Run availability and failed shipment check
+      run:  |
+              cd test/k6
+              docker-compose run k6 run /src/tests/eformidling.js -e env=${{ vars.ENV }} -e apimSubscriptionKey=${{ secrets.APIM_SUBSKEY }}
+    - name: Build failure report
+      if: failure()
+      run: |
+          report=":warning: eFormidling integration point - Failed checks identified in ${{ vars.ENV }} :warning: \n"
+          report+="\n Workflow available here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "stepreport="$report >> $GITHUB_ENV
+    - name: Report failure to Slack
+      if: failure()
+      id: slack
+      uses: slackapi/slack-github-action@v1.24.0
+      with:
+        payload: |
+            {
+              "text": "${{ env.stepreport }}"
+            }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_PROD }}
