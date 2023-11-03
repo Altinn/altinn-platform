@@ -18,7 +18,7 @@ jobs:
     - name: Run availability and failed shipment check
       run:  |
               cd test/k6
-              docker-compose run k6 run /src/tests/eformidling.js -e env=${{ vars.ENV }} -e apimSubscriptionKey=${{ secrets.APIM_SUBSKEY }}
+              docker compose run k6 run /src/tests/eformidling.js -e env=${{ vars.ENV }} -e apimSubscriptionKey=${{ secrets.APIM_SUBSKEY }}
     - name: Build failure report
       if: failure()
       run: |
