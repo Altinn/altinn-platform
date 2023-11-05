@@ -1,4 +1,4 @@
-name: Use case - TT02
+name: Use case - TT02 & PROD
 
 on:
   workflow_dispatch:
