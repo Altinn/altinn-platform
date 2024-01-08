@@ -18,7 +18,7 @@ namespace Altinn.Platform.Register.Models
         /// <summary>
         /// Gets or sets the UUID of the party
         /// </summary>
-        public Guid? PartyUUID { get; set; }
+        public Guid? PartyUuid { get; set; }
 
         /// <summary>
         /// Gets or sets the type of party

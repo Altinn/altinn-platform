@@ -17,7 +17,7 @@ namespace Altinn.Platform.Profile.Models
         /// <summary>
         /// Gets or sets the UUID of the user
         /// </summary>
-        public Guid? UserUUID { get; set; }
+        public Guid? UserUuid { get; set; }
 
         /// <summary>
         /// Gets or sets the username
