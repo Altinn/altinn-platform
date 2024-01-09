@@ -1,3 +1,4 @@
+using System;
 using Altinn.Platform.Profile.Enums;
 using Altinn.Platform.Register.Models;
 
@@ -12,6 +13,11 @@ namespace Altinn.Platform.Profile.Models
         /// Gets or sets the ID of the user
         /// </summary>
         public int UserId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the UUID of the user
+        /// </summary>
+        public Guid? UserUuid { get; set; }
 
         /// <summary>
         /// Gets or sets the username

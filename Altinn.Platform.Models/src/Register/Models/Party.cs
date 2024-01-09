@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 using Altinn.Platform.Register.Enums;
@@ -13,6 +14,11 @@ namespace Altinn.Platform.Register.Models
         /// Gets or sets the ID of the party
         /// </summary>
         public int PartyId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the UUID of the party
+        /// </summary>
+        public Guid? PartyUuid { get; set; }
 
         /// <summary>
         /// Gets or sets the type of party
