@@ -47,7 +47,7 @@ function TC02_GetLevetidUtloptInstances() {
   }
 
   success = check(JSON.parse(response.body), {
-    "GET levetid utløpt instances. No elements in list": (object) =>
+    "GET levetid utløpt instances. No failed shipments": (object) =>
     object.totalElements === 0
   });
   addErrorCount(success);
