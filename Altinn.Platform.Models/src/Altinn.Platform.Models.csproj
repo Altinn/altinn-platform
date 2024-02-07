@@ -3,8 +3,8 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
     <OutputType>Library</OutputType>
-    <AssemblyVersion>1.3.0.0</AssemblyVersion>
-    <FileVersion>1.3.0.0</FileVersion>
+    <AssemblyVersion>1.4.0.0</AssemblyVersion>
+    <FileVersion>1.4.0.0</FileVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!-- SonarCloud needs this -->
     <ProjectGuid>{B72A146D-719D-4E2A-B931-C2ACBA72EF4F}</ProjectGuid>
@@ -13,7 +13,7 @@
   <PropertyGroup>
     <!-- NuGet package properties -->
     <PackageId>Altinn.Platform.Models</PackageId>
-    <PackageVersion>1.3.0</PackageVersion>
+    <PackageVersion>1.4.0</PackageVersion>
     <PackageTags>Altinn;Studio;Platform;Models;Register;Profile;Authorization</PackageTags>
     <Description>
       Altinn.Platform.Models is a package for models used by platform register and profile.
