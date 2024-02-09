@@ -21,7 +21,7 @@
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/Altinn/altinn-studio</RepositoryUrl>
     <IsPackable>true</IsPackable>
-	  <MinVerTagPrefix>Altinn.Platform.Models-</MinVerTagPrefix>
+    <MinVerTagPrefix>Altinn.Platform.Models-</MinVerTagPrefix>
   </PropertyGroup>
 
   <ItemGroup>
