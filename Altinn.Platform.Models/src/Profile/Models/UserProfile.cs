@@ -1,4 +1,5 @@
 using System;
+
 using Altinn.Platform.Profile.Enums;
 using Altinn.Platform.Register.Models;
 
@@ -28,6 +29,11 @@ namespace Altinn.Platform.Profile.Models
         /// Gets or sets ExternalIdentity
         /// </summary>
         public string ExternalIdentity { get; set; }
+
+        /// <summary>
+        /// Gets or sets a boolean indicating whether the user has reserved themselves from electronic communication
+        /// </summary>
+        public bool IsReserved { get; set; }
 
         /// <summary>
         /// Gets or sets the phone number
