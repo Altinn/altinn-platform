@@ -36,8 +36,9 @@ export function GetLevetidUtloptLast20() {
 export function GetAvailability() {
   if (!apimSubscriptionKey) {
     stopIterationOnFail(
-    -re 
-        );
+      "Required environment variable APIM subscription key (apimSubscriptionKey) was not provided",
+      false
+    );
   }
 
   var endpoint =
