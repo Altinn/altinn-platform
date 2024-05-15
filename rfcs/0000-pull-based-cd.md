@@ -1,6 +1,6 @@
 - Feature Name: pull_based_cd
 - Start Date: 2024-05-15
-- RFC PR: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/pull/0000)
+- RFC PR: [altinn/altinn-platform#782](https://github.com/altinn/altinn-platform/pull/782)
 - Github Issue: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/issues/0000)
 - Product/Category: CI/CD
 - State: **REVIEW**
