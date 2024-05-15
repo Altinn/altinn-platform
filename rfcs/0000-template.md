@@ -18,7 +18,7 @@ Why are we doing this? What use cases does it support? What is the expected outc
 # Guide-level explanation
 [guide-level-explanation]: #guide-level-explanation
 
-Explain the proposal as if it was already included in the language and you were teaching it to another member of the team. That generally means:
+Explain the proposal as if it was already included in the platform and you were teaching it to another member of the team. That generally means:
 
 - Introducing new named concepts.
 - Explaining the feature largely in terms of examples.
