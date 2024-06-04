@@ -16,11 +16,10 @@ The proposed RFC introduces a new pull-based continuous deployment/delivery (CD)
 The main motivation for this change is to reduce complexity regarding CD purposes. 
 - The way it works currently adds extra time since the pipelines and processes have to be manually triggered and followed through.
 - Whenever a pipeline fails, for any reason, this has to be re-run manually.
--
 The second biggest motivation is leaning towards the concept of self-reconciliation and aiming for fast recovery
 - Since there is a SSOT the cluster itself will trigger the reconciliation, hence removing the need for a person taking care of a pipeline running.
 - In the case of re-creating the cluster, the desired state is pulled and reconciliated, eliminating the whole complexity of checking and triggering manually a pipeline per service.
-- There is a clear an plain desired state which can be always compared to the actual state running in the cluster/platform.
+- There is a clear and plain desired state which can be always compared to the actual state running in the cluster/platform.
 
 This supports several uses cases such as:
 - A clear CD of a service among different environments
@@ -264,7 +263,7 @@ In particular, basing a solution on managed Flux gives us the opportunity to esc
 Other projects in the area that were considered (ArgoCD being the other main alternative here) did not have a managed version that we could use in Azure,
 which ultimately decided to favor on Flux. Both tools have a rich API and can be extended if desired.
 
-By not doing this we expect to keep spending precious time on toil an manual tasks that keep us away from using that time on building products for the platform.
+By not doing this we expect to keep spending precious time on toil and manual tasks that keep us away from using that time on building products for the platform.
 # Prior art
 [prior-art]: #prior-art
 
