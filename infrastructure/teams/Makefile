@@ -5,7 +5,7 @@ ADMIN_GITHUB_REPOSITORY=altinn-platform
 VARIABLES=variables.tfvars
 
 TF=terraform
-TF_BACKEND_FLAGS=-backend-config="storage_account_name=$(ARM_STORAGE_ACCOUNT)" -backend-config="container_name=$(ARM_STORAGE_CONTAINER)" -backend-config="key=github.com/$(ADMIN_GITHUB_OWNER)/$(ADMIN_GITHUB_REPOSITORY)"
+TF_BACKEND_FLAGS=-backend-config="storage_account_name=$(ARM_STORAGE_ACCOUNT)" -backend-config="container_name=$(ARM_STORAGE_CONTAINER)" -backend-config="key=github.com/$(ADMIN_GITHUB_OWNER)/$(ADMIN_GITHUB_REPOSITORY)/environment/prod/teams.tfstate"
 TF_VARIABLES_FLAGS=-var-file=$(VARIABLES)
 
 tf_migrate:
@@ -16,3 +16,6 @@ tf_plan:
 
 tf_apply:
 	$(TF) apply $(TF_VARIABLES_FLAGS)
+
+tf_destroy:
+	$(TF) destroy $(TF_VARIABLES_FLAGS)
