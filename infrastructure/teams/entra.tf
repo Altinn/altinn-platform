@@ -3,7 +3,7 @@
 #
 
 resource "azuread_application" "administrator" {
-  display_name            = "GitHub: ${lower(local.configuration.github.owner)}/${lower(local.configuration.admin.repository)} - Admin"
+  display_name            = "GitHub: ${lower(local.configuration.admin.github.owner)}/${lower(local.configuration.admin.github.repository)} - Admin"
   prevent_duplicate_names = true
 }
 
@@ -12,9 +12,10 @@ resource "azuread_service_principal" "administrator" {
 }
 
 resource "azuread_application" "team" {
-  display_name            = "GitHub: ${lower(local.configuration.github.owner)}/${each.value.repository} - ${title(each.value.environment.name)}"
+  display_name            = "GitHub: ${lower(local.configuration.admin.github.owner)}/${each.value.repository} - ${title(each.value.environment.name)}"
   prevent_duplicate_names = true
-  for_each                = local.app_reggs
+
+  for_each = local.app_reggs
 }
 
 resource "azuread_service_principal" "team" {
@@ -43,6 +44,19 @@ resource "azuread_group" "admins" {
   for_each = local.teams
 }
 
+resource "azuread_group" "full_admins" {
+  display_name     = "Terraform Admins"
+  security_enabled = true
+}
+
+resource "azuread_group_member" "full_admins" {
+  group_object_id  = azuread_group.full_admins.object_id
+  member_object_id = data.azuread_client_config.current.object_id
+  lifecycle {
+    replace_triggered_by = []
+  }
+}
+
 resource "azuread_group_member" "admin_contributor" {
   group_object_id  = azuread_group.developers[each.key].id
   member_object_id = azuread_group.admins[each.key].object_id
@@ -57,23 +71,22 @@ resource "azuread_group_member" "contributor_reader" {
 
 resource "azuread_application_federated_identity_credential" "oidc_environments" {
   application_id = azuread_application.team[each.value.app_reggs_slug].id
-  display_name   = "github.${lower(local.configuration.github.owner)}.${each.value.repository_name}.environment.${each.value.environment_name}"
-  subject        = "repo:${lower(local.configuration.github.owner)}/${each.value.repository_name}:environment:${each.value.environment_name}"
+  display_name   = "github.${lower(local.configuration.admin.github.owner)}.${each.value.repository_name}.environment.${each.value.environment_name}"
+  subject        = "repo:${lower(local.configuration.admin.github.owner)}/${each.value.repository_name}:environment:${each.value.environment_name}"
   audiences      = ["api://AzureADTokenExchange"]
   issuer         = "https://token.actions.githubusercontent.com"
-  description    = "Allow GitHub actions run within the context of environment '${each.value.environment_name}' from the repository https://github.com/${local.configuration.github.owner}/${each.value.repository_name} to have access to the app registration"
+  description    = "Allow GitHub actions run within the context of environment '${each.value.environment_name}' from the repository https://github.com/${local.configuration.admin.github.owner}/${each.value.repository_name} to have access to the app registration"
 
   for_each = local.oidc_environments
 }
 
 resource "azuread_application_federated_identity_credential" "oidc_branch" {
   application_id = azuread_application.team[each.key].id
-  display_name   = "github.${lower(local.configuration.github.owner)}.${each.value.repository}.branch.main"
-  subject        = "repo:${local.configuration.github.owner}/${each.value.repository}:ref:refs/heads/main"
+  display_name   = "github.${lower(local.configuration.admin.github.owner)}.${each.value.repository}.branch.main"
+  subject        = "repo:${local.configuration.admin.github.owner}/${each.value.repository}:ref:refs/heads/main"
   audiences      = ["api://AzureADTokenExchange"]
   issuer         = "https://token.actions.githubusercontent.com"
-  description    = "Allow GitHub actions run within the context of branch 'main' from the repository https://github.com/${local.configuration.github.owner}/${each.value.repository} to have access to the app registration"
+  description    = "Allow GitHub actions run within the context of branch 'main' from the repository https://github.com/${local.configuration.admin.github.owner}/${each.value.repository} to have access to the app registration"
 
   for_each = local.oidc_branch
 }
-

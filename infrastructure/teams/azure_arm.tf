@@ -1,7 +1,3 @@
-# data "azurerm_billing_mpa_account_scope" "billing_scope" {
-#   billing_account_name = "593c07d6-aea4-5654-00ba-85d738c825a9:b5fc5a98-714c-41ed-8d40-200817b38923_2019-05-31"
-#   customer_name        = "Andreas Isnes Nilsen"
-# }
 
 locals {
   write_operations = <<-EOT
@@ -51,25 +47,35 @@ data "azurerm_role_definition" "user_access_administrator" {
   role_definition_id = "18d7d88d-d35e-4fb5-a5c3-7773c20a72d9"
 }
 
-// Current ARM Subscription
-data "azurerm_subscription" "current" {}
-
-data "azurerm_client_config" "current" {}
-
 resource "azurerm_resource_group" "tfstate" {
-  name     = "rgtfaltinntfstate${var.arm_instance}"
+  name     = "rgtfaltinn${var.arm_solution_name}${var.arm_instance}"
   location = var.arm_location
 }
 
+# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/billing_enrollment_account_scope
+data "azurerm_billing_enrollment_account_scope" "billing" {
+  billing_account_name    = var.arm_billing_account_name
+  enrollment_account_name = var.arm_enrollment_account_scope
+
+  count = var.arm_billing_account_name != null && var.arm_enrollment_account_scope != null ? 1 : 0
+}
+
+resource "azurerm_subscription" "subscriptions" {
+  subscription_name = "${each.value.team.name}-${each.value.environment}"
+  billing_scope_id  = data.azurerm_billing_enrollment_account_scope.billing[0].id
+
+  for_each = { for key, value in local.teams : key => value if var.arm_billing_account_name != null && var.arm_enrollment_account_scope != null }
+}
+
 resource "azurerm_app_configuration" "state" {
-  name                = "appconfaltinntfstate${var.arm_instance}"
+  name                = "appconf${var.arm_product_name}${var.arm_solution_name}${var.arm_instance}"
   resource_group_name = azurerm_resource_group.tfstate.name
   location            = azurerm_resource_group.tfstate.location
   sku                 = "standard"
 }
 
 resource "azurerm_storage_account" "backend" {
-  name                     = "staltinntfstate${var.arm_instance}"
+  name                     = "st${var.arm_product_name}${var.arm_solution_name}${var.arm_instance}"
   resource_group_name      = azurerm_resource_group.tfstate.name
   location                 = var.arm_location
   account_kind             = "BlobStorage"
@@ -94,6 +100,19 @@ resource "azurerm_management_group" "management_groups" {
   parent_management_group_id = azurerm_management_group.parent.id
 
   for_each = local.teams
+}
+
+resource "azurerm_management_group_subscription_association" "subscriptions" {
+  management_group_id = azurerm_management_group.management_groups[each.key].id
+  subscription_id     = azurerm_subscription.subscriptions[each.key].id
+
+  for_each = { for key, value in local.teams : key => value if var.arm_billing_account_name != null && var.arm_enrollment_account_scope != null }
+}
+
+resource "azurerm_role_assignment" "client_storage_account_admin" {
+  scope                = azurerm_storage_container.container.resource_manager_id
+  principal_id         = azuread_group.full_admins.object_id
+  role_definition_name = data.azurerm_role_definition.storage_blob_data_owner.name
 }
 
 resource "azurerm_role_assignment" "readers" {
@@ -126,7 +145,6 @@ resource "azurerm_role_assignment" "self_storage_blob_owner" {
   role_definition_name = data.azurerm_role_definition.storage_blob_data_owner.name
 }
 
-
 resource "azurerm_role_assignment" "teams" {
   scope                = azurerm_storage_container.container.resource_manager_id
   principal_id         = azuread_group.admins[each.value.slug].object_id
@@ -139,17 +157,16 @@ resource "azurerm_role_assignment" "teams" {
     OR 
     (
       %{for repository in each.value.repositories}
-        @Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringStartsWith 'github.com/${local.configuration.github.owner}/${repository}'
+        @Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringStartsWith 'github.com/${local.configuration.admin.github.owner}/${repository}'
         OR
       %{endfor~}
-      @Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringStartsWith 'github.com/${local.configuration.github.owner}/~/EOT'
+      @Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringStartsWith 'github.com/${local.configuration.admin.github.owner}/~/EOT'
     )
   )
   EOT
 
   for_each = local.role_abac_teams
 }
-
 
 resource "azurerm_role_assignment" "appregg" {
   scope                = azurerm_storage_container.container.resource_manager_id
@@ -163,14 +180,13 @@ resource "azurerm_role_assignment" "appregg" {
    OR 
    (
     %{for scope in each.value.scopes}
-    @Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringStartsWith 'github.com/${local.configuration.github.owner}/${scope.repository}/environments/${scope.environment}'
+    @Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringStartsWith 'github.com/${local.configuration.admin.github.owner}/${each.value.repository}/environments/${scope.environment}'
     OR
     %{endfor~}
-    @Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringStartsWith 'github.com/${local.configuration.github.owner}/~/EOT'
+    @Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringStartsWith 'github.com/${local.configuration.admin.github.owner}/~/EOT'
    )
   )
   EOT
 
   for_each = local.role_abac_apps
 }
-

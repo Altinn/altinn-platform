@@ -1,0 +1,17 @@
+admin:
+  github:
+    owner: altinn
+    repository: altinn-platform
+
+teams:
+  - name: Team Access Information
+    slug: TAI
+    repositories:
+      - altinn-resource-registry
+
+  - name: Team Access Management
+    slug: TAM
+    repositories:
+      - altinn-access-management
+      - altinn-access-management-frontend
+      - altinn-authorization

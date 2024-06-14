@@ -30,3 +30,27 @@ variable "arm_instance" {
     condition     = can(regex("^(00[1-9]|0[1-9][0-9]|[1-9][0-9]{2})$", var.arm_instance))
   }
 }
+
+variable "arm_solution_name" {
+  type     = string
+  default  = "tfstate"
+  nullable = false
+}
+
+variable "arm_product_name" {
+  type     = string
+  default  = "altinn"
+  nullable = false
+}
+
+variable "arm_billing_account_name" {
+  default  = null
+  nullable = true
+  type     = string
+}
+
+variable "arm_enrollment_account_scope" {
+  default  = null
+  nullable = true
+  type     = string
+}

@@ -13,7 +13,28 @@ terraform {
       version = "~> 6.0"
     }
   }
+
+  # backend "azurerm" {
+  #   use_azuread_auth = true
+  # }
 }
+
+# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs
+provider "azurerm" {
+  features {} # Required
+}
+
+# https://registry.terraform.io/providers/integrations/github/latest/docs
+provider "github" {
+  owner = local.configuration.admin.github.owner
+  app_auth {} # Required
+}
+
+// Current ARM Subscription
+data "azurerm_subscription" "current" {}
+
+// Current Callee
+data "azuread_client_config" "current" {}
 
 locals {
   configuration = yamldecode(file(var.configuration_file))
@@ -93,13 +114,9 @@ locals {
           scopes : flatten([for workspace in environment.workspaces :
             [
               for workspace_name in workspace.names :
-              [
-                for repository in coalesce(team.repositories, []) :
-                {
-                  repository : repository
-                  environment : workspace_name
-                }
-              ]
+              {
+                environment : workspace_name
+              }
             ]
           ])
         }
@@ -117,16 +134,5 @@ locals {
       }
     ]
   ]) : team.slug => team }
-}
-
-# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs
-provider "azurerm" {
-  features {} # Required
-}
-
-# https://registry.terraform.io/providers/integrations/github/latest/docs
-provider "github" {
-  owner = local.configuration.github.owner
-  app_auth {} # Required
 }
 
