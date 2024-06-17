@@ -1,6 +1,9 @@
+## Introduction
+![](teams/docs/architecture.drawio.svg)
+
 ## Initialization
 
-Modify *`main.tf` for local state initation, just comment `backend "azurerm"` block in `main.tf` out.
+Modify *`main.tf`* for local state initation, just comment `backend "azurerm"` block in `main.tf` out.
 ```terraform
 terraform {
     ...
