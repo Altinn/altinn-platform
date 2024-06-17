@@ -6,15 +6,15 @@ Terraform init templates initialize the state. This job must be called before ei
   working_directory: Project containing the main.tf file
 
   ### Identity federation parameters
-  oidc_type: should either be environment or branch. Environment if using GitHub environment, branch main if not using GitHub environments.
-  oidc_value: should either be branch or name of the environment
+  oidc_type: should either be environment or branch. Environment if using GitHub environment, branch main if not using GitHub environments. Required.
+  oidc_value: should either be branch or name of the environment. Required.
 
   # Azure Parameters
-  arm_client_id: Should be ${{ vars.ARM_CLIENT_ID }}. Needs to be set
-  arm_subscription_id: Should be ${{ vars.ARM_SUBSCRIPTION_ID }}. Needs to be set
-  arm_tenant_id: Should be ${{ vars.ARM_TENANT_ID }}. Needs to be set
-  arm_resource_group_name: Resource group name of the storage account. Shouldn't need to be set
-  arm_storage_account_name: Name of storage account. Shouldn't need to be set
+  arm_client_id: Should be ${{ vars.ARM_CLIENT_ID }}. Required
+  arm_subscription_id: Should be ${{ vars.ARM_SUBSCRIPTION_ID }}. Required
+  arm_tenant_id: Should be ${{ vars.ARM_TENANT_ID }}. Can be ignored
+  arm_resource_group_name: Resource group name of the storage account. Can be ignored 
+  arm_storage_account_name: Name of storage account. Can be ignored
 
   ## Terraform Parameters
   tf_state_name: Defaults to tfstate. Must be set to a unique name if having more Terraform projects in a repository
@@ -27,9 +27,9 @@ Terraform plan and apply has following parameters. The plan template will post a
   working_directory: Project containing the main.tf file
 
   # Azure Parameters
-  arm_client_id: Should be ${{ vars.ARM_CLIENT_ID }}. Needs to be set
-  arm_subscription_id: Should be ${{ vars.ARM_SUBSCRIPTION_ID }}. Needs to be set
-  arm_tenant_id: Should be ${{ vars.ARM_TENANT_ID }}. Needs to be set
+  arm_client_id: Should be ${{ vars.ARM_CLIENT_ID }}. Required.
+  arm_subscription_id: Should be ${{ vars.ARM_SUBSCRIPTION_ID }}. Required.
+  arm_tenant_id: Should be ${{ vars.ARM_TENANT_ID }}. Required.
 
   # Terraform parameters
   tf_args: command flags <plan / apply> $tf_args 
