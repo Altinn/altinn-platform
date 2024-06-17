@@ -24,7 +24,7 @@ variable "arm_location" {
 
 variable "arm_instance" {
   type    = string
-  default = "001"
+  default = "002"
   validation {
     error_message = "instance must be between [001, 999]"
     condition     = can(regex("^(00[1-9]|0[1-9][0-9]|[1-9][0-9]{2})$", var.arm_instance))

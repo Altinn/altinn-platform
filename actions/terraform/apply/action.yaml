@@ -1,0 +1,43 @@
+name: Terraform Initialize
+description: Deploying Terraform project
+inputs:
+  working_directory:
+    description: Terraform project
+    default: ./infrastructure
+    required: true
+  arm_client_id:
+    required: true
+    description: Azure Client ID
+  arm_subscription_id:
+    required: true
+    description: Azure Subscription ID
+  arm_tenant_id:
+    description: Azure Tenant ID
+    default: cd0026d8-283b-4a55-9bfa-d0ef4a8ba21c
+  tf_args:
+    description: Args
+    required: false
+  tf_version:
+    description: Terraform Version
+    default: 1.7.4
+
+runs:
+  using: "composite"
+  steps:
+    - name: Azure login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ inputs.arm_client_id }}
+        tenant-id: ${{ inputs.arm_tenant_id }}
+        subscription-id: ${{ inputs.arm_subscription_id }}
+
+    - name: Terraform Apply
+      working-directory: ${{ inputs.working_directory }}
+      shell: bash
+      env:
+        ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
+        ARM_SUBSCRIPTION_ID: ${{ inputs.arm_subscription_id }}
+        ARM_TENANT_ID: ${{ inputs.arm_tenant_id }}
+        ARM_USE_OIDC: "true"
+      run: |
+        terraform apply -auto-approve ${{ inputs.tf_args }}

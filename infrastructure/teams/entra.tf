@@ -52,9 +52,6 @@ resource "azuread_group" "full_admins" {
 resource "azuread_group_member" "full_admins" {
   group_object_id  = azuread_group.full_admins.object_id
   member_object_id = data.azuread_client_config.current.object_id
-  lifecycle {
-    replace_triggered_by = []
-  }
 }
 
 resource "azuread_group_member" "admin_contributor" {

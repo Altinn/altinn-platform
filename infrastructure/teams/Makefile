@@ -1,4 +1,4 @@
-ARM_STORAGE_ACCOUNT=staltinntfstate001
+ARM_STORAGE_ACCOUNT=staltinntfstate002
 ARM_STORAGE_CONTAINER=tfstates
 ADMIN_GITHUB_OWNER=altinn
 ADMIN_GITHUB_REPOSITORY=altinn-platform
@@ -19,3 +19,6 @@ tf_apply:
 
 tf_destroy:
 	$(TF) destroy $(TF_VARIABLES_FLAGS)
+
+clean_state:
+	@rm -f *.tfstate *.tfstate.backup
