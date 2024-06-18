@@ -26,7 +26,6 @@ jobs:
           oidc_type: environment # Token exhchange type branch or github environment. Recommended to use environment
           oidc_value: ${{ inputs.environment }} # Name of the github environment or branch.
           arm_client_id: 405d731d-ee0e-4a75-88fd-154e182eec21
-          arm_subscription_id: 19dd7f51-b3f0-45d1-a492-1f9763139e55
           tf_state_name: test.tfstate # If you have multiple terraform projects per repo, make sure this has a unique name. The name is scoped to the repository
 
       - name: Terraform Apply
