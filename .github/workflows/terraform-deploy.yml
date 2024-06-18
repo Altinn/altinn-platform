@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   dev:
-    uses: "./.github/workflows/terraform-apply-template.yaml"
+    uses: "./.github/workflows/terraform-deploy-template.yml"
     secrets: inherit
     with:
       environment: dev
