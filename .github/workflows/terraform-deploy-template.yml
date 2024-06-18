@@ -1,0 +1,37 @@
+# File: "./.github/workflows/apply-template.yaml"
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      log_level:
+        required: false
+        type: string
+
+env:
+  TERRAFORM_VERSION: 1.7.4
+
+jobs:
+  release:
+    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Terraform Initialize
+        uses: altinn/altinn-platform/actions/terraform/init@features/794
+        with:
+          working_directory: ./infrastructure/test # Path to directory containg main.tf
+          oidc_type: environment # Token exhchange type branch or github environment. Recommended to use environment
+          oidc_value: ${{ inputs.environment }} # Name of the github environment or branch.
+          arm_client_id: 405d731d-ee0e-4a75-88fd-154e182eec21
+          arm_subscription_id: 19dd7f51-b3f0-45d1-a492-1f9763139e55
+          tf_state_name: test.tfstate # If you have multiple terraform projects per repo, make sure this has a unique name. The name is scoped to the repository
+
+      - name: Terraform Apply
+        uses: altinn/altinn-platform/actions/terraform/apply@features/794
+        with:
+          working_directory: ./infrastructure/test
+          arm_client_id: 405d731d-ee0e-4a75-88fd-154e182eec21
+          arm_subscription_id: 19dd7f51-b3f0-45d1-a492-1f9763139e55
