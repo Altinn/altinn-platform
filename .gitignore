@@ -1,3 +1,6 @@
+# Vim temp file
+*.swp
+
 # Local .terraform directories
 **/.terraform/*
 
