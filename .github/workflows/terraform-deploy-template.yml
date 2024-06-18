@@ -23,7 +23,7 @@ jobs:
         uses: altinn/altinn-platform/actions/terraform/init@features/794
         with:
           working_directory: ./infrastructure/test # Path to directory containg main.tf
-          oidc_type: environment # Token exhchange type branch or github environment. Recommended to use environment
+          oidc_type: environments # Token exhchange type branch or github environment. Recommended to use environment
           oidc_value: ${{ inputs.environment }} # Name of the github environment or branch.
           arm_client_id: 405d731d-ee0e-4a75-88fd-154e182eec21
           tf_state_name: test.tfstate # If you have multiple terraform projects per repo, make sure this has a unique name. The name is scoped to the repository
