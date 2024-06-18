@@ -51,6 +51,10 @@ runs:
       shell: bash
       run: export TF_LOG="${{ inputs.tf_log_level == '' && 'INFO' || inputs.tf_log_level }}"
 
+    - name: Terraform Echo
+      shell: bash
+      run: echo "github.com/${GITHUB_REPOSITORY}/${{ inputs.oidc_type }}/${{ inputs.oidc_value }}/${{ inputs.tf_state_name }}" | tr '[:upper:]' '[:lower:]'
+
     - name: Terraform Init State
       shell: bash
       working-directory: ${{ inputs.working_directory }}
