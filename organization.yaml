@@ -4,13 +4,13 @@ admin:
     repository: altinn-platform
 
 teams:
-  - name: Team Access Information
-    slug: TAI
+  - name: Team Altinn Platform
+    slug: TAP
     repositories:
-      - altinn-resource-registry
+      - altinn-platform
 
-  - name: Team Access Management
-    slug: TAM
+  - name: Team Altinn Authorization
+    slug: TAA
     repositories:
       - altinn-access-management
       - altinn-access-management-frontend

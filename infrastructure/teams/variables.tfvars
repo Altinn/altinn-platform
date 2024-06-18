@@ -8,7 +8,7 @@ environments = [
       },
       {
         arm_subscription = "test"
-        names            = ["at21", "at22", "at23", "at24", "at25"]
+        names            = ["at21", "at22", "at23", "at24", "at25", "yt01"]
     }]
   },
   {

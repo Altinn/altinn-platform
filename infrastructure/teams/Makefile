@@ -1,4 +1,4 @@
-ARM_STORAGE_ACCOUNT=staltinntfstate002
+ARM_STORAGE_ACCOUNT=altinnterraformstorage02
 ARM_STORAGE_CONTAINER=tfstates
 ADMIN_GITHUB_OWNER=altinn
 ADMIN_GITHUB_REPOSITORY=altinn-platform

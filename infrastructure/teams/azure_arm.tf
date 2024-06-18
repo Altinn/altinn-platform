@@ -47,9 +47,13 @@ data "azurerm_role_definition" "user_access_administrator" {
   role_definition_id = "18d7d88d-d35e-4fb5-a5c3-7773c20a72d9"
 }
 
-resource "azurerm_resource_group" "tfstate" {
-  name     = "rgtfaltinn${var.arm_solution_name}${var.arm_instance}"
-  location = var.arm_location
+# resource "azurerm_resource_group" "tfstate" {
+#   name     = "rgtfaltinn${var.arm_solution_name}${var.arm_instance}"
+#   location = var.arm_location
+# }
+
+data "azurerm_resource_group" "tfstate" {
+  name = "terraform-rg"
 }
 
 # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/billing_enrollment_account_scope
@@ -68,15 +72,27 @@ resource "azurerm_subscription" "subscriptions" {
 }
 
 resource "azurerm_app_configuration" "state" {
-  name                = "appconf${var.arm_product_name}${var.arm_solution_name}${var.arm_instance}"
-  resource_group_name = azurerm_resource_group.tfstate.name
-  location            = azurerm_resource_group.tfstate.location
+  lifecycle {
+    ignore_changes = [
+      tags["costcenter"],
+      tags["solution"]
+    ]
+  }
+  name                = "altinnterraformappconf02"
+  resource_group_name = data.azurerm_resource_group.tfstate.name
+  location            = data.azurerm_resource_group.tfstate.location
   sku                 = "standard"
 }
 
 resource "azurerm_storage_account" "backend" {
-  name                     = "st${var.arm_product_name}${var.arm_solution_name}${var.arm_instance}"
-  resource_group_name      = azurerm_resource_group.tfstate.name
+  lifecycle {
+    ignore_changes = [
+      tags["costcenter"],
+      tags["solution"]
+    ]
+  }
+  name                     = "altinnterraformstorage02"
+  resource_group_name      = data.azurerm_resource_group.tfstate.name
   location                 = var.arm_location
   account_kind             = "BlobStorage"
   access_tier              = "Hot"
@@ -95,7 +111,7 @@ resource "azurerm_management_group" "parent" {
 }
 
 resource "azurerm_management_group" "management_groups" {
-  name                       = "${replace(each.value.team.name, " ", "-")}-${title(each.value.environment.name)}"
+  name                       = "${each.value.team.slug}-${title(each.value.environment.name)}"
   display_name               = "${replace(each.value.team.name, " ", "-")}-${title(each.value.environment.name)}"
   parent_management_group_id = azurerm_management_group.parent.id
 
@@ -110,9 +126,10 @@ resource "azurerm_management_group_subscription_association" "subscriptions" {
 }
 
 resource "azurerm_role_assignment" "client_storage_account_admin" {
-  scope                = azurerm_storage_container.container.resource_manager_id
-  principal_id         = azuread_group.full_admins.object_id
-  role_definition_name = data.azurerm_role_definition.storage_blob_data_owner.name
+  scope                            = azurerm_storage_container.container.resource_manager_id
+  principal_id                     = azuread_group.full_admins.object_id
+  role_definition_name             = data.azurerm_role_definition.storage_blob_data_owner.name
+  # skip_service_principal_aad_check = true
 }
 
 resource "azurerm_role_assignment" "readers" {
@@ -120,7 +137,8 @@ resource "azurerm_role_assignment" "readers" {
   principal_id         = azuread_group.readers[each.key].object_id
   role_definition_name = data.azurerm_role_definition.reader.name
 
-  for_each = local.teams
+  for_each                         = local.teams
+  # skip_service_principal_aad_check = true
 }
 
 resource "azurerm_role_assignment" "developers" {
@@ -128,7 +146,8 @@ resource "azurerm_role_assignment" "developers" {
   principal_id         = azuread_group.developers[each.key].object_id
   role_definition_name = data.azurerm_role_definition.contributor.name
 
-  for_each = local.teams
+  for_each                         = local.teams
+  # skip_service_principal_aad_check = true
 }
 
 resource "azurerm_role_assignment" "admins" {
@@ -136,13 +155,15 @@ resource "azurerm_role_assignment" "admins" {
   principal_id         = azuread_group.admins[each.key].object_id
   role_definition_name = data.azurerm_role_definition.user_access_administrator.name
 
-  for_each = local.teams
+  for_each                         = local.teams
+  # skip_service_principal_aad_check = true
 }
 
 resource "azurerm_role_assignment" "self_storage_blob_owner" {
-  scope                = azurerm_storage_account.backend.id
-  principal_id         = azuread_service_principal.administrator.object_id
-  role_definition_name = data.azurerm_role_definition.storage_blob_data_owner.name
+  scope                            = azurerm_storage_account.backend.id
+  principal_id                     = azuread_service_principal.administrator.object_id
+  role_definition_name             = data.azurerm_role_definition.storage_blob_data_owner.name
+  # skip_service_principal_aad_check = true
 }
 
 resource "azurerm_role_assignment" "teams" {
@@ -165,7 +186,8 @@ resource "azurerm_role_assignment" "teams" {
   )
   EOT
 
-  for_each = local.role_abac_teams
+  for_each                         = local.role_abac_teams
+  # skip_service_principal_aad_check = true
 }
 
 resource "azurerm_role_assignment" "appregg" {
@@ -188,5 +210,6 @@ resource "azurerm_role_assignment" "appregg" {
   )
   EOT
 
-  for_each = local.role_abac_apps
+  for_each                         = local.role_abac_apps
+  # skip_service_principal_aad_check = true
 }
