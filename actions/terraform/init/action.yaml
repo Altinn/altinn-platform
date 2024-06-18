@@ -53,7 +53,7 @@ runs:
 
     - name: Terraform Echo
       shell: bash
-      run: echo "github.com/${GITHUB_REPOSITORY}/${{ inputs.oidc_type }}/${{ inputs.oidc_value }}/${{ inputs.tf_state_name }}" | tr '[:upper:]' '[:lower:]'
+      run: echo "github.com/${GITHUB_REPOSITORY}/${{ inputs.oidc_type }}/${{ inputs.oidc_value }}/${{ inputs.tf_state_name }}"
 
     - name: Terraform Init State
       shell: bash
