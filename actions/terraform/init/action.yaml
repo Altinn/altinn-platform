@@ -22,10 +22,10 @@ inputs:
     default: cd0026d8-283b-4a55-9bfa-d0ef4a8ba21c
   arm_resource_group_name:
     description: Resource Group Name
-    default: rgaltinntfstate001
+    default: terraform-rg
   arm_storage_account_name:
     description: Storage Account Name
-    default: staltinntfstate001
+    default: altinnterraformstorage02
   tf_state_name:
     description: "Name of Terraform state file"
     required: true
