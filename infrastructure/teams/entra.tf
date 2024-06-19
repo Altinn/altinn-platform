@@ -44,13 +44,13 @@ resource "azuread_group" "admins" {
   for_each = local.teams
 }
 
-resource "azuread_group" "full_admins" {
+resource "azuread_group" "terraform_admins" {
   display_name     = "Terraform Admins"
   security_enabled = true
 }
 
-resource "azuread_group_member" "full_admins" {
-  group_object_id  = azuread_group.full_admins.object_id
+resource "azuread_group_member" "terraform_admins" {
+  group_object_id  = azuread_group.terraform_admins.object_id
   member_object_id = data.azuread_client_config.current.object_id
 }
 

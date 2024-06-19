@@ -17,23 +17,9 @@ variable "environments" {
   nullable = false
 }
 
-variable "arm_location" {
-  type    = string
-  default = "norwayeast"
-}
-
-variable "arm_instance" {
-  type    = string
-  default = "002"
-  validation {
-    error_message = "instance must be between [001, 999]"
-    condition     = can(regex("^(00[1-9]|0[1-9][0-9]|[1-9][0-9]{2})$", var.arm_instance))
-  }
-}
-
 variable "arm_solution_name" {
   type     = string
-  default  = "tfstate"
+  default  = "terraform"
   nullable = false
 }
 
@@ -41,6 +27,11 @@ variable "arm_product_name" {
   type     = string
   default  = "altinn"
   nullable = false
+}
+
+variable "arm_instance" {
+  type    = string
+  default = "02"
 }
 
 variable "arm_billing_account_name" {

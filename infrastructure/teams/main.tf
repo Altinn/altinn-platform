@@ -60,6 +60,7 @@ locals {
         for repository in coalesce(team.repositories, []) :
         {
           slug : "${team.slug}-${environment.name}-${repository}"
+          team_slug : "${team.slug}-${environment.name}"
           repository : repository
           environment : environment
           team : team

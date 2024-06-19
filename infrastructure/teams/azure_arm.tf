@@ -47,10 +47,6 @@ data "azurerm_role_definition" "user_access_administrator" {
   role_definition_id = "18d7d88d-d35e-4fb5-a5c3-7773c20a72d9"
 }
 
-# resource "azurerm_resource_group" "tfstate" {
-#   name     = "rgtfaltinn${var.arm_solution_name}${var.arm_instance}"
-#   location = var.arm_location
-# }
 
 data "azurerm_resource_group" "tfstate" {
   name = "terraform-rg"
@@ -78,7 +74,7 @@ resource "azurerm_app_configuration" "state" {
       tags["solution"]
     ]
   }
-  name                = "altinnterraformappconf02"
+  name                = "${var.arm_product_name}${var.arm_solution_name}appconf${var.arm_instance}"
   resource_group_name = data.azurerm_resource_group.tfstate.name
   location            = data.azurerm_resource_group.tfstate.location
   sku                 = "standard"
@@ -91,9 +87,9 @@ resource "azurerm_storage_account" "backend" {
       tags["solution"]
     ]
   }
-  name                     = "altinnterraformstorage02"
+  name                     = "${var.arm_product_name}${var.arm_solution_name}storage${var.arm_instance}"
   resource_group_name      = data.azurerm_resource_group.tfstate.name
-  location                 = var.arm_location
+  location                 = data.azurerm_resource_group.tfstate.location
   account_kind             = "BlobStorage"
   access_tier              = "Hot"
   account_tier             = "Standard"
@@ -125,10 +121,38 @@ resource "azurerm_management_group_subscription_association" "subscriptions" {
   for_each = { for key, value in local.teams : key => value if var.arm_billing_account_name != null && var.arm_enrollment_account_scope != null }
 }
 
+resource "azurerm_role_assignment" "administrator_user_access_administrator" {
+  scope                = azurerm_management_group.parent.id
+  principal_id         = azuread_service_principal.administrator.object_id
+  role_definition_name = data.azurerm_role_definition.user_access_administrator.name
+}
+
+resource "azurerm_role_assignment" "administrator_contributor" {
+  scope                = azurerm_management_group.parent.id
+  principal_id         = azuread_service_principal.administrator.object_id
+  role_definition_name = data.azurerm_role_definition.contributor.name
+}
+
+resource "azurerm_role_assignment" "apps_user_access_administrator" {
+  scope                = azurerm_management_group.management_groups[each.value.team_slug].id
+  principal_id         = azuread_service_principal.team[each.key].object_id
+  role_definition_name = data.azurerm_role_definition.user_access_administrator.name
+
+  for_each = local.app_reggs
+}
+
+resource "azurerm_role_assignment" "apps_contributor" {
+  scope                = azurerm_management_group.management_groups[each.value.team_slug].id
+  principal_id         = azuread_service_principal.team[each.key].object_id
+  role_definition_name = data.azurerm_role_definition.contributor.name
+
+  for_each = local.app_reggs
+}
+
 resource "azurerm_role_assignment" "client_storage_account_admin" {
-  scope                            = azurerm_storage_container.container.resource_manager_id
-  principal_id                     = azuread_group.full_admins.object_id
-  role_definition_name             = data.azurerm_role_definition.storage_blob_data_owner.name
+  scope                = azurerm_storage_container.container.resource_manager_id
+  principal_id         = azuread_group.terraform_admins.object_id
+  role_definition_name = data.azurerm_role_definition.storage_blob_data_owner.name
   # skip_service_principal_aad_check = true
 }
 
@@ -137,7 +161,7 @@ resource "azurerm_role_assignment" "readers" {
   principal_id         = azuread_group.readers[each.key].object_id
   role_definition_name = data.azurerm_role_definition.reader.name
 
-  for_each                         = local.teams
+  for_each = local.teams
   # skip_service_principal_aad_check = true
 }
 
@@ -146,7 +170,7 @@ resource "azurerm_role_assignment" "developers" {
   principal_id         = azuread_group.developers[each.key].object_id
   role_definition_name = data.azurerm_role_definition.contributor.name
 
-  for_each                         = local.teams
+  for_each = local.teams
   # skip_service_principal_aad_check = true
 }
 
@@ -155,14 +179,14 @@ resource "azurerm_role_assignment" "admins" {
   principal_id         = azuread_group.admins[each.key].object_id
   role_definition_name = data.azurerm_role_definition.user_access_administrator.name
 
-  for_each                         = local.teams
+  for_each = local.teams
   # skip_service_principal_aad_check = true
 }
 
 resource "azurerm_role_assignment" "self_storage_blob_owner" {
-  scope                            = azurerm_storage_account.backend.id
-  principal_id                     = azuread_service_principal.administrator.object_id
-  role_definition_name             = data.azurerm_role_definition.storage_blob_data_owner.name
+  scope                = azurerm_storage_account.backend.id
+  principal_id         = azuread_service_principal.administrator.object_id
+  role_definition_name = data.azurerm_role_definition.storage_blob_data_owner.name
   # skip_service_principal_aad_check = true
 }
 
@@ -186,7 +210,7 @@ resource "azurerm_role_assignment" "teams" {
   )
   EOT
 
-  for_each                         = local.role_abac_teams
+  for_each = local.role_abac_teams
   # skip_service_principal_aad_check = true
 }
 
@@ -210,6 +234,6 @@ resource "azurerm_role_assignment" "appregg" {
   )
   EOT
 
-  for_each                         = local.role_abac_apps
+  for_each = local.role_abac_apps
   # skip_service_principal_aad_check = true
 }
