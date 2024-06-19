@@ -66,7 +66,6 @@ runs:
       working-directory: ${{ inputs.working_directory }}
       shell: bash
       run: |
-        echo "#### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`" >> $GITHUB_STEP_SUMMARY
         echo "#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`" >> $GITHUB_STEP_SUMMARY
         echo "#### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`" >> $GITHUB_STEP_SUMMARY
         echo "<details><summary>Validation Output</summary>" >> $GITHUB_STEP_SUMMARY
