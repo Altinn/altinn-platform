@@ -9,10 +9,6 @@ on:
         required: false
         type: string
 
-env:
-  TERRAFORM_VERSION: 1.7.4
-  ARM_CLIENT_ID: 405d731d-ee0e-4a75-88fd-154e182eec21
-
 jobs:
   deploy:
     name: ${{ inputs.environment }}
@@ -28,7 +24,7 @@ jobs:
           working_directory: ./infrastructure/test
           oidc_type: environments
           oidc_value: ${{ inputs.environment }}
-          arm_client_id: $ARM_CLIENT_ID
+          arm_client_id: 405d731d-ee0e-4a75-88fd-154e182eec21
           tf_state_name: test.tfstate
 
       - name: Terraform Plan
