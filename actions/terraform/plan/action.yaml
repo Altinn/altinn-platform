@@ -54,7 +54,7 @@ runs:
         ARM_TENANT_ID: ${{ inputs.arm_tenant_id }}
         ARM_USE_OIDC: "true"
       run: |
-        terraform plan -out .planfile ${{ inputs.tf_args }}
+        terraform plan ${{ inputs.tf_args }}
 
     - uses: actions/github-script@v7
       env:
