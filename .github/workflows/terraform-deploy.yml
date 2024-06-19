@@ -22,7 +22,7 @@ permissions:
   contents: write
 
 jobs:
-  dev:
+  deploy:
     uses: "./.github/workflows/terraform-deploy-template.yml"
     secrets: inherit
     with:

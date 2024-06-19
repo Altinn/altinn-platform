@@ -45,7 +45,7 @@ runs:
       id: validate
       working-directory: ${{ inputs.working_directory }}
       shell: bash
-      run: terraform validate > tfvalidate.txt
+      run: terraform validate -no-color > tfvalidate.txt
 
     - name: Terraform Plan
       id: plan
