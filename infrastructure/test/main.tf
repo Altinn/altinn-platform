@@ -32,6 +32,6 @@ provider "github" {
 
 
 resource "azurerm_resource_group" "rg" {
-  name     = "altinnkake2"
+  name     = "altinnkake3"
   location = "norwayeast"
 }
