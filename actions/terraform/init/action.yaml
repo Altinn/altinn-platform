@@ -61,7 +61,7 @@ runs:
       working-directory: ${{ inputs.working_directory }}
       env:
         ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
-        arm_tfstate_subscription_id: ${{ inputs.arm_subscription_id }}
+        ARM_SUBSCRIPTION_ID: ${{ inputs.arm_subscription_id }}
         ARM_TENANT_ID: ${{ inputs.arm_tenant_id }}
         ARM_USE_OIDC: "true"
       run: |
