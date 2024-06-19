@@ -46,8 +46,10 @@ runs:
       run: terraform validate
 
     - name: Terraform Plan
+      id: plan
       working-directory: ${{ inputs.working_directory }}
       shell: bash
+      continue-on-error: true
       env:
         ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
         ARM_SUBSCRIPTION_ID: ${{ inputs.arm_subscription_id }}
