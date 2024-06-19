@@ -45,7 +45,7 @@ runs:
       id: validate
       working-directory: ${{ inputs.working_directory }}
       shell: bash
-      run: terraform validate
+      run: terraform validate > tfvalidate.txt
 
     - name: Terraform Plan
       id: plan
@@ -58,8 +58,8 @@ runs:
         ARM_TENANT_ID: ${{ inputs.arm_tenant_id }}
         ARM_USE_OIDC: "true"
       run: |
-        terraform plan -no-color -out tf.plan ${{ inputs.tf_args }}
-        terraform show -no-color tf.plan > tfplan.txt
+        terraform plan -no-color -out tfplan.out ${{ inputs.tf_args }}
+        terraform show -no-color tfplan.out > tfplan.txt
 
     - name: Terraform Summary
       id: summary
@@ -71,7 +71,7 @@ runs:
         echo "<details><summary>Validation Output</summary>" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`\n" >> $GITHUB_STEP_SUMMARY
-        echo "${{ steps.validate.outputs.stdout }}" >> $GITHUB_STEP_SUMMARY
+        echo "$(cat tfvalidate.txt)" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "</details>" >> $GITHUB_STEP_SUMMARY
