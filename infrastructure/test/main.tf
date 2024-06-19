@@ -14,9 +14,9 @@ terraform {
     }
   }
 
-  # backend "azurerm" {
-  #   use_azuread_auth = true
-  # }
+  backend "azurerm" {
+    use_azuread_auth = true
+  }
 }
 
 # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs
