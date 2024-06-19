@@ -1,3 +1,4 @@
+# File: "./.github/workflows/apply-template.yaml"
 on:
   workflow_call:
     inputs:
@@ -11,7 +12,6 @@ on:
 env:
   TERRAFORM_VERSION: 1.7.4
   ARM_CLIENT_ID: 405d731d-ee0e-4a75-88fd-154e182eec21
-  ARM_SUBSCRIPTION_ID: 19dd7f51-b3f0-45d1-a492-1f9763139e55
 
 jobs:
   deploy:
@@ -35,12 +35,12 @@ jobs:
         uses: altinn/altinn-platform/actions/terraform/plan@features/794
         with:
           working_directory: ./infrastructure/test
-          arm_client_id: $ARM_CLIENT_ID
-          arm_subscription_id: $ARM_SUBSCRIPTION_ID
+          arm_client_id: 405d731d-ee0e-4a75-88fd-154e182eec21
+          arm_subscription_id: 19dd7f51-b3f0-45d1-a492-1f9763139e55
 
       - name: Terraform Apply
         uses: altinn/altinn-platform/actions/terraform/apply@features/794
         with:
           working_directory: ./infrastructure/test
-          arm_client_id: $ARM_CLIENT_ID
-          arm_subscription_id: $ARM_SUBSCRIPTION_ID
+          arm_client_id: 405d731d-ee0e-4a75-88fd-154e182eec21
+          arm_subscription_id: 19dd7f51-b3f0-45d1-a492-1f9763139e55
