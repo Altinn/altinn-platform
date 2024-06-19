@@ -58,8 +58,8 @@ runs:
         ARM_TENANT_ID: ${{ inputs.arm_tenant_id }}
         ARM_USE_OIDC: "true"
       run: |
-        terraform plan -out tf.plan ${{ inputs.tf_args }}
-        terraform show tf.plan > tfplan.txt
+        terraform plan -no-color -out tf.plan ${{ inputs.tf_args }}
+        terraform show -no-color tf.plan > tfplan.txt
 
     - name: Terraform Summary
       id: summary
