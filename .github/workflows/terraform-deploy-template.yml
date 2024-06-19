@@ -34,3 +34,4 @@ jobs:
           working_directory: ./infrastructure/test
           arm_client_id: 405d731d-ee0e-4a75-88fd-154e182eec21
           arm_subscription_id: 19dd7f51-b3f0-45d1-a492-1f9763139e55
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
