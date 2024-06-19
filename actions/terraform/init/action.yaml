@@ -56,6 +56,7 @@ runs:
       run: echo "github.com/${GITHUB_REPOSITORY}/${{ inputs.oidc_type }}/${{ inputs.oidc_value }}/${{ inputs.tf_state_name }}"
 
     - name: Terraform Init State
+      id: init
       shell: bash
       working-directory: ${{ inputs.working_directory }}
       env:
