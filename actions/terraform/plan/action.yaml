@@ -37,11 +37,13 @@ runs:
     - name: Terraform Format
       shell: bash
       id: fmt
+      working-directory: ${{ inputs.working_directory }}
       continue-on-error: true
       run: terraform fmt -check
 
     - name: Terraform Validate
       id: validate
+      working-directory: ${{ inputs.working_directory }}
       shell: bash
       run: terraform validate
 
@@ -86,7 +88,7 @@ runs:
 
             </details>
 
-            *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, Working Directory: \`${{ env.tf_actions_working_dir }}\`, Workflow: \`${{ github.workflow }}\`*`;
+            *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, Working Directory: \`${{ env.tf_actions_working_dir }}\`, Workflow: \`${{ github.workflow }}\`*
           EOM
 
     - uses: actions/github-script@v7
