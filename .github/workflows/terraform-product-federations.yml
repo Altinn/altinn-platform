@@ -1,0 +1,50 @@
+name: "Altinn Product Federations"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - infrastructure/products/**
+      - products.yaml
+
+permissions:
+  id-token: write
+  contents: write
+
+env:
+  ENVIRONMENT: prod
+  TF_STATE_NAME: products.tfstate
+  TF_PROJECT: ./infrastructure/products
+
+jobs:
+  prod:
+    environment: ${{ env.ENVIRONMENT }}
+    name: ${{ env.ENVIRONMENT }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Terraform Initialize
+        uses: altinn/altinn-platform/actions/terraform/init@features/794
+        with:
+          working_directory: ${{ env.TF_PROJECT }}
+          oidc_type: environments
+          oidc_value: ${{ env.ENVIRONMENT }}
+          tf_state_name: ${{ env.TF_STATE_NAME }}
+          arm_client_id: ${{ variables.ARM_ADMIN_CLIENT_ID }}
+
+      - name: Terraform Plan
+        uses: altinn/altinn-platform/actions/terraform/plan@features/794
+        with:
+          working_directory: ${{ env.TF_PROJECT }}
+          arm_client_id: ${{ variables.ARM_ADMIN_CLIENT_ID }}
+          arm_subscription_id: ${{ variables.ARM_SUBSCRIPTION_ID }}
+
+      - name: Terraform Apply
+        uses: altinn/altinn-platform/actions/terraform/apply@features/794
+        with:
+          working_directory: ${{ env.TF_PROJECT }}
+          arm_client_id: ${{ variables.ARM_ADMIN_CLIENT_ID }}
+          arm_subscription_id: ${{ variables.ARM_SUBSCRIPTION_ID }}
