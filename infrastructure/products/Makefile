@@ -28,4 +28,4 @@ az_set_subscription:
 	az account set --subscription "$(AZ_SUBSCRIPTION)"
 
 clean_local_state:
-	@rm -f *.tfstate *.tfstate.backup *.terraform
+	@rm -f *.tfstate *.tfstate.backup
