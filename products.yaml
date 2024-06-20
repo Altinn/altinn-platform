@@ -3,15 +3,14 @@ admin:
     owner: altinn
     repository: altinn-platform
 
-teams:
-  - name: Team Altinn Platform
-    slug: TAP
+products:
+  - name: Platform
+    slug: PAP # Product Altinn Platform
     repositories:
       - altinn-platform
 
-  - name: Team Altinn Authorization
-    slug: TAA
+  - name: Authorization
+    slug: PAA # Product Altinn Authorization
     repositories:
       - altinn-access-management
-      - altinn-access-management-frontend
       - altinn-authorization

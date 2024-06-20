@@ -1,7 +1,7 @@
 variable "configuration_file" {
   type        = string
   description = "YAML file that contains all organization configuration"
-  default     = "../../organization.yaml"
+  default     = "../../products.yaml"
   nullable    = false
 }
 
@@ -14,6 +14,12 @@ variable "environments" {
     }))
   }))
 
+  nullable = false
+}
+
+variable "arm_resource_group_name" {
+  type     = string
+  default  = "terraform-rg"
   nullable = false
 }
 

@@ -1,5 +1,5 @@
 ## Introduction
-![](teams/docs/architecture.drawio.svg)
+![](products/docs/architecture.drawio.svg)
 
 ## Initialization
 
