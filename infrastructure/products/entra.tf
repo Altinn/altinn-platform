@@ -3,9 +3,9 @@
 #
 
 resource "azuread_application" "administrator" {
-  display_name            = "GitHub: ${lower(local.configuration.admin.github.owner)}/${lower(local.configuration.admin.github.repository)} - Admin"
-#  prevent_duplicate_names = true
-  lifecycle {create_before_destroy=false}
+  display_name = "GitHub: ${lower(local.configuration.admin.github.owner)}/${lower(local.configuration.admin.github.repository)} - Admin"
+  #  prevent_duplicate_names = true
+  lifecycle { create_before_destroy = false }
 }
 
 resource "azuread_service_principal" "administrator" {
@@ -13,11 +13,11 @@ resource "azuread_service_principal" "administrator" {
 }
 
 resource "azuread_application" "product" {
-  display_name            = "GitHub: ${lower(local.configuration.admin.github.owner)}/${each.value.repository} - ${title(each.value.environment.name)}"
-#  prevent_duplicate_names = true
+  display_name = "GitHub: ${lower(local.configuration.admin.github.owner)}/${each.value.repository} - ${title(each.value.environment.name)}"
+  #  prevent_duplicate_names = true
 
   for_each = local.app_reggs
-  lifecycle {create_before_destroy=false}
+  lifecycle { create_before_destroy = false }
 }
 
 resource "azuread_service_principal" "product" {
@@ -28,6 +28,9 @@ resource "azuread_service_principal" "product" {
 resource "azuread_group" "readers" {
   display_name     = "Altinn Product ${each.value.product.name}: Readers ${title(each.value.environment.name)}"
   security_enabled = true
+  owners = [
+    azuread_group.admins[each.key].object_id
+  ]
 
   for_each = local.products
 }
@@ -35,6 +38,9 @@ resource "azuread_group" "readers" {
 resource "azuread_group" "developers" {
   display_name     = "Altinn Product  ${each.value.product.name}: Developers ${title(each.value.environment.name)}"
   security_enabled = true
+  owners = [
+    azuread_group.admins[each.key].object_id
+  ]
 
   for_each = local.products
 }
