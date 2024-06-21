@@ -28,19 +28,13 @@ resource "azuread_service_principal" "product" {
 resource "azuread_group" "readers" {
   display_name     = "Altinn Product ${each.value.product.name}: Readers ${title(each.value.environment.name)}"
   security_enabled = true
-  owners = [
-    azuread_group.admins[each.key].object_id
-  ]
 
   for_each = local.products
 }
 
 resource "azuread_group" "developers" {
-  display_name     = "Altinn Product  ${each.value.product.name}: Developers ${title(each.value.environment.name)}"
+  display_name     = "Altinn Product ${each.value.product.name}: Developers ${title(each.value.environment.name)}"
   security_enabled = true
-  owners = [
-    azuread_group.admins[each.key].object_id
-  ]
 
   for_each = local.products
 }
