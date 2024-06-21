@@ -4,7 +4,8 @@
 
 resource "azuread_application" "administrator" {
   display_name            = "GitHub: ${lower(local.configuration.admin.github.owner)}/${lower(local.configuration.admin.github.repository)} - Admin"
-  prevent_duplicate_names = true
+#  prevent_duplicate_names = true
+  lifecycle {create_before_destroy=false}
 }
 
 resource "azuread_service_principal" "administrator" {
@@ -13,9 +14,10 @@ resource "azuread_service_principal" "administrator" {
 
 resource "azuread_application" "product" {
   display_name            = "GitHub: ${lower(local.configuration.admin.github.owner)}/${each.value.repository} - ${title(each.value.environment.name)}"
-  prevent_duplicate_names = true
+#  prevent_duplicate_names = true
 
   for_each = local.app_reggs
+  lifecycle {create_before_destroy=false}
 }
 
 resource "azuread_service_principal" "product" {

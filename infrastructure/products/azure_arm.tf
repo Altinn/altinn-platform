@@ -197,7 +197,7 @@ resource "azurerm_role_assignment" "self_storage_blob_owner" {
   scope                            = azurerm_storage_account.backend.id
   principal_id                     = azuread_service_principal.administrator.object_id
   role_definition_name             = data.azurerm_role_definition.storage_blob_data_owner.name
-  skip_service_principal_aad_check = true
+#  skip_service_principal_aad_check = true
 }
 
 resource "azurerm_role_assignment" "products" {
