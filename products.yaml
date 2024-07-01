@@ -1,0 +1,16 @@
+admin:
+  github:
+    owner: altinn
+    repository: altinn-platform
+
+products:
+  - name: Platform
+    slug: PAP # Product Altinn Platform
+    repositories:
+      - altinn-platform
+
+  - name: Authorization
+    slug: PAA # Product Altinn Authorization
+    repositories:
+      - altinn-access-management
+      - altinn-authorization

@@ -1,0 +1,30 @@
+name: Terraform test
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      log_level:
+        required: true
+        description: "Terraform Log Level"
+        default: INFO
+        type: choice
+        options:
+          - TRACE
+          - DEBUG
+          - INFO
+          - WARN
+          - ERROR
+
+# Must be present for token exchange
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  deploy:
+    uses: "./.github/workflows/terraform-deploy-template.yml"
+    secrets: inherit
+    with:
+      environment: dev
+      log_level: ${{ inputs.log_level }}

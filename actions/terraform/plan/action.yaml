@@ -1,0 +1,147 @@
+name: Terraform Plan
+description: Plan Terraform project
+inputs:
+  working_directory:
+    description: Terraform project
+    default: ./infrastructure
+    required: true
+  arm_client_id:
+    required: true
+    description: Azure Client ID
+  arm_subscription_id:
+    required: true
+    description: Azure Subscription ID
+  arm_tenant_id:
+    description: Azure Tenant ID
+    default: cd0026d8-283b-4a55-9bfa-d0ef4a8ba21c
+  gh_token:
+    description: GitHub Token
+    required: true
+  tf_args:
+    description: Args
+    required: false
+  tf_version:
+    description: Terraform Version
+    default: 1.7.4
+
+runs:
+  using: "composite"
+  steps:
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ inputs.arm_client_id }}
+        tenant-id: ${{ inputs.arm_tenant_id }}
+        subscription-id: ${{ inputs.arm_subscription_id }}
+
+    - name: Terraform Format
+      shell: bash
+      id: fmt
+      working-directory: ${{ inputs.working_directory }}
+      continue-on-error: true
+      run: terraform fmt -check
+
+    - name: Terraform Validate
+      id: validate
+      working-directory: ${{ inputs.working_directory }}
+      shell: bash
+      run: terraform validate -no-color > tfvalidate.txt
+
+    - name: Terraform Plan
+      id: plan
+      working-directory: ${{ inputs.working_directory }}
+      shell: bash
+      continue-on-error: true
+      env:
+        ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
+        ARM_SUBSCRIPTION_ID: ${{ inputs.arm_subscription_id }}
+        ARM_TENANT_ID: ${{ inputs.arm_tenant_id }}
+        ARM_USE_OIDC: "true"
+      run: |
+        terraform plan -no-color -out tfplan.out ${{ inputs.tf_args }}
+        terraform show -no-color tfplan.out > tfplan.txt
+
+    - name: Terraform Summary
+      id: summary
+      working-directory: ${{ inputs.working_directory }}
+      shell: bash
+      run: |
+        echo "#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "#### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "<details><summary>Validation Output</summary>" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`\n" >> $GITHUB_STEP_SUMMARY
+        echo "$(cat tfvalidate.txt)" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "</details>" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "#### Terraform Plan 📖\`${{ steps.plan.outcome }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "<details><summary>Show Plan</summary>" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`\n" >> $GITHUB_STEP_SUMMARY
+        echo "$(cat tfplan.txt)" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "</details>" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "*Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, Working Directory: \`${{ inputs.working_directory }}\`, Workflow: \`${{ github.workflow }}\`*" >> $GITHUB_STEP_SUMMARY
+
+    - uses: actions/github-script@v7
+      if: github.event_name == 'pull_request'
+      env:
+        PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+      with:
+        github-token: ${{ inputs.gh_token }}
+        script: |
+          // 1. Retrieve existing bot comments for the PR
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          })
+          const botComment = comments.find(comment => {
+            return comment.user.type === 'Bot' && comment.body.includes('Terraform Format and Style')
+          })
+
+          // 2. Prepare format of the comment
+          const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+          #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+          #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+          <details><summary>Validation Output</summary>
+
+          \`\`\`\n
+          ${{ steps.validate.outputs.stdout }}
+          \`\`\`
+
+          </details>
+
+          #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+
+          <details><summary>Show Plan</summary>
+
+          \`\`\`\n
+          ${process.env.PLAN}
+          \`\`\`
+
+          </details>
+
+          *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, Working Directory: \`${{ inputs.working_directory }}\`, Workflow: \`${{ github.workflow }}\`*`;
+
+          // 3. If we have a comment, update it, otherwise create a new one
+          if (botComment) {
+            github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: output
+            })
+          } else {
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+          }
