@@ -1,0 +1,35 @@
+admin:
+  github:
+    owner: altinn
+    repository: altinn-platform
+
+products:
+  - name: Platform
+    slug: PAP # Product Altinn Platform
+    github:
+      owner: altinn
+      repositories:
+        - altinn-platform
+
+  - name: Authorization
+    slug: PAA # Product Altinn Authorization
+    github:
+      owner: altinn
+      repositories:
+        - altinn-access-management
+        - altinn-authorization
+
+  - name: Studio
+    slug: PAS # Product Altinn Studio
+    github:
+      owner: altinn
+      repositories:
+        - altinn-studio
+
+  - name: Dialogporten
+    slug: DDP # Product DigDir Dialogporten
+    github:
+      owner: digdir
+      repositories:
+        - dialogporten
+        - dialogporten-frontend

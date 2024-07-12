@@ -1,0 +1,118 @@
+name: Terraform Plan
+description: Run terraform plan
+inputs:
+  working_directory:
+    description: Terraform project
+    default: ./infrastructure
+    required: true
+
+  oidc_type:
+    description: Can be either <branch, environment>
+    required: true
+  oidc_value:
+    description: Either name of branch or environment
+    required: true
+
+  arm_client_id:
+    required: true
+    description: Azure Client ID
+  arm_subscription_id:
+    required: true
+    description: Azure Subscription ID
+  arm_tenant_id:
+    description: Azure Tenant ID
+    default: cd0026d8-283b-4a55-9bfa-d0ef4a8ba21c
+
+  tf_arm_subscription_id:
+    required: true
+    default: d43d5057-8389-40d5-88c4-04db9275cbf2
+    description: Azure Subscription ID
+  tf_arm_resource_group_name:
+    description: Resource Group Name
+    default: terraform-rg
+  tf_arm_storage_account_name:
+    description: Storage Account Name
+    default: altinnterraformstorage02
+  tf_state_name:
+    description: Name of Terraform state file
+    required: true
+    default: tfstate
+  tf_version:
+    description: Terraform Version
+    default: 1.7.4
+  tf_log_level:
+    description: Log level
+    default: INFO
+  tf_args:
+    description: Args
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: Terraform Install
+      id: install
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.tf_version }}
+        terraform_wrapper: true
+
+    - name: Terraform Set Logger
+      id: logger
+      shell: bash
+      run: export TF_LOG="${{ inputs.tf_log_level == '' && 'INFO' || inputs.tf_log_level }}"
+
+    - name: Terraform Set State File Path
+      id: state_file_path_tmp
+      shell: bash
+      run: |
+        echo "TF_STATE_FILE_TMP=github.com/${GITHUB_REPOSITORY}/${{ inputs.oidc_type == 'environment' && 'environments' || 'branches' }}/${{ inputs.oidc_value }}/${{ inputs.tf_state_name }}" >> $GITHUB_ENV
+
+    - name: Terraform Set State File Path Lower
+      id: state_file_path
+      shell: bash
+      run: |
+        echo "TF_STATE_FILE=$(echo ${{ env.TF_STATE_FILE_TMP }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+    - name: Terraform Init
+      id: init
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      env:
+        ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
+        ARM_TENANT_ID: ${{ inputs.arm_tenant_id }}
+        ARM_SUBSCRIPTION_ID: ${{ inputs.tf_arm_subscription_id }}
+        ARM_USE_OIDC: "true"
+      run: |
+        terraform init -input=false \
+          -backend-config="resource_group_name=${{ inputs.tf_arm_resource_group_name }}" \
+          -backend-config="storage_account_name=${{ inputs.tf_arm_storage_account_name }}" \
+          -backend-config="container_name=tfstates" \
+          -backend-config="key=${{ env.TF_STATE_FILE }}"
+
+    - name: Artifact Key
+      id: artifact_key
+      shell: bash
+      run: |
+        TF_STATE_FILE=${{ env.TF_STATE_FILE }}
+        ARTIFACT_KEY="${TF_STATE_FILE////_}"
+        echo "ARTIFACT_KEY=$ARTIFACT_KEY" >> $GITHUB_ENV
+
+    - name: Download Plan
+      id: artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ env.ARTIFACT_KEY }}
+        path: ${{ inputs.working_directory }}
+
+    - name: Terraform Apply
+      id: apply
+      working-directory: ${{ inputs.working_directory }}
+      shell: bash
+      run: |
+        terraform apply -input=false -auto-approve ${{ inputs.tf_args }} tfplan.out
+      env:
+        ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
+        ARM_SUBSCRIPTION_ID: ${{ inputs.arm_subscription_id }}
+        ARM_TENANT_ID: ${{ inputs.arm_tenant_id }}
+        ARM_USE_OIDC: "true"
