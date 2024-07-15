@@ -2,20 +2,20 @@ name: Terraform Plan
 description: Run terraform plan
 inputs:
   working_directory:
-    description: Terraform project
+    description: The directory where the Terraform project is located.
     default: ./infrastructure
     required: true
 
   oidc_type:
-    description: Can be either <branch, environment>
+    description: Specifies a part of subject for OpenID Connect (OIDC), can be values 'branch' or 'environment'
     required: true
   oidc_value:
-    description: Either name of branch or environment
+    description: Name of branch or environment
     required: true
 
   arm_client_id:
     required: true
-    description: Azure Client ID
+    description: Federated Azure Client ID.
   arm_subscription_id:
     required: true
     description: Azure Subscription ID
@@ -26,12 +26,12 @@ inputs:
   tf_arm_subscription_id:
     required: true
     default: d43d5057-8389-40d5-88c4-04db9275cbf2
-    description: Azure Subscription ID
+    description: Azure Subscription ID for the storage account that persists the terraform state
   tf_arm_resource_group_name:
-    description: Resource Group Name
+    description: Azure resource group for the storage account that persists the terraform state
     default: terraform-rg
   tf_arm_storage_account_name:
-    description: Storage Account Name
+    description: Name of the azure storage account that persists the terraform state
     default: altinnterraformstorage02
   tf_state_name:
     description: Name of Terraform state file
@@ -41,14 +41,14 @@ inputs:
     description: Terraform Version
     default: 1.7.4
   tf_log_level:
-    description: Log level
+    description: Terraform Log level
     default: INFO
   tf_args:
-    description: Args
+    description: Terraform arguments
     required: false
 
 runs:
-  using: "composite"
+  using: composite
   steps:
     - name: Terraform Install
       id: install

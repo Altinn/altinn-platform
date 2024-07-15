@@ -2,7 +2,6 @@ ARM_STORAGE_ACCOUNT=altinnterraformstorage02
 ARM_STORAGE_CONTAINER=tfstates
 ADMIN_GITHUB_OWNER=altinn
 ADMIN_GITHUB_REPOSITORY=altinn-platform
-#VARIABLES=variables.tfvars
 AZ_SUBSCRIPTION=d43d5057-8389-40d5-88c4-04db9275cbf2
 
 TF=terraform

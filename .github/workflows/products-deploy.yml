@@ -6,7 +6,7 @@ on:
     inputs:
       log_level:
         required: true
-        description: "Terraform Log Level"
+        description: Terraform Log Level
         default: INFO
         type: choice
         options:
