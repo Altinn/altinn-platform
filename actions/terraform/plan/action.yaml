@@ -144,8 +144,6 @@ runs:
       shell: bash
       if: always()
       working-directory: ${{ inputs.working_directory }}
-      env:
-        PLAN: terraform\n${{ steps.plan.outputs.stdout }}
       run: |
         echo "#"" Terraform ${{ inputs.oidc_type }} ${{ inputs.oidc_value }}" >> $GITHUB_STEP_SUMMARY
 
@@ -168,7 +166,7 @@ runs:
         echo "<details><summary>Show Plan</summary>" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`\n" >> $GITHUB_STEP_SUMMARY
-        echo "${{ env.PLAN }}" >> $GITHUB_STEP_SUMMARY
+        echo "${{ steps.plan.outputs.stdout }}" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "</details>" >> $GITHUB_STEP_SUMMARY
@@ -217,7 +215,6 @@ runs:
       uses: actions/github-script@v7
       if: steps.issue_number.outputs.result != 'null' && steps.plan.outputs.exitcode == 2
       env:
-        PLAN: terraform\n${{ steps.plan.outputs.stdout }}
         ISSUE_NUMBER: ${{ steps.issue_number.outputs.result }}
       with:
         github-token: ${{ inputs.gh_token }}
@@ -250,7 +247,7 @@ runs:
           <details><summary>Show Plan</summary>
 
           \`\`\`\n
-          ${{ env.PLAN }}
+          ${{ steps.plan.outputs.stdout }}
           \`\`\`
 
           </details>
