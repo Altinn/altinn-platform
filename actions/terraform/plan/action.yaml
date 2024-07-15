@@ -199,7 +199,7 @@ runs:
                 repo: context.repo.repo,
               });
 
-              if (pr.length > 0)
+              if (data.length > 0)
               {
                 return data[0].number;
               } 
