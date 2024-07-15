@@ -193,15 +193,15 @@ runs:
             return context.issue.number;
           } else {
             // Otherwise return issue number from commit
-              const data = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              const prs = await github.rest.repos.listPullRequestsAssociatedWithCommit({
                 commit_sha: context.sha,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
               });
 
-              if (data.length > 0)
+              if (prs.data.length > 0)
               {
-                return data[0].number;
+                return prs.data[0].number;
               } 
 
               return null;
