@@ -205,11 +205,6 @@ runs:
               return null;
           }
 
-    - name: Echo Exit Code
-      id: exit_code
-      shell: bash
-      run: echo ${{ steps.issue_number.outputs.result }}
-
     - name: Terraform Summary PR
       id: pr_summary
       uses: actions/github-script@v7
