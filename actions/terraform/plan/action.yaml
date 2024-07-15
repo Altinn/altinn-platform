@@ -1,0 +1,272 @@
+name: Terraform Plan
+description: Run terraform plan
+inputs:
+  working_directory:
+    description: The directory where the Terraform project is located.
+    default: ./infrastructure
+    required: true
+
+  oidc_type:
+    description: Specifies a part of subject for OpenID Connect (OIDC), can be values 'branch' or 'environment'
+    required: true
+  oidc_value:
+    description: Name of branch or environment
+    required: true
+
+  arm_client_id:
+    required: true
+    description: Federated Azure Client ID.
+  arm_subscription_id:
+    required: true
+    description: Azure Subscription ID
+  arm_tenant_id:
+    description: Azure Tenant ID
+    default: cd0026d8-283b-4a55-9bfa-d0ef4a8ba21c
+
+  tf_arm_subscription_id:
+    required: true
+    default: d43d5057-8389-40d5-88c4-04db9275cbf2
+    description: Azure Subscription ID for the storage account that persists the terraform state
+  tf_arm_resource_group_name:
+    description: Azure resource group for the storage account that persists the terraform state
+    default: terraform-rg
+  tf_arm_storage_account_name:
+    description: Name of the azure storage account that persists the terraform state
+    default: altinnterraformstorage02
+  tf_state_name:
+    description: Name of Terraform state file
+    required: true
+    default: tfstate
+  tf_version:
+    description: Terraform Version
+    default: 1.7.4
+  tf_log_level:
+    description: Terraform Log level
+    default: INFO
+  tf_args:
+    description: Terraform arguments
+    required: false
+
+  gh_token:
+    description: GitHub Token
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Terraform Install
+      id: install
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.tf_version }}
+        terraform_wrapper: true
+
+    - name: Terraform Set Logger
+      id: logger
+      shell: bash
+      run: export TF_LOG="${{ inputs.tf_log_level == '' && 'INFO' || inputs.tf_log_level }}"
+
+    - name: Terraform Set State File Path
+      id: state_file_path_tmp
+      shell: bash
+      run: |
+        echo "TF_STATE_FILE_TMP=github.com/${GITHUB_REPOSITORY}/${{ inputs.oidc_type == 'environment' && 'environments' || 'branches' }}/${{ inputs.oidc_value }}/${{ inputs.tf_state_name }}" >> $GITHUB_ENV
+
+    - name: Terraform Set State File Path Lower
+      id: state_file_path
+      shell: bash
+      run: |
+        echo "TF_STATE_FILE=$(echo ${{ env.TF_STATE_FILE_TMP }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+    - name: Terraform Format
+      id: fmt
+      shell: bash
+      if: always()
+      working-directory: ${{ inputs.working_directory }}
+      continue-on-error: true
+      run: terraform fmt -check
+
+    - name: Terraform Init
+      id: init
+      shell: bash
+      if: always()
+      working-directory: ${{ inputs.working_directory }}
+      env:
+        ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
+        ARM_TENANT_ID: ${{ inputs.arm_tenant_id }}
+        ARM_SUBSCRIPTION_ID: ${{ inputs.tf_arm_subscription_id }}
+        ARM_USE_OIDC: "true"
+      run: |
+        terraform init -input=false \
+          -backend-config="resource_group_name=${{ inputs.tf_arm_resource_group_name }}" \
+          -backend-config="storage_account_name=${{ inputs.tf_arm_storage_account_name }}" \
+          -backend-config="container_name=tfstates" \
+          -backend-config="key=${{ env.TF_STATE_FILE }}"
+
+    - name: Terraform Validate
+      id: validate
+      shell: bash
+      if: always()
+      working-directory: ${{ inputs.working_directory }}
+      run: terraform validate -no-color
+
+    - name: Terraform Plan
+      id: plan
+      shell: bash
+      if: always()
+      working-directory: ${{ inputs.working_directory }}
+      run: |
+        terraform plan -no-color -input=false -out tfplan.out ${{ inputs.tf_args }}
+      env:
+        ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
+        ARM_SUBSCRIPTION_ID: ${{ inputs.arm_subscription_id }}
+        ARM_TENANT_ID: ${{ inputs.arm_tenant_id }}
+        ARM_USE_OIDC: "true"
+
+    - name: Artifact Key
+      id: artifact_key
+      shell: bash
+      run: |
+        TF_STATE_FILE=${{ env.TF_STATE_FILE }}
+        ARTIFACT_KEY="${TF_STATE_FILE////_}"
+        echo "ARTIFACT_KEY=$ARTIFACT_KEY" >> $GITHUB_ENV
+
+    - name: Upload Plan
+      id: artifact
+      uses: actions/upload-artifact@v4
+      if: success()
+      with:
+        name: ${{ env.ARTIFACT_KEY }}
+        path: ${{ inputs.working_directory }}/tfplan.out
+
+    - name: Terraform Summary
+      id: action_summary
+      shell: bash
+      if: always()
+      working-directory: ${{ inputs.working_directory }}
+      env:
+        PLAN: terraform\n${{ steps.plan.outputs.stdout }}
+      run: |
+        echo "#"" Terraform ${{ inputs.oidc_type }} ${{ inputs.oidc_value }}" >> $GITHUB_STEP_SUMMARY
+
+        echo "#### Initialization ⚙️\`${{ steps.init.outcome }}\`" >> $GITHUB_STEP_SUMMARY
+
+        echo "#### Format and Style 🖌\`${{ steps.fmt.outcome }}\`" >> $GITHUB_STEP_SUMMARY
+
+        echo "#### Validation 🤖\`${{ steps.validate.outcome }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "<details><summary>Validation Output</summary>" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`\n" >> $GITHUB_STEP_SUMMARY
+        echo "${{ steps.validate.outputs.stdout }}" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "</details>" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        echo "#### Plan 📖\`${{ steps.plan.outcome }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "<details><summary>Show Plan</summary>" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`\n" >> $GITHUB_STEP_SUMMARY
+        echo "${{ env.PLAN }}" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "</details>" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        echo "| Context | Values |" >> $GITHUB_STEP_SUMMARY 
+        echo "| - | - |" >> $GITHUB_STEP_SUMMARY 
+        echo "| Pusher | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY 
+        echo "| Action | \`${{ github.event_name }}\` |" >> $GITHUB_STEP_SUMMARY 
+        echo "| Working Directory | \`${{ inputs.working_directory }}\` |" >> $GITHUB_STEP_SUMMARY 
+        echo "| State | \`${{ env.TF_STATE_FILE }}\` |" >> $GITHUB_STEP_SUMMARY 
+        echo "| Artifact | \`${{ env.ARTIFACT_KEY }}\` |" >> $GITHUB_STEP_SUMMARY
+
+    - name: GitHub Issue
+      id: issue_number
+      uses: actions/github-script@v7
+      if: needs.pr-check.outputs.number != 'null'
+      with:
+        result-encoding: string
+        script: |
+          if (context.issue.number) {
+            // Return issue number if present
+            return context.issue.number;
+          } else {
+            // Otherwise return issue number from commit
+            return (
+              await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                commit_sha: context.sha,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+              })
+            ).data[0].number;
+          }
+
+    - name: Terraform Summary PR
+      id: pr_summary
+      uses: actions/github-script@v7
+      if: needs.pr-check.outputs.number != 'null'
+      env:
+        PLAN: terraform\n${{ steps.plan.outputs.stdout }}
+        ISSUE_NUMBER: ${{steps.issue_number.outputs.result}}
+      with:
+        github-token: ${{ inputs.gh_token }}
+        script: |
+          // 1. Retrieve existing bot comments for the PR
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: ${{ env.ISSUE_NUMBER }},
+          })
+          const botComment = comments.find(comment => {
+            return comment.user.type === 'Bot' && comment.body.includes('Terraform ${{ inputs.oidc_type }} ${{ inputs.oidc_value }}')
+          })
+
+          // 2. Prepare format of the comment
+          const output = `# Terraform ${{ inputs.oidc_type }} ${{ inputs.oidc_value }}
+          #### Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+          #### Initialization ⚙️\`${{ steps.init.outcome }}\`
+          #### Validation 🤖\`${{ steps.validate.outcome }}\`
+          <details><summary>Validation Output</summary>
+
+          \`\`\`\n
+          ${{ steps.validate.outputs.stdout }}
+          \`\`\`
+
+          </details>
+
+          #### Plan 📖\`${{ steps.plan.outcome }}\`
+
+          <details><summary>Show Plan</summary>
+
+          \`\`\`\n
+          ${{ env.PLAN }}
+          \`\`\`
+
+          </details>
+
+          | Context | Values |
+          | - | - |
+          | Pusher | @${{ github.actor }} |
+          | Action | \`${{ github.event_name }}\` |
+          | Working Directory | \`${{ inputs.working_directory }}\` |
+          | State | \`${{ env.TF_STATE_FILE }}\` |
+          | Artifact | \`${{ env.ARTIFACT_KEY }}\``;
+
+          // 3. If we have a comment, update it, otherwise create a new one
+          if (botComment) {
+            github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: output
+            })
+          } else {
+            github.rest.issues.createComment({
+              issue_number: ${{ env.ISSUE_NUMBER }},
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+          }

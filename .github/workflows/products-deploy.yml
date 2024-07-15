@@ -1,0 +1,69 @@
+name: Altinn Products
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      log_level:
+        required: true
+        description: Terraform Log Level
+        default: INFO
+        type: choice
+        options:
+          - TRACE
+          - DEBUG
+          - INFO
+          - WARN
+          - ERROR
+
+env:
+  ENVIRONMENT: prod
+  TF_STATE_NAME: products.tfstate
+  TF_PROJECT: ./infrastructure/products
+  ARM_CLIENT_ID: c217a3ea-402f-4886-ace5-478db72ab4c9
+  ARM_SUBSCRIPTION_ID: d43d5057-8389-40d5-88c4-04db9275cbf2
+
+permissions:
+  id-token: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  plan:
+    name: Plan
+    environment: prod
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Terraform Initialize
+        uses: altinn/altinn-platform/actions/terraform/plan@features/794
+        with:
+          working_directory: ${{ env.TF_PROJECT }}
+          oidc_type: environment
+          oidc_value: ${{ env.ENVIRONMENT }}
+          arm_client_id: ${{ env.ARM_CLIENT_ID }}
+          arm_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
+          tf_state_name: ${{ env.TF_STATE_NAME }}
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy:
+    name: Deploy
+    environment: prod
+    if: github.ref == 'refs/heads/main'
+    needs: plan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Terraform Apply
+        uses: altinn/altinn-platform/actions/terraform/apply@features/794
+        with:
+          working_directory: ${{ env.TF_PROJECT }}
+          oidc_type: environment
+          oidc_value: ${{ env.ENVIRONMENT }}
+          arm_client_id: ${{ env.ARM_CLIENT_ID }}
+          arm_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
+          tf_state_name: ${{ env.TF_STATE_NAME }}
