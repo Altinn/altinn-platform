@@ -1,0 +1,33 @@
+# Output of the `go build` command
+*.out
+
+# Directories for Go tools
+bin/
+dist/
+
+# Go test binary and coverage profiles
+*.test
+*.coverprofile
+*.cov
+*.out
+*.cover
+
+# IDE and editor-specific files
+.vscode/
+.idea/
+
+
+# Git-specific files
+.gitattributes
+.gitmodules
+.git/
+
+# Common build system files
+.env
+
+# Godoc
+.doc/
+
+# System files
+.DS_Store
+Thumbs.db
