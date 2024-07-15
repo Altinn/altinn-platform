@@ -215,7 +215,7 @@ runs:
     - name: Terraform Summary PR
       id: pr_summary
       uses: actions/github-script@v7
-      if: steps.issue_number.outputs.result != 'null'
+      if: steps.issue_number.outputs.result != 'null' && steps.plan.outputs.exitcode == 2
       env:
         PLAN: terraform\n${{ steps.plan.outputs.stdout }}
         ISSUE_NUMBER: ${{ steps.issue_number.outputs.result }}
