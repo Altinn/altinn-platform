@@ -35,7 +35,7 @@ products:
         - dialogporten-frontend
 
   - name: Core
-    slug: PAR # Product Altinn Core
+    slug: PAC # Product Altinn Core
     github:
       owner: altinn
       repositories:
