@@ -2,6 +2,8 @@ name: Altinn Products
 
 on:
   push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       log_level:
