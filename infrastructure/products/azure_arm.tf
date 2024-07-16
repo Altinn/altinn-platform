@@ -203,7 +203,7 @@ resource "azurerm_role_assignment" "admins" {
 
 # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
 resource "azurerm_role_assignment" "product_admins_storage_blob_owner" {
-  scope                = azurerm_storage_container.container.resource_manager_id
+  scope                = azurerm_storage_account.backend.id
   principal_id         = azuread_group.product_admins.object_id
   role_definition_name = data.azurerm_role_definition.storage_blob_data_owner.name
   #  skip_service_principal_aad_check = true
@@ -223,6 +223,8 @@ resource "azurerm_role_assignment" "products" {
   scope                = azurerm_storage_container.container.resource_manager_id
   principal_id         = azuread_group.admins[each.value.slug].object_id
   role_definition_name = data.azurerm_role_definition.storage_blob_data_owner.name
+
+  depends_on = [azurerm_role_assignment.product_admins_contributor]
 
   condition_version = "2.0"
   condition         = <<-EOT
@@ -248,6 +250,8 @@ resource "azurerm_role_assignment" "appregg" {
   principal_id                     = azuread_service_principal.product[each.key].object_id
   role_definition_name             = data.azurerm_role_definition.storage_blob_data_owner.name
   skip_service_principal_aad_check = true
+
+  depends_on = [azurerm_role_assignment.product_admins_contributor]
 
   condition_version = "2.0"
   condition         = <<-EOT
