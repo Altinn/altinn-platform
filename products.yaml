@@ -33,3 +33,10 @@ products:
       repositories:
         - dialogporten
         - dialogporten-frontend
+
+  - name: Core
+    slug: PAC # Product Altinn Core
+    github:
+      owner: altinn
+      repositories:
+        - altinn-receipt
