@@ -16,7 +16,6 @@ products:
     github:
       owner: altinn
       repositories:
-        - altinn-access-management
         - altinn-authorization
 
   - name: Studio
