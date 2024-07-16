@@ -34,8 +34,8 @@ products:
         - dialogporten
         - dialogporten-frontend
 
-  - name: Receipt
-    slug: PAR # Product Altinn Receipt
+  - name: Core
+    slug: PAR # Product Altinn Core
     github:
       owner: altinn
       repositories:
