@@ -64,8 +64,9 @@ func TestGetAppInfos(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(tt.statusCode)
+				// check return value, otherwise lint will complain
 				if _, err := w.Write([]byte(tt.mockResponse)); err != nil {
-					t.Errorf("failed to write response: %v", err)
+					t.Errorf("failed to write mock response: %v", err)
 				}
 			}))
 			defer server.Close()
