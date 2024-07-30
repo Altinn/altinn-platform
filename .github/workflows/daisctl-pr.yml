@@ -11,7 +11,7 @@ on:
       - "./github/workflows/daisctl-pr.yml"
 
 env:
-  WORKDIR: ./tools/daisctl
+  WORKDIR: tools/daisctl
 
 jobs:
   tidy:
