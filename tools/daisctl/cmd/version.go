@@ -13,7 +13,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the build information for daisctl",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Printf("Dais version %s\nCommit: %s\nBuild Date: %s\n", BuildInfo.Version, BuildInfo.Commit, BuildInfo.Date)
+		fmt.Printf("Dais version: %s\nCommit: %s\nBuild Date: %s\n", BuildInfo.Version, BuildInfo.Commit, BuildInfo.Date)
 		return nil
 	},
 }
