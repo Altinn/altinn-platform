@@ -53,9 +53,13 @@ jobs:
           version: latest
           working-directory: ${{ env.WORKDIR }}
 
-  tests-windows:
+  test:
     needs: lint
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    name: Test - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         working-directory: ${{ env.WORKDIR }}
@@ -67,37 +71,9 @@ jobs:
           go-version-file: '${{ env.WORKDIR }}/go.mod'
           cache: true
       - name: Run tests
-        run: make.exe test
-
-  tests-macos:
-    needs: lint
-    runs-on: macos-latest
-    defaults:
-      run:
-        working-directory: ${{ env.WORKDIR }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: '${{ env.WORKDIR }}/go.mod'
-          cache: true
-      - name: Run tests
-        run: make test
-
-  tests-unix:
-    needs: lint
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ env.WORKDIR }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: '${{ env.WORKDIR }}/go.mod'
-          cache: true
-      - name: Run tests
-        run: make test
-
+        run: |
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            make.exe test
+          else
+            make test
+          fi
