@@ -47,12 +47,11 @@ jobs:
         with:
           go-version-file: '${{ env.WORKDIR }}/go.mod'
           cache: true
-      - name: pwd
-        run: pwd
       - name: lint
         uses: golangci/golangci-lint-action@v6.0.1
         with:
           version: latest
+          working-directory: ${{ env.WORKDIR }}
 
   tests-windows:
     needs: lint
