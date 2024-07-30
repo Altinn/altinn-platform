@@ -21,13 +21,13 @@ jobs:
       run:
         working-directory: ${{ env.WORKDIR }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
       - name: Install Go
         uses: actions/setup-go@v5
         with:
           go-version-file: '${{ env.WORKDIR }}/go.mod'
           cache: true
-      - name: Checkout code
-        uses: actions/checkout@v4
       - name: Check go mod
         run: |
           go mod tidy
