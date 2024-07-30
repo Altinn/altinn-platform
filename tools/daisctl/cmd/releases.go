@@ -11,9 +11,13 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 )
 
-var deployCmd = &cobra.Command{
-	Use:   "deployments",
-	Short: "Display deployments information",
+// Flags for the releases cmd
+var appName string
+
+var releasesCmd = &cobra.Command{
+	Use:     "releases",
+	Aliases: []string{"r", "rel"},
+	Short:   "Display information of all releases per app",
 	RunE: func(cmd *cobra.Command, args []string) error {
 
 		d, err := altinn.GetAllDeployments()
@@ -21,8 +25,18 @@ var deployCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Println(setupTable(d.Apps).View())
+		if appName != "" {
+			appVersions := d.GetAppVersions(appName)
+			if appVersions == nil {
+				fmt.Printf("No releases found for app: %s\n", appName)
+				return nil
+			}
+			fmt.Println(setupTable(appVersions).View())
+		} else {
+			fmt.Println(setupTable(d.Apps).View())
+		}
 		return nil
+
 	},
 }
 
@@ -34,6 +48,7 @@ func setupTable(deployments map[string]*kube.AppVersions) table.Model {
 		{Title: "at22", Width: 10},
 		{Title: "at23", Width: 10},
 		{Title: "at24", Width: 10},
+		{Title: "yt01", Width: 10},
 		{Title: "tt02", Width: 10},
 		{Title: "production", Width: 10},
 	}
@@ -46,6 +61,7 @@ func setupTable(deployments map[string]*kube.AppVersions) table.Model {
 			d.Versions["at22"],
 			d.Versions["at23"],
 			d.Versions["at24"],
+			d.Versions["yt01"],
 			d.Versions["tt02"],
 			d.Versions["production"],
 		})
@@ -65,4 +81,8 @@ func setupTable(deployments map[string]*kube.AppVersions) table.Model {
 		Bold(true)
 	t.SetStyles(s)
 	return t
+}
+
+func init() {
+	releasesCmd.Flags().StringVar(&appName, "app", "", "App name to display its versions, e.g --app=myapp, --app myapp")
 }

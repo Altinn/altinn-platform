@@ -24,6 +24,8 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.AddCommand(deployCmd)
+	// Completion not needed at the moment
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
+	rootCmd.AddCommand(releasesCmd)
 	rootCmd.AddCommand(versionCmd)
 }

@@ -63,10 +63,12 @@ func (d *Deployments) initAppsData(kwUrl string, e Environment) error {
 	return nil
 }
 
-// GetAppVersions returns the versions of a given app across all environments
-func (d *Deployments) GetAppVersions(appName string) map[string]string {
+// GetAppVersions returns the map containing the specified app
+func (d *Deployments) GetAppVersions(appName string) map[string]*kube.AppVersions {
 	if app, exists := d.Apps[appName]; exists {
-		return app.Versions
+		return map[string]*kube.AppVersions{
+			appName: app,
+		}
 	}
 	return nil
 }
