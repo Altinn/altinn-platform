@@ -1,9 +1,14 @@
-name: CI
+name: Daisctl PRs
 on:
   push:
     branches:
-      - main
+      - "main"
   pull_request:
+    paths:
+      - "./tools/daisctl/**/*.go"
+      - "./tools/daisctl/go.*"
+      - "./tools/daisctl/Makefile"
+      - "./github/workflows/daisctl-pr.yml"
 
 env:
   WORKDIR: ./tools/daisctl
@@ -11,17 +16,18 @@ env:
 jobs:
   tidy:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.WORKDIR }}
     steps:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
           cache: true
-          working-directory: ${{ env.WORKDIR }}
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Check go mod
-        working-directory: ${{ env.WORKDIR }}
         run: |
           go mod tidy
           git diff --exit-code go.mod
@@ -30,6 +36,9 @@ jobs:
   lint:
     needs: tidy
     runs-on: ubuntu-latest
+    defaults:
+        run:
+          working-directory: ${{ env.WORKDIR }}
     steps:
       - uses: actions/checkout@v4
       - name: Install Go
@@ -37,7 +46,6 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
-          working-directory: ${{ env.WORKDIR }}
       - name: lint
         uses: golangci/golangci-lint-action@v6.0.1
         with:
@@ -46,6 +54,9 @@ jobs:
   tests-windows:
     needs: lint
     runs-on: windows-latest
+    defaults:
+        run:
+          working-directory: ${{ env.WORKDIR }}
     steps:
       - uses: actions/checkout@v4
       - name: Install Go
@@ -53,13 +64,15 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
-          working-directory: ${{ env.WORKDIR }}
       - name: Run tests
         run: make.exe test
 
   tests-macos:
     needs: lint
     runs-on: macos-latest
+    defaults:
+        run:
+          working-directory: ${{ env.WORKDIR }}
     steps:
       - uses: actions/checkout@v4
       - name: Install Go
@@ -67,13 +80,15 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
-          working-directory: ${{ env.WORKDIR }}
       - name: Run tests
         run: make test
 
   tests-unix:
     needs: lint
     runs-on: ubuntu-latest
+    defaults:
+        run:
+          working-directory: ${{ env.WORKDIR }}
     steps:
       - uses: actions/checkout@v4
       - name: Install Go
@@ -81,7 +96,6 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
-          working-directory: ${{ env.WORKDIR }}
       - name: Run tests
         run: make test
 
