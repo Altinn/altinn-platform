@@ -1,4 +1,8 @@
 name: Daisctl PRs
+
+env:
+  WORKDIR: tools/daisctl
+
 on:
   push:
     branches:
@@ -10,9 +14,6 @@ on:
       - "tools/daisctl/Makefile"
       - "./github/workflows/daisctl-pr.yml"
 
-env:
-  WORKDIR: tools/daisctl
-
 jobs:
   tidy:
     runs-on: ubuntu-latest
@@ -23,7 +24,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: '${{ env.WORKDIR }}/go.mod'
           cache: true
       - name: Checkout code
         uses: actions/checkout@v4
@@ -44,7 +45,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: '${{ env.WORKDIR }}/go.mod'
           cache: true
       - name: lint
         uses: golangci/golangci-lint-action@v6.0.1
@@ -62,7 +63,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: '${{ env.WORKDIR }}/go.mod'
           cache: true
       - name: Run tests
         run: make.exe test
@@ -78,7 +79,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: '${{ env.WORKDIR }}/go.mod'
           cache: true
       - name: Run tests
         run: make test
@@ -94,7 +95,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: '${{ env.WORKDIR }}/go.mod'
           cache: true
       - name: Run tests
         run: make test
