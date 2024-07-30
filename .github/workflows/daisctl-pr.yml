@@ -5,9 +5,9 @@ on:
       - "main"
   pull_request:
     paths:
-      - "./tools/daisctl/**/*.go"
-      - "./tools/daisctl/go.*"
-      - "./tools/daisctl/Makefile"
+      - "tools/daisctl/**/*.go"
+      - "tools/daisctl/go.*"
+      - "tools/daisctl/Makefile"
       - "./github/workflows/daisctl-pr.yml"
 
 env:
