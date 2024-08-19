@@ -143,6 +143,9 @@ runs:
       id: action_summary
       shell: bash
       if: always()
+      env:
+        VALIDATE_OUTPUT: ${{ steps.validate.outputs.stdout }}
+        PLAN_OUTPUT: ${{ steps.plan.outputs.stdout }}
       working-directory: ${{ inputs.working_directory }}
       run: |
         echo "#"" Terraform ${{ inputs.oidc_type }} ${{ inputs.oidc_value }}" >> $GITHUB_STEP_SUMMARY
@@ -155,7 +158,7 @@ runs:
         echo "<details><summary>Validation Output</summary>" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`\n" >> $GITHUB_STEP_SUMMARY
-        echo '${{ steps.validate.outputs.stdout }}' >> $GITHUB_STEP_SUMMARY
+        echo "${VALIDATE_OUTPUT}" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "</details>" >> $GITHUB_STEP_SUMMARY
@@ -166,7 +169,7 @@ runs:
         echo "<details><summary>Show Plan</summary>" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`\n" >> $GITHUB_STEP_SUMMARY
-        echo '${{ steps.plan.outputs.stdout }}' >> $GITHUB_STEP_SUMMARY
+        echo "${PLAN_OUTPUT}" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "</details>" >> $GITHUB_STEP_SUMMARY
