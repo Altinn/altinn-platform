@@ -39,3 +39,10 @@ products:
       owner: altinn
       repositories:
         - altinn-receipt
+
+  - name: Apps
+    slug: APP # Apps
+    github:
+      owner: altinn
+      repositories:
+        - app-frontend-react
