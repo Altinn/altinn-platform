@@ -128,7 +128,7 @@ runs:
       shell: bash
       run: |
         TF_STATE_FILE=${{ env.TF_STATE_FILE }}
-        ARTIFACT_KEY="${TF_STATE_FILE////_}"
+        ARTIFACT_KEY="${TF_STATE_FILE////_}.tfplan"
         echo "ARTIFACT_KEY=$ARTIFACT_KEY" >> $GITHUB_ENV
 
     - name: Upload Plan
@@ -178,7 +178,7 @@ runs:
         echo "| Action | \`${{ github.event_name }}\` |" >> $GITHUB_STEP_SUMMARY 
         echo "| Working Directory | \`${{ inputs.working_directory }}\` |" >> $GITHUB_STEP_SUMMARY 
         echo "| State File | \`${{ env.TF_STATE_FILE }}\` |" >> $GITHUB_STEP_SUMMARY 
-        echo "| Artifact | \`${{ env.ARTIFACT_KEY }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| Plan File | \`${{ env.ARTIFACT_KEY }}\` |" >> $GITHUB_STEP_SUMMARY
 
     - name: GitHub Issue
       id: issue_number
@@ -253,7 +253,7 @@ runs:
           | Action | \`${{ github.event_name }}\` |
           | Working Directory | \`${{ inputs.working_directory }}\` |
           | State File | \`${{ env.TF_STATE_FILE }}\` |
-          | Artifact | \`${{ env.ARTIFACT_KEY }}\``;
+          | Plan File | \`${{ env.ARTIFACT_KEY }}\``;
 
           // 3. If we have a comment, update it, otherwise create a new one
           if (botComment) {

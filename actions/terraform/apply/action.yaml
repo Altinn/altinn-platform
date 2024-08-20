@@ -95,7 +95,7 @@ runs:
       shell: bash
       run: |
         TF_STATE_FILE=${{ env.TF_STATE_FILE }}
-        ARTIFACT_KEY="${TF_STATE_FILE////_}"
+        ARTIFACT_KEY="${TF_STATE_FILE////_}.tfplan"
         echo "ARTIFACT_KEY=$ARTIFACT_KEY" >> $GITHUB_ENV
 
     - name: Download Plan
