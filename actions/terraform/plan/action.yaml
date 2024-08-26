@@ -139,16 +139,15 @@ runs:
         name: ${{ env.ARTIFACT_KEY }}
         path: ${{ inputs.working_directory }}/tfplan.out
 
-    - name: Terraform Summary
+    - name: Generate Terraform Summary
       id: action_summary
+      uses: actions/github-script@v7
       if: always()
       env:
         VALIDATE_OUTPUT: ${{ steps.validate.outputs.stdout }}
         PLAN_OUTPUT: ${{ steps.plan.outputs.stdout }}
-      working-directory: ${{ inputs.working_directory }}
-      uses: actions/github-script@v7
       with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+        github-token: ${{ inputs.gh_token }}
         script: |
           // 1. Prep the output
           const output = `# Terraform ${{ inputs.oidc_type }} ${{ inputs.oidc_value }}
@@ -183,9 +182,14 @@ runs:
           
           // 2. Set the output variable
           const fs = require('fs');
-          fs.writeFileSync('${{ env.tf_actions_working_dir }}/summary.md', output);
+          fs.writeFileSync('${{ inputs.working_directory }}/summary.md', output);
           core.setOutput('summary', output);
-
+    - name: Write Terraform Summary
+      if: always()
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      run: cat summary.md >> $GITHUB_STEP_SUMMARY
+      
     - name: GitHub Issue
       id: issue_number
       uses: actions/github-script@v7
