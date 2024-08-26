@@ -1,0 +1,33 @@
+name: Release Daisctl
+
+env:
+  WORKDIR: tools/daisctl
+
+on:
+  push:
+    tags:
+      - "*-daisctl"
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: '${{ env.WORKDIR }}/go.mod'
+          cache: true
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: 'latest'
+          args: release --clean
+          workdir: ${{ env.WORKDIR }}
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

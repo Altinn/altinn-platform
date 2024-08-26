@@ -141,44 +141,50 @@ runs:
 
     - name: Terraform Summary
       id: action_summary
-      shell: bash
       if: always()
+      env:
+        VALIDATE_OUTPUT: ${{ steps.validate.outputs.stdout }}
+        PLAN_OUTPUT: ${{ steps.plan.outputs.stdout }}
       working-directory: ${{ inputs.working_directory }}
-      run: |
-        echo "#"" Terraform ${{ inputs.oidc_type }} ${{ inputs.oidc_value }}" >> $GITHUB_STEP_SUMMARY
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          // 1. Prep the output
+          const output = `# Terraform ${{ inputs.oidc_type }} ${{ inputs.oidc_value }}
+          #### Initialization ⚙️\`${{ steps.init.outcome }}\`
+          #### Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+          #### Validation 🤖\`${{ steps.validate.outcome }}\`
+          <details><summary>Validation Output</summary>
 
-        echo "#### Initialization ⚙️\`${{ steps.init.outcome }}\`" >> $GITHUB_STEP_SUMMARY
+          \`\`\`\n
+          ${process.env.VALIDATE_OUTPUT}
+          \`\`\`
 
-        echo "#### Format and Style 🖌\`${{ steps.fmt.outcome }}\`" >> $GITHUB_STEP_SUMMARY
+          </details>
 
-        echo "#### Validation 🤖\`${{ steps.validate.outcome }}\`" >> $GITHUB_STEP_SUMMARY
-        echo "<details><summary>Validation Output</summary>" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "\`\`\`\n" >> $GITHUB_STEP_SUMMARY
-        echo "${{ steps.validate.outputs.stdout }}" >> $GITHUB_STEP_SUMMARY
-        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "</details>" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
+          #### Plan 📖\`${{ steps.plan.outcome }}\`
 
-        echo "#### Plan 📖\`${{ steps.plan.outcome }}\`" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "<details><summary>Show Plan</summary>" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "\`\`\`\n" >> $GITHUB_STEP_SUMMARY
-        echo "${{ steps.plan.outputs.stdout }}" >> $GITHUB_STEP_SUMMARY
-        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "</details>" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
+          <details><summary>Show Plan</summary>
 
-        echo "| Context | Values |" >> $GITHUB_STEP_SUMMARY 
-        echo "| - | - |" >> $GITHUB_STEP_SUMMARY 
-        echo "| Pusher | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY 
-        echo "| Action | \`${{ github.event_name }}\` |" >> $GITHUB_STEP_SUMMARY 
-        echo "| Working Directory | \`${{ inputs.working_directory }}\` |" >> $GITHUB_STEP_SUMMARY 
-        echo "| State File | \`${{ env.TF_STATE_FILE }}\` |" >> $GITHUB_STEP_SUMMARY 
-        echo "| Plan File | \`${{ env.ARTIFACT_KEY }}\` |" >> $GITHUB_STEP_SUMMARY
+          \`\`\`\n
+          ${process.env.PLAN_OUTPUT}
+          \`\`\`
+
+          </details>
+
+          | Context | Values |
+          | - | - |
+          | Pusher | @${{ github.actor }} |
+          | Action | \`${{ github.event_name }}\` |
+          | Working Directory | \`${{ inputs.working_directory }}\` |
+          | State | \`${{ env.TF_STATE_FILE }}\` |
+          | Artifact | \`${{ env.ARTIFACT_KEY }}\` |`;
+
+          // 2. Set the output variable
+          const fs = require('fs');
+          fs.writeFileSync('${{ env.tf_actions_working_dir }}/summary.md', output);
+          core.setOutput('summary', output);
 
     - name: GitHub Issue
       id: issue_number
