@@ -141,12 +141,12 @@ runs:
 
     - name: Terraform Summary
       id: action_summary
+      uses: actions/github-script@v7
       if: always()
       env:
         VALIDATE_OUTPUT: ${{ steps.validate.outputs.stdout }}
         PLAN_OUTPUT: ${{ steps.plan.outputs.stdout }}
       working-directory: ${{ inputs.working_directory }}
-      uses: actions/github-script@v7
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
