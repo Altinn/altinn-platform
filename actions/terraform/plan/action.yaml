@@ -145,12 +145,11 @@ runs:
     - name: truncate terraform plan result
       shell: bash
       run: |
-        plan=$(cat <<${{ env.DELIMITER }}
+        plan=$(cat <<${{ env.DELIMITER }}1
         ${{ format('{0}{1}', steps.plan.outputs.stdout, steps.plan.outputs.stderr) }}
-        ${{ env.DELIMITER }}
+        ${{ env.DELIMITER }}1
         )
-        plan=$(echo "${plan}" | grep -v 'Refreshing state' | tail --bytes 65500)
-        echo "${plan}"
+        plan=$(echo "${plan}" | grep -v 'Refreshing state' | tail --bytes 95500)
         echo "PLAN<<${{ env.DELIMITER }}2" >> $GITHUB_ENV
         echo '[maybe truncated]' >> $GITHUB_ENV
         echo "${plan}" >> $GITHUB_ENV
