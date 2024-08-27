@@ -145,7 +145,6 @@ runs:
       if: always()
       env:
         VALIDATE_OUTPUT: ${{ steps.validate.outputs.stdout }}
-        PLAN_OUTPUT: ${{ steps.plan.outputs.stdout }}
       with:
         github-token: ${{ inputs.gh_token }}
         script: |
@@ -167,7 +166,7 @@ runs:
           <details><summary>Show Plan</summary>
           
           \`\`\`\n
-          ${process.env.PLAN_OUTPUT}
+          ${{ steps.plan.outputs.stdout }}
           \`\`\`
           
           </details>
