@@ -40,7 +40,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Terraform Initialize
-        uses: altinn/altinn-platform/actions/terraform/plan@bugfix/product-tf-pipeline
+        uses: altinn/altinn-platform/actions/terraform/plan@main
         with:
           working_directory: ${{ env.TF_PROJECT }}
           oidc_type: environment
