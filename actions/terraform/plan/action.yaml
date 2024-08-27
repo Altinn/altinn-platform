@@ -149,7 +149,7 @@ runs:
         ${{ format('{0}{1}', steps.plan.outputs.stdout, steps.plan.outputs.stderr) }}
         ${{ env.DELIMITER }}1
         )
-        plan=$(echo "${plan}" | grep -v 'Refreshing state' | tail --bytes 95500)
+        plan=$(echo "${plan}" | grep -v 'Refreshing state' | tail --bytes 205500)
         echo "PLAN<<${{ env.DELIMITER }}2" >> $GITHUB_ENV
         echo '[maybe truncated]' >> $GITHUB_ENV
         echo "${plan}" >> $GITHUB_ENV
