@@ -139,6 +139,24 @@ runs:
         name: ${{ env.ARTIFACT_KEY }}
         path: ${{ inputs.working_directory }}/tfplan.out
 
+    - name: generate random delimiter
+      shell: bash
+      run: echo "DELIMITER=$(uuidgen)" >> $GITHUB_ENV
+    - name: truncate terraform plan result
+      shell: bash
+      run: |
+        plan=$(cat <<${{ env.DELIMITER }}
+        ${{ format('{0}{1}', steps.plan.outputs.stdout, steps.plan.outputs.stderr) }}
+        ${{ env.DELIMITER }}
+        )
+        plan=$(echo "${plan}" | grep -v 'Refreshing state' | tail --bytes 65500)
+        echo "${plan}"
+        echo "PLAN<<${{ env.DELIMITER }}2" >> $GITHUB_ENV
+        echo '[maybe truncated]' >> $GITHUB_ENV
+        echo "${plan}" >> $GITHUB_ENV
+        echo >> $GITHUB_ENV
+        echo "${{ env.DELIMITER }}2" >> $GITHUB_ENV
+
     - name: Generate Terraform Summary
       id: action_summary
       uses: actions/github-script@v7
@@ -166,7 +184,7 @@ runs:
           <details><summary>Show Plan</summary>
           
           \`\`\`\n
-          ${{ steps.plan.outputs.stdout }}
+          ${{ env.PLAN }}
           \`\`\`
           
           </details>
