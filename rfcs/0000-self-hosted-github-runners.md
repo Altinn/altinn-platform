@@ -8,17 +8,16 @@
 # Summary
 [summary]: #summary
 
-The proposed RFC introduces self hosted runners in github that teams can setup using a fairly easy self service solution. Self hosted runners are useful in cases where we need to add exceptions in firewalls or in private projects that are consuming all the free minutes we have for github hosted runners. The runners should be discarded after each job to reduce the chances of contaminated runners. The number of runners scale up and down automatically
+The proposed RFC introduces self-hosted runners in GitHub that teams can set up using a straightforward self-service solution. Self-hosted runners are useful in scenarios where exceptions in firewalls are needed or in private projects that consume all the free minutes available for GitHub-hosted runners. The runners should be discarded after each job to reduce the chances of contamination. The number of runners should scale up and down automatically.
 
 # Motivation
 [motivation]: #motivation
 
-We have some usecases where we need to run pipelines accessing internal resouces in our infrastructure. We cannot open up for access to github hosted runners as this would remove one layer of security in our solution. Having a setup for self-hosted runners we can put these in a VNet we controle and enable secure communication between those VNets and other of our private VNets.
-Each product/team should have their own set of self-hosted runners located in a VNet so that we don't need to expose all services to all runners.
-Self hosted runners in a public repository introduces a security consern as jobs can be executed from forks. To reduce the risk a runner should only run one job and then be discarded (ephemeral runners). In addition all services or infrastructure in the VNets that are connected to the runner VNet should be protected by a secure login/auth barrier ensuring that access to the runner is not enugh to access private services.
-Teams have different needs and our solution should support that there are different needs without adding to much of a maintenance burden on the platform team.
-The number of runners should scale up if there are qeueud jobs and down to zero if there are none, this is to ensure that we support both use cases with high number of executions and those with few, without paying for resources that are not used.
+We have some use cases where we need to run pipelines that access internal resources within our infrastructure. We cannot allow access to GitHub-hosted runners, as this would remove a layer of security in our solution. By setting up self-hosted runners, we can place these in a VNet we control and enable secure communication between those VNets and other private VNets.
 
+Each product/team should have its own set of self-hosted runners located in a VNet, so we don't need to expose all services to all runners. Self-hosted runners in a public repository introduce a security concern, as jobs can be executed from forks. To reduce the risk, a runner should only run one job and then be discarded (ephemeral runners). Additionally, all services or infrastructure in the VNets connected to the runner VNet should be protected by a secure login/authentication barrier, ensuring that access to the runner is not enough to access private services.
+
+Teams have different needs, and our solution should support these varying needs without adding too much of a maintenance burden on the platform team. The number of runners should scale up if there are queued jobs and down to zero if there are none. This ensures that we support both use cases with a high number of executions and those with few, without paying for unused resources.
 
 # Guide-level explanation
 [guide-level-explanation]: #guide-level-explanation
@@ -36,6 +35,79 @@ For implementation-oriented RFCs (e.g. for a code based solution), this section 
 
 # Reference-level explanation
 [reference-level-explanation]: #reference-level-explanation
+
+## Infrastructure overview
+
+```mermaid
+C4Context
+title System Context Diagram for self-hosted runners
+
+Deployment_Node(gh, "GitHub", "") {
+    Deployment_Node(altinn, "Organization", "Altinn") {
+        SystemDb(repo1, "Git Repo", "github.com/altinn/altinn-platform")
+        SystemQueue(jobq1, "Workflow Job Queue")
+    }
+}
+Deployment_Node(az, "Azure", "") {
+    Deployment_Node(acavnet, "VNet", "Runner VNet") {
+        Deployment_Node(avaenv, "Azure Container App Environment", "Product/Team Environment") {
+            Container_Boundary(job, "Azure Container App Job") {
+                Container(acascaler1, "Job Scaler")
+                Container(aca1, "Azure Container App Job")
+            }
+        }
+    }
+
+    Boundary(svc, "Private VNet") {
+        SystemDb(db, "PostgreSQL")
+    }
+}
+
+Rel(repo1, jobq1, "Queue Job")
+Rel(acascaler1, jobq1, "Checks for Queued Jobs")
+Rel(acascaler1, aca1, "Starts Job")
+Rel(aca1, repo1, "Register Runner")
+Rel(aca1, db, "Connect to Database")
+```
+## Lifecycle of Containers Running Jobs
+
+```mermaid
+sequenceDiagram
+participant w as Workflows
+participant jq as Job Queue
+participant js as Custom Scale Rule
+
+loop every 20 seconds
+    js ->> jq: Check for Pending Job
+end
+par
+    w ->> jq: Queue Job
+    create participant aj1 as Azure Container App Job 1
+    js ->> aj1: Start Azure Container App Job
+    aj1 ->> w: Register Runner with Repo
+    w ->> aj1: Send Job to Runner
+    loop foreach step in job
+        aj1 ->> aj1: Execute Step
+    end
+    aj1 ->> w: Send Back Result of Job
+    destroy aj1
+    aj1 -x w: Deregister and Terminate
+end
+par
+    w ->> jq: Queue Job
+    js ->> jq: Check for Pending Job
+    create participant aj2 as Azure Container App Job 2
+    js ->> aj2: Start Azure Container App Job
+    aj2 ->> w: Register Runner with Repo
+    w ->> aj2: Send Job to Runner
+    loop foreach step in job
+        aj2 ->> aj2: Execute Step
+    end
+    aj2 ->> w: Send Back Result of Job
+    destroy aj2
+    aj2 -x w: Deregister and Terminate
+end
+```
 
 This is the technical portion of the RFC. Explain the design in sufficient detail that:
 
