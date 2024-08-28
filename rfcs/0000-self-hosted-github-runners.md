@@ -82,6 +82,7 @@ loop every 20 seconds
 end
 par
     w ->> jq: Queue Job
+    js --> jq: Pending job is discovered
     create participant aj1 as Azure Container App Job 1
     js ->> aj1: Start Azure Container App Job
     aj1 ->> w: Register Runner with Repo
@@ -95,7 +96,7 @@ par
 end
 par
     w ->> jq: Queue Job
-    js ->> jq: Check for Pending Job
+    js --> jq: Pending job is discovered
     create participant aj2 as Azure Container App Job 2
     js ->> aj2: Start Azure Container App Job
     aj2 ->> w: Register Runner with Repo
