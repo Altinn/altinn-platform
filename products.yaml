@@ -17,6 +17,7 @@ products:
       owner: altinn
       repositories:
         - altinn-authorization
+        - altinn-access-management
 
   - name: Studio
     slug: PAS # Product Altinn Studio
