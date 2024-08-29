@@ -269,7 +269,7 @@ runs:
           <details><summary>Show Plan</summary>
 
           \`\`\`\n
-          ${{ steps.plan.outputs.stdout }}
+          ${{ env.PLAN }}
           \`\`\`
 
           </details>
