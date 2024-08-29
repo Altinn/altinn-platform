@@ -14,6 +14,7 @@ permissions:
 
 jobs:
   build:
+    name: Test build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +35,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push
+      - name: Build
         id: docker_build
         uses: docker/build-push-action@v6
         with:
