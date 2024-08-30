@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - main
+    paths:
+      - .github/workflows/products-deploy.yml
+      - actions/terraform/apply/**
+      - actions/terraform/plan/**
+      - infrastructure/products/**
+      - products.yaml
   workflow_dispatch:
     inputs:
       log_level:
