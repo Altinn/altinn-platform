@@ -121,18 +121,26 @@ The section should return to the examples given in the previous section, and exp
 # Drawbacks
 [drawbacks]: #drawbacks
 
-Why should we *not* do this?
+- Self-hosted runners are a security risk as actors can create PRs from forks and run any code they want on our infrastructure.
+- Self-hosted runners can expose weaknesses if hosts in private networks assume they are safe because they are not exposed publicly. This should not be the case, but private networking tends to lead people to make that assumption. A zero-trust mindset is a must.
 
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
 
-- Why is this design the best in the space of possible designs?
-- What other designs have been considered and what is the rationale for not choosing them?
-- What is the impact of not doing this?
+- Alternatives include setting up VMs to run jobs from workflows; this removes the possibility of having ephemeral runners and autoscaling, which introduces even greater security risks.
+- Using an AKS cluster with an operator for creating and handling pods for running GitHub Action jobs on self-hosted runners. This is less of a security risk than VMs since we can have ephemeral runners, but there is still a risk if you escape the Kubernetes pod sandbox, as the host running the AKS node is still present.
+- Upgrading our GitHub plan to use [private networking for GitHub-hosted runners in your organization](https://docs.github.com/en/organizations/managing-organization-settings/about-azure-private-networking-for-github-hosted-runners-in-your-organization).
+
+The alternative requiring less effort on our end is paying for GitHub Team and setting up private networking. We would still need to provide some way for teams to configure this. 
+
+Azure Container Apps are also, of course, running on some sort of hardware/host somewhere, but since that sandbox is managed by Azure, it is safe to assume that more time, effort, and funding go into keeping it safe than we could ever invest in our VMs/AKS nodes. The added benefit of not having to pay for compute resources when we are not using them makes it a good second alternative to paying for GitHub Team.
 
 # Prior art
 [prior-art]: #prior-art
 
+We already have some private runners for some private repositories. These run in a Kubernetes cluster with an operator. This works, but there is still higher maintenance since we have to ensure that Kubernetes, the host OS, and other software/hardware are kept up to date. If we change these to Azure Container Apps, we should only need to keep the Docker image up to date.
+
+<!-- 
 Discuss prior art, both the good and the bad, in relation to this proposal.
 A few examples of what this can include are:
 
@@ -145,15 +153,21 @@ This section is intended to encourage you as an author to think about the lesson
 If there is no prior art, that is fine - your ideas are interesting to us whether they are brand new or if it is an adaptation from other languages.
 
 Note that while precedent set by other projects is some motivation, it does not on its own motivate an RFC.
+-->
 
 # Unresolved questions
 [unresolved-questions]: #unresolved-questions
 
+- How do we make it easy to configure connections between a team's GitHub runners VNet and their internal VNets?
+- How can we discover if a team using a custom image has a security vulnerability and needs to upgrade it?
+- How do we monitor the runners for suspicious traffic/processes?
+
+<!--
 - What parts of the design do you expect to resolve through the RFC process before this gets merged?
 - What parts of the design do you expect to resolve through the implementation of this feature before stabilization?
 - What related issues do you consider out of scope for this RFC that could be addressed in the future independently of the solution that comes out of this RFC?
 - What are the (unknown) unknowns?
-
+ -->
 # Future possibilities
 [future-possibilities]: #future-possibilities
 
