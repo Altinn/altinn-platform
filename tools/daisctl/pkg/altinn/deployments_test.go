@@ -20,20 +20,20 @@ func TestInitAppsData(t *testing.T) {
 		{
 			name:               "Valid Response from kubewrapper, no existing apps",
 			initialDeployments: newDeployments(),
-			mockResponse: `[
-							  {
-								"version": "111",
-								"release": "altinn-access-management"
-							  },
-							  {
-								"version": "222",
-								"release": "altinn-authentication"
-							  },
-							  {
-								"version": "333",
-								"release": "altinn-authorization"
-							  }
-							]`,
+			mockResponse: `	[
+						{
+							"version": "111",
+							"release": "altinn-access-management"
+						},
+						{
+							"version": "222",
+							"release": "altinn-authentication"
+						},
+						{
+							"version": "333",
+							"release": "altinn-authorization"
+						}
+					]`,
 			statusCode:  http.StatusOK,
 			expectError: false,
 			expectedResult: map[string]*kube.AppVersions{
@@ -70,20 +70,20 @@ func TestInitAppsData(t *testing.T) {
 					},
 				},
 			},
-			mockResponse: `[
-							  {
-								"version": "112",
-								"release": "altinn-access-management"
-							  },
-							  {
-								"version": "222",
-								"release": "altinn-authentication"
-							  },
-							  {
-								"version": "333",
-								"release": "altinn-authorization"
-							  }
-							]`,
+			mockResponse: `	[
+						{
+							"version": "112",
+							"release": "altinn-access-management"
+						},
+						{
+							"version": "222",
+							"release": "altinn-authentication"
+						},
+						{
+							"version": "333",
+							"release": "altinn-authorization"
+						}
+					]`,
 			statusCode:  http.StatusOK,
 			expectError: false,
 			expectedResult: map[string]*kube.AppVersions{
@@ -119,11 +119,11 @@ func TestInitAppsData(t *testing.T) {
 		{
 			name:               "Invalid Response from kubewrapper result in error",
 			initialDeployments: newDeployments(),
-			mockResponse: `[
-							  {
-								"version": "112",
-								"release": "altinn-access-management"
-							  },`,
+			mockResponse: `	[
+						{
+							"version": "112",
+							"release": "altinn-access-management"
+						},`,
 			statusCode:     http.StatusOK,
 			expectError:    true,
 			expectedResult: make(map[string]*kube.AppVersions),
