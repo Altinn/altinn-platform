@@ -97,3 +97,21 @@ An additional layer of control is implemented through Altinn's use of AI-DEV and
 | Altinn Product {Name}: Readers Prod | Technical architect (AI-PROD) | AI-PROD users | Altinn-Product-{Name}-Prod | `Reader` |
 | Altinn Product {Name}: Developers Prod | Technical architect (AI-PROD) | AI-PROD users | Altinn-Product-{Name}-Prod | `Contributor` |
 | Altinn Product {Name}: Admins Prod | Technical architect (AI-PROD) | AI-PROD users | Altinn-Product-{Name}-Prod | `Contributor`, `User Access Administrator` |
+
+# Reference-level explanation
+[reference-level-explanation]: #reference-level-explanation
+
+# Drawbacks
+[drawbacks]: #drawbacks
+
+# Rationale and alternatives
+[rationale-and-alternatives]: #rationale-and-alternatives
+
+# Prior art
+[prior-art]: #prior-art
+
+# Unresolved questions
+[unresolved-questions]: #unresolved-questions
+
+# Future possibilities
+[future-possibilities]: #future-possibilities
