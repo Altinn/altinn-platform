@@ -11,31 +11,16 @@ import (
 func TestInitAppsData(t *testing.T) {
 	tests := []struct {
 		name               string
-		mockResponse       string
 		statusCode         int
 		initialDeployments *Deployments
 		expectedResult     map[string]*kube.AppVersions
 		expectError        bool
 	}{
 		{
-			name:               "Valid Response from kubewrapper, no existing apps",
+			name:               "Valid Response from kubewrapper",
 			initialDeployments: newDeployments(),
-			mockResponse: `	[
-						{
-							"version": "111",
-							"release": "altinn-access-management"
-						},
-						{
-							"version": "222",
-							"release": "altinn-authentication"
-						},
-						{
-							"version": "333",
-							"release": "altinn-authorization"
-						}
-					]`,
-			statusCode:  http.StatusOK,
-			expectError: false,
+			statusCode:         http.StatusOK,
+			expectError:        false,
 			expectedResult: map[string]*kube.AppVersions{
 				"altinn-access-management": {
 					AppName: "altinn-access-management",
@@ -58,7 +43,7 @@ func TestInitAppsData(t *testing.T) {
 			},
 		},
 		{
-			name: "Valid Response from kubewrapper, merge with existing apps",
+			name: "Merges response with existing",
 			initialDeployments: &Deployments{
 				Apps: map[string]*kube.AppVersions{
 					"altinn-access-management": {
@@ -70,20 +55,6 @@ func TestInitAppsData(t *testing.T) {
 					},
 				},
 			},
-			mockResponse: `	[
-						{
-							"version": "112",
-							"release": "altinn-access-management"
-						},
-						{
-							"version": "222",
-							"release": "altinn-authentication"
-						},
-						{
-							"version": "333",
-							"release": "altinn-authorization"
-						}
-					]`,
 			statusCode:  http.StatusOK,
 			expectError: false,
 			expectedResult: map[string]*kube.AppVersions{
@@ -111,7 +82,6 @@ func TestInitAppsData(t *testing.T) {
 		{
 			name:               "No deployments returned from kubewrapper",
 			initialDeployments: newDeployments(),
-			mockResponse:       `[]`,
 			statusCode:         http.StatusOK,
 			expectError:        false,
 			expectedResult:     make(map[string]*kube.AppVersions),
@@ -119,24 +89,19 @@ func TestInitAppsData(t *testing.T) {
 		{
 			name:               "Invalid Response from kubewrapper result in error",
 			initialDeployments: newDeployments(),
-			mockResponse: `	[
-						{
-							"version": "112",
-							"release": "altinn-access-management"
-						},`,
-			statusCode:     http.StatusOK,
-			expectError:    true,
-			expectedResult: make(map[string]*kube.AppVersions),
+			statusCode:         http.StatusOK,
+			expectError:        true,
+			expectedResult:     make(map[string]*kube.AppVersions),
 		},
 		{
 			name:               "Server Error from kubewrapper result in error",
 			initialDeployments: newDeployments(),
-			mockResponse:       `Internal Server Error`,
 			statusCode:         http.StatusInternalServerError,
 			expectError:        true,
 			expectedResult:     make(map[string]*kube.AppVersions),
 		},
 	}
+	const testGroupName = "TestInitAppsData"
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a test server that returns the mock response
@@ -144,7 +109,11 @@ func TestInitAppsData(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(tt.statusCode)
 				// check return value, otherwise lint will complain
-				if _, err := w.Write([]byte(tt.mockResponse)); err != nil {
+				mockResponse, err := readMockResponseFromFile(testGroupName, tt.name)
+				if err != nil {
+					t.Errorf("failed to read mock response file: %v", err)
+				}
+				if _, err := w.Write(mockResponse); err != nil {
 					t.Errorf("failed to write mock response: %v", err)
 				}
 			}))
@@ -159,7 +128,7 @@ func TestInitAppsData(t *testing.T) {
 				t.Fatalf("Expected error: %v, got: %v", tt.expectError, err)
 			}
 			if diff := cmp.Diff(tt.initialDeployments.GetAllApps(), tt.expectedResult); diff != "" {
-				t.Errorf("initAppsData() mismatch (-want +got):\n%s", diff)
+				t.Errorf("initAppsData() mismatch (-want +got):\n%s\nInput located here: %s", diff, getCompleteFilepath(testGroupName, tt.name))
 			}
 		})
 	}

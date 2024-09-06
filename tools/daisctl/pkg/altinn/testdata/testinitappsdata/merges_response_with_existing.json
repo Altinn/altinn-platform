@@ -1,0 +1,14 @@
+[
+  {
+    "version": "112",
+    "release": "altinn-access-management"
+  },
+  {
+    "version": "222",
+    "release": "altinn-authentication"
+  },
+  {
+    "version": "333",
+    "release": "altinn-authorization"
+  }
+]

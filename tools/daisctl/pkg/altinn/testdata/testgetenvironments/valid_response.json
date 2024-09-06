@@ -1,0 +1,20 @@
+{
+  "environments": [
+    {
+      "platformUrl": "https://a.com",
+      "hostname": "a.com",
+      "appPrefix": "apps",
+      "platformPrefix": "platform",
+      "name": "dev",
+      "type": "test"
+    },
+    {
+      "platformUrl": "https://b.com",
+      "hostname": "b.com",
+      "appPrefix": "apps",
+      "platformPrefix": "platform",
+      "name": "prod",
+      "type": "production"
+    }
+  ]
+}
