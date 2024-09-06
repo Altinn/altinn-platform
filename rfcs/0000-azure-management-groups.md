@@ -23,11 +23,7 @@ There's been occasions where teams requiring access to Azure resources creates a
 
 Implementing a hierarchy of Azure Management Groups offers significant advantages in terms of cost management and accountability. This structure enables efficient tracking of cloud spending and budgeting across different teams within Altinn. While cost management is not typically a top priority for technical teams, automating certain tasks—such as cost tracking and reporting—can provide valuable insights for the finance department, helping to streamline financial operations and ensure budgetary control.
 
-Autonome Team
-
-Well known structure
-
-Uniform picture of
+A management group structure that mirrors our internal communication patterns will provide a uniform picture across the organization, ensuring consistency and clarity across teams. This approach streamlines processes, enhances template usage, and fosters improved collaboration between teams. By empowering each team to work within familiar guardrails, we create an environment where individuals can operate more effectively. Embracing such a structure simplifies governance and communication, allowing teams to seamlessly collaborate across departments with a well-known and cohesive setup.
 
 # Guide-level explanation
 [guide-level-explanation]: #guide-level-explanation
