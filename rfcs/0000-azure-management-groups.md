@@ -1,7 +1,7 @@
 - Feature Name: azure_management_groups
 - Start Date: 2024-09-06
-- RFC PR: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/pull/0000)
-- Github Issue: [altinn/altinn-platform#861](https://github.com/Altinn/altinn-platform/issues/861)
+- RFC PR: [altinn/altinn-platform#0000](https://github.com/Altinn/altinn-platform/pull/916)
+- Github Issue: [altinn/altinn-platform#861](https://github.com/Altinn/altinn-platform/issues/914)
 - Product/Category: (optional)
 - State: **REVIEW** (possible states are: **REVIEW**, **ACCEPTED** and **REJECTED**)
 
