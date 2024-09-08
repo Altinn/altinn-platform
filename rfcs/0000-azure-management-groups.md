@@ -100,18 +100,107 @@ An additional layer of control is implemented through Altinn's use of AI-DEV and
 
 # Reference-level explanation
 [reference-level-explanation]: #reference-level-explanation
+We propose using a Terraform-based solution to organize Azure Management Groups, with the hierarchical structure defined in YAML configuration files. This approach ensures consistency across teams and simplifies the creation and management of these groups within Azure as we can create a single terraform module to create proposed setup. 
+
+```yaml
+# altinn-products.yaml
+section:
+  name: Products
+    components:
+    - name: Authorization
+      slug: AP-Authorization
+    - name: Studio
+      slug: AP-Studio
+    - name: Dialogporten
+      slug: AP-Dialogporten
+    - name: Apps
+      slug: AP-Apps
+``` 
+
+```yaml
+# altinn-capabilities.yaml
+section:
+  name: Capabilities
+    components:
+    - name: Core
+      slug: AC-Core
+    - name: Platform
+      slug: AC-Platform
+```
+
+```yaml
+# service-owner.yaml
+section:
+  name: Service-Owner
+  components:
+  - name: <Name of Service Owner>
+    slug: SO-<Name of Service Owner>
+```
+
+Each YAML file defines the organizational units under the corresponding Management Group category. These files will later be extended to include OpenID Connect (OIDC) and tfstate configuration for each organizational unit. However, these aspects are outside the scope of this RFC.
+
+
+The slug serves as a human-readable identifier, used when creating resources in Terraform. Each resource linked to a specific organizational unit is prefixed with its corresponding slug, ensuring unique resource identifiers across teams. It is crucial not to change these slugs once established—any modification will result in the deletion and recreation of all resources managed by the project.
+
+The proposed Terraform folder structure will follow this pattern:
+```
+infrastructure/
+  terraform/
+    projects/
+      altinn-products
+      altinn-capabilties
+      service-owners
+    modules/
+      iam
+      tfstate (not part of RFC)
+      oidc (not part of RFC)
+```
+
+The module `iam` will handle the creation of Management Groups and Azure AD Groups. The module will:
+* Read the YAML configuration files.
+* Create the top-level Management Groups (specified in file).
+* module will create two management groups for each `section.component`: one for Dev (AI-DEV) and one for Prod (AI-PROD).
+
+As iam is just a module, the projects that acutally use this module should be using it as following.
+```terraform
+# altinn-products/main.tf
+
+module "iam" {
+  source              = "../../modules/iam"
+  file = ../../../altinn-products.yaml
+
+  ... 
+}
+```
 
 # Drawbacks
 [drawbacks]: #drawbacks
+* **Reorganization Challenges**: If Altinn undergoes a reorganization, adapting this structure to a new organizational model could be complex and time-consuming. Each management group is tightly coupled with its respective team or organizational unit. A reorganization would require updating management groups, Azure AD groups, and role assignments.
+
+* **Risk of Slug Changes**: The slug serves as a identifier for resources. Any accidental changes to a slug would lead to Terraform interpreting it as a new resource, resulting in the deletion and recreation of associated resources.
+
+* **Production Environment Only**: Mistakes in configuring or modifying management groups could have far-reaching impacts. Since management groups span across subscriptions and environments, errors in permissions, resource assignments, or group structure may disrupt multiple teams simultaneously.
+
+* **Scalability Issues**: Although the proposed structure might work well with Altinn's current setup, as the number of teams, products, and environments grows, maintaining this structure could become increasingly complex.
+
+* **Limited Flexibility**: Once this structure is implemented, there is limited room for customization at the team level. Teams will be required to operate within the guardrails set by the platform.
 
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
+**Rationale**:
+* **Consistency Across Teams**: The main goal of this RFC is to standardize the creation and management of resources within Azure by leveraging a Terraform-based solution. 
+* **Efficiency**: Empowering teams to manage their own IAM needs reduces dependencies on the platform team, reducing delays and allowing teams to work autonomously within predefined boundaries.
+
+* **Security and Governance**: By using management groups, Altinn can implement streamline governance policies and cost-tracking measures across all teams. This allows for better enforcement of security standards, as well as consistent application of policies such as Azure policies or cost-tracking tools.
 
 # Prior art
 [prior-art]: #prior-art
 
 # Unresolved questions
 [unresolved-questions]: #unresolved-questions
+* Terminology for "Altinn Capabilities": The term "Capabilities" may not accurately capture the nature of these internal teams.
+* AI-DEV and AI-PROD Distinctions: The distinction between AI-DEV and AI-PROD users needs defined boundaries.
+* Service Owners structure to be defined.
 
 # Future possibilities
 [future-possibilities]: #future-possibilities
