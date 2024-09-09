@@ -128,7 +128,7 @@ runs:
       shell: bash
       run: |
         TF_STATE_FILE=${{ env.TF_STATE_FILE }}
-        ARTIFACT_KEY="${TF_STATE_FILE////_}"
+        ARTIFACT_KEY="${TF_STATE_FILE////_}.tfplan"
         echo "ARTIFACT_KEY=$ARTIFACT_KEY" >> $GITHUB_ENV
 
     - name: Upload Plan
@@ -172,23 +172,23 @@ runs:
           #### Format and Style 🖌\`${{ steps.fmt.outcome }}\`
           #### Validation 🤖\`${{ steps.validate.outcome }}\`
           <details><summary>Validation Output</summary>
-          
+
           \`\`\`\n
           ${process.env.VALIDATE_OUTPUT}
           \`\`\`
-          
+
           </details>
-          
+
           #### Plan 📖\`${{ steps.plan.outcome }}\`
-          
+
           <details><summary>Show Plan</summary>
-          
+
           \`\`\`\n
           ${{ env.PLAN }}
           \`\`\`
-          
+
           </details>
-          
+
           | Context | Values |
           | - | - |
           | Pusher | @${{ github.actor }} |
@@ -196,7 +196,7 @@ runs:
           | Working Directory | \`${{ inputs.working_directory }}\` |
           | State | \`${{ env.TF_STATE_FILE }}\` |
           | Artifact | \`${{ env.ARTIFACT_KEY }}\` |`;
-          
+
           // 2. Set the output variable
           const fs = require('fs');
           fs.writeFileSync('${{ inputs.working_directory }}/summary.md', output);
@@ -279,8 +279,8 @@ runs:
           | Pusher | @${{ github.actor }} |
           | Action | \`${{ github.event_name }}\` |
           | Working Directory | \`${{ inputs.working_directory }}\` |
-          | State | \`${{ env.TF_STATE_FILE }}\` |
-          | Artifact | \`${{ env.ARTIFACT_KEY }}\``;
+          | State File | \`${{ env.TF_STATE_FILE }}\` |
+          | Plan File | \`${{ env.ARTIFACT_KEY }}\``;
 
           // 3. If we have a comment, update it, otherwise create a new one
           if (botComment) {
