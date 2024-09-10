@@ -22,6 +22,16 @@ Teams have different needs, and our solution should support these varying needs 
 # Guide-level explanation
 [guide-level-explanation]: #guide-level-explanation
 
+To make it easy for teams in need of self-hosted runners the platform team provides a base oci image for github runners and a terraform module for setting up the azure container apps in a subscription and vnet they control.
+
+The base oci image is published on ghcr.io and also available in our pull through cache of images in azure.
+The terraform module is published through our provider in the terraform registry.
+
+Managing the resources through publicly available registries like ghcr.io and registry.terraform.io will simplify the process of keeping dependencies up to date for teams leveraging our buildingblocks with services like dependabot or renovate.
+
+The teams will need to contact team platform to get access to the gituhb apps private key so they can have access to register their own runners with the apps credentials. We should keep the use of PAT to a minimum.
+
+<!--
 Explain the proposal as if it was already included in the platform and you were teaching it to another member of the team. That generally means:
 
 - Introducing new named concepts.
@@ -32,6 +42,7 @@ Explain the proposal as if it was already included in the platform and you were 
 - If applicable, discuss how this impacts the ability to read, understand, and maintain sofware that runs in or uses the platform. Code is read and modified far more often than written; will the proposed feature make services easier to maintain? Will this help users of the platform to maintain their services?
 
 For implementation-oriented RFCs (e.g. for a code based solution), this section should focus on how code contributors should think about the change, and give examples of its concrete impact. For policy RFCs, this section should provide an example-driven introduction to the policy, and explain its impact in concrete terms.
+-->
 
 # Reference-level explanation
 [reference-level-explanation]: #reference-level-explanation
@@ -171,6 +182,11 @@ Note that while precedent set by other projects is some motivation, it does not 
 # Future possibilities
 [future-possibilities]: #future-possibilities
 
+As a first extension of this we should make the teams able to setup a self-hosted runner environment without requesting a key from platform, but for now we can make this a manual initial setup to get some experience with self hosted runners
+
+Once we see the usage and how the runners are used the platform team can make informed decisions on how we can evolve this service so that the teams might not need to run and maintain their own infrastructure related to the self-hosted runners and just use a fully managed service by the platform team, but for now we make a MVP that solves the use case we currently have.
+
+<!--
 Think about what the natural extension and evolution of your proposal would
 be and how it would affect the project as a whole in a holistic
 way. Try to use this section as a tool to more fully consider all possible
@@ -188,3 +204,4 @@ Note that having something written down in the future-possibilities section
 is not a reason to accept the current or a future RFC; such notes should be
 in the section on motivation or rationale in this or subsequent RFCs.
 The section merely provides additional information.
+-->
