@@ -25,7 +25,7 @@ Teams have different needs, and our solution should support these varying needs 
 To make it easy for teams in need of self-hosted runners the platform team provides a base oci image for github runners and a terraform module for setting up the azure container apps in a subscription and vnet they control.
 
 The base oci image is published on ghcr.io and also available in our pull through cache of images in azure.
-The terraform module is published through our provider in the terraform registry.
+The terraform module is published through the terraform registry.
 
 Managing the resources through publicly available registries like ghcr.io and registry.terraform.io will simplify the process of keeping dependencies up to date for teams leveraging our buildingblocks with services like dependabot or renovate.
 
