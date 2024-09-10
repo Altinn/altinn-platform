@@ -18,6 +18,7 @@ products:
       repositories:
         - altinn-authorization
         - altinn-access-management
+        - altinn-authorization-tmp
 
   - name: Studio
     slug: PAS # Product Altinn Studio
