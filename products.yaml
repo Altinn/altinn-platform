@@ -14,7 +14,7 @@ products:
   - name: Authorization
     slug: PAA # Product Altinn Authorization
     github:
-      owner: altinn
+      owner: Altinn
       repositories:
         - altinn-authorization
         - altinn-access-management
