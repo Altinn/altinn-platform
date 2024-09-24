@@ -99,11 +99,11 @@ resource "azuread_group_member" "contributor_reader" {
 # https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/application_federated_identity_credential
 resource "azuread_application_federated_identity_credential" "oidc_environments_admin" {
   application_id = azuread_application.administrator.id
-  display_name   = "github.${lower(local.configuration.admin.github.owner)}.${local.configuration.admin.github.repository}.environment.${each.value}"
-  subject        = "repo:${lower(local.configuration.admin.github.owner)}/${lower(local.configuration.admin.github.repository)}:environment:${each.value}"
+  display_name   = "github.${local.configuration.admin.github.owner}.${local.configuration.admin.github.repository}.environment.${each.value}"
+  subject        = "repo:${local.configuration.admin.github.owner}/${lower(local.configuration.admin.github.repository)}:environment:${each.value}"
   audiences      = ["api://AzureADTokenExchange"]
   issuer         = "https://token.actions.githubusercontent.com"
-  description    = "Allow GitHub actions run within the context of environment '${each.value}' from the repository https://github.com/${lower(local.configuration.admin.github.owner)}/${lower(local.configuration.admin.github.repository)} to have access to the app registration"
+  description    = "Allow GitHub actions run within the context of environment '${each.value}' from the repository https://github.com/${local.configuration.admin.github.owner}/${lower(local.configuration.admin.github.repository)} to have access to the app registration"
 
   for_each = local.environments
 }
@@ -111,11 +111,11 @@ resource "azuread_application_federated_identity_credential" "oidc_environments_
 # https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/application_federated_identity_credential
 resource "azuread_application_federated_identity_credential" "oidc_environments" {
   application_id = azuread_application.product[each.value.app_reggs_slug].id
-  display_name   = "github.${lower(each.value.repository.owner)}.${each.value.repository.name}.environment.${each.value.environment.name}"
-  subject        = "repo:${lower(each.value.repository.owner)}/${each.value.repository.name}:environment:${each.value.environment.name}"
+  display_name   = "github.${each.value.repository.owner}.${each.value.repository.name}.environment.${each.value.environment.name}"
+  subject        = "repo:${each.value.repository.owner}/${each.value.repository.name}:environment:${each.value.environment.name}"
   audiences      = ["api://AzureADTokenExchange"]
   issuer         = "https://token.actions.githubusercontent.com"
-  description    = "Allow GitHub actions run within the context of environment '${each.value.environment.name}' from the repository https://github.com/${lower(each.value.repository.owner)}/${each.value.repository.name} to have access to the app registration"
+  description    = "Allow GitHub actions run within the context of environment '${each.value.environment.name}' from the repository https://github.com/${each.value.repository.owner}/${each.value.repository.name} to have access to the app registration"
 
   for_each = local.oidc_environments
 }
@@ -123,11 +123,11 @@ resource "azuread_application_federated_identity_credential" "oidc_environments"
 # https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/application_federated_identity_credential
 resource "azuread_application_federated_identity_credential" "oidc_branch" {
   application_id = azuread_application.product[each.key].id
-  display_name   = "github.${lower(each.value.repository.owner)}.${each.value.repository.name}.branch.main"
-  subject        = "repo:${lower(each.value.repository.owner)}/${each.value.repository.name}:ref:refs/heads/main"
+  display_name   = "github.${each.value.repository.owner}.${each.value.repository.name}.branch.main"
+  subject        = "repo:${each.value.repository.owner}/${each.value.repository.name}:ref:refs/heads/main"
   audiences      = ["api://AzureADTokenExchange"]
   issuer         = "https://token.actions.githubusercontent.com"
-  description    = "Allow GitHub actions run within the context of branch 'main' from the repository https://github.com/${lower(each.value.repository.owner)}/${each.value.repository.name} to have access to the app registration"
+  description    = "Allow GitHub actions run within the context of branch 'main' from the repository https://github.com/${each.value.repository.owner}/${each.value.repository.name} to have access to the app registration"
 
   for_each = local.oidc_branch
 }
