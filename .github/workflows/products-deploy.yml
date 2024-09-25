@@ -10,6 +10,15 @@ on:
       - actions/terraform/plan/**
       - infrastructure/products/**
       - products.yaml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/products-deploy.yml
+      - actions/terraform/apply/**
+      - actions/terraform/plan/**
+      - infrastructure/products/**
+      - products.yaml
   workflow_dispatch:
     inputs:
       log_level:
@@ -28,7 +37,7 @@ env:
   ENVIRONMENT: prod
   TF_STATE_NAME: products.tfstate
   TF_PROJECT: ./infrastructure/products
-  ARM_CLIENT_ID: c217a3ea-402f-4886-ace5-478db72ab4c9
+  ARM_CLIENT_ID: ${{ secrets.TF_AZURE_CLIENT_ID }}
   ARM_SUBSCRIPTION_ID: d43d5057-8389-40d5-88c4-04db9275cbf2
 
 permissions:
@@ -39,7 +48,7 @@ permissions:
 jobs:
   plan:
     name: Plan
-    environment: prod
+    environment: staging
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
