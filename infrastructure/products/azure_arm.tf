@@ -155,6 +155,14 @@ resource "azurerm_role_assignment" "administrator_contributor" {
 }
 
 # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
+resource "azurerm_role_assignment" "reader_reader" {
+  scope                            = azurerm_management_group.parent.id
+  principal_id                     = azuread_service_principal.reader.object_id
+  role_definition_name             = data.azurerm_role_definition.reader.name
+  skip_service_principal_aad_check = true
+}
+
+# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
 resource "azurerm_role_assignment" "apps_user_access_administrator" {
   scope                            = azurerm_management_group.management_groups[each.value.product_slug].id
   principal_id                     = azuread_service_principal.product[each.key].object_id
@@ -222,6 +230,31 @@ resource "azurerm_role_assignment" "product_admins_contributor" {
   scope                = data.azurerm_resource_group.tfstate.id
   principal_id         = azuread_group.product_admins.object_id
   role_definition_name = data.azurerm_role_definition.contributor.name
+  #  skip_service_principal_aad_check = true
+}
+
+# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
+resource "azurerm_role_assignment" "product_readers_storage_blob_owner" {
+  scope                = azurerm_storage_container.container.resource_manager_id
+  principal_id         = azuread_group.product_readers.object_id
+  role_definition_name = data.azurerm_role_definition.storage_blob_data_owner.name
+  condition_version    = "2.0"
+  condition            = <<-EOT
+  (
+   ${local.write_operations}
+   OR 
+   (
+    @Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringStartsWith 'github.com/${local.configuration.admin.github.owner}/${lower(local.configuration.admin.github.repository)}/'
+   )
+  )
+  EOT
+}
+
+# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
+resource "azurerm_role_assignment" "product_readers_reader" {
+  scope                = data.azurerm_resource_group.tfstate.id
+  principal_id         = azuread_group.product_readers.object_id
+  role_definition_name = data.azurerm_role_definition.reader.name
   #  skip_service_principal_aad_check = true
 }
 
