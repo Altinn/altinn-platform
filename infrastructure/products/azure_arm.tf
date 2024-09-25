@@ -238,6 +238,7 @@ resource "azurerm_role_assignment" "product_readers_storage_blob_owner" {
   scope                = azurerm_storage_container.container.resource_manager_id
   principal_id         = azuread_group.product_readers.object_id
   role_definition_name = data.azurerm_role_definition.storage_blob_data_owner.name
+  condition_version = "2.0"
   condition         = <<-EOT
   (
    ${local.write_operations}
