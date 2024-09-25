@@ -3,7 +3,7 @@ name: Release gh-runner
 on:
   push:
     tags:
-      - "*-ghrunner"
+      - "ghrunner-*"
 
 permissions:
   contents: read
