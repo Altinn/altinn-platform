@@ -13,9 +13,14 @@
         "gomod"
       ],
       "groupName": "{{manager}} non-major dependencies",
-      "matchPackagePatterns": ["*"],
-      "matchUpdateTypes": ["minor", "patch"],
-      "groupSlug": "{{manager}}-minor-patch"
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupSlug": "{{manager}}-minor-patch",
+      "matchPackageNames": [
+        "*"
+      ]
     }
   ]
 }
