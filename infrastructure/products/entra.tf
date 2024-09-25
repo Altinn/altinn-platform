@@ -15,8 +15,19 @@ resource "azuread_application" "administrator" {
 }
 
 # https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/application
+resource "azuread_application" "reader" {
+  display_name = "GitHub: ${lower(local.configuration.admin.github.owner)}/${lower(local.configuration.admin.github.repository)} - Reader"
+  #  prevent_duplicate_names = true
+}
+
+# https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/application
 resource "azuread_service_principal" "administrator" {
   client_id = azuread_application.administrator.client_id
+}
+
+# https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/application
+resource "azuread_service_principal" "reader" {
+  client_id = azuread_application.reader.client_id
 }
 
 # https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/application
@@ -64,6 +75,12 @@ resource "azuread_group" "product_admins" {
   security_enabled = true
 }
 
+# https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/group
+resource "azuread_group" "product_readers" {
+  display_name     = "Altinn Products: Readers"
+  security_enabled = true
+}
+
 resource "azuread_application_api_access" "example_msgraph" {
   application_id = azuread_application.administrator.id
   api_client_id  = data.azuread_application_published_app_ids.well_known.result["MicrosoftGraph"]
@@ -74,10 +91,26 @@ resource "azuread_application_api_access" "example_msgraph" {
   ]
 }
 
+resource "azuread_application_api_access" "reader_msgraph" {
+  application_id = azuread_application.reader.id
+  api_client_id  = data.azuread_application_published_app_ids.well_known.result["MicrosoftGraph"]
+
+  role_ids = [
+    data.azuread_service_principal.msgraph.app_role_ids["Group.Read.All"],
+    data.azuread_service_principal.msgraph.app_role_ids["Application.Read.All"],
+  ]
+}
+
 # https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/group_member
 resource "azuread_group_member" "product_admins" {
   group_object_id  = azuread_group.product_admins.object_id
   member_object_id = azuread_service_principal.administrator.object_id
+}
+
+# https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/group_member
+resource "azuread_group_member" "product_readers" {
+  group_object_id  = azuread_group.product_readers.object_id
+  member_object_id = azuread_service_principal.reader.object_id
 }
 
 # https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/group_member
@@ -106,6 +139,16 @@ resource "azuread_application_federated_identity_credential" "oidc_environments_
   description    = "Allow GitHub actions run within the context of environment '${each.value}' from the repository https://github.com/${local.configuration.admin.github.owner}/${lower(local.configuration.admin.github.repository)} to have access to the app registration"
 
   for_each = local.environments
+}
+
+# https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/application_federated_identity_credential
+resource "azuread_application_federated_identity_credential" "oidc_environments_reader" {
+  application_id = azuread_application.reader.id
+  display_name   = "github.${local.configuration.admin.github.owner}.${local.configuration.admin.github.repository}.environment.reader"
+  subject        = "repo:${local.configuration.admin.github.owner}/${lower(local.configuration.admin.github.repository)}:environment:reader"
+  audiences      = ["api://AzureADTokenExchange"]
+  issuer         = "https://token.actions.githubusercontent.com"
+  description    = "Allow GitHub actions run within the context of environment reader from the repository https://github.com/${local.configuration.admin.github.owner}/${lower(local.configuration.admin.github.repository)} to have access to the app registration"
 }
 
 # https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/application_federated_identity_credential
