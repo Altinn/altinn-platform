@@ -244,8 +244,8 @@ resource "azurerm_role_assignment" "product_admins_contributor" {
 
 # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
 resource "azurerm_role_assignment" "product_reader_storage_blob_reader_data_access" {
-  scope                = azurerm_storage_container.container.resource_manager_id
-  principal_id         = azuread_group.product_admins.object_id
+  scope                = azurerm_storage_account.backend.id
+  principal_id         = azuread_group.product_readers.object_id
   role_definition_name = data.azurerm_role_definition.storage_blob_reader_data_access.name
   #  skip_service_principal_aad_check = true
 }
