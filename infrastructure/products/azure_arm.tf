@@ -32,6 +32,11 @@ data "azurerm_role_definition" "storage_blob_data_owner" {
   role_definition_id = "b7e6dc6d-f1e8-4753-8033-0f276bb0955b"
 }
 
+# https:#learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#storage
+data "azurerm_role_definition" "storage_blob_reader_data_access" {
+  role_definition_id = "c12c1c16-33a1-487b-954d-41c89c60f349"
+}
+
 # https:#learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#general
 data "azurerm_role_definition" "reader" {
   role_definition_id = "acdd72a7-3385-48ef-bd42-f606fba81ae7"
@@ -230,6 +235,14 @@ resource "azurerm_role_assignment" "product_admins_contributor" {
   scope                = data.azurerm_resource_group.tfstate.id
   principal_id         = azuread_group.product_admins.object_id
   role_definition_name = data.azurerm_role_definition.contributor.name
+  #  skip_service_principal_aad_check = true
+}
+
+# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
+resource "azurerm_role_assignment" "product_reader_storage_blob_reader_data_access" {
+  scope                = azurerm_storage_container.container.resource_manager_id
+  principal_id         = azuread_group.product_admins.object_id
+  role_definition_name = data.azurerm_role_definition.storage_blob_reader_data_access.name
   #  skip_service_principal_aad_check = true
 }
 
