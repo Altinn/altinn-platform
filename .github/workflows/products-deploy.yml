@@ -37,7 +37,7 @@ env:
   ENVIRONMENT: prod
   TF_STATE_NAME: products.tfstate
   TF_PROJECT: ./infrastructure/products
-  ARM_CLIENT_ID: ${{ secrets.TF_AZURE_CLIENT_ID }}
+  ARM_CLIENT_ID: ${{ vars.TF_AZURE_CLIENT_ID }}
   ARM_SUBSCRIPTION_ID: d43d5057-8389-40d5-88c4-04db9275cbf2
 
 permissions:
@@ -48,7 +48,7 @@ permissions:
 jobs:
   plan:
     name: Plan
-    environment: staging
+    environment: reader
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -60,7 +60,7 @@ jobs:
           working_directory: ${{ env.TF_PROJECT }}
           oidc_type: environment
           oidc_value: ${{ env.ENVIRONMENT }}
-          arm_client_id: c217a3ea-402f-4886-ace5-478db72ab4c9
+          arm_client_id: ${{ env.ARM_CLIENT_ID }}
           arm_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
           tf_state_name: ${{ env.TF_STATE_NAME }}
           gh_token: ${{ secrets.GITHUB_TOKEN }}
