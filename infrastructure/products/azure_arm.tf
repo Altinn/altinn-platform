@@ -102,6 +102,10 @@ resource "azurerm_storage_account" "backend" {
   account_tier             = "Standard"
   account_replication_type = "GRS"
 
+  blob_properties {
+    versioning_enabled = true
+  }
+
   tags = merge({
 
   }, local.default_tags)
