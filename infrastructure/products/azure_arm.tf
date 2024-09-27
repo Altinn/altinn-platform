@@ -261,7 +261,7 @@ resource "azurerm_role_assignment" "product_readers_storage_blob_owner" {
    ${local.write_operations}
    OR 
    (
-    @Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringStartsWith 'github.com/${local.configuration.admin.github.owner}/${lower(local.configuration.admin.github.repository)}/'
+    @Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringStartsWith 'github.com/${lower(local.configuration.admin.github.owner)}/${lower(local.configuration.admin.github.repository)}/'
    )
   )
   EOT
