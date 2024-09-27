@@ -10,13 +10,13 @@ data "azuread_service_principal" "msgraph" {
 
 # https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/application
 resource "azuread_application" "administrator" {
-  display_name = "GitHub: ${lower(local.configuration.admin.github.owner)}/${lower(local.configuration.admin.github.repository)} - Admin"
+  display_name = "GitHub: ${local.configuration.admin.github.owner}/${lower(local.configuration.admin.github.repository)} - Admin"
   #  prevent_duplicate_names = true
 }
 
 # https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/application
 resource "azuread_application" "reader" {
-  display_name = "GitHub: ${lower(local.configuration.admin.github.owner)}/${lower(local.configuration.admin.github.repository)} - Reader"
+  display_name = "GitHub: ${local.configuration.admin.github.owner}/${lower(local.configuration.admin.github.repository)} - Reader"
   #  prevent_duplicate_names = true
 }
 
