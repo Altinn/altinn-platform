@@ -92,6 +92,22 @@ resource "azurerm_app_configuration" "state" {
   }
 }
 
+# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_definition
+resource "azurerm_role_definition" "app_config_list_keys_action" {
+  name        = "app-configuration-list-keys-action"
+  scope       = data.azurerm_resource_group.tfstate.id
+  description = "Grants listKeys/action on App Configurations. Managed by terraform"
+
+  permissions {
+    actions     = ["Microsoft.AppConfiguration/configurationStores/listKeys/action"]
+    not_actions = []
+  }
+
+  assignable_scopes = [
+    azurerm_app_configuration.state.id
+  ]
+}
+
 # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_account
 resource "azurerm_storage_account" "backend" {
   name                     = "${var.arm_product_name}${var.arm_solution_name}storage${var.arm_instance}"
@@ -247,6 +263,14 @@ resource "azurerm_role_assignment" "product_reader_storage_blob_reader_data_acce
   scope                = azurerm_storage_account.backend.id
   principal_id         = azuread_group.product_readers.object_id
   role_definition_name = data.azurerm_role_definition.storage_blob_reader_data_access.name
+  #  skip_service_principal_aad_check = true
+}
+
+# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
+resource "azurerm_role_assignment" "product_reader_storage_blob_reader_data_access" {
+  scope                = azurerm_app_configuration.state.id
+  principal_id         = azuread_group.product_readers.object_id
+  role_definition_name = azurerm_role_definition.app_config_list_keys_action.name
   #  skip_service_principal_aad_check = true
 }
 
