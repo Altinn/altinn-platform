@@ -267,7 +267,7 @@ resource "azurerm_role_assignment" "product_reader_storage_blob_reader_data_acce
 }
 
 # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
-resource "azurerm_role_assignment" "product_reader_storage_blob_reader_data_access" {
+resource "azurerm_role_assignment" "product_reader_app_config_list_keys_action" {
   scope                = azurerm_app_configuration.state.id
   principal_id         = azuread_group.product_readers.object_id
   role_definition_name = azurerm_role_definition.app_config_list_keys_action.name
