@@ -11,7 +11,7 @@ body:
     id: type
     label: Maintenance type
     options:
-      - [Terraform upgrades Apps](https://dev.azure.com/brreg/altinn-apps-ops/_git/tjenesteeier-template?path=/README.md&_a=preview)
+      - [Terraform upgrades Apps](https://pedia.altinn.cloud/altinn-3/ops/patching/terraform/apps/)
       - [Terraform upgrades Platform](https://pedia.altinn.cloud/altinn-3/ops/patching/terraform/platform/)
       - Other
   - type: textarea
