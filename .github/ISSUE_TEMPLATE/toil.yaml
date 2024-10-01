@@ -1,0 +1,21 @@
+name: Toil
+description: Create a none user-story issue (chore, tech issue, backend issue).
+labels: ["kind/chore", "status/draft"]
+projects: Altinn/177
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Evaluate if this can be automated to remove the future need for this kind of toil. If so create a Enhancement issue
+  - type: dropdown
+    id: type
+    label: Maintenance type
+    options:
+      - [Terraform upgrades Apps](https://dev.azure.com/brreg/altinn-apps-ops/_git/tjenesteeier-template?path=/README.md&_a=preview)
+      - [Terraform upgrades Platform]()
+      - Other
+  - type: textarea
+    id: Context
+    attributes:
+      label: Context for the task
+      description: If this issue/task needs more information or other option was chosen, please give some more context

@@ -1,9 +1,0 @@
-name: Maintenance
-description: File a bug report here
-labels: ["kind/bug", "status/triage"]
-body:
-  - type: dropdown
-    id: type
-    label: Maintenance type
-    options:
-      - [Terraform providers]()
