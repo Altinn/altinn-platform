@@ -9,11 +9,12 @@ body:
         Evaluate if this can be automated to remove the future need for this kind of toil. If so create a Enhancement issue
   - type: dropdown
     id: type
-    label: Maintenance type
-    options:
-      - [Terraform upgrades Apps](https://pedia.altinn.cloud/altinn-3/ops/patching/terraform/apps/)
-      - [Terraform upgrades Platform](https://pedia.altinn.cloud/altinn-3/ops/patching/terraform/platform/)
-      - Other
+    attributes:
+      label: Toil type
+      options:
+        - "[Terraform upgrades Apps](https://pedia.altinn.cloud/altinn-3/ops/patching/terraform/apps)"
+        - "[Terraform upgrades Platform](https://pedia.altinn.cloud/altinn-3/ops/patching/terraform/platform)"
+        - "Other"
   - type: textarea
     id: Context
     attributes:
