@@ -1,0 +1,7 @@
+contact_links:
+- name: 🙋🏾 Question
+  url: https://github.com/Altinn/altinn-platform/discussions/categories/q-a
+  about: If you have a question for Team-Platform open a Q-A Discussion
+- name: 🤔 Request for comment
+  url: https://github.com/Altinn/altinn-platform/discussions/categories/request-for-comments
+  about: Create a RFC for a large enhancement or change in our solution
