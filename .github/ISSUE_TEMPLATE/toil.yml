@@ -1,6 +1,6 @@
 name: Toil
 description: Create a none user-story issue (chore, tech issue, backend issue).
-labels: ["kind/chore", "status/draft"]
+labels: ["kind/chore", "kind/toil", "status/triage"]
 projects: Altinn/177
 body:
   - type: markdown
