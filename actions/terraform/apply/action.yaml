@@ -116,8 +116,8 @@ runs:
       shell: bash
       run: |
         terraform apply -input=false -auto-approve ${{ inputs.tf_args }} tfplan.out
-        echo "outputs=$(terraform output -json)" >> $GITHUB_ENV
-        echo "result=${{ fromJson(env.outputs) }}" >> $GITHUB_OUTPUT
+        terraform output -json > tf_output.json
+        echo "result=$(cat tf_output.json)" >> $GITHUB_OUTPUT
       env:
         ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
         ARM_SUBSCRIPTION_ID: ${{ inputs.arm_subscription_id }}
