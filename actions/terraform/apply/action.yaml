@@ -1,5 +1,10 @@
 name: Terraform Plan
 description: Run terraform plan
+outputs:
+  result:
+    description: object contain all outputs from terraform apply
+    value: ${{ steps.apply.outputs.result }}
+
 inputs:
   working_directory:
     description: The directory where the Terraform project is located.
@@ -111,6 +116,8 @@ runs:
       shell: bash
       run: |
         terraform apply -input=false -auto-approve ${{ inputs.tf_args }} tfplan.out
+        echo "outputs=$(terraform output -json)" >> $GITHUB_ENV
+        echo "result=${{ fromJson(env.outputs) }}" >> $GITHUB_OUTPUT
       env:
         ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
         ARM_SUBSCRIPTION_ID: ${{ inputs.arm_subscription_id }}
