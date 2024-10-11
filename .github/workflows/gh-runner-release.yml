@@ -39,6 +39,6 @@ jobs:
           context: ./infrastructure/images/gh-runner
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ghcr.io/${{ stepd.vars.outputs.reponame }}/gh-runner:v${{ steps.vars.outputs.version }}
+          tags: ghcr.io/${{ steps.vars.outputs.reponame }}/gh-runner:v${{ steps.vars.outputs.version }}
         env:
           SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
