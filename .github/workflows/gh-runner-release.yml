@@ -17,8 +17,11 @@ jobs:
       - name: Get version from tags
         id: version
         run: |
-          tag=${GITHUB_REF/refs\/tags\//}
+          tag=${GITHUB_REF/refs\/tags\/ghrunner-/}
           echo "version=${tag%-demo}" >> $GITHUB_OUTPUT
+      - name: Repo to lowercase
+        run: |
+          echo "REPO=${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
       - name: Get Git commit timestamps
         run: echo "TIMESTAMP=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
       - name: Set up QEMU
@@ -38,6 +41,6 @@ jobs:
           context: ./infrastructure/images/gh-runner
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ghcr.io/${{ github.repository }}/gh-runner:v${{ steps.version.outputs.version }}
+          tags: ghcr.io/${REPO}/gh-runner:v${{ steps.version.outputs.version }}
         env:
           SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
