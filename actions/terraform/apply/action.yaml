@@ -1,10 +1,5 @@
 name: Terraform Plan
 description: Run terraform plan
-outputs:
-  result:
-    description: object contain all outputs from terraform apply
-    value: ${{ steps.apply.outputs.result }}
-
 inputs:
   working_directory:
     description: The directory where the Terraform project is located.
