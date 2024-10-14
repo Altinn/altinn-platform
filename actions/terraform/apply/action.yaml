@@ -116,6 +116,7 @@ runs:
       shell: bash
       run: |
         terraform apply -input=false -auto-approve ${{ inputs.tf_args }} tfplan.out
+        terraform output -json >> tf_output.json
       env:
         ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
         ARM_SUBSCRIPTION_ID: ${{ inputs.arm_subscription_id }}
