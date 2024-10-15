@@ -46,6 +46,9 @@ inputs:
   tf_args:
     description: Terraform arguments
     required: false
+  tf_output_file:
+    description: JSON file for dumping tf state output
+    default: tf_output.json
 
 runs:
   using: composite
@@ -111,6 +114,7 @@ runs:
       shell: bash
       run: |
         terraform apply -input=false -auto-approve ${{ inputs.tf_args }} tfplan.out
+        terraform output -json >> ${{ inputs.tf_output_file }}
       env:
         ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
         ARM_SUBSCRIPTION_ID: ${{ inputs.arm_subscription_id }}
