@@ -11,7 +11,7 @@ terraform {
 }
 
 provider "azurerm" {
-  subscription_id = data.azurerm_subscription.current.subscription_id
+  subscription_id = "1ce8e9af-c2d6-44e7-9c5e-099a308056fe"
   features {}
   resource_providers_to_register = [
     "Microsoft.Monitor",
