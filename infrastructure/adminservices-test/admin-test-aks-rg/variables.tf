@@ -30,6 +30,3 @@ variable "pool_configs" {
     max_count = string
   }))
 }
-variable "altinncr_id" {
-  type = string
-}
