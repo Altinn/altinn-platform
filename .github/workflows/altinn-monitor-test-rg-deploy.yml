@@ -32,7 +32,7 @@ on:
           - ERROR
 
 env:
-  ENVIRONMENT: dev
+  ENVIRONMENT: test
   TF_STATE_NAME: altinn-monitor-test-rg.tfstate
   TF_PROJECT: ./infrastructure/adminservices-test/altinn-monitor-test-rg
   ARM_CLIENT_ID: ${{ vars.TF_AZURE_CLIENT_ID }}
@@ -66,7 +66,7 @@ jobs:
 
   deploy:
     name: Deploy
-    environment: dev
+    environment: test
     if: github.ref == 'refs/heads/main'
     needs: plan
     runs-on: ubuntu-latest
