@@ -19,4 +19,4 @@ pool_configs = {
 }
 kubernetes_version = "1.29"
 aks_sku_tier       = "Free"
-altinncr_id        = "/subscriptions/a6e9ee7d-2b65-41e1-adfb-0c8c23515cf9/resourceGroups/acr/providers/Microsoft.ContainerRegistry/registries/altinncr"
+# altinncr_id        = "/subscriptions/a6e9ee7d-2b65-41e1-adfb-0c8c23515cf9/resourceGroups/acr/providers/Microsoft.ContainerRegistry/registries/altinncr"

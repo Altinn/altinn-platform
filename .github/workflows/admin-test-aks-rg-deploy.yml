@@ -1,11 +1,11 @@
-name: Altinn Monitor Test rg
+name: admin-test-aks-rg deploy
 
 on:
   push:
     branches:
       - main
     paths:
-      - .github/workflows/altinn-monitor-test-rg-deploy.yml
+      - .github/workflows/admin-test-aks-rg-deploy.yml
       - actions/terraform/apply/**
       - actions/terraform/plan/**
       - infrastructure/adminservices-test/altinn-monitor-test-rg/**
@@ -13,10 +13,10 @@ on:
     branches:
       - main
     paths:
-      - .github/workflows/altinn-monitor-test-rg-deploy.yml
+      - .github/workflows/admin-test-aks-rg-deploy.yml
       - actions/terraform/apply/**
       - actions/terraform/plan/**
-      - infrastructure/adminservices-test/altinn-monitor-test-rg/**
+      - infrastructure/adminservices-test/admin-test-aks-rg/**
   workflow_dispatch:
     inputs:
       log_level:
@@ -33,10 +33,11 @@ on:
 
 env:
   ENVIRONMENT: test
-  TF_STATE_NAME: altinn-monitor-test-rg.tfstate
-  TF_PROJECT: ./infrastructure/adminservices-test/altinn-monitor-test-rg
+  TF_STATE_NAME: admin-test-aks-rg.tfstate
+  TF_PROJECT: ./infrastructure/adminservices-test/admin-test-aks-rg
   ARM_CLIENT_ID: ${{ vars.TF_AZURE_CLIENT_ID }}
   ARM_SUBSCRIPTION_ID: 1ce8e9af-c2d6-44e7-9c5e-099a308056fe
+  TF_VAR_altinncr_id: ${{ vars.ALTINNCR_ID }}
 
 permissions:
   id-token: write
