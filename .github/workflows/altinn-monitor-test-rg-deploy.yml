@@ -52,7 +52,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Terraform Initialize
+      - name: Terraform Plan
         uses: altinn/altinn-platform/actions/terraform/plan@main
         with:
           working_directory: ${{ env.TF_PROJECT }}
