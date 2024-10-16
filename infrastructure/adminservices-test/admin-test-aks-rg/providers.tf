@@ -25,6 +25,14 @@ provider "azurerm" {
   ]
 }
 
+provider "azurerm" {
+  alias                           = "adminservices-prod"
+  resource_provider_registrations = "none"
+  subscription_id                 = var.admin_services_prod_subscription_id
+  use_oidc                        = true
+  features {}
+}
+
 provider "kubectl" {
   load_config_file       = false
   client_certificate     = base64decode(azurerm_kubernetes_cluster.aks.kube_config.0.client_certificate)
