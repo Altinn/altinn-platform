@@ -1,6 +1,6 @@
 resource "kubectl_manifest" "metrics_server_configmap" {
-  depends_on     = [azurerm_kubernetes_cluster.aks]
-  yaml_body = <<YAML
+  depends_on = [azurerm_kubernetes_cluster.aks]
+  yaml_body  = <<YAML
 apiVersion: v1
 kind: ConfigMap
 metadata:
