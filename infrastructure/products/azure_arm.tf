@@ -52,6 +52,11 @@ data "azurerm_role_definition" "user_access_administrator" {
   role_definition_id = "18d7d88d-d35e-4fb5-a5c3-7773c20a72d9"
 }
 
+# https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#containers
+data "azurerm_role_definition" "azure_kubernetes_service_cluster_user_role" {
+  role_definition_id = "4abbcc35-e782-43d8-92c5-2d3f1bd2253f"
+}
+
 # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/resources
 data "azurerm_resource_group" "tfstate" {
   name = var.arm_resource_group_name
@@ -188,6 +193,14 @@ resource "azurerm_role_assignment" "reader_reader" {
 }
 
 # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
+resource "azurerm_role_assignment" "reader_azure_kubernetes_service_cluster_user_role" {
+  scope                            = azurerm_management_group.parent.id
+  principal_id                     = azuread_service_principal.reader.object_id
+  role_definition_name             = data.azurerm_role_definition.azure_kubernetes_service_cluster_user_role.name
+  skip_service_principal_aad_check = true
+}
+
+# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
 resource "azurerm_role_assignment" "apps_user_access_administrator" {
   scope                            = azurerm_management_group.management_groups[each.value.product_slug].id
   principal_id                     = azuread_service_principal.product[each.key].object_id
@@ -283,7 +296,7 @@ resource "azurerm_role_assignment" "product_readers_storage_blob_owner" {
   condition            = <<-EOT
   (
    ${local.write_operations}
-   OR 
+   OR
    (
     @Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringStartsWith 'github.com/${lower(local.configuration.admin.github.owner)}/${lower(local.configuration.admin.github.repository)}/'
    )
@@ -311,7 +324,7 @@ resource "azurerm_role_assignment" "products" {
   condition         = <<-EOT
   (
     ${local.write_operations}
-    OR 
+    OR
     (
       %{for repository in each.value.repositories.names}
         @Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringStartsWith 'github.com/${lower(each.value.repositories.owner)}/${lower(repository)}'
@@ -338,7 +351,7 @@ resource "azurerm_role_assignment" "appregg" {
   condition         = <<-EOT
   (
    ${local.write_operations}
-   OR 
+   OR
    (
     %{for scope in each.value.scopes}
     @Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringStartsWith 'github.com/${lower(each.value.repository.owner)}/${lower(each.value.repository.name)}/environments/${lower(scope.environment.name)}'
