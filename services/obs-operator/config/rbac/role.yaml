@@ -5,32 +5,6 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - alertsmanagement.azure.com
-  resources:
-  - prometheusrulegroups
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - alertsmanagement.azure.com
-  resources:
-  - prometheusrulegroups/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - alertsmanagement.azure.com
-  resources:
-  - prometheusrulegroups/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
   - monitoring.coreos.com
   resources:
   - prometheusrules
@@ -42,12 +16,6 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - monitoring.coreos.com
-  resources:
-  - prometheusrules/finalizers
-  verbs:
-  - update
 - apiGroups:
   - monitoring.coreos.com
   resources:

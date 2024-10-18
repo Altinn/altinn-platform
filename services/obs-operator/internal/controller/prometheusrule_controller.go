@@ -19,6 +19,9 @@ import (
 	"github.com/altinn/altinn-platform/services/obs-operator/pkg/utils"
 )
 
+// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules/status,verbs=get;update;patch
+
 // PrometheusRuleReconciler reconciles a PrometheusRule object
 type PrometheusRuleReconciler struct {
 	client.Client

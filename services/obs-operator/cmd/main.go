@@ -35,7 +35,6 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	alertsmanagementv1 "github.com/Azure/azure-service-operator/v2/api/alertsmanagement/v1api20230301"
 	"github.com/altinn/altinn-platform/services/obs-operator/internal/controller"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	// +kubebuilder:scaffold:imports
@@ -146,9 +145,6 @@ func main() {
 
 	// // Add the PrometheusRule and PrometheusRuleGroup schemes
 	if err := monitoringv1.AddToScheme(mgr.GetScheme()); err != nil {
-		os.Exit(1)
-	}
-	if err := alertsmanagementv1.AddToScheme(mgr.GetScheme()); err != nil {
 		os.Exit(1)
 	}
 
