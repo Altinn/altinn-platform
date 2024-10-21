@@ -2,7 +2,10 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/alertsmanagement/armalertsmanagement"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -69,4 +72,62 @@ func (r *PromRuleToAzPromRuleGroupReconciler) SetupWithManager(mgr ctrl.Manager)
 		).
 		Named("promrule-to-azpromrulegroup").
 		Complete(r)
+}
+
+func (r *PromRuleToAzPromRuleGroupReconciler) deployArmTemplate(ctx context.Context, deploymentName string, jsonTemplate string, resourceGroupName string, resourceGroupLocation string, actionGroupId string, azureMonitorWorkspace string) (*armresources.DeploymentExtended, error) {
+	// TODO: this is only a stub. Needs implementation review.
+	log := log.FromContext(ctx)
+
+	contents := make(map[string]interface{})
+	_ = json.Unmarshal([]byte(jsonTemplate), &contents)
+	deploy, err := r.DeploymentClient.BeginCreateOrUpdate(
+		ctx,
+		resourceGroupName,
+		deploymentName,
+		armresources.Deployment{
+			Properties: &armresources.DeploymentProperties{
+				Template: contents,
+				Mode:     to.Ptr(armresources.DeploymentModeIncremental),
+				Parameters: map[string]interface{}{
+					"location": map[string]string{
+						"value": resourceGroupLocation,
+					},
+					"actionGroupId": map[string]string{
+						"value": actionGroupId,
+					},
+					"azureMonitorWorkspace": map[string]string{
+						"value": azureMonitorWorkspace},
+				},
+			},
+		},
+		nil,
+	)
+
+	if err != nil {
+		log.Error(err, "failed BeginCreateOrUpdate")
+		return nil, err
+	}
+	// TODO: Check the best practices here. I doubt we want to do this synchronously.
+	resp, err := deploy.PollUntilDone(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get the create deployment future respone: %v", err)
+	}
+	return &resp.DeploymentExtended, nil
+
+}
+func (r *PromRuleToAzPromRuleGroupReconciler) deletePrometheusRuleGroup(ctx context.Context, resourceGroupName string, ruleGroupName string) {
+	// TODO: this is only a stub. Needs implementation review.
+	log := log.FromContext(ctx)
+	_, err := r.PrometheusRuleGroupsClient.Delete(ctx, resourceGroupName, ruleGroupName, nil)
+	if err != nil {
+		log.Error(err, "failed to delete the prometheus rule group")
+	}
+
+}
+
+func (r *PromRuleToAzPromRuleGroupReconciler) generateArmTemplateFromPromRule() {
+	// TODO: I have this working as well with the changes I proposed on the azure tool.
+	// It's currently using exec to call the tool since I'm running it locally.
+	// If we go with calling a node app, we can probably use something like https://github.com/rogchap/v8go
+	// Or, we could re-write the tool in go if the azure maintainers are ok with it.
 }
