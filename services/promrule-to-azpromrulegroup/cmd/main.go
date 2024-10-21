@@ -24,6 +24,7 @@ import (
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	"github.com/altinn/altinn-platform/services/promrule-to-azpromrulegroup/internal/controller"
+	"github.com/joho/godotenv"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
@@ -52,6 +53,15 @@ func init() {
 }
 
 func main() {
+	// TODO: Need to double check how we specify each env.
+	if os.Getenv("ENVIRONMENT") == "" {
+		err := godotenv.Load()
+		if err != nil {
+			setupLog.Error(err, "Error loading .env file")
+			os.Exit(1)
+		}
+	}
+
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
