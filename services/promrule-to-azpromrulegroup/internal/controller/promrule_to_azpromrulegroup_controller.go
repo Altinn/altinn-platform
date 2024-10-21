@@ -3,6 +3,8 @@ package controller
 import (
 	"context"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/alertsmanagement/armalertsmanagement"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -15,7 +17,9 @@ import (
 // makes sure the equivalent Microsoft.AlertsManagement/prometheusRuleGroups are kept in sync.
 type PromRuleToAzPromRuleGroupReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme                     *runtime.Scheme
+	DeploymentClient           *armresources.DeploymentsClient
+	PrometheusRuleGroupsClient *armalertsmanagement.PrometheusRuleGroupsClient
 }
 
 /*
