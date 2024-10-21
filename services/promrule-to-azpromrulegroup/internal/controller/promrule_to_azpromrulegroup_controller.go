@@ -34,7 +34,24 @@ type PromRuleToAzPromRuleGroupReconciler struct {
 func (r *PromRuleToAzPromRuleGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
-	// TODO(user): your logic here
+	/*
+		TODO: review this
+
+		First naive implementation
+		- Call the API to get the specific CR.
+		- Extract the Spec from the PrometheusRule
+		- json.Marshal the struct
+		- Call the az-prom-rules-converter to get an ARM template with the equivalent PrometheusRuleGroup
+		- Deploy the ARM template
+
+		Second stage
+		- How to handle the different kinds of events; create, update, delete?
+			- Add the deployed ARM template as an annotation in the CR? We can re-generate the ARM template and compare with the previous one.
+			- I lack experience with ARM templates but it looks like they aren't great for deletions. We might need to call a
+			  armalertsmanagement.PrometheusRuleGroupsClient to perform the deletions.
+			- ARM template deployments take some time to complete; Should we wait? Or requeue?
+
+	*/
 
 	return ctrl.Result{}, nil
 }
