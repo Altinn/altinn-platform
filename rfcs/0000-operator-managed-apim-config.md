@@ -1,8 +1,8 @@
 - Feature Name: operator_managed_apim_config
 - Start Date: 2024-10-08
-- RFC PR: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/pull/0000)
+- RFC PR: [altinn/altinn-platform#1026](https://github.com/Altinn/altinn-platform/pull/1026)
 - Github Issue: [altinn/altinn-platform#770](https://github.com/Altinn/altinn-platform/issues/770)
-- Github Discussion: [altinn/altinn-platform/discussion#086](https://github.com/Altinn/altinn-platform/discussions/986)
+- Github Discussion: [altinn/altinn-platform/discussion#986](https://github.com/Altinn/altinn-platform/discussions/986)
 - Product/Category: APIM
 - State: **REVIEW** (possible states are: **REVIEW**, **ACCEPTED** and **REJECTED**)
 
