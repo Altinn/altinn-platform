@@ -110,6 +110,8 @@ In addition to this sync loop we need to ensure visibility into the process. Use
 
 # Reference-level explanation
 
+Disclaimer: These diagrams give a very simplified overview of the sync/reconcile process. This is to not hide the important higher level aspects of the solution. For more complete and complex diagrams please see the operators actual documentation
+
 ```mermaid
 C4Context
 title System Context Diagram for operator for api management
@@ -150,12 +152,8 @@ ctrl ->> kapi: Read desired ProductApi specification
 alt if actual state does not match desired state
   ctrl ->> apim: Read actual state in Api management
   ctrl ->> apim: Update state in Api management to match desired state
-  ctrl ->> kapi: Update status of ProductApi to provisioning
-  loop while update job is running
-    ctrl ->> apim: Check status of update job
-    ctrl ->> kapi: Update status of ProductApi
-  end
-  ctrl ->> kapi: Update status ProductApi to done
+  ctrl ->> apim: Check status of update job
+  ctrl ->> kapi: Update status of ProductApi
 end
 ```
 
@@ -166,17 +164,13 @@ participant dev as Developer
 participant kapi as Kubernetes API
 participant ctrl as Operator
 participant apim as Api Management
-kapi ->> ctrl: Reque sync of ProductApi
+kapi ->> ctrl: Reconcile of ProductApi
 ctrl ->> kapi: Read desired ProductApi specification
 ctrl ->> apim: Read actual state in Api management
 alt if actual state does not match desired state
   ctrl ->> apim: Update state in Api management to match desired state
-  ctrl ->> kapi: Update status of ProductApi to provisioning
-  loop while update job is running
-    ctrl ->> apim: Check status of update job
-    ctrl ->> kapi: Update status of ProductApi
-  end
-  ctrl ->> kapi: Update status ProductApi to done
+  ctrl ->> apim: Check status of update job
+  ctrl ->> kapi: Update status of ProductApi
 end
 ```
 
