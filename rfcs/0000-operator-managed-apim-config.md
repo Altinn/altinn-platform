@@ -226,3 +226,4 @@ Having a operator pattern in front of Api Management can in the future automate 
 
 If the application is deployed in one of our kubernetes clusters we can tie the api setup tighter together with the deployment of the application.
 
+Managing subscriptions for external entities, this is a bigger decission as we need a place where customers can manage their subscriptions. We need to decide if we are going to use a SaaS service for this or write our own. Either way this operator might be a good place to handle backup/restore functionality
