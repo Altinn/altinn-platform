@@ -28,6 +28,10 @@ import (
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/alertsmanagement/armalertsmanagement"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -154,11 +158,32 @@ func main() {
 	}
 
 	// Initialize Reconciler dependencies
+	subscriptionId := os.Getenv("AZ_SUBSCRIPTION_ID")
+
+	cred, err := azidentity.NewDefaultAzureCredential(nil)
+	if err != nil {
+		setupLog.Error(err, "failed to obtain a credential")
+		os.Exit(1)
+	}
+
+	deploymentsClient, err := armresources.NewDeploymentsClient(subscriptionId, cred, nil)
+	if err != nil {
+		setupLog.Error(err, "failed to create the DeploymentsClient")
+		os.Exit(1)
+	}
+
+	prometheusRuleGroupsClient, err := armalertsmanagement.NewPrometheusRuleGroupsClient(subscriptionId, cred)
+	if err != nil {
+		setupLog.Error(err, "failed to create the PrometheusRuleGroupsClient")
+		os.Exit(1)
+	}
 
 	// Create the reconciler and Register the reconciler with the Manager
 	if err = (&controller.PromRuleToAzPromRuleGroupReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:                     mgr.GetClient(),
+		Scheme:                     mgr.GetScheme(),
+		DeploymentClient:           deploymentsClient,
+		PrometheusRuleGroupsClient: prometheusRuleGroupsClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller")
 		os.Exit(1)
