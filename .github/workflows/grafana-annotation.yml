@@ -14,6 +14,10 @@ on:
         description: 'Owner or team name'
         required: true
         default: 'platform'
+      app:
+        description: 'App name'
+        required: true
+        default: 'platform'
 
 
 permissions:
@@ -37,7 +41,7 @@ jobs:
 
       - name: Create Grafana Annotation
         run: |
-          timestamp=$(date +%s000)
+          timestamp=$(date +%s%3N)  # Use millisecond resolution, as requested by the annotations api
           curl -X POST "${{ secrets.GRAFANA_URL }}/api/annotations" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.GRAFANA_SA_TOKEN }}" \
@@ -46,6 +50,7 @@ jobs:
               \"tags\": [
                 \"deployment\",
                 \"${{ github.event.inputs.environment }}\",
+                \"${{ github.event.inputs.app }}\",
                 \"${{ github.event.inputs.owner }}\"
               ],
               \"time\": ${timestamp},
