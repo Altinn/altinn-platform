@@ -42,8 +42,9 @@ jobs:
       - name: Create Grafana API Key
         id: create_grafana_key
         run: |
-          az grafana api-key create --key keyname --name ${{ github.event.repository.name }}-key \
-            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" --role editor --output json > grafana_key.json
+          az grafana api-key create --key keyname --name ${{ secrets.GRAFANA_NAME }} \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" --role editor \
+            --time-to-live 1m --output json > grafana_key.json
           key=$(jq -r '.key' grafana_key.json)
           echo "::add-mask::$key"
           echo "grafana_api_key=$key" >> "$GITHUB_OUTPUT"
