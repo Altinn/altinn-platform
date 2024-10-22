@@ -49,10 +49,10 @@ jobs:
               \"text\": \"Deployed ${{ github.event.repository.name }} version ${{ github.event.inputs.version }}\",
               \"tags\": [
                 \"deployment\",
-                \"${{ github.event.inputs.environment }}\",
-                \"${{ github.event.inputs.app }}\",
-                \"${{ github.event.inputs.owner }}\"
+                \"env:${{ github.event.inputs.environment }}\",
+                \"app:${{ github.event.inputs.app }}\",
+                \"team:${{ github.event.inputs.owner }}\"
               ],
-              \"time\": ${timestamp},
+              \"time\": ${timestamp}
             }"
 
