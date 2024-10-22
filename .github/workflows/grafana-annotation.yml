@@ -6,7 +6,7 @@ on:
       environment:
         description: 'Deployment environment'
         required: true
-        default: 'prod'
+        default: 'grafana'
       version:
         description: 'Application version'
         required: true
@@ -19,8 +19,6 @@ on:
 permissions:
   id-token: write
   contents: write
-#   pull-requests: read
-  deployments: write
 
 jobs:
   deploy-annotation:
@@ -37,24 +35,12 @@ jobs:
             tenant-id: ${{ secrets.AZURE_TENANT_ID }}
             subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-
-
-      - name: Create Grafana API Key
-        id: create_grafana_key
-        run: |
-          az grafana api-key create --key keyname --name ${{ secrets.GRAFANA_NAME }} \
-            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" --role editor \
-            --time-to-live 1m --output json > grafana_key.json
-          key=$(jq -r '.key' grafana_key.json)
-          echo "::add-mask::$key"
-          echo "grafana_api_key=$key" >> "$GITHUB_OUTPUT"
-
       - name: Create Grafana Annotation
         run: |
           timestamp=$(date +%s000)
           curl -X POST "${{ secrets.GRAFANA_URL }}/api/annotations" \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $GRAFANA_API_KEY" \
+            -H "Authorization: Bearer ${{ secrets.GRAFANA_SA_TOKEN }}" \
             -d "{
               \"text\": \"Deployed ${{ github.event.repository.name }} version ${{ github.event.inputs.version }}\",
               \"tags\": [
@@ -66,5 +52,4 @@ jobs:
               \"panelId\": 0,
               \"dashboardId\": 0
             }"
-        env:
-          GRAFANA_API_KEY: ${{ steps.create_grafana_key.outputs.grafana_api_key }}
+
