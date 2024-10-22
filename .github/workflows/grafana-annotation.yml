@@ -54,7 +54,5 @@ jobs:
                 \"${{ github.event.inputs.owner }}\"
               ],
               \"time\": ${timestamp},
-              \"panelId\": 0,
-              \"dashboardId\": 0
             }"
 
