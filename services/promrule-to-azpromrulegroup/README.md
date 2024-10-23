@@ -1,6 +1,61 @@
 # promrule-to-azpromrulegroup
-// TODO(user): Add simple overview of use/purpose
+This controller is intended to sync PrometheusRule CRs created by Pyrra (and not picked up by the Managed Prometheus) with Azure PrometheusRuleGroups.
 
+```mermaid
+    sequenceDiagram
+    participant User
+    participant K8s
+    participant Pyrra
+    participant ThisController
+    participant Azure
+    User->>K8s: Deploy a Pyrra CR
+    K8s->>Pyrra: A new SLO CR has been created
+    Pyrra->>K8s: Create PrometheusRule CR
+    K8s ->> ThisController: A new PrometheusRule CR has been created
+    ThisController ->> K8s: Fetch the object
+
+    alt Object is marked for deletion
+        alt Object has our finalizer
+            ThisController->> Azure: Delete PrometheusRuleGroup(s)
+            alt Successfully deleted all external PrometheusRuleGroup(s)
+                ThisController->> ThisController: Remove finalizer from Object
+                ThisController->> K8s: Update Object
+            else Did not Successfully delete all external resources
+                ThisController->> ThisController: Requeue the request
+            end
+        else Object does not have our finalizer
+            ThisController->> ThisController: Stop the reconciliation
+        end
+    else Object is not marked for deletion
+        alt Object has been marked with our finalizer
+            alt Object has our annotations
+                ThisController->> ThisController: Fetch metadata stored in the Annotations
+                ThisController->> ThisController: Regenerate the ARM Template based on the PrometheusRule
+                alt The new template and the old are the same
+                    ThisController->> Azure: Re-apply the template in case manual changes have been made to the PrometheusRuleGroup(s)
+                else The new and old templates are not the same
+                    alt Resources have been deleted from PrometheusRule
+                        ThisController->> Azure: Delete the corresponding PrometheusRuleGroup(s)
+                    else Resources have been added to the PrometheusRule
+                        ThisController->> Azure: Apply the new ARM template
+                    end
+                end
+            else Object does not have our annotations
+                ThisController ->> ThisController: Generate ARM template from PrometheusRule
+                ThisController ->> ThisController: Get the name(s) of the resources to be created
+                ThisController ->> Azure: Deploy the ARM template
+                alt ARM deployment was Successful
+                    ThisController->> ThisController: Add metadata as Annotations to the CR
+                    ThisController->> K8s: Update CR
+                else ARM deployment was not Successful
+                    ThisController->>ThisController: Requeue
+                end
+            end
+        else Object has not been marked with our finalizer
+            ThisController ->> K8s: Add our finalizer to the object
+        end
+    end
+```
 ## Description
 // TODO(user): An in-depth paragraph about your project and overview of use
 
@@ -111,4 +166,3 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-
