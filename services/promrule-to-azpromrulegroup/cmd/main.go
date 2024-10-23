@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -55,6 +56,14 @@ func init() {
 	utilruntime.Must(monitoringv1.AddToScheme(scheme))
 
 	// +kubebuilder:scaffold:scheme
+}
+
+func getEnvVarOrExit(name string) string {
+	value, ok := os.LookupEnv(name)
+	if !ok {
+		setupLog.Error(fmt.Errorf("Missing required env var"), "Missing required env var", "env var", name)
+	}
+	return value
 }
 
 func main() {
@@ -194,6 +203,9 @@ func main() {
 		Scheme:                     mgr.GetScheme(),
 		DeploymentClient:           deploymentsClient,
 		PrometheusRuleGroupsClient: prometheusRuleGroupsClient,
+		AzResourceGroupName:        getEnvVarOrExit("AZ_RESOURCE_GROUP_NAME"),
+		AzResourceGroupLocation:    getEnvVarOrExit("AZ_RESOURCE_GROUP_LOCATION"),
+		AzAzureMonitorWorkspace:    getEnvVarOrExit("AZ_AZURE_MONITOR_WORKSPACE"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller")
 		os.Exit(1)
