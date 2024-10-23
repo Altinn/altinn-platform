@@ -17,10 +17,10 @@ This controller is intended to sync PrometheusRule CRs created by Pyrra (and not
     alt Object is marked for deletion
         alt Object has our finalizer
             ThisController->> Azure: Delete PrometheusRuleGroup(s)
-            alt Successfully deleted all external PrometheusRuleGroup(s)
+            alt Successfully deleted all PrometheusRuleGroup(s)
                 ThisController->> ThisController: Remove finalizer from Object
                 ThisController->> K8s: Update Object
-            else Did not Successfully delete all external resources
+            else Did not Successfully delete all PrometheusRuleGroup(s)
                 ThisController->> ThisController: Requeue the request
             end
         else Object does not have our finalizer
@@ -52,7 +52,8 @@ This controller is intended to sync PrometheusRule CRs created by Pyrra (and not
                 end
             end
         else Object has not been marked with our finalizer
-            ThisController ->> K8s: Add our finalizer to the object
+            ThisController ->> ThisController: Add our finalizer to the object
+            ThisController ->> K8s: Update Object
         end
     end
 ```
