@@ -206,6 +206,9 @@ func main() {
 		AzResourceGroupName:        getEnvVarOrExit("AZ_RESOURCE_GROUP_NAME"),
 		AzResourceGroupLocation:    getEnvVarOrExit("AZ_RESOURCE_GROUP_LOCATION"),
 		AzAzureMonitorWorkspace:    getEnvVarOrExit("AZ_AZURE_MONITOR_WORKSPACE"),
+		AzClusterName:              getEnvVarOrExit("AZ_CLUSTER_NAME"),
+		NodePath:                   getEnvVarOrExit("NODE_PATH"),
+		AzPromRulesConverterPath:   getEnvVarOrExit("AZ_PROM_RULES_CONVERTER_PATH"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller")
 		os.Exit(1)
