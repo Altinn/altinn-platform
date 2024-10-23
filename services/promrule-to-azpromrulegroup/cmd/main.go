@@ -182,7 +182,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	prometheusRuleGroupsClient, err := armalertsmanagement.NewPrometheusRuleGroupsClient(subscriptionId, cred)
+	prometheusRuleGroupsClient, err := armalertsmanagement.NewPrometheusRuleGroupsClient(subscriptionId, cred, nil)
 	if err != nil {
 		setupLog.Error(err, "failed to create the PrometheusRuleGroupsClient")
 		os.Exit(1)
