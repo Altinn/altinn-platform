@@ -56,3 +56,19 @@ jobs:
               \"time\": ${timestamp}
             }"
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+            node-version: '16'
+    
+      - name: Install dependencies and build action
+        run: |
+            cd actions/send-trace-action
+            npm install
+            npm run build
+
+      - name: Send Trace to Azure Monitor
+        uses: ./../../actions/send-trace-action
+        with:
+            connection_string: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
+            repo_token: ${{ secrets.GITHUB_TOKEN }}
