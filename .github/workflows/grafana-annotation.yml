@@ -58,17 +58,18 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-            node-version-file: package.json
+            node-version-file: ../actions/send-trace-action/package.json
             cache: npm
     
       - name: Install Dependencies
         run: npm ci --ignore-scripts
+        working-directory: actions/send-trace-action
     
       - name: Build the Action
         run: |
             cd actions/send-trace-action
             npm run build
-
+        working-directory: actions/send-trace-action
       - name: Send Trace to Azure Monitor
         uses: ./../../actions/send-trace-action
         with:
