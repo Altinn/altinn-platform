@@ -58,20 +58,19 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-            node-version-file: ../actions/send-trace-action/package.json
+            node-version-file: ../actions/send-ci-cd-trace/package.json
             cache: npm
     
       - name: Install Dependencies
         run: npm ci --ignore-scripts
-        working-directory: actions/send-trace-action
+        working-directory: actions/send-ci-cd-trace
     
       - name: Build the Action
-        run: |
-            cd actions/send-trace-action
-            npm run build
-        working-directory: actions/send-trace-action
+        run: npm run build
+        working-directory: actions/send-ci-cd-trace
+
       - name: Send Trace to Azure Monitor
-        uses: ./../../actions/send-trace-action
+        uses: ./../../actions/send-ci-cd-trace
         with:
             connection_string: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
             repo_token: ${{ secrets.GITHUB_TOKEN }}
