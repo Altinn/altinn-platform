@@ -6,11 +6,11 @@ resource "azurerm_application_insights" "app" {
   disable_ip_masking  = true
   retention_in_days   = 30
   workspace_id        = azurerm_log_analytics_workspace.application.id
-    
+
 }
 
 resource "azurerm_role_assignment" "operations_altinn_monitoring_contributor" {
-    depends_on           = [azurerm_application_insights.app]
+  depends_on                       = [azurerm_application_insights.app]
   for_each                         = { for value in local.grafana_admin : value => value if value != null }
   scope                            = azurerm_application_insights.app.id
   role_definition_name             = "Monitoring Contributor"

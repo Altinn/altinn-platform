@@ -10,10 +10,10 @@ resource "azurerm_log_analytics_workspace" "application" {
 }
 
 resource "azurerm_role_assignment" "operations_altinn_law_reader" {
-  depends_on           = [azurerm_log_analytics_workspace.application]
-  for_each             = { for value in local.grafana_admin : value => value if value != null }
-  scope                = azurerm_log_analytics_workspace.application.id
-  role_definition_name = "Log Analytics Reader"
+  depends_on                       = [azurerm_log_analytics_workspace.application]
+  for_each                         = { for value in local.grafana_admin : value => value if value != null }
+  scope                            = azurerm_log_analytics_workspace.application.id
+  role_definition_name             = "Log Analytics Reader"
   principal_id                     = each.key
   principal_type                   = "Group"
   skip_service_principal_aad_check = true
