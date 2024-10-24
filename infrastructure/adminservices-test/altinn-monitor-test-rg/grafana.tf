@@ -44,3 +44,10 @@ resource "azurerm_role_assignment" "grafana_admin" {
   principal_type                   = "Group"
   skip_service_principal_aad_check = true
 }
+
+resource "azurerm_role_assignment" "log_analytics_reader" {
+  principal_id         = azurerm_dashboard_grafana.grafana.id
+  scope                = azurerm_log_analytics_workspace.application.id
+  role_definition_name = "Log Analytics Reader"
+  skip_service_principal_aad_check = true
+}
