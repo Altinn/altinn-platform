@@ -109,13 +109,13 @@ async function run() {
         },
       });
 
+
       // Iterate over the steps in each job and track step information
       if (isLastJob) {
         const steps = job.steps || [];
-        const isLastStep = steps.length > 0 ? steps[steps.length - 1].name === 'Send Trace to Azure Monitor' : false;
         for (const step of steps) {
-          // Skip the step if it is not the last step in the last job
-          if (!isLastStep) {
+          // Skip the step if it is not the last step in the workflow
+          if (job !== jobs[jobs.length - 1] || step !== steps[steps.length - 1]) {
             continue;
           }
         const stepMetadata = {
