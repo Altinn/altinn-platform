@@ -8,5 +8,5 @@ inputs:
     description: 'GitHub Token for accessing workflow data'
     required: true
 runs:
-  using: 'node16'
+  using: 'node20'
   main: 'dist/index.js'

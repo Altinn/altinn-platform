@@ -36,7 +36,7 @@ async function run() {
     client.config.aadTokenCredential = credential;
 
     // Get GitHub context
-    const { repo, runId } = github.context;
+    const { repo, runId, job } = github.context;
     const octokit = github.getOctokit(token);
 
     // Fetch workflow run details from GitHub API
@@ -56,6 +56,9 @@ async function run() {
     });
 
     const jobs = jobsResponse.data.jobs;
+    
+    // Check if the current job is the last job in the workflow
+    const isLastJob = jobs[jobs.length - 1]?.name === job;
 
     // Collect workflow metadata
     const workflowMetadata = {
@@ -81,6 +84,10 @@ async function run() {
 
     // Iterate over the jobs and track each job's information
     for (const job of jobs) {
+      // Skip the job if it is not the last one
+      if (!isLastJob) {
+        continue;
+      }
       const jobMetadata = {
         job_name: job.name,
         status: job.conclusion,
@@ -103,7 +110,14 @@ async function run() {
       });
 
       // Iterate over the steps in each job and track step information
-      for (const step of job.steps || []) {
+      if (isLastJob) {
+        const steps = job.steps || [];
+        const isLastStep = steps.length > 0 ? steps[steps.length - 1].name === 'Send Trace to Azure Monitor' : false;
+        for (const step of steps) {
+          // Skip the step if it is not the last step in the last job
+          if (!isLastStep) {
+            continue;
+          }
         const stepMetadata = {
           step_name: step.name,
           status: step.conclusion,
@@ -121,12 +135,12 @@ async function run() {
             ...stepMetadata,
             duration_ms: stepDurationMs,
             startTime: stepStartTime.toISOString(),
-            endTime: stepEndTime.toISOString(),
+            endTime: stepEndTime ? stepEndTime.toISOString() : "",
           },
         });
       }
     }
-
+  }
     console.log("Trace data sent to Azure Monitor successfully.");
   } catch (error) {
     if (error instanceof Error) {
