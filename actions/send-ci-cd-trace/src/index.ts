@@ -1,9 +1,7 @@
 import * as core from "@actions/core";
 import * as github from "@actions/github";
 import { DefaultAzureCredential } from "@azure/identity";
-import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
-import { AzureMonitorTraceExporter } from "@azure/monitor-opentelemetry-exporter";
-import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
+import { ReadableSpan, Span, SpanProcessor } from "@opentelemetry/sdk-trace-base";
 import {
   trace,
   context,
@@ -12,8 +10,8 @@ import {
   DiagConsoleLogger,
   DiagLogLevel,
 } from "@opentelemetry/api";
-import { Resource } from "@opentelemetry/resources";
-import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
+import { useAzureMonitor, AzureMonitorOpenTelemetryOptions, shutdownAzureMonitor } from "@azure/monitor-opentelemetry";
+
 
 // Set the global logger and log level for debugging
 diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.ALL);
@@ -32,22 +30,36 @@ async function run() {
       throw new Error("GitHub token is required.");
     }
 
-    // Set up OpenTelemetry Tracer Provider
-    const provider = new NodeTracerProvider({
-      resource: new Resource({
-        [SemanticResourceAttributes.SERVICE_NAME]: "gh-action-tracer",
-      }),
-    });
+    // test extra attributes
+    class SpanEnrichingProcessor implements SpanProcessor {
+      forceFlush(): Promise<void> {
+        return Promise.resolve();
+      }
 
-    // Set up Azure Monitor Exporter with Azure Identity
+      shutdown(): Promise<void> {
+        return Promise.resolve();
+      }
+
+      onStart(_span: Span): void {}
+
+      onEnd(span: ReadableSpan) {
+
+        span.attributes["app"] = "gh-action-tracer";
+      }
+    }
+
     const credential = new DefaultAzureCredential();
-    const exporter = new AzureMonitorTraceExporter({
-      connectionString: connectionString,
-      credential: credential,
-    });
 
-    provider.addSpanProcessor(new BatchSpanProcessor(exporter));
-    provider.register();
+    const options: AzureMonitorOpenTelemetryOptions = {
+      azureMonitorExporterOptions: {
+        connectionString: connectionString,
+        credential: credential,
+      },
+      spanProcessors: [new SpanEnrichingProcessor()] 
+    };
+
+    // Initialize OpenTelemetry with Azure Monitor
+    useAzureMonitor(options);
 
     // Get tracer
     const tracer = trace.getTracer("gh-action-tracer");
@@ -75,8 +87,11 @@ async function run() {
     const jobs = jobsResponse.data.jobs;
 
     // Function to parse and validate date strings
-    function parseDate(dateString: string | null | undefined, defaultTime: Date): Date {
-      if (dateString && !isNaN(Date.parse(dateString))) {
+    function parseDate(
+      dateString: string | null | undefined,
+      defaultTime: Date
+    ): Date {
+      if (dateString && dateString !== "null" && !isNaN(Date.parse(dateString))) {
         return new Date(dateString);
       } else {
         console.warn(`Invalid or missing date string "${dateString}", using default time.`);
@@ -91,20 +106,23 @@ async function run() {
     );
     const workflowEndTime = parseDate(workflowRun.updated_at, new Date());
 
-    const workflowSpan = tracer.startSpan(`Workflow: ${workflowRun.name ?? 'Unnamed Workflow'}`, {
-      startTime: workflowStartTime,
-      kind: SpanKind.INTERNAL,
-      attributes: {
-        app: repo.repo,
-        repository: repo.repo,
-        run_id: runId.toString(),
-        workflow_name: workflowRun.name ?? undefined,
-        status: workflowRun.status ?? undefined,
-        run_started_at: workflowRun.run_started_at ?? undefined,
-        created_at: workflowRun.created_at ?? undefined,
-        updated_at: workflowRun.updated_at ?? undefined,
-      },
-    });
+    const workflowSpan = tracer.startSpan(
+      `Workflow: ${workflowRun.name ?? "Unnamed Workflow"}`,
+      {
+        startTime: workflowStartTime,
+        kind: SpanKind.INTERNAL,
+        attributes: {
+          app: repo.repo,
+          repository: repo.repo,
+          run_id: runId.toString(),
+          workflow_name: workflowRun.name ?? undefined,
+          status: workflowRun.status ?? undefined,
+          run_started_at: workflowRun.run_started_at ?? undefined,
+          created_at: workflowRun.created_at ?? undefined,
+          updated_at: workflowRun.updated_at ?? undefined,
+        },
+      }
+    );
 
     // Use the context to ensure child spans are associated with the root span
     await context.with(trace.setSpan(context.active(), workflowSpan), async () => {
@@ -121,7 +139,7 @@ async function run() {
           jobEndTime.setTime(jobStartTime.getTime());
         }
 
-        const jobSpan = tracer.startSpan(`Job: ${job.name ?? 'Unnamed Job'}`, {
+        const jobSpan = tracer.startSpan(`Job: ${job.name ?? "Unnamed Job"}`, {
           startTime: jobStartTime,
           kind: SpanKind.INTERNAL,
           attributes: {
@@ -136,6 +154,12 @@ async function run() {
         const steps = job.steps || [];
         await context.with(trace.setSpan(context.active(), jobSpan), async () => {
           for (const step of steps) {
+            // Skip steps with missing timestamps
+            if (!step.started_at && !step.completed_at) {
+              console.warn(`Skipping step "${step.name}" due to missing timestamps.`);
+              continue;
+            }
+
             const stepStartTime = parseDate(step.started_at, jobStartTime);
             const stepEndTime = parseDate(step.completed_at, jobEndTime);
 
@@ -147,7 +171,7 @@ async function run() {
               stepEndTime.setTime(stepStartTime.getTime());
             }
 
-            const stepSpan = tracer.startSpan(`Step: ${step.name ?? 'Unnamed Step'}`, {
+            const stepSpan = tracer.startSpan(`Step: ${step.name ?? "Unnamed Step"}`, {
               startTime: stepStartTime,
               kind: SpanKind.INTERNAL,
               attributes: {
@@ -169,10 +193,6 @@ async function run() {
     // End the workflow span
     workflowSpan.end(workflowEndTime);
 
-    // Force flush and shutdown the provider to ensure all spans are sent
-    await provider.forceFlush();
-    await provider.shutdown();
-
     console.log("Trace data sent to Azure Monitor successfully.");
   } catch (error) {
     if (error instanceof Error) {
@@ -183,4 +203,8 @@ async function run() {
   }
 }
 
-run();
+run().catch(async (error) => {
+  console.error("An error occurred:", error);
+  await shutdownAzureMonitor();
+  process.exit(1);
+});
