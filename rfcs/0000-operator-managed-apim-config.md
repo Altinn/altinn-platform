@@ -19,7 +19,8 @@ Having an operator makes it possible for team platform to upgrade/reconfigure in
 
 # Guide-level explanation
 
-We have a operator deployed in a kubernetes cluster. This operator is using workload identity or a similar solution to authenticate against azures apis.
+We have a operator deployed in centralized kubernetes management cluster. THis cluster is utilised to manage core services that team platform is responsible for. 
+This operator is using workload identity or a similar solution to authenticate against azures apis.
 This operator manages [Custom Resources](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) that defines the APIs we serve through the API management service.
 When a developer from a team that wants to expose their API through the centralized api management service they create a new object of the custom resource. This can then only contain the actual parts the developer needs to care about, like name, base path of the api, the version (if versioned), and where the api specification is and what format it is.
 A yaml defining this could look something like this (just a sample and will change in the actual implementation):
