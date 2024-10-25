@@ -4,7 +4,19 @@ import { DefaultAzureCredential } from "@azure/identity";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { AzureMonitorTraceExporter } from "@azure/monitor-opentelemetry-exporter";
 import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
-import { trace, context, SpanKind } from "@opentelemetry/api";
+import {
+  trace,
+  context,
+  SpanKind,
+  diag,
+  DiagConsoleLogger,
+  DiagLogLevel,
+} from "@opentelemetry/api";
+import { Resource } from "@opentelemetry/resources";
+import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
+
+// Set the global logger and log level for debugging
+diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.ALL);
 
 async function run() {
   try {
@@ -20,6 +32,13 @@ async function run() {
       throw new Error("GitHub token is required.");
     }
 
+    // Set up OpenTelemetry Tracer Provider
+    const provider = new NodeTracerProvider({
+      resource: new Resource({
+        [SemanticResourceAttributes.SERVICE_NAME]: "gh-action-tracer",
+      }),
+    });
+
     // Set up Azure Monitor Exporter with Azure Identity
     const credential = new DefaultAzureCredential();
     const exporter = new AzureMonitorTraceExporter({
@@ -27,16 +46,14 @@ async function run() {
       credential: credential,
     });
 
-    // Set up OpenTelemetry Tracer Provider
-    const provider = new NodeTracerProvider();
     provider.addSpanProcessor(new BatchSpanProcessor(exporter));
     provider.register();
 
     // Get tracer
-    const tracer = trace.getTracer("github-action-tracer");
+    const tracer = trace.getTracer("gh-action-tracer");
 
     // Get GitHub context
-    const { repo, runId, job } = github.context;
+    const { repo, runId } = github.context;
     const octokit = github.getOctokit(token);
 
     // Fetch workflow run details from GitHub API
@@ -57,20 +74,35 @@ async function run() {
 
     const jobs = jobsResponse.data.jobs;
 
+    // Function to parse and validate date strings
+    function parseDate(dateString: string | null | undefined, defaultTime: Date): Date {
+      if (dateString && !isNaN(Date.parse(dateString))) {
+        return new Date(dateString);
+      } else {
+        console.warn(`Invalid or missing date string "${dateString}", using default time.`);
+        return defaultTime;
+      }
+    }
+
     // Start a root span for the workflow
-    const workflowStartTime = new Date(workflowRun.run_started_at || workflowRun.created_at || 0);
-    const workflowSpan = tracer.startSpan(`Workflow: ${workflowRun.name}`, {
+    const workflowStartTime = parseDate(
+      workflowRun.run_started_at || workflowRun.created_at,
+      new Date()
+    );
+    const workflowEndTime = parseDate(workflowRun.updated_at, new Date());
+
+    const workflowSpan = tracer.startSpan(`Workflow: ${workflowRun.name ?? 'Unnamed Workflow'}`, {
       startTime: workflowStartTime,
       kind: SpanKind.INTERNAL,
       attributes: {
-        'app': repo.repo,
-        'repository': repo.repo,
-        'run_id': runId,
-        'workflow_name': workflowRun.name ?? undefined,
-        'status': workflowRun.status ?? undefined,
-        'run_started_at': workflowRun.run_started_at,
-        'created_at': workflowRun.created_at,
-        'updated_at': workflowRun.updated_at,
+        app: repo.repo,
+        repository: repo.repo,
+        run_id: runId.toString(),
+        workflow_name: workflowRun.name ?? undefined,
+        status: workflowRun.status ?? undefined,
+        run_started_at: workflowRun.run_started_at ?? undefined,
+        created_at: workflowRun.created_at ?? undefined,
+        updated_at: workflowRun.updated_at ?? undefined,
       },
     });
 
@@ -78,19 +110,25 @@ async function run() {
     await context.with(trace.setSpan(context.active(), workflowSpan), async () => {
       // Iterate over the jobs and create spans for each job
       for (const job of jobs) {
-        const jobStartTime = job.started_at ? new Date(job.started_at) : new Date(0);
-        const jobEndTime = job.completed_at ? new Date(job.completed_at) : new Date();
-        const jobDurationMs = jobEndTime.getTime() - jobStartTime.getTime();
+        const jobStartTime = parseDate(job.started_at, workflowStartTime);
+        const jobEndTime = parseDate(job.completed_at, workflowEndTime);
 
-        const jobSpan = tracer.startSpan(`Job: ${job.name}`, {
+        // Ensure end time is not before start time
+        if (jobEndTime < jobStartTime) {
+          console.warn(
+            `Job "${job.name}" end time is before start time. Adjusting end time to match start time.`
+          );
+          jobEndTime.setTime(jobStartTime.getTime());
+        }
+
+        const jobSpan = tracer.startSpan(`Job: ${job.name ?? 'Unnamed Job'}`, {
           startTime: jobStartTime,
           kind: SpanKind.INTERNAL,
           attributes: {
-            'job_name': job.name,
-            'status': job.conclusion ?? undefined,
-            'started_at': job.started_at,
-            'completed_at': job.completed_at ?? undefined,
-            'duration_ms': jobDurationMs,
+            job_name: job.name ?? undefined,
+            status: job.conclusion ?? undefined,
+            started_at: job.started_at ?? undefined,
+            completed_at: job.completed_at ?? undefined,
           },
         });
 
@@ -98,19 +136,25 @@ async function run() {
         const steps = job.steps || [];
         await context.with(trace.setSpan(context.active(), jobSpan), async () => {
           for (const step of steps) {
-            const stepStartTime = step.started_at ? new Date(step.started_at) : new Date(0);
-            const stepEndTime = step.completed_at ? new Date(step.completed_at) : new Date();
-            const stepDurationMs = stepEndTime.getTime() - stepStartTime.getTime();
+            const stepStartTime = parseDate(step.started_at, jobStartTime);
+            const stepEndTime = parseDate(step.completed_at, jobEndTime);
 
-            const stepSpan = tracer.startSpan(`Step: ${step.name}`, {
+            // Ensure end time is not before start time
+            if (stepEndTime < stepStartTime) {
+              console.warn(
+                `Step "${step.name}" end time is before start time. Adjusting end time to match start time.`
+              );
+              stepEndTime.setTime(stepStartTime.getTime());
+            }
+
+            const stepSpan = tracer.startSpan(`Step: ${step.name ?? 'Unnamed Step'}`, {
               startTime: stepStartTime,
               kind: SpanKind.INTERNAL,
               attributes: {
-                'step_name': step.name,
-                'status': step.conclusion ?? undefined,
-                'started_at': step.started_at ?? undefined,
-                'completed_at': step.completed_at ?? undefined,
-                'duration_ms': stepDurationMs,
+                step_name: step.name ?? undefined,
+                status: step.conclusion ?? undefined,
+                started_at: step.started_at ?? undefined,
+                completed_at: step.completed_at ?? undefined,
               },
             });
 
@@ -123,8 +167,11 @@ async function run() {
     });
 
     // End the workflow span
-    const workflowEndTime = new Date(workflowRun.updated_at || Date.now());
     workflowSpan.end(workflowEndTime);
+
+    // Force flush and shutdown the provider to ensure all spans are sent
+    await provider.forceFlush();
+    await provider.shutdown();
 
     console.log("Trace data sent to Azure Monitor successfully.");
   } catch (error) {
