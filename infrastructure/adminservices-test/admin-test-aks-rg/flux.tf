@@ -6,6 +6,6 @@ resource "azurerm_kubernetes_cluster_extension" "flux_ext" {
   configuration_settings = {
     "useKubeletIdentity"      = "true"
     "autoUpgradeMinorVersion" = "true"
-    "multiTenancy.enforce"    = "true"
+    "multiTenancy.enforce"    = "false"
   }
 }

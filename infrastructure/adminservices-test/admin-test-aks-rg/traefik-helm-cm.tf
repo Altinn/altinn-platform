@@ -1,3 +1,13 @@
+resource "kubectl_manifest" "traefik_namespace" {
+  depends_on = [azurerm_kubernetes_cluster_extension.flux_ext]
+  yaml_body  = <<YAML
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: traefik
+YAML
+}
+
 resource "kubectl_manifest" "traefik_helm_values_configmap" {
   depends_on = [azurerm_kubernetes_cluster_extension.flux_ext]
   yaml_body  = <<YAML
@@ -5,7 +15,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: traefik-helm-values
-  namespace: flux-system
+  namespace: traefik
 data:
   values.yaml: |
     service:
