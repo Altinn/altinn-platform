@@ -30,6 +30,13 @@ resource "azurerm_role_assignment" "monitoring_reader_rg" {
   skip_service_principal_aad_check = true
 }
 
+resource "azurerm_role_assignment" "grafana_identity_reader" {
+  scope                            = "/subscriptions/${data.azurerm_client_config.current.subscription_id}"
+  role_definition_name             = "Monitoring Reader"
+  principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
+  skip_service_principal_aad_check = true
+}
+
 locals {
   altinn_30_operations      = "143ed28a-6e6d-4ca0-8273-eecb9c1665ba"
   altinn_30_operations_prod = "5a5ed585-9f7c-4b94-80af-9ceee8124db3"
