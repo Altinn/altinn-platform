@@ -72,7 +72,7 @@ jobs:
         working-directory: actions/send-ci-cd-trace
 
       - name: Send Trace to Azure Monitor
-        uses: ./../../actions/send-ci-cd-trace
+        uses: ./actions/send-ci-cd-trace
         with:
             connection_string: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
             repo_token: ${{ secrets.GITHUB_TOKEN }}
