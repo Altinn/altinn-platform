@@ -1,7 +1,7 @@
 name: 'Send CI/CD Trace to Azure Monitor'
 description: 'Collects jobs and steps metrics from GitHub Actions workflow and send them to Azure Application Insights'
 inputs:
-  instrumentation_key:
+  connection_string:
     description: 'Azure Application Insights Instrumentation Key'
     required: true
   repo_token:
