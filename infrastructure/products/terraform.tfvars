@@ -8,7 +8,7 @@ workspaces = [
       },
       {
         arm_subscription = "test"
-        names            = ["test", "at21", "at22", "at23", "at24", "at25", "yt01"]
+        names            = ["test", "at21", "at22", "at23", "at24", "at25", "yt01", "grafana"]
     }]
   },
   {
