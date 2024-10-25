@@ -175,6 +175,12 @@ alt if actual state does not match desired state
 end
 ```
 
+Using flux to dpeloy we can have a deploy time check of de API deployment. But the deployment in azure might take a long time and is an asyncronous deployment that could fail after some time.
+
+To accomedate for the fact that a deploy can fail after some time or the status can change down the road (outage or other problems in apim) we also need a api where it is possible to check the status of an deployment.
+
+This api shoul in turn be consumed by disctl so that teams can use dis tool to check the status.
+
 Sequence diagram status api
 ```mermaid
 sequenceDiagram
@@ -208,12 +214,6 @@ We have a pipeline script setup today that configures the api management service
 Few people know how this works and it is complicated to deploy a new or a change to a api in the api management service
 
 # Unresolved questions
-
-* Can we automate even more of the process than we do today
-* How we should report status of an deployment back to the teams
-  * Flux status?
-  * Custom api endpoint for viewing status (ala. kuberneteswrapper)
-  * other
 
 # Future possibilities
 
