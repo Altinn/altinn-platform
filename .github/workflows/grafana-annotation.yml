@@ -10,7 +10,7 @@ on:
       version:
         description: 'Application version'
         required: true
-      owner:
+      team:
         description: 'Owner or team name'
         required: true
         default: 'platform'
@@ -56,3 +56,10 @@ jobs:
               \"time\": ${timestamp}
             }"
 
+      - name: Send Trace to Azure Monitor
+        uses: altinn/altinn-platform/actions/send-ci-cd-trace@v1.0.0
+        with:
+            connection_string: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
+            app: "${{ github.event.inputs.app }}"
+            team: "${{ github.event.inputs.team }}"
+            repo_token: ${{ secrets.GITHUB_TOKEN }}
