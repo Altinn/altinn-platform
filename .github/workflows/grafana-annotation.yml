@@ -77,3 +77,4 @@ jobs:
             connection_string: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
             app: "${{ github.event.inputs.app }}"
             team: "${{ github.event.inputs.team }}"
+            repo_token: ${{ secrets.GITHUB_TOKEN }}

@@ -15,6 +15,7 @@ async function run() {
     const connectionString = core.getInput("connection_string");
     const app = core.getInput("app");
     const team = core.getInput("team");
+    const token = core.getInput("repo_token")
     
     if (!connectionString) {
       throw new Error("Application Insights connection string is required.");
@@ -28,10 +29,8 @@ async function run() {
       throw new Error("Team name is required.");
     }
 
-    let token = core.getInput("repo_token") || process.env.GITHUB_TOKEN;
-
     if (!token) {
-      throw new Error("GitHub token is required. Ensure 'repo_token' input or GITHUB_TOKEN environment variable is provided.");
+      throw new Error("GitHub token is required. Ensure 'repo_token' input is provided.");
     }
 
     // Add default attributes to spans

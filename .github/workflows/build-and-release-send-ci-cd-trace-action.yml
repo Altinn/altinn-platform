@@ -1,4 +1,4 @@
-name: Build and Release Action
+name: Build and Release send-ci-cd-trace Action
 
 on:
   push:

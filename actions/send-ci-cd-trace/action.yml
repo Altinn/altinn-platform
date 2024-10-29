@@ -13,7 +13,7 @@ inputs:
     required: true
   repo_token:
     description: 'GitHub Token for accessing workflow data in private repositories'
-    required: false
+    required: true
 runs:
   using: 'node20'
   main: 'dist/index.js'
