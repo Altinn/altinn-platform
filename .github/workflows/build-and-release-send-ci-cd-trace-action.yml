@@ -35,7 +35,7 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add dist/
+          git add -f dist/  # Force add the dist folder, bypassing .gitignore
           git commit -m "Add built files for release [skip ci]"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
