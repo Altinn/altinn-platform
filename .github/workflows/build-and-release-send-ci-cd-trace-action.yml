@@ -45,15 +45,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create and push tag
-        id: create_tag
-        run: |
-          TAG_NAME="v$(date +'%Y%m%d%H%M%S')"  # Create a unique tag with a timestamp
-          git tag $TAG_NAME
-          git push origin $TAG_NAME
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create and push tag
         if: ${{ success() }}
         run: |
           TAG_NAME="${{ inputs.git_tag }}"
