@@ -1,0 +1,33 @@
+name: Dis-apim-operator Lint
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - services/dis-apim-operator/**
+      - .github/workflows/dis-apim-lint.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - services/dis-apim-operator/**
+      - .github/workflows/dis-apim-lint.yml
+
+jobs:
+  lint:
+    name: Run on Ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '~1.22'
+
+      - name: Run linter
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.59
