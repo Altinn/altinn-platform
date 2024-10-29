@@ -18,6 +18,9 @@ jobs:
   lint:
     name: Run on Ubuntu
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/dis-apim-operator
     steps:
       - name: Clone the code
         uses: actions/checkout@v4
