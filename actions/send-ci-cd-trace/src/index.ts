@@ -5,32 +5,36 @@ import { ReadableSpan, Span, SpanProcessor } from "@opentelemetry/sdk-trace-base
 import {
   trace,
   context,
-  SpanKind,
-  diag,
-  DiagConsoleLogger,
-  DiagLogLevel,
+  SpanKind
 } from "@opentelemetry/api";
 import { useAzureMonitor, AzureMonitorOpenTelemetryOptions, shutdownAzureMonitor } from "@azure/monitor-opentelemetry";
-
-
-// Set the global logger and log level for debugging
-diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.ALL);
 
 async function run() {
   try {
     // Retrieve inputs
     const connectionString = core.getInput("connection_string");
-    const token = core.getInput("repo_token");
-
+    const app = core.getInput("app");
+    const team = core.getInput("team");
+    
     if (!connectionString) {
       throw new Error("Application Insights connection string is required.");
     }
 
-    if (!token) {
-      throw new Error("GitHub token is required.");
+    if (!app) {
+      throw new Error("App name is required.");
     }
 
-    // test extra attributes
+    if (!team) {
+      throw new Error("Team name is required.");
+    }
+
+    let token = core.getInput("repo_token") || process.env.GITHUB_TOKEN;
+
+    if (!token) {
+      throw new Error("GitHub token is required. Ensure 'repo_token' input or GITHUB_TOKEN environment variable is provided.");
+    }
+
+    // Add default attributes to spans
     class SpanEnrichingProcessor implements SpanProcessor {
       forceFlush(): Promise<void> {
         return Promise.resolve();
@@ -44,10 +48,14 @@ async function run() {
 
       onEnd(span: ReadableSpan) {
 
-        span.attributes["app"] = "gh-action-tracer";
+        span.attributes["service"] = "gh-action-tracer";
+        span.attributes["app"] = app;
+        span.attributes["team"] = team;
+        span.attributes["git_hash"] = github.context.sha;
+
       }
     }
-
+    
     const credential = new DefaultAzureCredential();
 
     const options: AzureMonitorOpenTelemetryOptions = {
@@ -58,7 +66,7 @@ async function run() {
       spanProcessors: [new SpanEnrichingProcessor()] 
     };
 
-    // Initialize OpenTelemetry with Azure Monitor
+    // Initialize otel with Azure Monitor
     useAzureMonitor(options);
 
     // Get tracer
@@ -112,7 +120,6 @@ async function run() {
         startTime: workflowStartTime,
         kind: SpanKind.INTERNAL,
         attributes: {
-          app: repo.repo,
           repository: repo.repo,
           run_id: runId.toString(),
           workflow_name: workflowRun.name ?? undefined,

@@ -1,12 +1,19 @@
 name: 'Send CI/CD Trace to Azure Monitor'
 description: 'Collects jobs and steps metrics from GitHub Actions workflow and send them to Azure Application Insights'
+author: 'Digdir'  
 inputs:
+  app:
+    description: 'Name of the App'
+    required: true
+  team:
+    description: 'Name of the team that owns the App'
+    required: true
   connection_string:
-    description: 'Azure Application Insights Instrumentation Key'
+    description: 'Azure Application Insights Connection String'
     required: true
   repo_token:
-    description: 'GitHub Token for accessing workflow data'
-    required: true
+    description: 'GitHub Token for accessing workflow data in private repositories'
+    required: false
 runs:
   using: 'node20'
   main: 'dist/index.js'

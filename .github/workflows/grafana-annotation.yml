@@ -10,7 +10,7 @@ on:
       version:
         description: 'Application version'
         required: true
-      owner:
+      team:
         description: 'Owner or team name'
         required: true
         default: 'platform'
@@ -75,4 +75,5 @@ jobs:
         uses: ./actions/send-ci-cd-trace
         with:
             connection_string: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
-            repo_token: ${{ secrets.GITHUB_TOKEN }}
+            app: "${{ github.event.inputs.app }}"
+            team: "${{ github.event.inputs.team }}"
