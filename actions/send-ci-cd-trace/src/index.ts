@@ -1,6 +1,5 @@
 import * as core from "@actions/core";
 import * as github from "@actions/github";
-import { DefaultAzureCredential } from "@azure/identity";
 import { ReadableSpan, Span, SpanProcessor } from "@opentelemetry/sdk-trace-base";
 import {
   trace,
@@ -57,17 +56,9 @@ async function run() {
       }
     }
     
-    let credential;
-    try {
-      credential = new DefaultAzureCredential();
-    } catch (error) {
-      console.warn("Azure credential not available, proceeding without it.");
-    }
-
     const options: AzureMonitorOpenTelemetryOptions = {
       azureMonitorExporterOptions: {
         connectionString: connectionString,
-        ...(credential && { credential: credential }),
       },
       spanProcessors: [new SpanEnrichingProcessor()] 
     };
