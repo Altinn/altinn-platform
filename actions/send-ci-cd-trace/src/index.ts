@@ -16,20 +16,21 @@ async function run() {
     const app = core.getInput("app");
     const team = core.getInput("team");
     const token = core.getInput("repo_token")
+    const environment = core.getInput("environment");
     
-    if (!connectionString) {
+    if (connectionString.trim() === "") {
       throw new Error("Application Insights connection string is required.");
     }
 
-    if (!app) {
+    if (app.trim() === "") {
       throw new Error("App name is required.");
     }
 
-    if (!team) {
+    if (team.trim() === "") {
       throw new Error("Team name is required.");
     }
 
-    if (!token) {
+    if (token.trim() === "") {
       throw new Error("GitHub token is required. Ensure 'repo_token' input is provided.");
     }
 
@@ -47,20 +48,26 @@ async function run() {
 
       onEnd(span: ReadableSpan) {
 
-        span.attributes["service"] = "gh-action-tracer";
-        span.attributes["app"] = app;
+        span.attributes["source"] = "gh-action-tracer";
+        span.attributes["appName"] = app;
         span.attributes["team"] = team;
         span.attributes["git_hash"] = github.context.sha;
+        span.attributes["environment"] = environment;
 
       }
     }
     
-    const credential = new DefaultAzureCredential();
+    let credential;
+    try {
+      credential = new DefaultAzureCredential();
+    } catch (error) {
+      console.warn("Azure credential not available, proceeding without it.");
+    }
 
     const options: AzureMonitorOpenTelemetryOptions = {
       azureMonitorExporterOptions: {
         connectionString: connectionString,
-        credential: credential,
+        ...(credential && { credential: credential }),
       },
       spanProcessors: [new SpanEnrichingProcessor()] 
     };
@@ -198,6 +205,7 @@ async function run() {
 
     // End the workflow span
     workflowSpan.end(workflowEndTime);
+    console.log("Trace ID:", workflowSpan.spanContext().traceId);
 
     console.log("Trace data sent to Azure Monitor successfully.");
   } catch (error) {
