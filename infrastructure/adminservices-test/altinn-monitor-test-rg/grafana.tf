@@ -38,8 +38,11 @@ resource "azurerm_role_assignment" "grafana_identity_reader" {
 }
 
 locals {
+  altinn_30_developers      = "416302ed-fbab-41a4-8c8d-61f486fa79ca"
+  altinn_30_developers_prod = "2d962017-75cf-47f2-a76e-50591fbf7fe9"
   altinn_30_operations      = "143ed28a-6e6d-4ca0-8273-eecb9c1665ba"
   altinn_30_operations_prod = "5a5ed585-9f7c-4b94-80af-9ceee8124db3"
+  grafana_editor            = [local.altinn_30_developers, local.altinn_30_developers_prod]
   grafana_admin             = [local.altinn_30_operations, local.altinn_30_operations_prod]
 }
 
@@ -48,6 +51,15 @@ resource "azurerm_role_assignment" "grafana_admin" {
   scope                            = azurerm_dashboard_grafana.grafana.id
   role_definition_name             = "Grafana Admin"
   principal_id                     = each.key
+  principal_type                   = "Group"
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "grafana_editors" {
+  for_each                         = { for value in local.grafana_editor : value => value if value != null }
+  scope                            = azurerm_dashboard_grafana.grafana.id
+  role_definition_name             = "Grafana Editor"
+  principal_id                     = each.value
   principal_type                   = "Group"
   skip_service_principal_aad_check = true
 }
