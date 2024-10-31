@@ -50,7 +50,7 @@ jobs:
             }"
 
       - name: Send Trace to Azure Monitor
-        uses: altinn/altinn-platform/actions/send-ci-cd-trace@v1.0.0
+        uses: altinn/altinn-platform/actions/send-ci-cd-trace@v1.0.1
         with:
             connection_string: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
             app: "${{ github.event.inputs.app }}"
