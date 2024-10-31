@@ -198,11 +198,6 @@ async function run() {
     // End the workflow span
     workflowSpan.end(workflowEndTime);
     console.log("Trace ID:", workflowSpan.spanContext().traceId);
-    // Force flush before shutdown
-    const provider = trace.getTracerProvider()
-    if (provider && 'forceFlush' in provider) {
-      await provider.forceFlush;
-    }
 
     console.log("Trace data sent to Azure Monitor successfully.");
   } catch (error) {
