@@ -203,8 +203,7 @@ async function run() {
     if (provider && 'forceFlush' in provider) {
       await provider.forceFlush;
     }
-    // Shutdown the Azure Monitor exporter
-    await shutdownAzureMonitor();
+
     console.log("Trace data sent to Azure Monitor successfully.");
   } catch (error) {
     if (error instanceof Error) {
