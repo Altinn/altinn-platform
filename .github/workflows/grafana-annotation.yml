@@ -30,7 +30,7 @@ jobs:
     environment: ${{ github.event.inputs.environment }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: 'Azure login'
         uses: azure/login@v2
