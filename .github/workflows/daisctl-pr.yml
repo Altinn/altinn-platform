@@ -7,6 +7,11 @@ on:
   push:
     branches:
       - "main"
+    paths:
+      - "tools/daisctl/**/*.go"
+      - "tools/daisctl/go.*"
+      - "tools/daisctl/Makefile"
+      - "./github/workflows/daisctl-pr.yml"
   pull_request:
     paths:
       - "tools/daisctl/**/*.go"
