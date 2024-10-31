@@ -22,7 +22,7 @@ on:
 
 permissions:
   id-token: write
-  contents: write
+  contents: read
 
 jobs:
   deploy-annotation:
@@ -31,13 +31,6 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
-      - name: 'Azure login'
-        uses: azure/login@v2
-        with:
-            client-id: ${{ secrets.AZURE_CLIENT_ID }}
-            tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-            subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Create Grafana Annotation
         run: |
@@ -57,7 +50,7 @@ jobs:
             }"
 
       - name: Send Trace to Azure Monitor
-        uses: altinn/altinn-platform/actions/send-ci-cd-trace@v1.0.0
+        uses: altinn/altinn-platform/actions/send-ci-cd-trace@v1.0.1
         with:
             connection_string: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
             app: "${{ github.event.inputs.app }}"
