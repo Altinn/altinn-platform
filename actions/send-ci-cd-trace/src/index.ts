@@ -7,8 +7,8 @@ import {
 } from "@opentelemetry/api";
 import { useAzureMonitor, AzureMonitorOpenTelemetryOptions, shutdownAzureMonitor } from "@azure/monitor-opentelemetry";
 import { AzureMonitorTraceExporter } from "@azure/monitor-opentelemetry-exporter";
-import { ReadableSpan, BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
-import { ExportResult, ExportResultCode } from "@opentelemetry/core";
+import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
+
 
 async function run() {
   try {
@@ -54,18 +54,6 @@ async function run() {
       maxQueueSize: 500,
     });
 
-    // Wrap the export function to log export results
-    const originalExport = azureExporter.export.bind(azureExporter);
-    azureExporter.export = async (spans: ReadableSpan[], resultCallback: (result: ExportResult) => void): Promise<void> => {
-      originalExport(spans, (result) => {
-        if (result.code === ExportResultCode.SUCCESS) {
-          console.log(`Successfully exported ${spans.length} span(s).`);
-        } else {
-          console.error(`Failed to export spans. Code: ${result.code}`);
-        }
-        resultCallback(result);
-      });
-    };
     const options: AzureMonitorOpenTelemetryOptions = {
       azureMonitorExporterOptions: {
         connectionString: connectionString,
