@@ -6,9 +6,6 @@ import {
   SpanKind
 } from "@opentelemetry/api";
 import { useAzureMonitor, AzureMonitorOpenTelemetryOptions, shutdownAzureMonitor } from "@azure/monitor-opentelemetry";
-import { AzureMonitorTraceExporter } from "@azure/monitor-opentelemetry-exporter";
-import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
-
 
 async function run() {
   try {
@@ -44,21 +41,10 @@ async function run() {
       environment: environment,
     };
 
-    const azureExporter = new AzureMonitorTraceExporter({
-      connectionString: connectionString,
-    });
-
-    // try to optimize the performance by batching the spans
-    const batchSpanProcessor = new BatchSpanProcessor(azureExporter, {
-      maxExportBatchSize: 100,
-      maxQueueSize: 500,
-    });
-
     const options: AzureMonitorOpenTelemetryOptions = {
       azureMonitorExporterOptions: {
         connectionString: connectionString,
       },
-      spanProcessors: [batchSpanProcessor] 
     };
 
     // Initialize otel with Azure Monitor
@@ -198,11 +184,6 @@ async function run() {
     // End the workflow span
     workflowSpan.end(workflowEndTime);
     console.log("Trace ID:", workflowSpan.spanContext().traceId);
-    // Force flush before shutdown
-    const provider = trace.getTracerProvider()
-    if (provider && 'forceFlush' in provider) {
-      await provider.forceFlush;
-    }
 
     console.log("Trace data sent to Azure Monitor successfully.");
   } catch (error) {
