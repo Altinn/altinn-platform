@@ -1,12 +1,13 @@
 import * as core from "@actions/core";
 import * as github from "@actions/github";
-import { ReadableSpan, Span, SpanProcessor } from "@opentelemetry/sdk-trace-base";
 import {
   trace,
   context,
   SpanKind
 } from "@opentelemetry/api";
 import { useAzureMonitor, AzureMonitorOpenTelemetryOptions, shutdownAzureMonitor } from "@azure/monitor-opentelemetry";
+import { AzureMonitorTraceExporter } from "@azure/monitor-opentelemetry-exporter";
+import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
 
 async function run() {
   try {
@@ -33,34 +34,30 @@ async function run() {
       throw new Error("GitHub token is required. Ensure 'repo_token' input is provided.");
     }
 
-    // Add default attributes to spans
-    class SpanEnrichingProcessor implements SpanProcessor {
-      forceFlush(): Promise<void> {
-        return Promise.resolve();
-      }
+    // Common attributes for all spans
+    const commonAttributes = {
+      service: "gh-action-tracer",
+      appName: app,
+      team: team,
+      git_hash: github.context.sha,
+      environment: environment,
+    };
 
-      shutdown(): Promise<void> {
-        return Promise.resolve();
-      }
+    const azureExporter = new AzureMonitorTraceExporter({
+      connectionString: connectionString,
+    });
 
-      onStart(_span: Span): void {}
+    // try to optimize the performance by batching the spans
+    const batchSpanProcessor = new BatchSpanProcessor(azureExporter, {
+      maxExportBatchSize: 100,
+      maxQueueSize: 500,
+    });
 
-      onEnd(span: ReadableSpan) {
-
-        span.attributes["source"] = "gh-action-tracer";
-        span.attributes["appName"] = app;
-        span.attributes["team"] = team;
-        span.attributes["git_hash"] = github.context.sha;
-        span.attributes["environment"] = environment;
-
-      }
-    }
-    
     const options: AzureMonitorOpenTelemetryOptions = {
       azureMonitorExporterOptions: {
         connectionString: connectionString,
       },
-      spanProcessors: [new SpanEnrichingProcessor()] 
+      spanProcessors: [batchSpanProcessor] 
     };
 
     // Initialize otel with Azure Monitor
@@ -197,7 +194,13 @@ async function run() {
     // End the workflow span
     workflowSpan.end(workflowEndTime);
     console.log("Trace ID:", workflowSpan.spanContext().traceId);
-
+    // Force flush before shutdown
+    const provider = trace.getTracerProvider()
+    if (provider && 'forceFlush' in provider) {
+      await provider.forceFlush;
+    }
+    // Shutdown the Azure Monitor exporter
+    await shutdownAzureMonitor();
     console.log("Trace data sent to Azure Monitor successfully.");
   } catch (error) {
     if (error instanceof Error) {
