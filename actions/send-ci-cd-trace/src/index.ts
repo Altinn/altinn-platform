@@ -7,7 +7,8 @@ import {
 } from "@opentelemetry/api";
 import { useAzureMonitor, AzureMonitorOpenTelemetryOptions, shutdownAzureMonitor } from "@azure/monitor-opentelemetry";
 import { AzureMonitorTraceExporter } from "@azure/monitor-opentelemetry-exporter";
-import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
+import { ReadableSpan, BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
+import { ExportResult, ExportResultCode } from "@opentelemetry/core";
 
 async function run() {
   try {
@@ -53,6 +54,18 @@ async function run() {
       maxQueueSize: 500,
     });
 
+    // Wrap the export function to log export results
+    const originalExport = azureExporter.export.bind(azureExporter);
+    azureExporter.export = async (spans: ReadableSpan[], resultCallback: (result: ExportResult) => void): Promise<void> => {
+      originalExport(spans, (result) => {
+        if (result.code === ExportResultCode.SUCCESS) {
+          console.log(`Successfully exported ${spans.length} span(s).`);
+        } else {
+          console.error(`Failed to export spans. Code: ${result.code}`);
+        }
+        resultCallback(result);
+      });
+    };
     const options: AzureMonitorOpenTelemetryOptions = {
       azureMonitorExporterOptions: {
         connectionString: connectionString,
@@ -121,6 +134,7 @@ async function run() {
           run_started_at: workflowRun.run_started_at ?? undefined,
           created_at: workflowRun.created_at ?? undefined,
           updated_at: workflowRun.updated_at ?? undefined,
+          ...commonAttributes
         },
       }
     );
@@ -148,6 +162,7 @@ async function run() {
             status: job.conclusion ?? undefined,
             started_at: job.started_at ?? undefined,
             completed_at: job.completed_at ?? undefined,
+            ...commonAttributes
           },
         });
 
@@ -180,6 +195,7 @@ async function run() {
                 status: step.conclusion ?? undefined,
                 started_at: step.started_at ?? undefined,
                 completed_at: step.completed_at ?? undefined,
+                ...commonAttributes
               },
             });
 
@@ -213,6 +229,8 @@ async function run() {
 
 run().catch(async (error) => {
   console.error("An error occurred:", error);
+  // Allow 2s for spans to be exported
+  await new Promise((resolve) => setTimeout(resolve, 2000));
   await shutdownAzureMonitor();
   process.exit(1);
 });
