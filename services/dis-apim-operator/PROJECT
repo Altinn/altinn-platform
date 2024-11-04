@@ -7,4 +7,17 @@ layout:
 - go.kubebuilder.io/v4
 projectName: dis-apim-operator
 repo: github.com/Altinn/altinn-platform/services/dis-apim-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: dis.altinn.cloud
+  group: apim
+  kind: Backend
+  path: github.com/Altinn/altinn-platform/services/dis-apim-operator/api/v1alpha1
+  version: v1alpha1
+  webhooks:
+    defaulting: true
+    webhookVersion: v1
 version: "3"
