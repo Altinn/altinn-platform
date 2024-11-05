@@ -33,8 +33,7 @@ func LoadConfig(configFile string, flagset *pflag.FlagSet) (*AzureConfig, error)
 
 	// Load from environment
 	err := k.Load(env.Provider("DISAPIM_", ".", func(s string) string {
-		return strings.Replace(strings.ToLower(
-			strings.TrimPrefix(s, "DISAPIM_")), "_", ".", -1)
+		return toCamelCase(strings.ToLower(strings.TrimPrefix(s, "DISAPIM_")))
 	}), nil)
 
 	if err != nil {
@@ -59,4 +58,12 @@ func LoadConfigOrDie(configFile string, flagset *pflag.FlagSet) *AzureConfig {
 		panic(err)
 	}
 	return c
+}
+
+func toCamelCase(snake string) string {
+	parts := strings.Split(snake, "_")
+	for i := 1; i < len(parts); i++ {
+		parts[i] = strings.Title(parts[i])
+	}
+	return strings.Join(parts, "")
 }
