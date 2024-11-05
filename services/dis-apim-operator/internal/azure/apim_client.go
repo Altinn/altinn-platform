@@ -43,6 +43,14 @@ func NewAPIMClient(config *ApimClientConfig) (*APIMClient, error) {
 	}, nil
 }
 
+// NewApimClientWithFactory creates a new APIMClient with a given client factory
+func NewApimClientWithFactory(config *ApimClientConfig, factory *apim.ClientFactory) *APIMClient {
+	return &APIMClient{
+		ApimClientConfig:  *config,
+		apimClientFactory: factory,
+	}
+}
+
 func (c *APIMClient) GetApiVersionSet(ctx context.Context, apiVersionSetName string, options *apim.APIVersionSetClientGetOptions) (apim.APIVersionSetClientGetResponse, error) {
 	client := c.apimClientFactory.NewAPIVersionSetClient()
 	return client.Get(ctx, c.ApimClientConfig.ResourceGroup, c.ApimClientConfig.ApimServiceName, apiVersionSetName, options)

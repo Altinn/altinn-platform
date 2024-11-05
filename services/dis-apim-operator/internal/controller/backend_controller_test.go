@@ -114,7 +114,7 @@ var _ = Describe("Backend Controller", func() {
 			controllerReconciler := &BackendReconciler{
 				Client:    k8sClient,
 				Scheme:    k8sClient.Scheme(),
-				NewClient: azure.NewAPIMClient,
+				NewClient: testutils.NewFakeAPIMClient,
 				ApimClientConfig: &azure.ApimClientConfig{
 					AzureConfig: config.AzureConfig{
 						SubscriptionId:  "fake-subscription-id",
@@ -151,7 +151,7 @@ var _ = Describe("Backend Controller", func() {
 			controllerReconciler := &BackendReconciler{
 				Client:    k8sClient,
 				Scheme:    k8sClient.Scheme(),
-				NewClient: azure.NewAPIMClient,
+				NewClient: testutils.NewFakeAPIMClient,
 				ApimClientConfig: &azure.ApimClientConfig{
 					AzureConfig: config.AzureConfig{
 						SubscriptionId:  "fake-subscription-id",
@@ -209,7 +209,7 @@ var _ = Describe("Backend Controller", func() {
 			controllerReconciler := &BackendReconciler{
 				Client:    k8sClient,
 				Scheme:    k8sClient.Scheme(),
-				NewClient: azure.NewAPIMClient,
+				NewClient: testutils.NewFakeAPIMClient,
 				ApimClientConfig: &azure.ApimClientConfig{
 					AzureConfig: config.AzureConfig{
 						SubscriptionId:  "fake-subscription-id",
@@ -282,7 +282,7 @@ var _ = Describe("Backend Controller", func() {
 			controllerReconciler := &BackendReconciler{
 				Client:    k8sClient,
 				Scheme:    k8sClient.Scheme(),
-				NewClient: azure.NewAPIMClient,
+				NewClient: testutils.NewFakeAPIMClient,
 				ApimClientConfig: &azure.ApimClientConfig{
 					AzureConfig: config.AzureConfig{
 						SubscriptionId:  "fake-subscription-id",
@@ -348,7 +348,7 @@ var _ = Describe("Backend Controller", func() {
 			controllerReconciler := &BackendReconciler{
 				Client:    k8sClient,
 				Scheme:    k8sClient.Scheme(),
-				NewClient: azure.NewAPIMClient,
+				NewClient: testutils.NewFakeAPIMClient,
 				ApimClientConfig: &azure.ApimClientConfig{
 					AzureConfig: config.AzureConfig{
 						SubscriptionId:  "fake-subscription-id",
@@ -412,7 +412,7 @@ var _ = Describe("Backend Controller", func() {
 			controllerReconciler := &BackendReconciler{
 				Client:    k8sClient,
 				Scheme:    k8sClient.Scheme(),
-				NewClient: azure.NewAPIMClient,
+				NewClient: testutils.NewFakeAPIMClient,
 				ApimClientConfig: &azure.ApimClientConfig{
 					AzureConfig: config.AzureConfig{
 						SubscriptionId:  "fake-subscription-id",
@@ -461,7 +461,7 @@ var _ = Describe("Backend Controller", func() {
 			controllerReconciler := &BackendReconciler{
 				Client:    k8sClient,
 				Scheme:    k8sClient.Scheme(),
-				NewClient: azure.NewAPIMClient,
+				NewClient: testutils.NewFakeAPIMClient,
 				ApimClientConfig: &azure.ApimClientConfig{
 					AzureConfig: config.AzureConfig{
 						SubscriptionId:  "fake-subscription-id",
