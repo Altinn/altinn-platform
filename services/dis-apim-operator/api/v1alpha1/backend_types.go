@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	"fmt"
+
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,38 +26,38 @@ import (
 
 // BackendSpec defines the desired state of Backend.
 type BackendSpec struct {
-	//Title - Title of the Backend. May include its purpose, where to get more information, and other relevant information.
-	//+kubebuilder:validation:Required
+	// Title - Title of the Backend. May include its purpose, where to get more information, and other relevant information.
+	// +kubebuilder:validation:Required
 	Title string `json:"title,omitempty"`
-	//Description - Description of the Backend. May include its purpose, where to get more information, and other relevant information.
-	//+kubebuilder:validation:Optional
+	// Description - Description of the Backend. May include its purpose, where to get more information, and other relevant information.
+	// +kubebuilder:validation:Optional
 	Description *string `json:"description,omitempty"`
-	//Url - URL of the Backend.
-	//+kubebuilder:validation:Required
+	// Url - URL of the Backend.
+	// +kubebuilder:validation:Required
 	Url string `json:"url,omitempty"`
-	//ValidateCertificateChain - Whether to validate the certificate chain when using the backend.
-	//+kubebuilder:validation:Optional
-	//+kubebuilder:default:=true
+	// ValidateCertificateChain - Whether to validate the certificate chain when using the backend.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default:=true
 	ValidateCertificateChain *bool `json:"validateCertificateChain,omitempty"`
-	//ValidateCertificateName - Whether to validate the certificate name when using the backend.
-	//+kubebuilder:validation:Optional
-	//+kubebuilder:default:=true
+	// ValidateCertificateName - Whether to validate the certificate name when using the backend.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default:=true
 	ValidateCertificateName *bool `json:"validateCertificateName,omitempty"`
-	//AzureResourceUidPrefix - The prefix to use for the Azure resource.
-	//+kubebuilder:validation:Optional
+	// AzureResourceUidPrefix - The prefix to use for the Azure resource.
+	// +kubebuilder:validation:Optional
 	AzureResourcePrefix *string `json:"azureResourceUidPrefix,omitempty"`
 }
 
 // BackendStatus defines the observed state of Backend.
 type BackendStatus struct {
-	//BackendID - The identifier of the Backend.
-	//+kubebuilder:validation:Optional
+	// BackendID - The identifier of the Backend.
+	// +kubebuilder:validation:Optional
 	BackendID string `json:"backendID,omitempty"`
-	//ProvisioningState - The provisioning state of the Backend.
-	//+kubebuilder:validation:Optional
+	// ProvisioningState - The provisioning state of the Backend.
+	// +kubebuilder:validation:Optional
 	ProvisioningState BackendProvisioningState `json:"provisioningState,omitempty"`
-	//LastProvisioningError - The last error that occurred during provisioning.
-	//+kubebuilder:validation:Optional
+	// LastProvisioningError - The last error that occurred during provisioning.
+	// +kubebuilder:validation:Optional
 	LastProvisioningError string `json:"lastProvisioningError,omitempty"`
 }
 
@@ -64,9 +65,9 @@ type BackendStatus struct {
 type BackendProvisioningState string
 
 const (
-	//BackendProvisioningStateSucceeded - The Backend has been successfully provisioned.
+	// BackendProvisioningStateSucceeded - The Backend has been successfully provisioned.
 	BackendProvisioningStateSucceeded BackendProvisioningState = "Succeeded"
-	//BackendProvisioningStateFailed - The Backend has failed to be provisioned.
+	// BackendProvisioningStateFailed - The Backend has failed to be provisioned.
 	BackendProvisioningStateFailed BackendProvisioningState = "Failed"
 )
 
@@ -104,6 +105,7 @@ func (b *Backend) MatchesActualState(actual *apim.BackendClientGetResponse) bool
 		*b.Spec.ValidateCertificateName == *actual.Properties.TLS.ValidateCertificateName
 }
 
+// ToAzureBackend converts the Backend to an apim.BackendContract.
 func (b *Backend) ToAzureBackend() apim.BackendContract {
 	return apim.BackendContract{
 		Properties: &apim.BackendContractProperties{
@@ -119,6 +121,7 @@ func (b *Backend) ToAzureBackend() apim.BackendContract {
 	}
 }
 
+// GetAzureResourceName returns the name of the Azure resource.
 func (b *Backend) GetAzureResourceName() string {
 	if b.Spec.AzureResourcePrefix != nil {
 		return fmt.Sprintf("%s-%s", *b.Spec.AzureResourcePrefix, b.Name)

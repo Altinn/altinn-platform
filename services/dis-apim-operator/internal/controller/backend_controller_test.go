@@ -18,6 +18,9 @@ package controller
 
 import (
 	"context"
+	"net/http"
+	"time"
+
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/azure"
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/config"
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
@@ -26,8 +29,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2"
 	apimfake "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2/fake"
-	"net/http"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

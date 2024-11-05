@@ -49,7 +49,7 @@ var _ = Describe("Backend Webhook", func() {
 			By("simulating a scenario where AzureResourcePrefix is not provided")
 			obj.Spec.AzureResourcePrefix = nil
 			By("calling the Default method to apply defaults")
-			defaulter.Default(ctx, obj)
+			Expect(defaulter.Default(ctx, obj)).To(Succeed())
 			By("checking that a random string is added to AzureResourcePrefix")
 			Expect(obj.Spec.AzureResourcePrefix).NotTo(BeNil())
 			Expect(*obj.Spec.AzureResourcePrefix).To(HaveLen(8))
@@ -58,7 +58,7 @@ var _ = Describe("Backend Webhook", func() {
 			By("simulating a scenario where AzureResourcePrefix is provided")
 			obj.Spec.AzureResourcePrefix = utils.ToPointer("test")
 			By("calling the Default method to apply defaults")
-			defaulter.Default(ctx, obj)
+			Expect(defaulter.Default(ctx, obj)).To(Succeed())
 			By("checking that AzureResourcePrefix is not changed")
 			Expect(*obj.Spec.AzureResourcePrefix).To(Equal("test"))
 		})

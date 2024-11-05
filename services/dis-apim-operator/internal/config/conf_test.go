@@ -30,11 +30,11 @@ apimServiceName = "test-apim-service"
 		Expect(err).NotTo(HaveOccurred())
 		_, err = configFile.Write([]byte(configContent))
 		Expect(err).NotTo(HaveOccurred())
-		configFile.Close()
+		_ = configFile.Close()
 	})
 
 	AfterEach(func() {
-		os.Remove(configFile.Name())
+		Expect(os.Remove(configFile.Name())).To(Succeed())
 	})
 
 	It("should load config from file", func() {
@@ -47,12 +47,18 @@ apimServiceName = "test-apim-service"
 	})
 
 	It("should load config from environment variables", func() {
-		os.Setenv("DISAPIM_SUBSCRIPTION_ID", "env-subscription-id")
-		os.Setenv("DISAPIM_RESOURCE_GROUP", "env-resource-group")
-		os.Setenv("DISAPIM_APIM_SERVICE_NAME", "env-apim-service")
-		defer os.Unsetenv("DISAPIM_SUBSCRIPTION_ID")
-		defer os.Unsetenv("DISAPIM_RESOURCE_GROUP")
-		defer os.Unsetenv("DISAPIM_APIM_SERVICE_NAME")
+		Expect(os.Setenv("DISAPIM_SUBSCRIPTION_ID", "env-subscription-id")).To(Succeed())
+		Expect(os.Setenv("DISAPIM_RESOURCE_GROUP", "env-resource-group")).To(Succeed())
+		Expect(os.Setenv("DISAPIM_APIM_SERVICE_NAME", "env-apim-service")).To(Succeed())
+		defer func() {
+			_ = os.Unsetenv("DISAPIM_SUBSCRIPTION_ID")
+		}()
+		defer func() {
+			_ = os.Unsetenv("DISAPIM_RESOURCE_GROUP")
+		}()
+		defer func() {
+			_ = os.Unsetenv("DISAPIM_APIM_SERVICE_NAME")
+		}()
 
 		flagset := pflag.NewFlagSet("test", pflag.ContinueOnError)
 		cfg, err := LoadConfig(configFile.Name(), flagset)
@@ -63,17 +69,23 @@ apimServiceName = "test-apim-service"
 	})
 
 	It("should load config from flags", func() {
-		os.Setenv("DISAPIM_SUBSCRIPTION_ID", "env-subscription-id")
-		os.Setenv("DISAPIM_RESOURCE_GROUP", "env-resource-group")
-		os.Setenv("DISAPIM_APIM_SERVICE_NAME", "env-apim-service")
-		defer os.Unsetenv("DISAPIM_SUBSCRIPTION_ID")
-		defer os.Unsetenv("DISAPIM_RESOURCE_GROUP")
-		defer os.Unsetenv("DISAPIM_APIM_SERVICE_NAME")
+		Expect(os.Setenv("DISAPIM_SUBSCRIPTION_ID", "env-subscription-id")).To(Succeed())
+		Expect(os.Setenv("DISAPIM_RESOURCE_GROUP", "env-resource-group")).To(Succeed())
+		Expect(os.Setenv("DISAPIM_APIM_SERVICE_NAME", "env-apim-service")).To(Succeed())
+		defer func() {
+			_ = os.Unsetenv("DISAPIM_SUBSCRIPTION_ID")
+		}()
+		defer func() {
+			_ = os.Unsetenv("DISAPIM_RESOURCE_GROUP")
+		}()
+		defer func() {
+			_ = os.Unsetenv("DISAPIM_APIM_SERVICE_NAME")
+		}()
 		flagset := pflag.NewFlagSet(configFile.Name(), pflag.ContinueOnError)
 		flagset.String("subscriptionId", "flag-subscription-id", "subscription id")
 		flagset.String("resourceGroup", "flag-resource-group", "resource group")
 		flagset.String("apimServiceName", "flag-apim-service", "apim service name")
-		flagset.Parse([]string{
+		_ = flagset.Parse([]string{
 			"--subscriptionId=flag-subscription-id",
 			"--resourceGroup=flag-resource-group",
 			"--apimServiceName=flag-apim-service",
@@ -97,8 +109,10 @@ apimServiceName "test-apim-service"
 		Expect(err).NotTo(HaveOccurred())
 		_, err = badConfigFile.Write([]byte(badConfigContent))
 		Expect(err).NotTo(HaveOccurred())
-		badConfigFile.Close()
-		defer os.Remove(badConfigFile.Name())
+		_ = badConfigFile.Close()
+		defer func() {
+			_ = os.Remove(badConfigFile.Name())
+		}()
 		Expect(func() {
 			LoadConfigOrDie(badConfigFile.Name(), pflag.NewFlagSet("test", pflag.ExitOnError))
 		}).To(Panic())

@@ -3,13 +3,14 @@ package azure
 import (
 	"context"
 	"errors"
+	"net/http"
+
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/config"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2"
-	"net/http"
 )
 
 // APIMClient is a client for interacting with the Azure API Management service

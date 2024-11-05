@@ -2,14 +2,15 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"strings"
+
 	"github.com/knadh/koanf/parsers/toml/v2"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/posflag"
 	"github.com/knadh/koanf/v2"
 	"github.com/spf13/pflag"
-	"os"
-	"strings"
 )
 
 type AzureConfig struct {
@@ -63,7 +64,7 @@ func LoadConfigOrDie(configFile string, flagset *pflag.FlagSet) *AzureConfig {
 func toCamelCase(snake string) string {
 	parts := strings.Split(snake, "_")
 	for i := 1; i < len(parts); i++ {
-		parts[i] = strings.Title(parts[i])
+		parts[i] = strings.ToUpper(parts[i][:1]) + strings.ToLower(parts[i][1:])
 	}
 	return strings.Join(parts, "")
 }

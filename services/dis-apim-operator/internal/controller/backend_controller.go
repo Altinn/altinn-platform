@@ -19,9 +19,10 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/azure"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"

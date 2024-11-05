@@ -2,13 +2,21 @@ package utils
 
 import (
 	"context"
+	"net/http"
+
 	azfake "github.com/Azure/azure-sdk-for-go/sdk/azcore/fake"
 	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2"
 	apimfake "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2/fake"
-	"net/http"
 )
 
-func GetFakeBackendServer(getResponse apim.BackendClientGetResponse, getErrorCode *int, createOrUpdateResponse apim.BackendClientCreateOrUpdateResponse, createOrUpdateErrorCode *int, deleteResponse apim.BackendClientDeleteResponse, deleteErrorCode *int) *apimfake.BackendServer {
+func GetFakeBackendServer(
+	getResponse apim.BackendClientGetResponse,
+	getErrorCode *int,
+	createOrUpdateResponse apim.BackendClientCreateOrUpdateResponse,
+	createOrUpdateErrorCode *int,
+	deleteResponse apim.BackendClientDeleteResponse,
+	deleteErrorCode *int,
+) *apimfake.BackendServer {
 	fakeServer := &apimfake.BackendServer{
 		CreateOrUpdate: func(
 			ctx context.Context,
