@@ -336,7 +336,21 @@ func (r *PromRuleToAzPromRuleGroupReconciler) generateArmTemplateFromPromRule(ct
 		return "", err
 	}
 
-	cmd := exec.Command(r.NodePath, r.AzPromRulesConverterPath, "-amw", "altinn-monitor-test-amw", "-l", "norwayeast", "-c", r.AzClusterName, "-j", string(marshalledPromRule))
+	tmp := strings.Split(r.AzAzureMonitorWorkspace, "/")
+	azureMonitorWorkspaceName := tmp[len(tmp)-1]
+
+	cmd := exec.Command(
+		r.NodePath,
+		r.AzPromRulesConverterPath,
+		"--azure-monitor-workspace",
+		azureMonitorWorkspaceName,
+		"--location",
+		r.AzResourceGroupLocation,
+		"--cluster-name",
+		r.AzClusterName,
+		"--json",
+		string(marshalledPromRule),
+	)
 
 	var out strings.Builder
 	cmd.Stdout = &out
@@ -364,7 +378,6 @@ func timestamp() string {
 	return sb.String()
 }
 
-// TODO: This is likely not needed. In the beginning I wasn't sure which annotations would be essential and which ones would be nice to haves.
 func hasAllAnnotations(annotations map[string]string) bool {
 	boolRes := true
 	for _, a := range allAnnotations {
