@@ -112,25 +112,25 @@ func (r *PromRuleToAzPromRuleGroupReconciler) handleCreation(ctx context.Context
 
 func (r *PromRuleToAzPromRuleGroupReconciler) handleUpdate(ctx context.Context, req ctrl.Request, promRule monitoringv1.PrometheusRule) (reconcile.Result, error) {
 	log := log.FromContext(ctx)
+
 	annotations := promRule.GetAnnotations()
 	lastGeneratedArmtemplateHash := annotations[azArmTemplateHashAnnotation]
 	suffix := timestamp()
 	armDeploymentName := generateArmDeploymentName(req, suffix)
 	regeneratedArmTemplate, err := r.generateArmTemplateFromPromRule(ctx, promRule)
 	if err != nil {
-		// TODO: Likely not worth it to reschedule
 		return ctrl.Result{Requeue: false}, err
 	}
-	ruleGroupNames := generateRuleGroupNamesAnnotationString(promRule)
+
 	regeneratedArmTemplateHash := hashArmTemplate([]byte(regeneratedArmTemplate))
 	if !(regeneratedArmTemplateHash == lastGeneratedArmtemplateHash) {
+		ruleGroupNames := generateRuleGroupNamesAnnotationString(promRule)
+
 		annotations := promRule.GetAnnotations()
-		promRuleGroupNames := strings.Split(annotations[azPrometheusRuleGroupResourceNamesAnnotation], ",") // old
-		var newNames []string
-		for _, rgn := range promRule.Spec.Groups {
-			newNames = append(newNames, rgn.Name)
-		}
-		toDelete := removedGroups(promRuleGroupNames, newNames)
+		oldPromRuleGroupNames := strings.Split(annotations[azPrometheusRuleGroupResourceNamesAnnotation], ",")
+		newPromRuleGroupNames := strings.Split(ruleGroupNames, ",")
+		toDelete := removedGroups(oldPromRuleGroupNames, newPromRuleGroupNames)
+
 		for _, td := range toDelete {
 			_, err := r.deletePrometheusRuleGroup(ctx, td)
 			if err != nil {
@@ -148,7 +148,7 @@ func (r *PromRuleToAzPromRuleGroupReconciler) handleUpdate(ctx context.Context, 
 			log.Error(err, "failed to deploy arm template", "namespace", promRule.Namespace, "name", promRule.Name)
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 		}
-		// Update the annotations on the CR
+
 		return r.updateAnnotations(ctx, promRule, ruleGroupNames, regeneratedArmTemplateHash, armDeploymentName, suffix)
 	} else {
 		// TODO: Might make sense to double check that the Azure resources havent been deleted/modified outside the controller too.
@@ -159,10 +159,9 @@ func (r *PromRuleToAzPromRuleGroupReconciler) handleUpdate(ctx context.Context, 
 func (r *PromRuleToAzPromRuleGroupReconciler) handleDelete(ctx context.Context, promRule monitoringv1.PrometheusRule) (reconcile.Result, error) {
 	log := log.FromContext(ctx)
 	log.Info("deletion of PrometheusRule CR detected", "namespace", promRule.Namespace, "name", promRule.Name)
-	// The object is scheduled for deletion so we need to delete the equivalent resources in Azure and then remove the finalizer
+
 	if controllerutil.ContainsFinalizer(&promRule, finalizerName) {
 		if err := r.deleteExternalResources(ctx, promRule); err != nil {
-			// if fail to delete the external dependency here, return with error so that it can be retried.
 			log.Info("failed to delete Azure resources", "namespace", promRule.Namespace, "name", promRule.Name)
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, err
 		}
@@ -174,7 +173,7 @@ func (r *PromRuleToAzPromRuleGroupReconciler) handleDelete(ctx context.Context, 
 				return ctrl.Result{RequeueAfter: 5 * time.Second}, err
 			}
 		} else {
-			log.Info("failed to removed out finalizer from object", "namespace", promRule.Namespace, "name", promRule.Name)
+			log.Info("failed to remove out finalizer from object", "namespace", promRule.Namespace, "name", promRule.Name)
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, errors.New("failed to remove finalizer from object")
 		}
 	}
@@ -192,58 +191,51 @@ func (r *PromRuleToAzPromRuleGroupReconciler) addOurFinalizer(ctx context.Contex
 		}
 		return ctrl.Result{}, nil
 	} else {
-		log.Info("failed to add our finalzer to the object", "namespace", promRule.Namespace, "name", promRule.Name)
-		return ctrl.Result{RequeueAfter: 5 * time.Second}, errors.New("failed to add our finalzer to the object")
+		log.Info("failed to add our finalizer to the object", "namespace", promRule.Namespace, "name", promRule.Name)
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, errors.New("failed to add our finalizer to the object")
 	}
 }
 
 func (r *PromRuleToAzPromRuleGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	// Try to get the object to reconcile
-	var originalPrometheusRule monitoringv1.PrometheusRule
-	if err := r.Get(ctx, req.NamespacedName, &originalPrometheusRule); err != nil {
+	var prometheusRule monitoringv1.PrometheusRule
+	if err := r.Get(ctx, req.NamespacedName, &prometheusRule); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
 		log.Error(err, "unable to fetch PrometheusRule", "namespace", req.Namespace, "name", req.Name)
 		return ctrl.Result{}, err
 	}
-
 	// The resource is not marked for deletion.
-	if originalPrometheusRule.GetDeletionTimestamp().IsZero() {
+	if prometheusRule.GetDeletionTimestamp().IsZero() {
 		// We need to make sure we add a finalizer to the PrometheusRule CR so we can cleanup Azure resources when the CR is deleted.
-		if !controllerutil.ContainsFinalizer(&originalPrometheusRule, finalizerName) {
-			result, err := r.addOurFinalizer(ctx, originalPrometheusRule)
-			return result, err
+		if !controllerutil.ContainsFinalizer(&prometheusRule, finalizerName) {
+			return r.addOurFinalizer(ctx, prometheusRule)
 		}
 		// Look into the object's annotations for annotations we own.
-		annotations := originalPrometheusRule.GetAnnotations()
+		annotations := prometheusRule.GetAnnotations()
 		ok := hasAllAnnotations(annotations)
 		if !ok {
-			log.Info("new PrometheusRule CR detected", "namespace", originalPrometheusRule.Namespace, "name", originalPrometheusRule.Name)
-			// A new resource
-			result, err := r.handleCreation(ctx, req, originalPrometheusRule)
-			return result, err
+			log.Info("new PrometheusRule CR detected", "namespace", prometheusRule.Namespace, "name", prometheusRule.Name)
+			return r.handleCreation(ctx, req, prometheusRule)
 		} else {
-			log.Info("update to PrometheusRule CR detected", "namespace", originalPrometheusRule.Namespace, "name", originalPrometheusRule.Name)
-			// Not a new resource, make sure the current state matches the current spec
-			result, err := r.handleUpdate(ctx, req, originalPrometheusRule)
-			return result, err
+			log.Info("update to PrometheusRule CR detected", "namespace", prometheusRule.Namespace, "name", prometheusRule.Name)
+			return r.handleUpdate(ctx, req, prometheusRule)
 		}
 	} else {
-		result, err := r.handleDelete(ctx, originalPrometheusRule)
-		return result, err
+		return r.handleDelete(ctx, prometheusRule)
 	}
 }
 
-func (r *PromRuleToAzPromRuleGroupReconciler) updateAnnotations(ctx context.Context, promRule monitoringv1.PrometheusRule, groupNames, regeneratedArmTemplateHash, armDeploymentName, suffix string) (reconcile.Result, error) {
+func (r *PromRuleToAzPromRuleGroupReconciler) updateAnnotations(ctx context.Context, promRule monitoringv1.PrometheusRule, groupNames, armTemplateHash, armDeploymentName, timestamp string) (reconcile.Result, error) {
 	log := log.FromContext(ctx)
+
 	annotations := promRule.GetAnnotations()
 	annotations[azPrometheusRuleGroupResourceNamesAnnotation] = groupNames
-	annotations[azArmTemplateHashAnnotation] = regeneratedArmTemplateHash
+	annotations[azArmTemplateHashAnnotation] = armTemplateHash
 	annotations[azArmDeploymentNameAnnotation] = armDeploymentName
-	annotations[azArmDeploymentLastSuccessfulTimestampAnnotation] = suffix
+	annotations[azArmDeploymentLastSuccessfulTimestampAnnotation] = timestamp
 
 	promRule.SetAnnotations(annotations)
 	err := r.Client.Update(ctx, &promRule)
@@ -259,6 +251,7 @@ func (r *PromRuleToAzPromRuleGroupReconciler) deployArmTemplate(ctx context.Cont
 
 	contents := make(map[string]interface{})
 	_ = json.Unmarshal([]byte(jsonTemplate), &contents)
+
 	deploy, err := r.DeploymentClient.BeginCreateOrUpdate(
 		ctx,
 		r.AzResourceGroupName,
@@ -295,15 +288,12 @@ func (r *PromRuleToAzPromRuleGroupReconciler) deployArmTemplate(ctx context.Cont
 	return nil
 }
 func (r *PromRuleToAzPromRuleGroupReconciler) deleteExternalResources(ctx context.Context, promRule monitoringv1.PrometheusRule) error {
-	log := log.FromContext(ctx)
 	annotations := promRule.GetAnnotations()
 	resourceNames, ok := annotations[azPrometheusRuleGroupResourceNamesAnnotation]
 	if ok {
-		resourceNamesSplitted := strings.Split(resourceNames, ",")
-		for _, rn := range resourceNamesSplitted {
+		for _, rn := range strings.Split(resourceNames, ",") {
 			_, err := r.deletePrometheusRuleGroup(ctx, rn)
 			if err != nil {
-				log.Error(err, "Failed to delete prometeheus rule group", "resourceName", rn)
 				// TODO: Should we try to delete the rest in case one deletion fails? Or simply retry again?
 				return err
 			}
@@ -324,13 +314,8 @@ func (r *PromRuleToAzPromRuleGroupReconciler) deletePrometheusRuleGroup(ctx cont
 	return &resp, nil
 }
 
-// func (r *PromRuleToAzPromRuleGroupReconciler) generateArmTemplateFromPromRule(ctx context.Context, promRule monitoringv1.PrometheusRule) (*armalertsmanagement.PrometheusRuleGroupResource, string, error) {
 func (r *PromRuleToAzPromRuleGroupReconciler) generateArmTemplateFromPromRule(ctx context.Context, promRule monitoringv1.PrometheusRule) (string, error) {
 	log := log.FromContext(ctx)
-	// TODO: I have this working as well with the changes I proposed on the azure tool.
-	// It's currently using exec to call the tool since I'm running it locally.
-	// If we go with calling a node app, we can probably use something like https://github.com/rogchap/v8go
-	// Or, we could re-write the tool in go if the azure maintainers are ok with it.
 
 	for _, ruleGroup := range promRule.Spec.Groups {
 		interval, err := prometheusmodel.ParseDuration(string(*ruleGroup.Interval))
