@@ -93,6 +93,18 @@ func removedGroups(old, new []string) []string {
 	return groupsToRemove
 }
 
+func generateResourceNamesAnnotationString(promRule monitoringv1.PrometheusRule) string {
+	resourceNames := ""
+	for idx, p := range promRule.Spec.Groups {
+		if idx+1 < len(promRule.Spec.Groups) {
+			resourceNames = resourceNames + p.Name + ","
+		} else {
+			resourceNames = resourceNames + p.Name
+		}
+	}
+	return resourceNames
+}
+
 func (r *PromRuleToAzPromRuleGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
@@ -131,14 +143,7 @@ func (r *PromRuleToAzPromRuleGroupReconciler) Reconcile(ctx context.Context, req
 				return ctrl.Result{Requeue: false}, err
 			}
 
-			resourceNames := ""
-			for idx, p := range originalPrometheusRule.Spec.Groups {
-				if idx+1 < len(originalPrometheusRule.Spec.Groups) {
-					resourceNames = resourceNames + p.Name + ","
-				} else {
-					resourceNames = resourceNames + p.Name
-				}
-			}
+			resourceNames := generateResourceNamesAnnotationString(originalPrometheusRule)
 			timestamp := timestamp()
 			deploymentName := generateArmDeploymentName(req, timestamp)
 			err = r.deployArmTemplate(
@@ -174,14 +179,7 @@ func (r *PromRuleToAzPromRuleGroupReconciler) Reconcile(ctx context.Context, req
 				// TODO: Likely not worth it to reschedule
 				return ctrl.Result{Requeue: false}, err
 			}
-			resourceNames := ""
-			for idx, p := range originalPrometheusRule.Spec.Groups {
-				if idx+1 < len(originalPrometheusRule.Spec.Groups) {
-					resourceNames = resourceNames + p.Name + ","
-				} else {
-					resourceNames = resourceNames + p.Name
-				}
-			}
+			resourceNames := generateResourceNamesAnnotationString(originalPrometheusRule)
 
 			if !(regeneratedArmTemplate == lastGeneratedArmtemplate) {
 				annotations := originalPrometheusRule.GetAnnotations()
