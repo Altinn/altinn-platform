@@ -35,7 +35,7 @@ func GetFakeBackendServer(
 			backendID string,
 			parameters apim.BackendContract,
 			options *apim.BackendClientCreateOrUpdateOptions,
-		) (resp azfake.Responder[apim.BackendClientCreateOrUpdateResponse], errResp azfake.ErrorResponder) {
+		) (azfake.Responder[apim.BackendClientCreateOrUpdateResponse], azfake.ErrorResponder) {
 
 			response := createOrUpdateResponse
 
@@ -58,7 +58,7 @@ func GetFakeBackendServer(
 			backendID string,
 			ifMatch string,
 			options *apim.BackendClientDeleteOptions,
-		) (resp azfake.Responder[apim.BackendClientDeleteResponse], errResp azfake.ErrorResponder) {
+		) (azfake.Responder[apim.BackendClientDeleteResponse], azfake.ErrorResponder) {
 			response := deleteResponse
 			responder := azfake.Responder[apim.BackendClientDeleteResponse]{}
 
@@ -76,7 +76,7 @@ func GetFakeBackendServer(
 			serviceName string,
 			backendID string,
 			options *apim.BackendClientGetOptions,
-		) (resp azfake.Responder[apim.BackendClientGetResponse], errResp azfake.ErrorResponder) {
+		) (azfake.Responder[apim.BackendClientGetResponse], azfake.ErrorResponder) {
 			response := getResponse
 			responder := azfake.Responder[apim.BackendClientGetResponse]{}
 
