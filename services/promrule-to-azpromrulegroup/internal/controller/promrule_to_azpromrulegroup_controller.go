@@ -53,7 +53,7 @@ import (
 const (
 	finalizerName = "promrule-to-azpromrulegroup.digdir.no/finalizer"
 	// This annotation has a comma separated string with the names of the resources created in azure.
-	azPrometheusRuleGroupResourceNamesAnnotation = "promrule-to-azpromrulegroup.digdir.no/azpromrulegroup-name"
+	azPrometheusRuleGroupResourceNamesAnnotation = "promrule-to-azpromrulegroup.digdir.no/azpromrulegroup-names"
 	// This annotation has the latest applied ARM template.
 	azArmTemplateHashAnnotation = "promrule-to-azpromrulegroup.digdir.no/latest-arm-template-deployed-hash"
 	// This annotation has the latest ARM template deployment name
@@ -62,9 +62,13 @@ const (
 	azArmDeploymentLastSuccessfulTimestampAnnotation = "promrule-to-azpromrulegroup.digdir.no/az-arm-deployment-last-successful-timestamp"
 )
 
-// TODO: This is likely not needed. In the beginning I wasn't sure which annotations would be essential and which ones would be nice to haves.
 var (
-	allAnnotations = [3]string{azPrometheusRuleGroupResourceNamesAnnotation, azArmTemplateHashAnnotation, azArmDeploymentNameAnnotation}
+	allAnnotations = [4]string{
+		azPrometheusRuleGroupResourceNamesAnnotation,
+		azArmTemplateHashAnnotation,
+		azArmDeploymentNameAnnotation,
+		azArmDeploymentLastSuccessfulTimestampAnnotation,
+	}
 )
 
 type PromRuleToAzPromRuleGroupReconciler struct {
@@ -82,17 +86,16 @@ type PromRuleToAzPromRuleGroupReconciler struct {
 
 func (r *PromRuleToAzPromRuleGroupReconciler) handleCreation(ctx context.Context, req ctrl.Request, promRule monitoringv1.PrometheusRule) (reconcile.Result, error) {
 	log := log.FromContext(ctx)
-	// Convert the PrometheusRule resource into a PrometheusRuleGroupResource using the azure provided tool
 	armTemplateJsonString, err := r.generateArmTemplateFromPromRule(ctx, promRule)
 	if err != nil {
 		log.Error(err, "failed to convert the PrometheusRule into an ARM template", "namespace", promRule.Namespace, "name", promRule.Name)
-		// TODO: Likely not worth it to requeue the request as the conversion is likely to keep failing.
 		return ctrl.Result{Requeue: false}, err
 	}
 
-	resourceNames := generateResourceNamesAnnotationString(promRule)
-	timestamp := timestamp()
-	deploymentName := generateArmDeploymentName(req, timestamp)
+	ruleGroupNames := generateRuleGroupNamesAnnotationString(promRule)
+	suffix := timestamp()
+	deploymentName := generateArmDeploymentName(req, suffix)
+
 	err = r.deployArmTemplate(
 		ctx,
 		deploymentName,
@@ -104,19 +107,7 @@ func (r *PromRuleToAzPromRuleGroupReconciler) handleCreation(ctx context.Context
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 	}
 	// Update the annotations on the CR
-	annotations := promRule.GetAnnotations()
-	annotations[azPrometheusRuleGroupResourceNamesAnnotation] = resourceNames
-	annotations[azArmTemplateHashAnnotation] = hashArmTemplate([]byte(armTemplateJsonString))
-	annotations[azArmDeploymentNameAnnotation] = deploymentName
-	annotations[azArmDeploymentLastSuccessfulTimestampAnnotation] = timestamp
-
-	promRule.SetAnnotations(annotations)
-	err = r.Client.Update(ctx, &promRule)
-	if err != nil {
-		log.Error(err, "failed to update the PrometheusRule CR with new annotations", "namespace", promRule.Namespace, "name", promRule.Name)
-		return ctrl.Result{}, err
-	}
-	return ctrl.Result{}, err
+	return r.updateAnnotations(ctx, promRule, ruleGroupNames, hashArmTemplate([]byte(armTemplateJsonString)), deploymentName, suffix)
 }
 
 func (r *PromRuleToAzPromRuleGroupReconciler) handleUpdate(ctx context.Context, req ctrl.Request, promRule monitoringv1.PrometheusRule) (reconcile.Result, error) {
@@ -130,12 +121,11 @@ func (r *PromRuleToAzPromRuleGroupReconciler) handleUpdate(ctx context.Context, 
 		// TODO: Likely not worth it to reschedule
 		return ctrl.Result{Requeue: false}, err
 	}
-	resourceNames := generateResourceNamesAnnotationString(promRule)
+	ruleGroupNames := generateRuleGroupNamesAnnotationString(promRule)
 	regeneratedArmTemplateHash := hashArmTemplate([]byte(regeneratedArmTemplate))
 	if !(regeneratedArmTemplateHash == lastGeneratedArmtemplateHash) {
 		annotations := promRule.GetAnnotations()
-		promRuleGroupNamesAnnotation := annotations[azPrometheusRuleGroupResourceNamesAnnotation]
-		promRuleGroupNames := strings.Split(promRuleGroupNamesAnnotation, ",") // old
+		promRuleGroupNames := strings.Split(annotations[azPrometheusRuleGroupResourceNamesAnnotation], ",") // old
 		var newNames []string
 		for _, rgn := range promRule.Spec.Groups {
 			newNames = append(newNames, rgn.Name)
@@ -159,17 +149,7 @@ func (r *PromRuleToAzPromRuleGroupReconciler) handleUpdate(ctx context.Context, 
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 		}
 		// Update the annotations on the CR
-		annotations[azPrometheusRuleGroupResourceNamesAnnotation] = resourceNames
-		annotations[azArmTemplateHashAnnotation] = regeneratedArmTemplateHash
-		annotations[azArmDeploymentNameAnnotation] = armDeploymentName
-		annotations[azArmDeploymentLastSuccessfulTimestampAnnotation] = suffix
-
-		promRule.SetAnnotations(annotations)
-		err = r.Client.Update(ctx, &promRule)
-		if err != nil {
-			log.Error(err, "failed to update the PrometheusRule CR with new annotations", "namespace", promRule.Namespace, "name", promRule.Name)
-			return ctrl.Result{}, err
-		}
+		return r.updateAnnotations(ctx, promRule, ruleGroupNames, regeneratedArmTemplateHash, armDeploymentName, suffix)
 	} else {
 		// TODO: Might make sense to double check that the Azure resources havent been deleted/modified outside the controller too.
 	}
@@ -255,6 +235,23 @@ func (r *PromRuleToAzPromRuleGroupReconciler) Reconcile(ctx context.Context, req
 		result, err := r.handleDelete(ctx, originalPrometheusRule)
 		return result, err
 	}
+}
+
+func (r *PromRuleToAzPromRuleGroupReconciler) updateAnnotations(ctx context.Context, promRule monitoringv1.PrometheusRule, groupNames, regeneratedArmTemplateHash, armDeploymentName, suffix string) (reconcile.Result, error) {
+	log := log.FromContext(ctx)
+	annotations := promRule.GetAnnotations()
+	annotations[azPrometheusRuleGroupResourceNamesAnnotation] = groupNames
+	annotations[azArmTemplateHashAnnotation] = regeneratedArmTemplateHash
+	annotations[azArmDeploymentNameAnnotation] = armDeploymentName
+	annotations[azArmDeploymentLastSuccessfulTimestampAnnotation] = suffix
+
+	promRule.SetAnnotations(annotations)
+	err := r.Client.Update(ctx, &promRule)
+	if err != nil {
+		log.Error(err, "failed to update the PrometheusRule CR with new annotations", "namespace", promRule.Namespace, "name", promRule.Name)
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, err
+	}
+	return ctrl.Result{}, nil
 }
 
 func (r *PromRuleToAzPromRuleGroupReconciler) deployArmTemplate(ctx context.Context, deploymentName string, jsonTemplate string, actionGroupId string) error {
@@ -413,7 +410,7 @@ func removedGroups(old, new []string) []string {
 	return groupsToRemove
 }
 
-func generateResourceNamesAnnotationString(promRule monitoringv1.PrometheusRule) string {
+func generateRuleGroupNamesAnnotationString(promRule monitoringv1.PrometheusRule) string {
 	resourceNames := ""
 	for idx, p := range promRule.Spec.Groups {
 		if idx+1 < len(promRule.Spec.Groups) {
