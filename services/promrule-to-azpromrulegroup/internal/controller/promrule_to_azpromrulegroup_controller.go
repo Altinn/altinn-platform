@@ -18,6 +18,8 @@ package controller
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -53,7 +55,7 @@ const (
 	// This annotation has a comma separated string with the names of the resources created in azure.
 	azPrometheusRuleGroupResourceNamesAnnotation = "promrule-to-azpromrulegroup.digdir.no/azpromrulegroup-name"
 	// This annotation has the latest applied ARM template.
-	azArmTemplateAnnotation = "promrule-to-azpromrulegroup.digdir.no/latest-arm-template-deployed"
+	azArmTemplateHashAnnotation = "promrule-to-azpromrulegroup.digdir.no/latest-arm-template-deployed-hash"
 	// This annotation has the latest ARM template deployment name
 	azArmDeploymentNameAnnotation = "promrule-to-azpromrulegroup.digdir.no/az-arm-deployment-name"
 	// Last time a sucessul deployment was done
@@ -62,7 +64,7 @@ const (
 
 // TODO: This is likely not needed. In the beginning I wasn't sure which annotations would be essential and which ones would be nice to haves.
 var (
-	allAnnotations = [3]string{azPrometheusRuleGroupResourceNamesAnnotation, azArmTemplateAnnotation, azArmDeploymentNameAnnotation}
+	allAnnotations = [3]string{azPrometheusRuleGroupResourceNamesAnnotation, azArmTemplateHashAnnotation, azArmDeploymentNameAnnotation}
 )
 
 type PromRuleToAzPromRuleGroupReconciler struct {
@@ -104,7 +106,7 @@ func (r *PromRuleToAzPromRuleGroupReconciler) handleCreation(ctx context.Context
 	// Update the annotations on the CR
 	annotations := promRule.GetAnnotations()
 	annotations[azPrometheusRuleGroupResourceNamesAnnotation] = resourceNames
-	annotations[azArmTemplateAnnotation] = armTemplateJsonString
+	annotations[azArmTemplateHashAnnotation] = hashArmTemplate([]byte(armTemplateJsonString))
 	annotations[azArmDeploymentNameAnnotation] = deploymentName
 	annotations[azArmDeploymentLastSuccessfulTimestampAnnotation] = timestamp
 
@@ -120,7 +122,7 @@ func (r *PromRuleToAzPromRuleGroupReconciler) handleCreation(ctx context.Context
 func (r *PromRuleToAzPromRuleGroupReconciler) handleUpdate(ctx context.Context, req ctrl.Request, promRule monitoringv1.PrometheusRule) (reconcile.Result, error) {
 	log := log.FromContext(ctx)
 	annotations := promRule.GetAnnotations()
-	lastGeneratedArmtemplate := annotations[azArmTemplateAnnotation]
+	lastGeneratedArmtemplateHash := annotations[azArmTemplateHashAnnotation]
 	suffix := timestamp()
 	armDeploymentName := generateArmDeploymentName(req, suffix)
 	regeneratedArmTemplate, err := r.generateArmTemplateFromPromRule(ctx, promRule)
@@ -129,8 +131,8 @@ func (r *PromRuleToAzPromRuleGroupReconciler) handleUpdate(ctx context.Context, 
 		return ctrl.Result{Requeue: false}, err
 	}
 	resourceNames := generateResourceNamesAnnotationString(promRule)
-
-	if !(regeneratedArmTemplate == lastGeneratedArmtemplate) {
+	regeneratedArmTemplateHash := hashArmTemplate([]byte(regeneratedArmTemplate))
+	if !(regeneratedArmTemplateHash == lastGeneratedArmtemplateHash) {
 		annotations := promRule.GetAnnotations()
 		promRuleGroupNamesAnnotation := annotations[azPrometheusRuleGroupResourceNamesAnnotation]
 		promRuleGroupNames := strings.Split(promRuleGroupNamesAnnotation, ",") // old
@@ -158,7 +160,7 @@ func (r *PromRuleToAzPromRuleGroupReconciler) handleUpdate(ctx context.Context, 
 		}
 		// Update the annotations on the CR
 		annotations[azPrometheusRuleGroupResourceNamesAnnotation] = resourceNames
-		annotations[azArmTemplateAnnotation] = regeneratedArmTemplate
+		annotations[azArmTemplateHashAnnotation] = regeneratedArmTemplateHash
 		annotations[azArmDeploymentNameAnnotation] = armDeploymentName
 		annotations[azArmDeploymentLastSuccessfulTimestampAnnotation] = suffix
 
@@ -421,6 +423,12 @@ func generateResourceNamesAnnotationString(promRule monitoringv1.PrometheusRule)
 		}
 	}
 	return resourceNames
+}
+
+func hashArmTemplate(bytes []byte) string {
+	h := sha256.New()
+	h.Write(bytes)
+	return base64.URLEncoding.EncodeToString(h.Sum(nil))
 }
 
 // SetupWithManager sets up the controller with the Manager.
