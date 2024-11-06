@@ -76,6 +76,23 @@ type PromRuleToAzPromRuleGroupReconciler struct {
 	AzPromRulesConverterPath   string
 }
 
+func removedGroups(old, new []string) []string {
+	groupsToRemove := make([]string, 0)
+	for _, viOld := range old {
+		found := false
+		for _, viNew := range new {
+			if viNew == viOld {
+				found = true
+				break
+			}
+		}
+		if !found {
+			groupsToRemove = append(groupsToRemove, viOld)
+		}
+	}
+	return groupsToRemove
+}
+
 func (r *PromRuleToAzPromRuleGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
@@ -167,7 +184,20 @@ func (r *PromRuleToAzPromRuleGroupReconciler) Reconcile(ctx context.Context, req
 			}
 
 			if !(regeneratedArmTemplate == lastGeneratedArmtemplate) {
-				// TODO: We need to check if resources have been removed from the CR and delete equivalent Azure resources
+				annotations := originalPrometheusRule.GetAnnotations()
+				promRuleGroupNamesAnnotation := annotations[azPrometheusRuleGroupResourceNamesAnnotation]
+				promRuleGroupNames := strings.Split(promRuleGroupNamesAnnotation, ",") // old
+				var newNames []string
+				for _, rgn := range originalPrometheusRule.Spec.Groups {
+					newNames = append(newNames, rgn.Name)
+				}
+				toDelete := removedGroups(promRuleGroupNames, newNames)
+				for _, td := range toDelete {
+					_, err := r.deletePrometheusRuleGroup(ctx, td)
+					if err != nil {
+						log.Error(err, "failed to delete PrometheusRuleGroup", "PrometheusRuleGroupName", td)
+					}
+				}
 
 				err = r.deployArmTemplate(
 					ctx,
@@ -278,6 +308,7 @@ func (r *PromRuleToAzPromRuleGroupReconciler) deleteExternalResources(ctx contex
 func (r *PromRuleToAzPromRuleGroupReconciler) deletePrometheusRuleGroup(ctx context.Context, ruleGroupName string) (*armalertsmanagement.PrometheusRuleGroupsClientDeleteResponse, error) {
 	log := log.FromContext(ctx)
 	resp, err := r.PrometheusRuleGroupsClient.Delete(ctx, r.AzResourceGroupName, ruleGroupName, nil)
+
 	if err != nil {
 		log.Error(err, "failed to delete the prometheus rule group", "ruleGroupName", ruleGroupName)
 		return nil, err
