@@ -78,35 +78,6 @@ type PromRuleToAzPromRuleGroupReconciler struct {
 	AzPromRulesConverterPath   string
 }
 
-func removedGroups(old, new []string) []string {
-	groupsToRemove := make([]string, 0)
-	for _, viOld := range old {
-		found := false
-		for _, viNew := range new {
-			if viNew == viOld {
-				found = true
-				break
-			}
-		}
-		if !found {
-			groupsToRemove = append(groupsToRemove, viOld)
-		}
-	}
-	return groupsToRemove
-}
-
-func generateResourceNamesAnnotationString(promRule monitoringv1.PrometheusRule) string {
-	resourceNames := ""
-	for idx, p := range promRule.Spec.Groups {
-		if idx+1 < len(promRule.Spec.Groups) {
-			resourceNames = resourceNames + p.Name + ","
-		} else {
-			resourceNames = resourceNames + p.Name
-		}
-	}
-	return resourceNames
-}
-
 func (r *PromRuleToAzPromRuleGroupReconciler) handleCreation(ctx context.Context, req ctrl.Request, promRule monitoringv1.PrometheusRule) (reconcile.Result, error) {
 	log := log.FromContext(ctx)
 	// Convert the PrometheusRule resource into a PrometheusRuleGroupResource using the azure provided tool
@@ -203,7 +174,7 @@ func (r *PromRuleToAzPromRuleGroupReconciler) handleUpdate(ctx context.Context, 
 	return ctrl.Result{}, err
 }
 
-func (r *PromRuleToAzPromRuleGroupReconciler) handleDelete(ctx context.Context, req ctrl.Request, promRule monitoringv1.PrometheusRule) (reconcile.Result, error) {
+func (r *PromRuleToAzPromRuleGroupReconciler) handleDelete(ctx context.Context, promRule monitoringv1.PrometheusRule) (reconcile.Result, error) {
 	log := log.FromContext(ctx)
 	log.Info("deletion of PrometheusRule CR detected", "namespace", promRule.Namespace, "name", promRule.Name)
 	// The object is scheduled for deletion so we need to delete the equivalent resources in Azure and then remove the finalizer
@@ -228,7 +199,7 @@ func (r *PromRuleToAzPromRuleGroupReconciler) handleDelete(ctx context.Context, 
 	return ctrl.Result{}, nil
 }
 
-func (r *PromRuleToAzPromRuleGroupReconciler) addOurFinalizer(ctx context.Context, req ctrl.Request, promRule monitoringv1.PrometheusRule) (reconcile.Result, error) {
+func (r *PromRuleToAzPromRuleGroupReconciler) addOurFinalizer(ctx context.Context, promRule monitoringv1.PrometheusRule) (reconcile.Result, error) {
 	log := log.FromContext(ctx)
 	log.Info("updating the PrometheusRule CR with our finalizer", "namespace", promRule.Namespace, "name", promRule.Name)
 	ok := controllerutil.AddFinalizer(&promRule, finalizerName)
@@ -261,7 +232,7 @@ func (r *PromRuleToAzPromRuleGroupReconciler) Reconcile(ctx context.Context, req
 	if originalPrometheusRule.GetDeletionTimestamp().IsZero() {
 		// We need to make sure we add a finalizer to the PrometheusRule CR so we can cleanup Azure resources when the CR is deleted.
 		if !controllerutil.ContainsFinalizer(&originalPrometheusRule, finalizerName) {
-			result, err := r.addOurFinalizer(ctx, req, originalPrometheusRule)
+			result, err := r.addOurFinalizer(ctx, originalPrometheusRule)
 			return result, err
 		}
 		// Look into the object's annotations for annotations we own.
@@ -279,7 +250,7 @@ func (r *PromRuleToAzPromRuleGroupReconciler) Reconcile(ctx context.Context, req
 			return result, err
 		}
 	} else {
-		result, err := r.handleDelete(ctx, req, originalPrometheusRule)
+		result, err := r.handleDelete(ctx, originalPrometheusRule)
 		return result, err
 	}
 }
@@ -420,9 +391,36 @@ func hasAllAnnotations(annotations map[string]string) bool {
 }
 
 func generateArmDeploymentName(req ctrl.Request, suffix string) string {
-	// Limit of 64 characters, we might need to come up with a better naming convension, e.g. an hash instead of Namespace + Name
-	//return "PromruleToAzpromrulegroup" + "." + req.Namespace + "." + req.Name + "-" + timestamp()
-	return "Controller" + "." + req.Namespace + "." + req.Name + "-" + suffix
+	// Limit of 64 characters
+	return req.Namespace + "-" + req.Name + "-" + suffix
+}
+func removedGroups(old, new []string) []string {
+	groupsToRemove := make([]string, 0)
+	for _, viOld := range old {
+		found := false
+		for _, viNew := range new {
+			if viNew == viOld {
+				found = true
+				break
+			}
+		}
+		if !found {
+			groupsToRemove = append(groupsToRemove, viOld)
+		}
+	}
+	return groupsToRemove
+}
+
+func generateResourceNamesAnnotationString(promRule monitoringv1.PrometheusRule) string {
+	resourceNames := ""
+	for idx, p := range promRule.Spec.Groups {
+		if idx+1 < len(promRule.Spec.Groups) {
+			resourceNames = resourceNames + p.Name + ","
+		} else {
+			resourceNames = resourceNames + p.Name
+		}
+	}
+	return resourceNames
 }
 
 // SetupWithManager sets up the controller with the Manager.
