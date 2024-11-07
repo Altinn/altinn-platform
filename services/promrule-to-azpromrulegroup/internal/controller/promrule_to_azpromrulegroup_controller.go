@@ -232,6 +232,9 @@ func (r *PromRuleToAzPromRuleGroupReconciler) updateAnnotations(ctx context.Cont
 	log := log.FromContext(ctx)
 
 	annotations := promRule.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
 	annotations[azPrometheusRuleGroupResourceNamesAnnotation] = groupNames
 	annotations[azArmTemplateHashAnnotation] = armTemplateHash
 	annotations[azArmDeploymentNameAnnotation] = armDeploymentName
