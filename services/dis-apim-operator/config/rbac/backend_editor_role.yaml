@@ -1,8 +1,11 @@
----
+# permissions for end users to edit backends.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: manager-role
+  labels:
+    app.kubernetes.io/name: dis-apim-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: backend-editor-role
 rules:
 - apiGroups:
   - apim.dis.altinn.cloud
@@ -19,14 +22,6 @@ rules:
 - apiGroups:
   - apim.dis.altinn.cloud
   resources:
-  - backends/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - apim.dis.altinn.cloud
-  resources:
   - backends/status
   verbs:
   - get
-  - patch
-  - update

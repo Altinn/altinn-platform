@@ -1,32 +1,23 @@
----
+# permissions for end users to view backends.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: manager-role
+  labels:
+    app.kubernetes.io/name: dis-apim-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: backend-viewer-role
 rules:
 - apiGroups:
   - apim.dis.altinn.cloud
   resources:
   - backends
   verbs:
-  - create
-  - delete
   - get
   - list
-  - patch
-  - update
   - watch
-- apiGroups:
-  - apim.dis.altinn.cloud
-  resources:
-  - backends/finalizers
-  verbs:
-  - update
 - apiGroups:
   - apim.dis.altinn.cloud
   resources:
   - backends/status
   verbs:
   - get
-  - patch
-  - update
