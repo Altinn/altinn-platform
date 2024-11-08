@@ -22,6 +22,10 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the Project itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- apiversion_editor_role.yaml
+- apiversion_viewer_role.yaml
+- api_editor_role.yaml
+- api_viewer_role.yaml
 - backend_editor_role.yaml
 - backend_viewer_role.yaml
 
