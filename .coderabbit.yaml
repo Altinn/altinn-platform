@@ -25,12 +25,12 @@ reviews:
     ignore_title_keywords: []
     labels: []
     drafts: false
-    base_branches: []
+    base_branches: ['main']
   tools:
     shellcheck:
       enabled: true
     ruff:
-      enabled: true
+      enabled: false
     markdownlint:
       enabled: true
     github-checks:
@@ -49,10 +49,9 @@ reviews:
     hadolint:
       enabled: true
     swiftlint:
-      enabled: true
+      enabled: false
     phpstan:
-      enabled: true
-      level: default
+      enabled: false
     golangci-lint:
       enabled: true
     yamllint:
@@ -62,25 +61,25 @@ reviews:
     checkov:
       enabled: true
     detekt:
-      enabled: true
+      enabled: false
     eslint:
       enabled: true
     rubocop:
-      enabled: true
+      enabled: false
     buf:
-      enabled: true
+      enabled: false
     regal:
-      enabled: true
+      enabled: false
     actionlint:
       enabled: true
     pmd:
-      enabled: true
+      enabled: false
     cppcheck:
-      enabled: true
+      enabled: false
     semgrep:
       enabled: true
     circleci:
-      enabled: true
+      enabled: false
     ast-grep:
       packages: []
       rule_dirs: []
