@@ -1,0 +1,27 @@
+# permissions for end users to edit apiversions.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: dis-apim-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: apiversion-editor-role
+rules:
+- apiGroups:
+  - apim.dis.altinn.cloud
+  resources:
+  - apiversions
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apim.dis.altinn.cloud
+  resources:
+  - apiversions/status
+  verbs:
+  - get
