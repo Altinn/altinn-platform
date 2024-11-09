@@ -89,7 +89,7 @@ func (r *PromRuleToAzPromRuleGroupReconciler) handleCreation(ctx context.Context
 	armTemplateJsonString, err := r.generateArmTemplateFromPromRule(ctx, promRule)
 	if err != nil {
 		log.Error(err, "failed to convert the PrometheusRule into an ARM template", "namespace", promRule.Namespace, "name", promRule.Name)
-		return ctrl.Result{Requeue: false}, err
+		return ctrl.Result{Requeue: false}, nil
 	}
 
 	ruleGroupNames := generateRuleGroupNamesAnnotationString(promRule)
@@ -119,7 +119,8 @@ func (r *PromRuleToAzPromRuleGroupReconciler) handleUpdate(ctx context.Context, 
 	armDeploymentName := generateArmDeploymentName(req, suffix)
 	regeneratedArmTemplate, err := r.generateArmTemplateFromPromRule(ctx, promRule)
 	if err != nil {
-		return ctrl.Result{Requeue: false}, err
+		log.Error(err, "failed to convert the PrometheusRule into an ARM template", "namespace", promRule.Namespace, "name", promRule.Name)
+		return ctrl.Result{Requeue: false}, nil
 	}
 
 	regeneratedArmTemplateHash := hashArmTemplate([]byte(regeneratedArmTemplate))
@@ -355,11 +356,12 @@ func (r *PromRuleToAzPromRuleGroupReconciler) generateArmTemplateFromPromRule(ct
 		string(marshalledPromRule),
 	)
 
-	var out strings.Builder
+	var out, errb strings.Builder
 	cmd.Stdout = &out
+	cmd.Stderr = &errb
 	err = cmd.Run()
 	if err != nil {
-		log.Error(err, "Failed to convert PrometheusRule into PrometheusRuleGroup")
+		log.Error(err, "Failed to convert PrometheusRule into PrometheusRuleGroup", "Stderr", errb.String())
 		return "", err
 	}
 	jsonString := out.String()

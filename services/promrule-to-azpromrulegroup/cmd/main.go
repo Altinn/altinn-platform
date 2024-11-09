@@ -61,7 +61,8 @@ func init() {
 func getEnvVarOrExit(name string) string {
 	value, ok := os.LookupEnv(name)
 	if !ok {
-		setupLog.Error(fmt.Errorf("Missing required env var"), "Missing required env var", "env var", name)
+		setupLog.Error(fmt.Errorf("missing required env var"), "Missing required env var", "env var", name)
+		os.Exit(1)
 	}
 	return value
 }
