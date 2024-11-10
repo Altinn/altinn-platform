@@ -168,7 +168,7 @@ func main() {
 				// Should be be created in a specific namespace? or should developers just push into their own namespaces?
 				// Whatever we decide, it must be coherent with what we configure in the relabel config rules in Prometheus
 				// otherwise the SLO metrics might not be pushed into the centralized monitoring workspace.
-				"monitoring": cache.Config{},
+				"monitoring": {},
 			},
 		},
 	})
