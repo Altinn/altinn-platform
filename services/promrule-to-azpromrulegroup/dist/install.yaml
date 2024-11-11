@@ -1,0 +1,241 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: promrule-to-azpromrulegroup
+    control-plane: controller-manager
+  name: promrule-to-azpromrulegroup-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: promrule-to-azpromrulegroup
+  name: promrule-to-azpromrulegroup-controller-manager
+  namespace: promrule-to-azpromrulegroup-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: promrule-to-azpromrulegroup
+  name: promrule-to-azpromrulegroup-leader-election-role
+  namespace: promrule-to-azpromrulegroup-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: promrule-to-azpromrulegroup-manager-role
+rules:
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - prometheusrules
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - prometheusrules/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - prometheusrules/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: promrule-to-azpromrulegroup-metrics-auth-role
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: promrule-to-azpromrulegroup-metrics-reader
+rules:
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: promrule-to-azpromrulegroup
+  name: promrule-to-azpromrulegroup-leader-election-rolebinding
+  namespace: promrule-to-azpromrulegroup-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: promrule-to-azpromrulegroup-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: promrule-to-azpromrulegroup-controller-manager
+  namespace: promrule-to-azpromrulegroup-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: promrule-to-azpromrulegroup
+  name: promrule-to-azpromrulegroup-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: promrule-to-azpromrulegroup-manager-role
+subjects:
+- kind: ServiceAccount
+  name: promrule-to-azpromrulegroup-controller-manager
+  namespace: promrule-to-azpromrulegroup-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: promrule-to-azpromrulegroup-metrics-auth-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: promrule-to-azpromrulegroup-metrics-auth-role
+subjects:
+- kind: ServiceAccount
+  name: promrule-to-azpromrulegroup-controller-manager
+  namespace: promrule-to-azpromrulegroup-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: promrule-to-azpromrulegroup
+    control-plane: controller-manager
+  name: promrule-to-azpromrulegroup-controller-manager-metrics-service
+  namespace: promrule-to-azpromrulegroup-system
+spec:
+  ports:
+  - name: https
+    port: 8443
+    protocol: TCP
+    targetPort: 8443
+  selector:
+    control-plane: controller-manager
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: promrule-to-azpromrulegroup
+    control-plane: controller-manager
+  name: promrule-to-azpromrulegroup-controller-manager
+  namespace: promrule-to-azpromrulegroup-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+      labels:
+        control-plane: controller-manager
+    spec:
+      containers:
+      - args:
+        - --metrics-bind-address=:8443
+        - --leader-elect
+        - --health-probe-bind-address=:8081
+        command:
+        - /manager
+        image: controller:latest
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        name: manager
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 500m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      securityContext:
+        runAsNonRoot: true
+      serviceAccountName: promrule-to-azpromrulegroup-controller-manager
+      terminationGracePeriodSeconds: 10
