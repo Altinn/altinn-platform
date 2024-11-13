@@ -37,6 +37,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -160,6 +161,15 @@ func main() {
 		// if you are doing or is intended to do any operation such as perform cleanups
 		// after the manager stops then its usage might be unsafe.
 		// LeaderElectionReleaseOnCancel: true,
+		Cache: cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				// TODO: We need to decide on how we are going to handle this.
+				// Should the resources be created in a specific namespace? or should developers just push into their own namespaces?
+				// Whatever we decide, it must be coherent with what we configure in the relabel config rules in Prometheus
+				// otherwise the SLO metrics will not be pushed into the centralized monitoring.
+				"monitoring": {},
+			},
+		},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
