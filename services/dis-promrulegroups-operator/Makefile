@@ -61,6 +61,15 @@ vet: ## Run go vet against code.
 
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
+	@command -v npm >/dev/null 2>&1 || { \
+		echo "npm is not installed. Please install npm manually."; \
+		exit 1; \
+	}
+	@command -v $(LOCALBIN)/az-tool/node_modules/.bin/az-prom-rules-converter >/dev/null 2>&1 || { \
+		echo "Installing az-prom-rules-converter in $(LOCALBIN)/az-tool"; \
+		mkdir -p $(LOCALBIN)/az-tool; \
+		npm i --prefix $(LOCALBIN)/az-tool --omit=dev https://gitpkg.now.sh/monteiro-renato/prometheus-collector/tools/az-prom-rules-converter?with-piped-input; \
+	}
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
