@@ -19,7 +19,7 @@ package controller
 import (
 	"context"
 
-	monitoringcoreoscomv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -32,8 +32,8 @@ type PrometheusRuleReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules/status,verbs=get
 // +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -56,7 +56,7 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 // SetupWithManager sets up the controller with the Manager.
 func (r *PrometheusRuleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&monitoringcoreoscomv1.PrometheusRule{}).
+		For(&monitoringv1.PrometheusRule{}).
 		Named("prometheusrule").
 		Complete(r)
 }

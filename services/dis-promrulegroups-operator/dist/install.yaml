@@ -67,8 +67,6 @@ rules:
   resources:
   - prometheusrules
   verbs:
-  - create
-  - delete
   - get
   - list
   - patch
@@ -86,8 +84,6 @@ rules:
   - prometheusrules/status
   verbs:
   - get
-  - patch
-  - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
