@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM golang:1.23 AS builder1
+FROM golang:1.22 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -13,6 +13,7 @@ RUN go mod download
 
 # Copy the go source
 COPY cmd/main.go cmd/main.go
+COPY api/ api/
 COPY internal/ internal/
 
 # Build
@@ -22,20 +23,11 @@ COPY internal/ internal/
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager cmd/main.go
 
-
-FROM node:20 AS builder2
-WORKDIR /tool
-RUN npm i --omit=dev https://gitpkg.now.sh/monteiro-renato/prometheus-collector/tools/az-prom-rules-converter?with-piped-input
-
-
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/nodejs22-debian12:nonroot
+FROM gcr.io/distroless/static:nonroot
 WORKDIR /
-COPY --from=builder1 /workspace/manager .
-COPY --from=builder2 /tool /tool/.
-ENV PATH="$PATH:nodejs/bin/"
-ENV ENVIRONMENT="prod"
+COPY --from=builder /workspace/manager .
 USER 65532:65532
 
 ENTRYPOINT ["/manager"]
