@@ -7,4 +7,11 @@ layout:
 - go.kubebuilder.io/v4
 projectName: dis-promrulegroups-operator
 repo: github.com/Altinn/altinn-platform/services/dis-promrulegroups-operator
+resources:
+- controller: true
+  external: true
+  group: monitoring.coreos.com
+  kind: PrometheusRule
+  path: github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1
+  version: v1
 version: "3"
