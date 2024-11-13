@@ -19,13 +19,20 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+	"github.com/joho/godotenv"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/alertsmanagement/armalertsmanagement"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
+
+	"github.com/Altinn/altinn-platform/services/dis-promrulegroups-operator/internal/controller"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -35,8 +42,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-
-	"github.com/Altinn/altinn-platform/services/dis-promrulegroups-operator/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -52,7 +57,24 @@ func init() {
 	// +kubebuilder:scaffold:scheme
 }
 
+func getEnvVarOrExit(name string) string {
+	value, ok := os.LookupEnv(name)
+	if !ok {
+		setupLog.Error(fmt.Errorf("missing required env var"), "Missing required env var", "env var", name)
+		os.Exit(1)
+	}
+	return value
+}
+
 func main() {
+	if os.Getenv("ENVIRONMENT") == "" {
+		err := godotenv.Load()
+		if err != nil {
+			setupLog.Error(err, "Error loading .env file")
+			os.Exit(1)
+		}
+	}
+
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
@@ -144,9 +166,39 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initialize Reconciler dependencies
+	subscriptionId := getEnvVarOrExit("AZ_SUBSCRIPTION_ID")
+
+	cred, err := azidentity.NewDefaultAzureCredential(nil)
+	if err != nil {
+		setupLog.Error(err, "failed to obtain a credential")
+		os.Exit(1)
+	}
+
+	deploymentsClient, err := armresources.NewDeploymentsClient(subscriptionId, cred, nil)
+	if err != nil {
+		setupLog.Error(err, "failed to create the DeploymentsClient")
+		os.Exit(1)
+	}
+
+	prometheusRuleGroupsClient, err := armalertsmanagement.NewPrometheusRuleGroupsClient(subscriptionId, cred, nil)
+	if err != nil {
+		setupLog.Error(err, "failed to create the PrometheusRuleGroupsClient")
+		os.Exit(1)
+	}
+
+	// Create the reconciler and Register the reconciler with the Manager
 	if err = (&controller.PrometheusRuleReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:                     mgr.GetClient(),
+		Scheme:                     mgr.GetScheme(),
+		DeploymentClient:           deploymentsClient,
+		PrometheusRuleGroupsClient: prometheusRuleGroupsClient,
+		AzResourceGroupName:        getEnvVarOrExit("AZ_RESOURCE_GROUP_NAME"),
+		AzResourceGroupLocation:    getEnvVarOrExit("AZ_RESOURCE_GROUP_LOCATION"),
+		AzAzureMonitorWorkspace:    getEnvVarOrExit("AZ_AZURE_MONITOR_WORKSPACE"),
+		AzClusterName:              getEnvVarOrExit("AZ_CLUSTER_NAME"),
+		NodePath:                   getEnvVarOrExit("NODE_PATH"),
+		AzPromRulesConverterPath:   getEnvVarOrExit("AZ_PROM_RULES_CONVERTER_PATH"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PrometheusRule")
 		os.Exit(1)
