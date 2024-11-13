@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -45,9 +46,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-// TODO: review the permissions needed.
-// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules/status,verbs=get
 // +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules/finalizers,verbs=update
 
 const (
@@ -352,11 +352,14 @@ func (r *PromRuleToAzPromRuleGroupReconciler) generateArmTemplateFromPromRule(ct
 		r.AzResourceGroupLocation,
 		"--cluster-name",
 		r.AzClusterName,
-		"--json",
-		string(marshalledPromRule),
 	)
 
+	var in bytes.Buffer
 	var out, errb strings.Builder
+
+	in.Write([]byte(marshalledPromRule))
+	cmd.Stdin = &in
+
 	cmd.Stdout = &out
 	cmd.Stderr = &errb
 	err = cmd.Run()
