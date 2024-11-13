@@ -10,6 +10,8 @@ metadata:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
+  annotations:
+    azure.workload.identity/client-id: ""
   labels:
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: dis-promrulegroups-operator
@@ -196,6 +198,7 @@ spec:
       annotations:
         kubectl.kubernetes.io/default-container: manager
       labels:
+        azure.workload.identity/use: "true"
         control-plane: controller-manager
     spec:
       containers:
@@ -205,6 +208,25 @@ spec:
         - --health-probe-bind-address=:8081
         command:
         - /manager
+        env:
+        - name: AZ_SUBSCRIPTION_ID
+          value: ""
+        - name: AZ_RESOURCE_GROUP_NAME
+          value: ""
+        - name: AZ_MONITOR_WORKSPACE_NAME
+          value: ""
+        - name: AZ_RESOURCE_GROUP_LOCATION
+          value: ""
+        - name: AZ_ACTION_GROUP_ID
+          value: ""
+        - name: AZ_AZURE_MONITOR_WORKSPACE
+          value: ""
+        - name: AZ_CLUSTER_NAME
+          value: ""
+        - name: NODE_PATH
+          value: /nodejs/bin/node
+        - name: AZ_PROM_RULES_CONVERTER_PATH
+          value: /tool/node_modules/az-prom-rules-converter/dist/cli.js
         image: controller:latest
         livenessProbe:
           httpGet:
