@@ -197,8 +197,8 @@ async function run() {
 
 run().catch(async (error) => {
   console.error("An error occurred:", error);
-  // Allow 2s for spans to be exported
-  await new Promise((resolve) => setTimeout(resolve, 2000));
+  // Allow 5s for spans to be exported
+  await new Promise((resolve) => setTimeout(resolve, 5000));
   await shutdownAzureMonitor();
   process.exit(1);
 });
