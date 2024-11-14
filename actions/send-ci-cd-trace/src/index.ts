@@ -192,13 +192,10 @@ async function run() {
     } else {
       core.setFailed(`Action failed with unexpected error: ${JSON.stringify(error)}`);
     }
+  } finally {
+    // Ensure the Azure Monitor exporter is properly shut down
+    await shutdownAzureMonitor();
   }
 }
 
-run().catch(async (error) => {
-  console.error("An error occurred:", error);
-  // Allow 5s for spans to be exported
-  await new Promise((resolve) => setTimeout(resolve, 5000));
-  await shutdownAzureMonitor();
-  process.exit(1);
-});
+run();
