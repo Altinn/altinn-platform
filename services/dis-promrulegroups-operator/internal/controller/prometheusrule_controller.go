@@ -323,8 +323,12 @@ func (r *PrometheusRuleReconciler) deletePrometheusRuleGroup(ctx context.Context
 
 func (r *PrometheusRuleReconciler) generateArmTemplateFromPromRule(ctx context.Context, promRule monitoringv1.PrometheusRule) (string, error) {
 	log := log.FromContext(ctx)
-
-	for _, ruleGroup := range promRule.Spec.Groups {
+	promRuleCopy := promRule.DeepCopy()
+	for idx, ruleGroup := range promRuleCopy.Spec.Groups {
+		// The names are the same for every cluster so we need to prefix them
+		if !strings.Contains(promRuleCopy.Spec.Groups[idx].Name, r.AzClusterName) {
+			promRuleCopy.Spec.Groups[idx].Name = r.AzClusterName + "-" + ruleGroup.Name
+		}
 		interval, err := prometheusmodel.ParseDuration(string(*ruleGroup.Interval))
 		if err != nil {
 			log.Error(err, "Failed to parse the Interval from the PrometheusRule Spec")
@@ -336,7 +340,7 @@ func (r *PrometheusRuleReconciler) generateArmTemplateFromPromRule(ctx context.C
 		}
 	}
 
-	marshalledPromRule, err := json.Marshal(promRule.Spec)
+	marshalledPromRule, err := json.Marshal(promRuleCopy.Spec)
 
 	if err != nil {
 		log.Error(err, "Failed to marshal the promRule")
