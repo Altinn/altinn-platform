@@ -67,7 +67,7 @@ resource "azurerm_role_assignment" "grafana_admin" {
 }
 
 resource "azurerm_role_assignment" "grafana_editors" {
-  for_each                         = { for value in altinn_30_broker_prod_developerslocal.grafana_editor : value => value if value != null }
+  for_each                         = { for value in local.grafana_editor : value => value if value != null }
   scope                            = azurerm_dashboard_grafana.grafana.id
   role_definition_name             = "Grafana Editor"
   principal_id                     = each.value
