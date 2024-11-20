@@ -50,9 +50,9 @@ locals {
     local.altinn_30_broker_prod_developers,
     local.altinn_30_broker_test_developers,
     local.altinn_30_correspondence_prod_developer,
-    local.altinn_30_correspondence_test_developer
+    local.altinn_30_correspondence_test_developer,
     local.altinn_30_developers,
-    local.altinn_30_developers_prod,
+    local.altinn_30_developers_prod
   ]
   grafana_admin = [local.altinn_30_operations, local.altinn_30_operations_prod]
 }
