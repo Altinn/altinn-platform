@@ -1,0 +1,293 @@
+---
+# Source: dis-promrulegroups-operator/templates/rbac/service_account.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: "0.1.0"
+    app.kubernetes.io/name: dis-promrulegroups-operator
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/managed-by: Helm
+  name: dis-promrulegroups-operator-controller-manager
+  namespace: hvasomhelst
+---
+# Source: dis-promrulegroups-operator/templates/rbac/metrics_auth_role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: "0.1.0"
+    app.kubernetes.io/name: dis-promrulegroups-operator
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/managed-by: Helm
+  name: dis-promrulegroups-operator-metrics-auth-role
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+---
+# Source: dis-promrulegroups-operator/templates/rbac/metrics_reader_role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: "0.1.0"
+    app.kubernetes.io/name: dis-promrulegroups-operator
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/managed-by: Helm
+  name: dis-promrulegroups-operator-metrics-reader
+rules:
+- nonResourceURLs:
+  - "/metrics"
+  verbs:
+  - get
+---
+# Source: dis-promrulegroups-operator/templates/rbac/role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: "0.1.0"
+    app.kubernetes.io/name: dis-promrulegroups-operator
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/managed-by: Helm
+  name: dis-promrulegroups-operator-manager-role
+rules:
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - prometheusrules
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - prometheusrules/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - prometheusrules/status
+  verbs:
+  - get
+---
+# Source: dis-promrulegroups-operator/templates/rbac/metrics_auth_role_binding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: "0.1.0"
+    app.kubernetes.io/name: dis-promrulegroups-operator
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/managed-by: Helm
+  name: dis-promrulegroups-operator-metrics-auth-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: dis-promrulegroups-operator-metrics-auth-role
+subjects:
+- kind: ServiceAccount
+  name: dis-promrulegroups-operator-controller-manager
+  namespace: hvasomhelst
+---
+# Source: dis-promrulegroups-operator/templates/rbac/role_binding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: "0.1.0"
+    app.kubernetes.io/name: dis-promrulegroups-operator
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/managed-by: Helm
+  name: dis-promrulegroups-operator-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: dis-promrulegroups-operator-manager-role
+subjects:
+- kind: ServiceAccount
+  name: dis-promrulegroups-operator-controller-manager
+  namespace: hvasomhelst
+---
+# Source: dis-promrulegroups-operator/templates/rbac/leader_election_role.yaml
+# permissions to do leader election.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: "0.1.0"
+    app.kubernetes.io/name: dis-promrulegroups-operator
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/managed-by: Helm
+  namespace: hvasomhelst
+  name: dis-promrulegroups-operator-leader-election-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+# Source: dis-promrulegroups-operator/templates/rbac/leader_election_role_binding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: "0.1.0"
+    app.kubernetes.io/name: dis-promrulegroups-operator
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/managed-by: Helm
+  namespace: hvasomhelst
+  name: dis-promrulegroups-operator-leader-election-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: dis-promrulegroups-operator-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: dis-promrulegroups-operator-controller-manager
+  namespace: hvasomhelst
+---
+# Source: dis-promrulegroups-operator/templates/metrics/metrics-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: dis-promrulegroups-operator-controller-manager-metrics-service
+  namespace: hvasomhelst
+  labels:
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: "0.1.0"
+    app.kubernetes.io/name: dis-promrulegroups-operator
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/managed-by: Helm
+spec:
+  ports:
+    - port: 8443
+      targetPort: 8443
+      protocol: TCP
+      name: https
+  selector:
+    control-plane: controller-manager
+---
+# Source: dis-promrulegroups-operator/templates/manager/manager.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dis-promrulegroups-operator-controller-manager
+  namespace: hvasomhelst
+  labels:
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: "0.1.0"
+    app.kubernetes.io/name: dis-promrulegroups-operator
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/managed-by: Helm
+    control-plane: controller-manager
+spec:
+  replicas:  1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dis-promrulegroups-operator
+      app.kubernetes.io/instance: release-name
+      control-plane: controller-manager
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+      labels:
+        app.kubernetes.io/version: "0.1.0"
+        helm.sh/chart: "0.1.0"
+        app.kubernetes.io/name: dis-promrulegroups-operator
+        app.kubernetes.io/instance: release-name
+        app.kubernetes.io/managed-by: Helm
+        control-plane: controller-manager
+    spec:
+      containers:
+        - name: manager
+          args:
+            - --leader-elect
+            - --metrics-bind-address=:8443
+            - --health-probe-bind-address=:8081
+          command:
+            - /manager
+          image: controller:latest
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            limits:
+              cpu: 500m
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: dis-promrulegroups-operator-controller-manager
+      terminationGracePeriodSeconds: 10
+---
+# Source: dis-promrulegroups-operator/templates/prometheus/monitor.yaml
+# To integrate with Prometheus.
