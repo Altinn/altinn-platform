@@ -9,6 +9,8 @@ metadata:
     app.kubernetes.io/name: dis-promrulegroups-operator
     app.kubernetes.io/instance: release-name
     app.kubernetes.io/managed-by: Helm
+  annotations:
+    azure.workload.identity/client-id: 
   name: dis-promrulegroups-operator-controller-manager
   namespace: hvasomhelst
 ---
@@ -248,6 +250,7 @@ spec:
         app.kubernetes.io/instance: release-name
         app.kubernetes.io/managed-by: Helm
         control-plane: controller-manager
+        azure.workload.identity/use: true
     spec:
       containers:
         - name: manager
@@ -258,6 +261,25 @@ spec:
           command:
             - /manager
           image: controller:latest
+          env:
+            - name: AZ_ACTION_GROUP_ID
+              value: 
+            - name: AZ_AZURE_MONITOR_WORKSPACE
+              value: 
+            - name: AZ_CLUSTER_NAME
+              value: 
+            - name: AZ_MONITOR_WORKSPACE_NAME
+              value: 
+            - name: AZ_PROM_RULES_CONVERTER_PATH
+              value: /tool/node_modules/az-prom-rules-converter/dist/cli.js
+            - name: AZ_RESOURCE_GROUP_LOCATION
+              value: 
+            - name: AZ_RESOURCE_GROUP_NAME
+              value: 
+            - name: AZ_SUBSCRIPTION_ID
+              value: 
+            - name: NODE_PATH
+              value: /nodejs/bin/node
           livenessProbe:
             httpGet:
               path: /healthz
@@ -287,7 +309,30 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       serviceAccountName: dis-promrulegroups-operator-controller-manager
-      terminationGracePeriodSeconds: 10
+      terminationGracePeriodSeconds: 30
 ---
 # Source: dis-promrulegroups-operator/templates/prometheus/monitor.yaml
 # To integrate with Prometheus.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app.kubernetes.io/version: "0.1.0"
+    helm.sh/chart: "0.1.0"
+    app.kubernetes.io/name: dis-promrulegroups-operator
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/managed-by: Helm
+  name: dis-promrulegroups-operator-controller-manager-metrics-monitor
+  namespace: hvasomhelst
+spec:
+  endpoints:
+    - path: /metrics
+      port: https
+      scheme: https
+      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      tlsConfig:
+        # Development/Test mode (insecure configuration)
+        insecureSkipVerify: true
+  selector:
+    matchLabels:
+      control-plane: controller-manager
