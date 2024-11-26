@@ -5,6 +5,8 @@
 domain: dis.altinn.cloud
 layout:
 - go.kubebuilder.io/v4
+plugins:
+  helm.kubebuilder.io/v1-alpha: {}
 projectName: dis-promrulegroups-operator
 repo: github.com/Altinn/altinn-platform/services/dis-promrulegroups-operator
 resources:
