@@ -84,10 +84,10 @@ type PrometheusRuleReconciler struct {
 }
 
 func (r *PrometheusRuleReconciler) handleCreation(ctx context.Context, req ctrl.Request, promRule monitoringv1.PrometheusRule) (reconcile.Result, error) {
-	log := log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 	armTemplateJsonString, err := r.generateArmTemplateFromPromRule(ctx, promRule)
 	if err != nil {
-		log.Error(err, "failed to convert the PrometheusRule into an ARM template", "namespace", promRule.Namespace, "name", promRule.Name)
+		logger.Error(err, "failed to convert the PrometheusRule into an ARM template", "namespace", promRule.Namespace, "name", promRule.Name)
 		return ctrl.Result{Requeue: false}, nil
 	}
 
@@ -102,7 +102,7 @@ func (r *PrometheusRuleReconciler) handleCreation(ctx context.Context, req ctrl.
 		os.Getenv("AZ_ACTION_GROUP_ID"),
 	)
 	if err != nil {
-		log.Error(err, "failed to deploy arm template", "namespace", promRule.Namespace, "name", promRule.Name)
+		logger.Error(err, "failed to deploy arm template", "namespace", promRule.Namespace, "name", promRule.Name)
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 	// Update the annotations on the CR
@@ -110,7 +110,7 @@ func (r *PrometheusRuleReconciler) handleCreation(ctx context.Context, req ctrl.
 }
 
 func (r *PrometheusRuleReconciler) handleUpdate(ctx context.Context, req ctrl.Request, promRule monitoringv1.PrometheusRule) (reconcile.Result, error) {
-	log := log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	annotations := promRule.GetAnnotations()
 	lastGeneratedArmtemplateHash := annotations[azArmTemplateHashAnnotation]
@@ -118,7 +118,7 @@ func (r *PrometheusRuleReconciler) handleUpdate(ctx context.Context, req ctrl.Re
 	armDeploymentName := generateArmDeploymentName(req, suffix)
 	regeneratedArmTemplate, err := r.generateArmTemplateFromPromRule(ctx, promRule)
 	if err != nil {
-		log.Error(err, "failed to convert the PrometheusRule into an ARM template", "namespace", promRule.Namespace, "name", promRule.Name)
+		logger.Error(err, "failed to convert the PrometheusRule into an ARM template", "namespace", promRule.Namespace, "name", promRule.Name)
 		return ctrl.Result{Requeue: false}, nil
 	}
 
@@ -134,7 +134,7 @@ func (r *PrometheusRuleReconciler) handleUpdate(ctx context.Context, req ctrl.Re
 		for _, td := range toDelete {
 			_, err := r.deletePrometheusRuleGroup(ctx, td)
 			if err != nil {
-				log.Error(err, "failed to delete PrometheusRuleGroup", "PrometheusRuleGroupName", td)
+				logger.Error(err, "failed to delete PrometheusRuleGroup", "PrometheusRuleGroupName", td)
 			}
 		}
 
@@ -145,7 +145,7 @@ func (r *PrometheusRuleReconciler) handleUpdate(ctx context.Context, req ctrl.Re
 			os.Getenv("AZ_ACTION_GROUP_ID"),
 		)
 		if err != nil {
-			log.Error(err, "failed to deploy arm template", "namespace", promRule.Namespace, "name", promRule.Name)
+			logger.Error(err, "failed to deploy arm template", "namespace", promRule.Namespace, "name", promRule.Name)
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
 
@@ -157,23 +157,23 @@ func (r *PrometheusRuleReconciler) handleUpdate(ctx context.Context, req ctrl.Re
 }
 
 func (r *PrometheusRuleReconciler) handleDelete(ctx context.Context, promRule monitoringv1.PrometheusRule) (reconcile.Result, error) {
-	log := log.FromContext(ctx)
-	log.Info("deletion of PrometheusRule CR detected", "namespace", promRule.Namespace, "name", promRule.Name)
+	logger := log.FromContext(ctx)
+	logger.Info("deletion of PrometheusRule CR detected", "namespace", promRule.Namespace, "name", promRule.Name)
 
 	if controllerutil.ContainsFinalizer(&promRule, finalizerName) {
 		if err := r.deleteExternalResources(ctx, promRule); err != nil {
-			log.Error(err, "failed to delete Azure resources", "namespace", promRule.Namespace, "name", promRule.Name)
+			logger.Error(err, "failed to delete Azure resources", "namespace", promRule.Namespace, "name", promRule.Name)
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 		}
-		log.Info("removing our finalizer", "namespace", promRule.Namespace, "name", promRule.Name)
+		logger.Info("removing our finalizer", "namespace", promRule.Namespace, "name", promRule.Name)
 		ok := controllerutil.RemoveFinalizer(&promRule, finalizerName)
 		if ok {
 			if err := r.Update(ctx, &promRule); err != nil {
-				log.Error(err, "failed to update object", "namespace", promRule.Namespace, "name", promRule.Name)
+				logger.Error(err, "failed to update object", "namespace", promRule.Namespace, "name", promRule.Name)
 				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 			}
 		} else {
-			log.Error(errors.New("failed to remove out finalizer from object"), "failed to remove out finalizer from object", "namespace", promRule.Namespace, "name", promRule.Name)
+			logger.Error(errors.New("failed to remove out finalizer from object"), "failed to remove out finalizer from object", "namespace", promRule.Namespace, "name", promRule.Name)
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 		}
 	}
@@ -181,30 +181,30 @@ func (r *PrometheusRuleReconciler) handleDelete(ctx context.Context, promRule mo
 }
 
 func (r *PrometheusRuleReconciler) addOurFinalizer(ctx context.Context, promRule monitoringv1.PrometheusRule) (reconcile.Result, error) {
-	log := log.FromContext(ctx)
-	log.Info("updating the PrometheusRule CR with our finalizer", "namespace", promRule.Namespace, "name", promRule.Name)
+	logger := log.FromContext(ctx)
+	logger.Info("updating the PrometheusRule CR with our finalizer", "namespace", promRule.Namespace, "name", promRule.Name)
 	ok := controllerutil.AddFinalizer(&promRule, finalizerName)
 	if ok {
 		if err := r.Update(ctx, &promRule); err != nil {
-			log.Error(err, "failed to update the PrometheusRule CR with our finalizer", "namespace", promRule.Namespace, "name", promRule.Name)
+			logger.Error(err, "failed to update the PrometheusRule CR with our finalizer", "namespace", promRule.Namespace, "name", promRule.Name)
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 		}
 		return ctrl.Result{}, nil
 	} else {
-		log.Error(errors.New("failed to add our finalizer to the object"), "failed to add our finalizer to the object", "namespace", promRule.Namespace, "name", promRule.Name)
+		logger.Error(errors.New("failed to add our finalizer to the object"), "failed to add our finalizer to the object", "namespace", promRule.Namespace, "name", promRule.Name)
 		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	}
 }
 
 func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	var prometheusRule monitoringv1.PrometheusRule
 	if err := r.Get(ctx, req.NamespacedName, &prometheusRule); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
-		log.Error(err, "unable to fetch PrometheusRule", "namespace", req.Namespace, "name", req.Name)
+		logger.Error(err, "unable to fetch PrometheusRule", "namespace", req.Namespace, "name", req.Name)
 		return ctrl.Result{}, err
 	}
 	// The resource is marked for deletion.
@@ -219,15 +219,15 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	annotations := prometheusRule.GetAnnotations()
 	ok := hasAllAnnotations(annotations)
 	if ok {
-		log.Info("update to PrometheusRule CR detected", "namespace", prometheusRule.Namespace, "name", prometheusRule.Name)
+		logger.Info("update to PrometheusRule CR detected", "namespace", prometheusRule.Namespace, "name", prometheusRule.Name)
 		return r.handleUpdate(ctx, req, prometheusRule)
 	}
-	log.Info("new PrometheusRule CR detected", "namespace", prometheusRule.Namespace, "name", prometheusRule.Name)
+	logger.Info("new PrometheusRule CR detected", "namespace", prometheusRule.Namespace, "name", prometheusRule.Name)
 	return r.handleCreation(ctx, req, prometheusRule)
 }
 
 func (r *PrometheusRuleReconciler) updateAnnotations(ctx context.Context, promRule monitoringv1.PrometheusRule, groupNames, armTemplateHash, armDeploymentName, timestamp string) (reconcile.Result, error) {
-	log := log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	annotations := promRule.GetAnnotations()
 	if annotations == nil {
@@ -241,14 +241,14 @@ func (r *PrometheusRuleReconciler) updateAnnotations(ctx context.Context, promRu
 	promRule.SetAnnotations(annotations)
 	err := r.Client.Update(ctx, &promRule)
 	if err != nil {
-		log.Error(err, "failed to update the PrometheusRule CR with new annotations", "namespace", promRule.Namespace, "name", promRule.Name)
+		logger.Error(err, "failed to update the PrometheusRule CR with new annotations", "namespace", promRule.Namespace, "name", promRule.Name)
 		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	}
 	return ctrl.Result{}, nil
 }
 
 func (r *PrometheusRuleReconciler) deployArmTemplate(ctx context.Context, deploymentName string, jsonTemplate string, actionGroupId string) error {
-	log := log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	contents := make(map[string]interface{})
 	_ = json.Unmarshal([]byte(jsonTemplate), &contents)
@@ -281,7 +281,7 @@ func (r *PrometheusRuleReconciler) deployArmTemplate(ctx context.Context, deploy
 	)
 
 	if err != nil {
-		log.Error(err, "failed BeginCreateOrUpdate", "deploymentName", deploymentName)
+		logger.Error(err, "failed BeginCreateOrUpdate", "deploymentName", deploymentName)
 		return err
 	}
 	// TODO: Check the best practices here. I doubt we want to do this synchronously.
@@ -308,19 +308,19 @@ func (r *PrometheusRuleReconciler) deleteExternalResources(ctx context.Context, 
 }
 
 func (r *PrometheusRuleReconciler) deletePrometheusRuleGroup(ctx context.Context, ruleGroupName string) (*armalertsmanagement.PrometheusRuleGroupsClientDeleteResponse, error) {
-	log := log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 	resp, err := r.PrometheusRuleGroupsClient.Delete(ctx, r.AzResourceGroupName, ruleGroupName, nil)
 
 	if err != nil {
-		log.Error(err, "failed to delete the prometheus rule group", "ruleGroupName", ruleGroupName)
+		logger.Error(err, "failed to delete the prometheus rule group", "ruleGroupName", ruleGroupName)
 		return nil, err
 	}
-	log.Info("Sucessfully deleted PrometheusRuleGroup", "ruleGroupName", ruleGroupName)
+	logger.Info("Sucessfully deleted PrometheusRuleGroup", "ruleGroupName", ruleGroupName)
 	return &resp, nil
 }
 
 func (r *PrometheusRuleReconciler) generateArmTemplateFromPromRule(ctx context.Context, promRule monitoringv1.PrometheusRule) (string, error) {
-	log := log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 	promRuleCopy := promRule.DeepCopy()
 	for idx, ruleGroup := range promRuleCopy.Spec.Groups {
 		// The names are the same for every cluster so we need to prefix them
@@ -329,7 +329,7 @@ func (r *PrometheusRuleReconciler) generateArmTemplateFromPromRule(ctx context.C
 		}
 		interval, err := prometheusmodel.ParseDuration(string(*ruleGroup.Interval))
 		if err != nil {
-			log.Error(err, "Failed to parse the Interval from the PrometheusRule Spec")
+			logger.Error(err, "Failed to parse the Interval from the PrometheusRule Spec")
 			return "", err
 		}
 		// Can't be lower than 1m.
@@ -341,7 +341,7 @@ func (r *PrometheusRuleReconciler) generateArmTemplateFromPromRule(ctx context.C
 	marshalledPromRule, err := json.Marshal(promRuleCopy.Spec)
 
 	if err != nil {
-		log.Error(err, "Failed to marshal the promRule")
+		logger.Error(err, "Failed to marshal the promRule")
 		return "", err
 	}
 
@@ -369,7 +369,7 @@ func (r *PrometheusRuleReconciler) generateArmTemplateFromPromRule(ctx context.C
 	cmd.Stderr = &errb
 	err = cmd.Run()
 	if err != nil {
-		log.Error(err, "Failed to convert PrometheusRule into PrometheusRuleGroup", "Stderr", errb.String())
+		logger.Error(err, "Failed to convert PrometheusRule into PrometheusRuleGroup", "Stderr", errb.String())
 		return "", err
 	}
 	jsonString := out.String()
