@@ -207,25 +207,23 @@ func (r *PrometheusRuleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		log.Error(err, "unable to fetch PrometheusRule", "namespace", req.Namespace, "name", req.Name)
 		return ctrl.Result{}, err
 	}
-	// The resource is not marked for deletion.
-	if prometheusRule.GetDeletionTimestamp().IsZero() {
-		// We need to make sure we add a finalizer to the PrometheusRule CR so we can cleanup Azure resources when the CR is deleted.
-		if !controllerutil.ContainsFinalizer(&prometheusRule, finalizerName) {
-			return r.addOurFinalizer(ctx, prometheusRule)
-		}
-		// Look into the object's annotations for annotations we own.
-		annotations := prometheusRule.GetAnnotations()
-		ok := hasAllAnnotations(annotations)
-		if !ok {
-			log.Info("new PrometheusRule CR detected", "namespace", prometheusRule.Namespace, "name", prometheusRule.Name)
-			return r.handleCreation(ctx, req, prometheusRule)
-		} else {
-			log.Info("update to PrometheusRule CR detected", "namespace", prometheusRule.Namespace, "name", prometheusRule.Name)
-			return r.handleUpdate(ctx, req, prometheusRule)
-		}
-	} else {
+	// The resource is marked for deletion.
+	if !prometheusRule.GetDeletionTimestamp().IsZero() {
 		return r.handleDelete(ctx, prometheusRule)
 	}
+	// We need to make sure we add a finalizer to the PrometheusRule CR so we can cleanup Azure resources when the CR is deleted.
+	if !controllerutil.ContainsFinalizer(&prometheusRule, finalizerName) {
+		return r.addOurFinalizer(ctx, prometheusRule)
+	}
+	// Look into the object's annotations for annotations we own.
+	annotations := prometheusRule.GetAnnotations()
+	ok := hasAllAnnotations(annotations)
+	if ok {
+		log.Info("update to PrometheusRule CR detected", "namespace", prometheusRule.Namespace, "name", prometheusRule.Name)
+		return r.handleUpdate(ctx, req, prometheusRule)
+	}
+	log.Info("new PrometheusRule CR detected", "namespace", prometheusRule.Namespace, "name", prometheusRule.Name)
+	return r.handleCreation(ctx, req, prometheusRule)
 }
 
 func (r *PrometheusRuleReconciler) updateAnnotations(ctx context.Context, promRule monitoringv1.PrometheusRule, groupNames, armTemplateHash, armDeploymentName, timestamp string) (reconcile.Result, error) {
