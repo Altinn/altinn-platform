@@ -22,7 +22,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -103,7 +102,7 @@ func (r *PrometheusRuleReconciler) handleCreation(ctx context.Context, req ctrl.
 	)
 	if err != nil {
 		log.Error(err, "failed to deploy arm template", "namespace", promRule.Namespace, "name", promRule.Name)
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 	// Update the annotations on the CR
 	return r.updateAnnotations(ctx, promRule, ruleGroupNames, hashArmTemplate([]byte(armTemplateJsonString)), deploymentName, suffix)
@@ -146,7 +145,7 @@ func (r *PrometheusRuleReconciler) handleUpdate(ctx context.Context, req ctrl.Re
 		)
 		if err != nil {
 			log.Error(err, "failed to deploy arm template", "namespace", promRule.Namespace, "name", promRule.Name)
-			return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
 
 		return r.updateAnnotations(ctx, promRule, ruleGroupNames, regeneratedArmTemplateHash, armDeploymentName, suffix)
@@ -163,18 +162,18 @@ func (r *PrometheusRuleReconciler) handleDelete(ctx context.Context, promRule mo
 	if controllerutil.ContainsFinalizer(&promRule, finalizerName) {
 		if err := r.deleteExternalResources(ctx, promRule); err != nil {
 			log.Info("failed to delete Azure resources", "namespace", promRule.Namespace, "name", promRule.Name)
-			return ctrl.Result{RequeueAfter: 5 * time.Second}, err
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 		}
 		log.Info("removing our finalizer", "namespace", promRule.Namespace, "name", promRule.Name)
 		ok := controllerutil.RemoveFinalizer(&promRule, finalizerName)
 		if ok {
 			if err := r.Update(ctx, &promRule); err != nil {
 				log.Info("failed to update object", "namespace", promRule.Namespace, "name", promRule.Name)
-				return ctrl.Result{RequeueAfter: 5 * time.Second}, err
+				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 			}
 		} else {
 			log.Info("failed to remove out finalizer from object", "namespace", promRule.Namespace, "name", promRule.Name)
-			return ctrl.Result{RequeueAfter: 5 * time.Second}, errors.New("failed to remove finalizer from object")
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 		}
 	}
 	return ctrl.Result{}, nil
@@ -187,12 +186,12 @@ func (r *PrometheusRuleReconciler) addOurFinalizer(ctx context.Context, promRule
 	if ok {
 		if err := r.Update(ctx, &promRule); err != nil {
 			log.Error(err, "failed to update the PrometheusRule CR with our finalizer", "namespace", promRule.Namespace, "name", promRule.Name)
-			return ctrl.Result{RequeueAfter: 5 * time.Second}, err
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 		}
 		return ctrl.Result{}, nil
 	} else {
 		log.Info("failed to add our finalizer to the object", "namespace", promRule.Namespace, "name", promRule.Name)
-		return ctrl.Result{RequeueAfter: 5 * time.Second}, errors.New("failed to add our finalizer to the object")
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	}
 }
 
@@ -244,7 +243,7 @@ func (r *PrometheusRuleReconciler) updateAnnotations(ctx context.Context, promRu
 	err := r.Client.Update(ctx, &promRule)
 	if err != nil {
 		log.Error(err, "failed to update the PrometheusRule CR with new annotations", "namespace", promRule.Namespace, "name", promRule.Name)
-		return ctrl.Result{RequeueAfter: 5 * time.Second}, err
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	}
 	return ctrl.Result{}, nil
 }
