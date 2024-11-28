@@ -293,18 +293,20 @@ func (r *PrometheusRuleReconciler) deployArmTemplate(ctx context.Context, deploy
 	return nil
 }
 func (r *PrometheusRuleReconciler) deleteExternalResources(ctx context.Context, promRule monitoringv1.PrometheusRule) error {
+	allResourcesDeleted := true
 	annotations := promRule.GetAnnotations()
-	resourceNames, ok := annotations[azPrometheusRuleGroupResourceNamesAnnotation]
-	if ok {
+	if resourceNames, ok := annotations[azPrometheusRuleGroupResourceNamesAnnotation]; ok {
 		for _, rn := range strings.Split(resourceNames, ",") {
-			_, err := r.deletePrometheusRuleGroup(ctx, rn)
-			if err != nil {
-				// TODO: Should we try to delete the rest in case one deletion fails? Or simply retry again?
-				return err
+			if _, err := r.deletePrometheusRuleGroup(ctx, rn); err != nil {
+				allResourcesDeleted = false
 			}
 		}
 	}
-	return nil
+	if allResourcesDeleted {
+		return nil
+	} else {
+		return fmt.Errorf("failed to delete all Azure resources associated with PrometheusRule %s", promRule.Name)
+	}
 }
 
 func (r *PrometheusRuleReconciler) deletePrometheusRuleGroup(ctx context.Context, ruleGroupName string) (*armalertsmanagement.PrometheusRuleGroupsClientDeleteResponse, error) {
