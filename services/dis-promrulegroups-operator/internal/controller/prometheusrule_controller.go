@@ -394,12 +394,13 @@ func timestamp() string {
 }
 
 func hasAllAnnotations(annotations map[string]string) bool {
-	boolRes := true
 	for _, a := range allAnnotations {
 		_, ok := annotations[a]
-		boolRes = boolRes && ok
+		if !ok {
+			return false
+		}
 	}
-	return boolRes
+	return true
 }
 
 func generateArmDeploymentName(req ctrl.Request, suffix string) string {
