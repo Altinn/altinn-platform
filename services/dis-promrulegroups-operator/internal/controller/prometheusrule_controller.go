@@ -122,7 +122,7 @@ func (r *PrometheusRuleReconciler) handleUpdate(ctx context.Context, req ctrl.Re
 	}
 
 	regeneratedArmTemplateHash := hashArmTemplate([]byte(regeneratedArmTemplate))
-	if !(regeneratedArmTemplateHash == lastGeneratedArmtemplateHash) {
+	if regeneratedArmTemplateHash != lastGeneratedArmtemplateHash {
 		ruleGroupNames := generateRuleGroupNamesAnnotationString(promRule)
 
 		annotations := promRule.GetAnnotations()
