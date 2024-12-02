@@ -8,5 +8,5 @@ metadata:
 spec:
   title: test-backend
   description: test-backend
-  url: https://primary-test-aca-vga.ambitioushill-7fbb0e9c.norwayeast.azurecontainerapps.io
-  azureResourceUidPrefix: test
+  url: https://secondary-test-aca-vga.gentleground-884783d5.norwayeast.azurecontainerapps.io
+  azureResourceUidPrefix: test1234

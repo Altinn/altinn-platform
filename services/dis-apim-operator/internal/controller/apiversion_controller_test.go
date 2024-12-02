@@ -18,11 +18,19 @@ package controller
 
 import (
 	"context"
-
+	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/azure"
+	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/config"
+	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
+	testutils "github.com/Altinn/altinn-platform/services/dis-apim-operator/test/utils"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2"
+	apimfake "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2/fake"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"net/http"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,6 +59,14 @@ var _ = Describe("ApiVersion Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
+					Spec: apimv1alpha1.ApiVersionSpec{
+						ApiVersionSetId: "test-api-version-set-id",
+						Path:            "/v1",
+						ApiVersionSubSpec: apimv1alpha1.ApiVersionSubSpec{
+							DisplayName: "test-display-name",
+							Content:     utils.ToPointer(`{"openapi": "3.0.0","info": {"title": "Minimal API","version": "1.0.0"},""paths": {}}`),
+						},
+					},
 					// TODO(user): Specify other spec details if needed.
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
@@ -67,10 +83,40 @@ var _ = Describe("ApiVersion Controller", func() {
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
 		It("should successfully reconcile the resource", func() {
+			fakeServer := testutils.GetFakeApiClient(
+				&apim.APIClientCreateOrUpdateResponse{
+					APIContract: apim.APIContract{
+						Properties: nil,
+						ID:         nil,
+						Name:       nil,
+						Type:       nil,
+					},
+				},
+				nil,
+				nil,
+				utils.ToPointer(http.StatusNotFound),
+				nil,
+				nil,
+			)
+			transport := apimfake.NewAPIServerTransport(fakeServer)
+			factoryClientOptions := &arm.ClientOptions{
+				ClientOptions: azcore.ClientOptions{
+					Transport: transport,
+				},
+			}
 			By("Reconciling the created resource")
 			controllerReconciler := &ApiVersionReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:    k8sClient,
+				Scheme:    k8sClient.Scheme(),
+				NewClient: testutils.NewFakeAPIMClient,
+				ApimClientConfig: &azure.ApimClientConfig{
+					AzureConfig: config.AzureConfig{
+						SubscriptionId:  "fake-subscription-id",
+						ResourceGroup:   "fake-resource-group",
+						ApimServiceName: "fake-apim-service",
+					},
+					FactoryOptions: factoryClientOptions,
+				},
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
