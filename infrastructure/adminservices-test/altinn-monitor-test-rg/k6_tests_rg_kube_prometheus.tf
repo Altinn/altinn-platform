@@ -1,4 +1,7 @@
 resource "helm_release" "prometheus_operator_crds" {
+  depends_on = [
+    azurerm_kubernetes_cluster.k6tests
+  ]
   name       = "prometheus-operator-crds"
   repository = "https://prometheus-community.github.io/helm-charts"
   chart      = "prometheus-operator-crds"
@@ -6,7 +9,11 @@ resource "helm_release" "prometheus_operator_crds" {
 }
 
 resource "helm_release" "kube_prometheus_stack" {
-  depends_on       = [helm_release.prometheus_operator_crds]
+  depends_on = [
+    helm_release.prometheus_operator_crds,
+    azuread_application.prometheus,
+    azurerm_monitor_workspace.k6tests_amw
+  ]
   name             = "kube-prometheus-stack"
   namespace        = "monitoring"
   create_namespace = true
@@ -16,8 +23,15 @@ resource "helm_release" "kube_prometheus_stack" {
   version          = "66.3.1"
 
   values = [
-    "${templatefile("${path.module}/k6_tests_rg_kube_prometheus_stack_values.tftpl", {
-    cluster_name = "${azurerm_kubernetes_cluster.k6tests.name}" })}"
+    "${templatefile(
+      "${path.module}/k6_tests_rg_kube_prometheus_stack_values.tftpl",
+      {
+        cluster_name          = "${azurerm_kubernetes_cluster.k6tests.name}",
+        client_id             = "${azuread_application.prometheus.client_id}",
+        tenant_id             = "${data.azurerm_client_config.current.tenant_id}",
+        remote_write_endpoint = "${azurerm_monitor_workspace.k6tests_amw.default_data_collection_rule_id}"
+      }
+    )}"
   ]
 }
 
