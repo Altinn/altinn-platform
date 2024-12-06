@@ -15,26 +15,8 @@ resource "helm_release" "kube_prometheus_stack" {
   skip_crds        = true
   version          = "66.3.1"
 
-  values = [<<-EOT
-              crds:
-                enabled: false
-              alertmanager:
-                enabled: true
-              grafana:
-                enabled: false
-              prometheus:
-                enabled: true
-                prometheusSpec:
-                  externalLabels:
-                    cluster: "${azurerm_kubernetes_cluster.k6tests.name}"
-                  priorityClassName: "system-cluster-critical"
-                  retention: 1d
-                  storageSpec:
-                    volumeClaimTemplate:
-                      spec:
-                        resources:
-                          requests:
-                            storage: 5Gi
-              EOT
+  values = [
+    "${templatefile("${path.module}/k6_tests_rg_kube_prometheus_stack_values.tftpl", {
+    cluster_name = "${azurerm_kubernetes_cluster.k6tests.name}" })}"
   ]
 }
