@@ -6,9 +6,21 @@ grafana:
   enabled: false
 prometheus:
   enabled: true
+  serviceAccount:
+    annotations:
+      azure.workload.identity/client-id: "${client_id}"
   prometheusSpec:
+    podMetadata:
+      labels:
+        azure.workload.identity/use: "true"
     externalLabels:
       cluster: "${cluster_name}"
+    remoteWrite:
+      - url: "${remote_write_endpoint}"
+        azureAd:
+          cloud: "AzurePublic"
+          sdk:
+            tenantId: "${tenant_id}"
     priorityClassName: "system-cluster-critical"
     retention: 1d
     storageSpec:
