@@ -9,25 +9,25 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Sha256FromContent", func() {
+var _ = Describe("Base64FromContent", func() {
 	Context("with a valid URL", func() {
-		It("should return the correct SHA256 hash", func() {
+		It("should return the correct Base64 string", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				_, _ = fmt.Fprintln(w, "test content")
 			}))
 			defer server.Close()
-			expectedHash := "a1fff0ffefb9eace7230c24e50731f0a91c62f9cefdfe77121c2f607125dffae"
-			hash, err := Sha256FromContent(&server.URL)
+			expectedHash := "dGVzdCBjb250ZW50Cg=="
+			hash, err := Base64FromContent(&server.URL)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(hash).To(BeEquivalentTo(expectedHash))
 		})
 	})
 
 	Context("with a valid content string", func() {
-		It("should return the correct SHA256 hash", func() {
+		It("should return the correct Base64 string", func() {
 			content := "test content"
-			expectedHash := "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72"
-			hash, err := Sha256FromContent(&content)
+			expectedHash := "dGVzdCBjb250ZW50"
+			hash, err := Base64FromContent(&content)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(hash).To(BeEquivalentTo(expectedHash))
 		})
@@ -36,14 +36,14 @@ var _ = Describe("Sha256FromContent", func() {
 	Context("handle nil and empty string", func() {
 		It("should return empty string when nil", func() {
 			expectedHash := ""
-			hash, err := Sha256FromContent(nil)
+			hash, err := Base64FromContent(nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(hash).To(BeEquivalentTo(expectedHash))
 		})
-		It("should return correct SHA256  when empty string content", func() {
-			expectedHash := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		It("should return empty string when empty string content", func() {
+			expectedHash := ""
 			emptyString := ""
-			hash, err := Sha256FromContent(&emptyString)
+			hash, err := Base64FromContent(&emptyString)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(hash).To(BeEquivalentTo(expectedHash))
 		})
@@ -52,7 +52,7 @@ var _ = Describe("Sha256FromContent", func() {
 	Context("with an invalid URL", func() {
 		It("should return an error", func() {
 			invalidUrl := "http://invalid-url"
-			_, err := Sha256FromContent(&invalidUrl)
+			_, err := Base64FromContent(&invalidUrl)
 			Expect(err).To(HaveOccurred())
 		})
 	})

@@ -258,7 +258,7 @@ func (r *ApiReconciler) reconcileVersions(ctx context.Context, api *apimv1alpha1
 				inSync = false
 				api.Status.VersionStates[k] = existingVersion.Status
 			} else {
-				if existingVersion.Status.ProvisioningState == "" || existingVersion.Status.ProvisioningState == apimv1alpha1.ProvisioningStateUpdating {
+				if existingVersion.Status.ProvisioningState != apimv1alpha1.ProvisioningStateSucceeded {
 					inSync = false
 				}
 				api.Status.VersionStates[k] = existingVersion.Status
@@ -266,7 +266,7 @@ func (r *ApiReconciler) reconcileVersions(ctx context.Context, api *apimv1alpha1
 		}
 	}
 	if !inSync {
-		api.Status.ProvisioningState = apimv1alpha1.ProvisioningStateUpdating
+		api.Status.ProvisioningState = getStatusFromVersionStatuses(api.Status.VersionStates)
 	} else {
 		api.Status.ProvisioningState = apimv1alpha1.ProvisioningStateSucceeded
 	}
@@ -302,4 +302,17 @@ func versionInList(version apimv1alpha1.ApiVersion, apiName string, versions []a
 		}
 	}
 	return false
+}
+
+func getStatusFromVersionStatuses(versions map[string]apimv1alpha1.ApiVersionStatus) apimv1alpha1.ProvisioningState {
+	state := apimv1alpha1.ProvisioningStateSucceeded
+	for _, v := range versions {
+		if v.ProvisioningState == apimv1alpha1.ProvisioningStateFailed {
+			return apimv1alpha1.ProvisioningStateFailed
+		}
+		if v.ProvisioningState != apimv1alpha1.ProvisioningStateSucceeded {
+			state = apimv1alpha1.ProvisioningStateUpdating
+		}
+	}
+	return state
 }

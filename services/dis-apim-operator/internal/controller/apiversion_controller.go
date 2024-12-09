@@ -129,7 +129,7 @@ func (r *ApiVersionReconciler) deleteApiVersion(ctx context.Context, apiVersion 
 }
 
 func (r *ApiVersionReconciler) handleApiVersionUpdate(ctx context.Context, apiVersion apimv1alpha1.ApiVersion) (ctrl.Result, error) {
-	latestSha, err := utils.Sha256FromContent(*apiVersion.Spec.Content)
+	latestSha, err := utils.Sha256FromContent(apiVersion.Spec.Content)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get api spec sha: %w", err)
 	}
@@ -138,7 +138,7 @@ func (r *ApiVersionReconciler) handleApiVersionUpdate(ctx context.Context, apiVe
 	}
 	if apiVersion.Spec.Policies != nil {
 		_, policyErr := r.apimClient.GetApiPolicy(ctx, apiVersion.GetApiVersionAzureFullName(), nil)
-		lastPolicySha, shaErr := utils.Sha256FromContent(*apiVersion.Spec.Policies.PolicyContent)
+		lastPolicySha, shaErr := utils.Sha256FromContent(apiVersion.Spec.Policies.PolicyContent)
 		if shaErr != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to get policy sha: %w", err)
 		}
@@ -164,10 +164,12 @@ func (r *ApiVersionReconciler) createUpdateApimApi(ctx context.Context, apiVesri
 
 	if err != nil {
 		logger.Error(err, "Failed to create/update API")
+		apiVesrion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateFailed
+		_ = r.Status().Update(ctx, &apiVesrion)
 		return ctrl.Result{}, err
 	}
 	logger.Info("Watching LR operation")
-	status, _, token, err := azure.StartResumeOperation(ctx, poller)
+	status, _, token, err := azure.StartResumeOperation[apim.APIClientCreateOrUpdateResponse](ctx, poller)
 	if err != nil {
 		logger.Error(err, "Failed to watch LR operation")
 		return ctrl.Result{}, err
@@ -196,7 +198,10 @@ func (r *ApiVersionReconciler) createUpdateApimApi(ctx context.Context, apiVesri
 		logger.Info("Operation completed")
 		apiVesrion.Status.ResumeToken = ""
 		apiVesrion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateSucceeded
-		apiVesrion.Status.LastAppliedSpecSha, err = utils.Sha256FromContent(*apiVesrion.Spec.Content)
+		apiVesrion.Status.LastAppliedSpecSha, err = utils.Sha256FromContent(apiVesrion.Spec.Content)
+		if apiVesrion.Spec.Policies != nil {
+			apiVesrion.Status.LastAppliedPolicyBase64, err = utils.Base64FromContent(apiVesrion.Spec.Policies.PolicyContent)
+		}
 		if err != nil {
 			logger.Error(err, "Failed to get spec sha")
 			return ctrl.Result{}, err
@@ -240,7 +245,7 @@ func (r *ApiVersionReconciler) createUpdatePolicy(ctx context.Context, apiVersio
 		_ = r.Status().Update(ctx, &apiVersion)
 		return err
 	}
-	apiVersion.Status.LastAppliedPolicySha, err = utils.Sha256FromContent(*apiVersion.Spec.Policies.PolicyContent)
+	apiVersion.Status.LastAppliedPolicySha, err = utils.Sha256FromContent(apiVersion.Spec.Policies.PolicyContent)
 	if err != nil {
 		logger.Error(err, "Failed to get policy sha")
 		return err

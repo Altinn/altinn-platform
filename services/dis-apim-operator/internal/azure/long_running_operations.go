@@ -23,7 +23,7 @@ func StartResumeOperation[T any](ctx context.Context, poller *runtime.Poller[T])
 		status = OperationStatusFailed
 		return
 	}
-	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusCreated {
+	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusCreated && res.StatusCode != http.StatusAccepted {
 		status = OperationStatusFailed
 		err = runtime.NewResponseError(res)
 		return
