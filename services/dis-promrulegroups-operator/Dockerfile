@@ -25,7 +25,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o ma
 
 FROM node:20 AS builder2
 WORKDIR /tool
-RUN npm i --omit=dev https://gitpkg.now.sh/monteiro-renato/prometheus-collector/tools/az-prom-rules-converter?with-piped-input
+RUN npm i --omit=dev https://gitpkg.now.sh/Azure/prometheus-collector/tools/az-prom-rules-converter?main
 
 
 # Use distroless as minimal base image to package the manager binary

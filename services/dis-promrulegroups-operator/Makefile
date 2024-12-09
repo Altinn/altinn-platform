@@ -68,7 +68,7 @@ test: manifests generate fmt vet envtest ## Run tests.
 	@command -v $(LOCALBIN)/az-tool/node_modules/.bin/az-prom-rules-converter >/dev/null 2>&1 || { \
 		echo "Installing az-prom-rules-converter in $(LOCALBIN)/az-tool"; \
 		mkdir -p $(LOCALBIN)/az-tool; \
-		npm i --prefix $(LOCALBIN)/az-tool --omit=dev https://gitpkg.now.sh/monteiro-renato/prometheus-collector/tools/az-prom-rules-converter?with-piped-input; \
+		npm i --prefix $(LOCALBIN)/az-tool --omit=dev https://gitpkg.now.sh/Azure/prometheus-collector/tools/az-prom-rules-converter?main; \
 	}
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
