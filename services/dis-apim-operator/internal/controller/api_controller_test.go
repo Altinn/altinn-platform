@@ -26,7 +26,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	apimfake "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2/fake"
-	"net/http"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2"
@@ -35,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	apimv1alpha1 "github.com/Altinn/altinn-platform/services/dis-apim-operator/api/v1alpha1"
@@ -52,10 +52,35 @@ var _ = Describe("Api Controller", func() {
 			Namespace: resourceNamespace,
 		}
 		api := &apimv1alpha1.Api{}
-
+		fakeApim := testutils.NewFakeAPIMClientStruct()
 		BeforeEach(func() {
+			By("ensuring all old resources are cleaned up")
+			resource := &apimv1alpha1.Api{}
+			err := k8sClient.Get(ctx, typeNamespacedName, resource)
+			if err != nil && !errors.IsNotFound(err) {
+				Expect(runtimeclient.IgnoreNotFound(err)).Should(Succeed())
+				controllerutil.RemoveFinalizer(resource, API_FINALIZER)
+				Eventually(k8sClient.Update(ctx, resource)).Should(Succeed())
+				Eventually(k8sClient.Delete(ctx, resource)).Should(Succeed())
+				Eventually(func(g Gomega) {
+					err := k8sClient.Get(ctx, typeNamespacedName, resource)
+					g.Expect(errors.IsNotFound(err)).To(BeTrue())
+				})
+			}
+			versions := &apimv1alpha1.ApiVersionList{}
+			Eventually(k8sClient.List(ctx, versions)).Should(Succeed())
+			for _, version := range versions.Items {
+				Eventually(k8sClient.Delete(ctx, &version)).Should(Succeed())
+				Eventually(func(g Gomega) {
+					err := k8sClient.Get(ctx, types.NamespacedName{
+						Namespace: version.Namespace,
+						Name:      version.Name,
+					}, &version)
+					g.Expect(errors.IsNotFound(err)).To(BeTrue())
+				})
+			}
 			By("creating the custom resource for the Kind Api")
-			err := k8sClient.Get(ctx, typeNamespacedName, api)
+			err = k8sClient.Get(ctx, typeNamespacedName, api)
 			if err != nil && errors.IsNotFound(err) {
 				resource := &apimv1alpha1.Api{
 					ObjectMeta: metav1.ObjectMeta{
@@ -73,61 +98,36 @@ var _ = Describe("Api Controller", func() {
 							},
 						},
 					},
-					// TODO(user): Specify other spec details if needed.
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
+			fakeApim.APIMVersionSets = make(map[string]apim.APIVersionSetContract)
 		})
-
 		AfterEach(func() {
 			// TODO(user): Cleanup logic after each test, like removing the resource instance.
 			resource := &apimv1alpha1.Api{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			controllerutil.RemoveFinalizer(resource, API_FINALIZER)
-			Expect(k8sClient.Update(ctx, resource)).To(Succeed())
+			Eventually(k8sClient.Update(ctx, resource)).Should(Succeed())
 			Expect(err).NotTo(HaveOccurred())
 			versions := &apimv1alpha1.ApiVersionList{}
 			err = k8sClient.List(ctx, versions)
 			Expect(err).NotTo(HaveOccurred())
-
-			By("Cleanup the specific resource instance Api")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 			By("Cleanup the specific resource instance ApiVersion")
 			for _, version := range versions.Items {
-				k8sClient.Delete(ctx, &version)
+				Eventually(k8sClient.Delete(ctx, &version)).Should(Succeed())
 			}
+			By("Cleanup the specific resource instance Api")
+			Eventually(k8sClient.Delete(ctx, resource)).Should(Succeed())
 		})
-		It("should successfully reconcile the resource and create a azure apim api versionset during first reconcile", func() {
-			var createdVersionsets []apim.APIVersionSetContract
-			getCounter := 0
-			fakeServer := testutils.GetFakeApiVersionSetClient(
-				&apim.APIVersionSetClientCreateOrUpdateResponse{
-					APIVersionSetContract: apim.APIVersionSetContract{
-						Properties: &apim.APIVersionSetContractProperties{},
-						ID:         utils.ToPointer("fake-api-id"),
-						Name:       utils.ToPointer(resourceName),
-						Type:       nil,
-					},
-				},
-				nil,
-				nil,
-				utils.ToPointer(http.StatusNotFound),
-				nil,
-				nil,
-				func(input apim.APIVersionSetContract, errorResponse bool) {
-					createdVersionsets = append(createdVersionsets, input)
-				},
-				func(input string, errorResponse bool) {
-					getCounter++
-				},
-			)
-			transport := apimfake.NewAPIVersionSetServerTransport(fakeServer)
+		It("should successfully reconcile the resource", func() {
+			transport := apimfake.NewAPIVersionSetServerTransport(fakeApim.GetFakeApiVersionServer(false, false, false))
 			factoryClientOptions := &arm.ClientOptions{
 				ClientOptions: azcore.ClientOptions{
 					Transport: transport,
 				},
 			}
-			By("Reconciling the created resource")
+			By("creating the api during first reconciliation")
 			controllerReconciler := &ApiReconciler{
 				Client:    k8sClient,
 				Scheme:    k8sClient.Scheme(),
@@ -146,17 +146,29 @@ var _ = Describe("Api Controller", func() {
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(getCounter).To(Equal(1), "Expected to get the versionset once")
-			Expect(createdVersionsets).To(HaveLen(1))
-			Expect(createdVersionsets[0].Name).To(Equal(utils.ToPointer(fmt.Sprintf("%s-%s", resourceNamespace, resourceName))))
-			Expect(createdVersionsets[0].ID).To(BeNil())
-			Expect(createdVersionsets[0].Properties).NotTo(BeNil())
-			Expect(createdVersionsets[0].Properties.DisplayName).To(Equal(utils.ToPointer("test-api")))
-			Expect(*createdVersionsets[0].Properties.VersioningScheme).To(Equal(apim.VersioningSchemeSegment))
-			Expect(createdVersionsets[0].Properties.VersionQueryName).To(BeNil())
+			Expect(fakeApim.APIMVersionSets).To(HaveLen(1))
+			apimResourceName := resourceNamespace + "-" + resourceName
+			Expect(fakeApim.APIMVersionSets[apimResourceName].Properties.DisplayName).To(Equal(utils.ToPointer("test-api")))
+			Expect(fakeApim.APIMVersionSets[apimResourceName].Name).To(Equal(utils.ToPointer(fmt.Sprintf("%s-%s", resourceNamespace, resourceName))))
+			Expect(fakeApim.APIMVersionSets[apimResourceName].Properties).NotTo(BeNil())
+			Expect(fakeApim.APIMVersionSets[apimResourceName].Properties.DisplayName).To(Equal(utils.ToPointer("test-api")))
+			Expect(*fakeApim.APIMVersionSets[apimResourceName].Properties.VersioningScheme).To(Equal(apim.VersioningSchemeSegment))
+			Expect(fakeApim.APIMVersionSets[apimResourceName].Properties.VersionQueryName).To(BeNil())
 			var apiVersions apimv1alpha1.ApiVersionList
-			k8sClient.List(ctx, &apiVersions)
+			Eventually(k8sClient.List(ctx, &apiVersions)).Should(Succeed())
 			Expect(apiVersions.Items).To(HaveLen(0))
+			By("adding apiVersion during second reconciliation")
+			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fakeApim.APIMVersionSets).To(HaveLen(1))
+			Eventually(k8sClient.List(ctx, &apiVersions)).Should(Succeed())
+			Expect(apiVersions.Items).To(HaveLen(1))
+			Expect(apiVersions.Items[0].Spec.DisplayName).To(Equal("the default version"))
+			Expect(*apiVersions.Items[0].Spec.Name).To(Equal("v1"))
+			Expect(*apiVersions.Items[0].Spec.Content).To(Equal(`{"openapi": "3.0.0","info": {"title": "Minimal API","version": "1.0.0"},""paths": {}}`))
+
 			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
 			// Example: If you expect a certain status condition after reconciliation, verify it here.
 		})
