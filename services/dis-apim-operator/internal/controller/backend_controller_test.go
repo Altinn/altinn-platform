@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -80,13 +81,13 @@ var _ = Describe("Backend Controller", func() {
 				g.Expect(*fakeApim.Backends[updatedBackend.GetAzureResourceName()].Properties.URL).To(Equal(updatedBackend.Spec.Url))
 			}, timeout, interval).Should(Succeed())
 			By("Deleting the apim Backend and removing the finalizer when the resource is deleted")
-			Eventually(k8sClient.Delete(ctx, updatedBackend)).Should(Succeed())
+			Eventually(k8sClient.Delete).WithArguments(ctx, updatedBackend).Should(Succeed())
 			// Fetch the updated Backend resource
 			Eventually(func(g Gomega) {
 				err := k8sClient.Get(ctx, typeNamespacedName, updatedBackend)
 				g.Expect(err).To(HaveOccurred())
 				g.Expect(errors.IsNotFound(err)).To(BeTrue())
-				g.Expect(fakeApim.Backends).To(HaveLen(0))
+				g.Expect(fakeApim.Backends).To(BeEmpty())
 			}, timeout, interval).Should(Succeed())
 			// Example: If you expect a certain status condition after reconciliation, verify it here.
 		})

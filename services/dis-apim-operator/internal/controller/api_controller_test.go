@@ -19,6 +19,8 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
+
 	apimv1alpha1 "github.com/Altinn/altinn-platform/services/dis-apim-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2"
@@ -27,12 +29,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"time"
 )
 
 const (
 	timeout  = time.Second * 60
-	duration = time.Second * 10
 	interval = time.Millisecond * 250
 )
 
@@ -67,11 +67,6 @@ var _ = Describe("Api Controller", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
-
-			/*_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())*/
 
 			updatedApi := getUpdatedApi(ctx, typeNamespacedName)
 			Expect(updatedApi.Spec.DisplayName).To(Equal("test-api"))
@@ -120,21 +115,21 @@ var _ = Describe("Api Controller", func() {
 			}, timeout, interval).Should(Succeed(), "api should eventually be updated")
 			Expect(fakeApim.APIMVersionSets).To(HaveLen(1))
 			Eventually(func(g Gomega) {
-				g.Eventually(k8sClient.List(ctx, &apiVersionList)).Should(Succeed())
+				g.Expect(k8sClient.List(ctx, &apiVersionList)).To(Succeed())
 				g.Expect(apiVersionList.Items).To(HaveLen(2))
 			}, timeout, interval).Should(Succeed(), "apiVersion list should eventually have length 2")
 
 			By("deleting the api if it has been marked for deletion")
 			err := k8sClient.Get(ctx, typeNamespacedName, &updatedApi)
 			Expect(err).NotTo(HaveOccurred())
-			Eventually(k8sClient.Delete(ctx, &updatedApi)).Should(Succeed())
+			Eventually(k8sClient.Delete).WithArguments(ctx, &updatedApi).Should(Succeed())
 			Eventually(func(g Gomega) {
 				err := k8sClient.List(ctx, &apiVersionList)
 				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(apiVersionList.Items).To(HaveLen(0))
+				g.Expect(apiVersionList.Items).To(BeEmpty())
 			}, timeout, interval).Should(Succeed(), "list of apiVersions should have length 0")
 			Eventually(func(g Gomega) {
-				g.Expect(fakeApim.APIMVersionSets).To(HaveLen(0))
+				g.Expect(fakeApim.APIMVersionSets).To(BeEmpty())
 				err = k8sClient.Get(ctx, typeNamespacedName, &updatedApi)
 				g.Expect(errors.IsNotFound(err)).To(BeTrue())
 			}, timeout, interval).Should(Succeed(), "api should eventually be deleted")
@@ -148,22 +143,4 @@ func getUpdatedApi(ctx context.Context, typeNamespacedName types.NamespacedName)
 		g.Expect(k8sClient.Get(ctx, typeNamespacedName, &resource)).To(Succeed())
 	}, timeout, interval).Should(Succeed())
 	return resource
-}
-
-func getUpdatedApiVersion(ctx context.Context, typeNamespacedName types.NamespacedName) apimv1alpha1.ApiVersion {
-	resource := apimv1alpha1.ApiVersion{}
-	Eventually(func(g Gomega) {
-		err := k8sClient.Get(ctx, typeNamespacedName, &resource)
-		g.Expect(err).NotTo(HaveOccurred())
-	}, timeout, interval).Should(Succeed())
-	return resource
-}
-
-func getUpdatedApiVersionList(ctx context.Context) apimv1alpha1.ApiVersionList {
-	var apiVersions apimv1alpha1.ApiVersionList
-	Eventually(func(g Gomega) {
-		err := k8sClient.List(ctx, &apiVersions)
-		g.Expect(err).NotTo(HaveOccurred())
-	}, timeout, interval).Should(Succeed())
-	return apiVersions
 }
