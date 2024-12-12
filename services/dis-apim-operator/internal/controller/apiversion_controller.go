@@ -114,10 +114,12 @@ func (r *ApiVersionReconciler) deleteApiVersion(ctx context.Context, apiVersion 
 		logger.Error(err, "Failed to delete APIVersion")
 		return ctrl.Result{}, err
 	}
-	_, err = r.apimClient.DeleteApiPolicy(ctx, apiVersion.GetApiVersionAzureFullName(), "*", nil)
-	if azure.IgnoreNotFound(err) != nil {
-		logger.Error(err, "Failed to delete policy")
-		return ctrl.Result{}, err
+	if apiVersion.Spec.Policies != nil {
+		_, err = r.apimClient.DeleteApiPolicy(ctx, apiVersion.GetApiVersionAzureFullName(), "*", nil)
+		if azure.IgnoreNotFound(err) != nil {
+			logger.Error(err, "Failed to delete policy")
+			return ctrl.Result{}, err
+		}
 	}
 	controllerutil.RemoveFinalizer(&apiVersion, API_VERSION_FINALIZER)
 	err = r.Update(ctx, &apiVersion)

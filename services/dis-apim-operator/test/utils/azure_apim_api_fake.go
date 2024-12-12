@@ -10,9 +10,15 @@ import (
 )
 
 type AzureApimFake struct {
-	APIMVersionSets map[string]apim.APIVersionSetContract
-	APIMVersions    map[string]apim.APIContract
-	Backends        map[string]apim.BackendContract
+	APIMVersionSets         map[string]apim.APIVersionSetContract
+	APIMVersions            map[string]apim.APIContract
+	Backends                map[string]apim.BackendContract
+	FakeApiServer           apimfake.APIServer
+	FakeApiVersionServer    apimfake.APIVersionSetServer
+	FakeBackendServer       apimfake.BackendServer
+	createUpdateServerError bool
+	getServerError          bool
+	deleteServerError       bool
 }
 
 type SimpleApimApiVersionSet struct {
@@ -33,16 +39,23 @@ type SimpleApimBackend struct {
 }
 
 // NewFakeAPIMClient creates a new APIMClient
-func NewFakeAPIMClientStruct() *AzureApimFake {
-	return &AzureApimFake{
-		APIMVersionSets: map[string]apim.APIVersionSetContract{},
-		APIMVersions:    map[string]apim.APIContract{},
-		Backends:        map[string]apim.BackendContract{},
+func NewFakeAPIMClientStruct() AzureApimFake {
+	aaf := AzureApimFake{
+		APIMVersionSets:         map[string]apim.APIVersionSetContract{},
+		APIMVersions:            map[string]apim.APIContract{},
+		Backends:                map[string]apim.BackendContract{},
+		createUpdateServerError: false,
+		deleteServerError:       false,
+		getServerError:          false,
 	}
+	aaf.FakeApiServer = aaf.GetFakeApiServer()
+	aaf.FakeApiVersionServer = aaf.GetFakeApiVersionServer()
+	aaf.FakeBackendServer = aaf.GetFakeBackendServer()
+	return aaf
 }
 
-func (a *AzureApimFake) GetFakeBackendServer(createUpdateServerError bool, getServerError bool, deleteServerError bool) *apimfake.BackendServer {
-	fakeServer := &apimfake.BackendServer{
+func (a *AzureApimFake) GetFakeBackendServer() apimfake.BackendServer {
+	fakeServer := apimfake.BackendServer{
 		CreateOrUpdate: func(
 			ctx context.Context,
 			resourceGroupName string,
@@ -53,7 +66,7 @@ func (a *AzureApimFake) GetFakeBackendServer(createUpdateServerError bool, getSe
 		) (azfake.Responder[apim.BackendClientCreateOrUpdateResponse], azfake.ErrorResponder) {
 			responder := azfake.Responder[apim.BackendClientCreateOrUpdateResponse]{}
 			errResponder := azfake.ErrorResponder{}
-			if createUpdateServerError {
+			if a.createUpdateServerError {
 				errResponder.SetResponseError(http.StatusInternalServerError, "Some fake internal server error occurred")
 			} else {
 				response := apim.BackendClientCreateOrUpdateResponse{
@@ -79,7 +92,7 @@ func (a *AzureApimFake) GetFakeBackendServer(createUpdateServerError bool, getSe
 		) (azfake.Responder[apim.BackendClientDeleteResponse], azfake.ErrorResponder) {
 			responder := azfake.Responder[apim.BackendClientDeleteResponse]{}
 			errResponder := azfake.ErrorResponder{}
-			if deleteServerError {
+			if a.deleteServerError {
 				errResponder.SetResponseError(http.StatusInternalServerError, "Some fake internal server error occurred")
 			} else {
 				response := apim.BackendClientDeleteResponse{}
@@ -101,7 +114,7 @@ func (a *AzureApimFake) GetFakeBackendServer(createUpdateServerError bool, getSe
 		) (azfake.Responder[apim.BackendClientGetResponse], azfake.ErrorResponder) {
 			responder := azfake.Responder[apim.BackendClientGetResponse]{}
 			errResponder := azfake.ErrorResponder{}
-			if getServerError {
+			if a.getServerError {
 				errResponder.SetResponseError(http.StatusInternalServerError, "Some fake internal server error occurred")
 			} else {
 				response := apim.BackendClientGetResponse{}
@@ -123,12 +136,12 @@ func (a *AzureApimFake) GetFakeBackendServer(createUpdateServerError bool, getSe
 	return fakeServer
 }
 
-func (a *AzureApimFake) GetFakeApiServer(createUpdateServerError bool, getServerError bool, deleteServerError bool) *apimfake.APIServer {
-	fakeServer := &apimfake.APIServer{
+func (a *AzureApimFake) GetFakeApiServer() apimfake.APIServer {
+	fakeServer := apimfake.APIServer{
 		BeginCreateOrUpdate: func(ctx context.Context, resourceGroupName string, serviceName string, apiID string, parameters apim.APICreateOrUpdateParameter, options *apim.APIClientBeginCreateOrUpdateOptions) (azfake.PollerResponder[apim.APIClientCreateOrUpdateResponse], azfake.ErrorResponder) {
 			responder := azfake.PollerResponder[apim.APIClientCreateOrUpdateResponse]{}
 			errResponder := azfake.ErrorResponder{}
-			if createUpdateServerError {
+			if a.createUpdateServerError {
 				errResponder.SetResponseError(http.StatusInternalServerError, "Some fake internal server error occurred")
 			} else {
 				response := apim.APIClientCreateOrUpdateResponse{
@@ -169,7 +182,7 @@ func (a *AzureApimFake) GetFakeApiServer(createUpdateServerError bool, getServer
 		Delete: func(ctx context.Context, resourceGroupName string, serviceName string, apiID string, ifMatch string, options *apim.APIClientDeleteOptions) (azfake.Responder[apim.APIClientDeleteResponse], azfake.ErrorResponder) {
 			responder := azfake.Responder[apim.APIClientDeleteResponse]{}
 			errResponder := azfake.ErrorResponder{}
-			if deleteServerError {
+			if a.deleteServerError {
 				errResponder.SetResponseError(http.StatusInternalServerError, "Some fake internal server error occurred")
 			} else {
 				response := apim.APIClientDeleteResponse{}
@@ -185,7 +198,7 @@ func (a *AzureApimFake) GetFakeApiServer(createUpdateServerError bool, getServer
 		Get: func(ctx context.Context, resourceGroupName string, serviceName string, apiID string, options *apim.APIClientGetOptions) (azfake.Responder[apim.APIClientGetResponse], azfake.ErrorResponder) {
 			responder := azfake.Responder[apim.APIClientGetResponse]{}
 			errResponder := azfake.ErrorResponder{}
-			if getServerError {
+			if a.getServerError {
 				errResponder.SetResponseError(http.StatusInternalServerError, "Some fake internal server error occurred")
 			} else {
 				response := apim.APIClientGetResponse{}
@@ -207,12 +220,12 @@ func (a *AzureApimFake) GetFakeApiServer(createUpdateServerError bool, getServer
 	return fakeServer
 }
 
-func (a *AzureApimFake) GetFakeApiVersionServer(createUpdateServerError bool, getServerError bool, deleteServerError bool) *apimfake.APIVersionSetServer {
-	fakeServer := &apimfake.APIVersionSetServer{
+func (a *AzureApimFake) GetFakeApiVersionServer() apimfake.APIVersionSetServer {
+	fakeServer := apimfake.APIVersionSetServer{
 		CreateOrUpdate: func(ctx context.Context, resourceGroupName string, serviceName string, apiVersionSetID string, parameters apim.APIVersionSetContract, options *apim.APIVersionSetClientCreateOrUpdateOptions) (azfake.Responder[apim.APIVersionSetClientCreateOrUpdateResponse], azfake.ErrorResponder) {
 			responder := azfake.Responder[apim.APIVersionSetClientCreateOrUpdateResponse]{}
 			errResponder := azfake.ErrorResponder{}
-			if createUpdateServerError {
+			if a.createUpdateServerError {
 				errResponder.SetResponseError(http.StatusInternalServerError, "Some fake internal server error occurred")
 			} else {
 				response := apim.APIVersionSetClientCreateOrUpdateResponse{
@@ -231,7 +244,7 @@ func (a *AzureApimFake) GetFakeApiVersionServer(createUpdateServerError bool, ge
 		Delete: func(ctx context.Context, resourceGroupName string, serviceName string, apiVersionSetID string, ifMatch string, options *apim.APIVersionSetClientDeleteOptions) (azfake.Responder[apim.APIVersionSetClientDeleteResponse], azfake.ErrorResponder) {
 			responder := azfake.Responder[apim.APIVersionSetClientDeleteResponse]{}
 			errResponder := azfake.ErrorResponder{}
-			if deleteServerError {
+			if a.deleteServerError {
 				errResponder.SetResponseError(http.StatusInternalServerError, "Some fake internal server error occurred")
 			} else {
 				response := apim.APIVersionSetClientDeleteResponse{}
@@ -247,7 +260,7 @@ func (a *AzureApimFake) GetFakeApiVersionServer(createUpdateServerError bool, ge
 		Get: func(ctx context.Context, resourceGroupName string, serviceName string, apiVersionSetID string, options *apim.APIVersionSetClientGetOptions) (azfake.Responder[apim.APIVersionSetClientGetResponse], azfake.ErrorResponder) {
 			responder := azfake.Responder[apim.APIVersionSetClientGetResponse]{}
 			errResponder := azfake.ErrorResponder{}
-			if getServerError {
+			if a.getServerError {
 				errResponder.SetResponseError(http.StatusInternalServerError, "Some fake internal server error occurred")
 			} else {
 				response := apim.APIVersionSetClientGetResponse{}
@@ -266,8 +279,4 @@ func (a *AzureApimFake) GetFakeApiVersionServer(createUpdateServerError bool, ge
 		Update:                nil,
 	}
 	return fakeServer
-}
-
-func (a *AzureApimFake) genericFakeResponder(returnServerError bool) {
-
 }

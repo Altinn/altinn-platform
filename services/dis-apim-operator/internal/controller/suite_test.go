@@ -19,8 +19,16 @@ package controller
 import (
 	"context"
 	"fmt"
+	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/azure"
+	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/config"
+	testutils "github.com/Altinn/altinn-platform/services/dis-apim-operator/test/utils"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	apimfake "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2/fake"
 	"path/filepath"
 	"runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -42,9 +50,11 @@ import (
 
 var cfg *rest.Config
 var k8sClient client.Client
+var k8sManager manager.Manager
 var testEnv *envtest.Environment
 var ctx context.Context
 var cancel context.CancelFunc
+var fakeApim testutils.AzureApimFake
 
 func TestControllers(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -80,12 +90,64 @@ var _ = BeforeSuite(func() {
 	err = apimv1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
+	fakeApim = testutils.NewFakeAPIMClientStruct()
 	// +kubebuilder:scaffold:scheme
-
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
+	k8sManager, err = ctrl.NewManager(cfg, ctrl.Options{
+		Scheme: scheme.Scheme,
+	})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(k8sManager).NotTo(BeNil())
 
+	serverFactoryTransport := apimfake.NewServerFactoryTransport(&apimfake.ServerFactory{
+		APIVersionSetServer: fakeApim.FakeApiVersionServer,
+		APIServer:           fakeApim.FakeApiServer,
+		BackendServer:       fakeApim.FakeBackendServer,
+	})
+
+	apimClientConfig := &azure.ApimClientConfig{
+		AzureConfig: config.AzureConfig{
+			SubscriptionId:  "fake-subscription-id",
+			ResourceGroup:   "fake-resource-group",
+			ApimServiceName: "fake-apim-service",
+		},
+		FactoryOptions: &arm.ClientOptions{
+			ClientOptions: azcore.ClientOptions{
+				Transport: serverFactoryTransport,
+			},
+		},
+	}
+	err = (&ApiVersionReconciler{
+		Client:           k8sManager.GetClient(),
+		Scheme:           k8sManager.GetScheme(),
+		NewClient:        testutils.NewFakeAPIMClient,
+		ApimClientConfig: apimClientConfig,
+	}).SetupWithManager(k8sManager)
+	Expect(err).ToNot(HaveOccurred())
+
+	err = (&BackendReconciler{
+		Client:           k8sManager.GetClient(),
+		Scheme:           k8sManager.GetScheme(),
+		NewClient:        testutils.NewFakeAPIMClient,
+		ApimClientConfig: apimClientConfig,
+	}).SetupWithManager(k8sManager)
+	Expect(err).ToNot(HaveOccurred())
+
+	err = (&ApiReconciler{
+		Client:           k8sManager.GetClient(),
+		Scheme:           k8sManager.GetScheme(),
+		NewClient:        testutils.NewFakeAPIMClient,
+		ApimClientConfig: apimClientConfig,
+	}).SetupWithManager(k8sManager)
+	Expect(err).ToNot(HaveOccurred())
+
+	go func() {
+		defer GinkgoRecover()
+		err = k8sManager.Start(ctx)
+		Expect(err).ToNot(HaveOccurred(), "failed to run manager")
+	}()
 })
 
 var _ = AfterSuite(func() {
