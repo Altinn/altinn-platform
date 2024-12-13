@@ -55,5 +55,5 @@ resource "azuread_application_federated_identity_credential" "prometheus" {
 resource "azurerm_role_assignment" "monitoring_metrics_publisher" {
   scope                = azurerm_monitor_workspace.k6tests_amw.default_data_collection_endpoint_id
   role_definition_name = "Monitoring Metrics Publisher"
-  principal_id         = azuread_service_principal.prometheus.id
+  principal_id         = azuread_service_principal.prometheus.object_id
 }
