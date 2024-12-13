@@ -8,6 +8,11 @@ resource "helm_release" "prometheus_operator_crds" {
   version    = "16.0.1"
 }
 
+data "azurerm_monitor_data_collection_rule" "prometheus" {
+  name                = "k6tests-amw"
+  resource_group_name = "MA_k6tests-amw_norwayeast_managed"
+}
+
 resource "helm_release" "kube_prometheus_stack" {
   depends_on = [
     helm_release.prometheus_operator_crds,
@@ -29,7 +34,7 @@ resource "helm_release" "kube_prometheus_stack" {
         cluster_name          = "${azurerm_kubernetes_cluster.k6tests.name}",
         client_id             = "${azuread_application.prometheus.client_id}",
         tenant_id             = "${data.azurerm_client_config.current.tenant_id}",
-        remote_write_endpoint = "${azurerm_monitor_workspace.k6tests_amw.default_data_collection_rule_id}"
+        remote_write_endpoint = "https://k6tests-amw-0vej.norwayeast-1.metrics.ingest.monitor.azure.com/dataCollectionRules/dcr-81e9cf1b38fb4648b047399c5593ebda/streams/Microsoft-PrometheusMetrics/api/v1/write?api-version=2023-04-24"
       }
     )}"
   ]
@@ -53,7 +58,7 @@ resource "azuread_application_federated_identity_credential" "prometheus" {
 }
 
 resource "azurerm_role_assignment" "monitoring_metrics_publisher" {
-  scope                = azurerm_monitor_workspace.k6tests_amw.default_data_collection_endpoint_id
+  scope                = data.azurerm_monitor_data_collection_rule.prometheus.id
   role_definition_name = "Monitoring Metrics Publisher"
   principal_id         = azuread_service_principal.prometheus.object_id
 }
