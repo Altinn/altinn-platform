@@ -15,6 +15,7 @@ prometheus:
         azure.workload.identity/use: "true"
     externalLabels:
       cluster: "${cluster_name}"
+    enableRemoteWriteReceiver: true
     remoteWrite:
       - url: "${remote_write_endpoint}"
         azureAd:
