@@ -1,28 +1,25 @@
-name: Test build gh-runner
+name: Release azure devops agent
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - .github/workflows/gh-runner-pr.yml
-      - infrastructure/images/gh-runner/**
+  push:
+    tags:
+      - "azdevops-agent-*"
 
 permissions:
   contents: read
-  packages: read
+  packages: write
 
 jobs:
-  build:
-    name: Test build
+  release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Get version from tags
-        id: version
+      - name: Get variables from tags
+        id: vars
         run: |
-          tag=${GITHUB_REF/refs\/tags\//}
+          tag=${GITHUB_REF/refs\/tags\/azdevops-agent-/}
           echo "version=${tag%-demo}" >> $GITHUB_OUTPUT
+          echo "reponame=${GITHUB_REPOSITORY,,}" >>${GITHUB_OUTPUT}
       - name: Get Git commit timestamps
         run: echo "TIMESTAMP=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
       - name: Set up QEMU
@@ -35,13 +32,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build
+      - name: Build and push
         id: docker_build
         uses: docker/build-push-action@v6
         with:
-          context: ./infrastructure/images/gh-runner
-          push: false
+          context: ./infrastructure/images/azdevops-agent
+          push: true
           platforms: linux/amd64,linux/arm64
-          tags: ${{ github.repository }}/gh-runner:test
+          tags: ghcr.io/${{ steps.vars.outputs.reponame }}/azdevops-agent:v${{ steps.vars.outputs.version }}
         env:
           SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}

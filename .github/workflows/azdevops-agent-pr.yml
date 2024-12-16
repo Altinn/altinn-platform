@@ -1,12 +1,12 @@
-name: Test build gh-runner
+name: Test build azure devops agent
 
 on:
   pull_request:
     branches:
       - main
     paths:
-      - .github/workflows/gh-runner-pr.yml
-      - infrastructure/images/gh-runner/**
+      - .github/workflows/azdevops-agent-pr.yml
+      - infrastructure/images/azdevops-agent/**
 
 permissions:
   contents: read
@@ -39,9 +39,9 @@ jobs:
         id: docker_build
         uses: docker/build-push-action@v6
         with:
-          context: ./infrastructure/images/gh-runner
+          context: ./infrastructure/images/azdevops-agent
           push: false
           platforms: linux/amd64,linux/arm64
-          tags: ${{ github.repository }}/gh-runner:test
+          tags: ${{ github.repository }}/azdevops-agent:test
         env:
           SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
