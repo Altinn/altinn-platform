@@ -22,7 +22,7 @@ jobs:
         id: version
         run: |
           tag=${GITHUB_REF/refs\/tags\//}
-          echo "version=${tag%-demo}" >> $GITHUB_OUTPUT
+          echo "version=${tag%-demo}" >> "$GITHUB_OUTPUT"
       - name: Get Git commit timestamps
         run: echo "TIMESTAMP=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
       - name: Set up QEMU
@@ -42,6 +42,6 @@ jobs:
           context: ./infrastructure/images/azdevops-agent
           push: false
           platforms: linux/amd64,linux/arm64
-          tags: ${{ github.repository }}/azdevops-agent:test
+          tags: ${{ github.repository }}/azure-devops-agent:test
         env:
           SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}

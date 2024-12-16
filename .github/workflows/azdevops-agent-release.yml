@@ -18,8 +18,8 @@ jobs:
         id: vars
         run: |
           tag=${GITHUB_REF/refs\/tags\/azdevops-agent-/}
-          echo "version=${tag%-demo}" >> $GITHUB_OUTPUT
-          echo "reponame=${GITHUB_REPOSITORY,,}" >>${GITHUB_OUTPUT}
+          echo "version=${tag%-demo}" >> "$GITHUB_OUTPUT"
+          echo "reponame=${GITHUB_REPOSITORY,,}" >> "${GITHUB_OUTPUT}""
       - name: Get Git commit timestamps
         run: echo "TIMESTAMP=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
       - name: Set up QEMU
@@ -39,6 +39,6 @@ jobs:
           context: ./infrastructure/images/azdevops-agent
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ghcr.io/${{ steps.vars.outputs.reponame }}/azdevops-agent:v${{ steps.vars.outputs.version }}
+          tags: ghcr.io/${{ steps.vars.outputs.reponame }}/azure-devops-agent:v${{ steps.vars.outputs.version }}
         env:
           SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
