@@ -19,7 +19,7 @@ jobs:
         run: |
           tag=${GITHUB_REF/refs\/tags\/azdevops-agent-/}
           echo "version=${tag%-demo}" >> "$GITHUB_OUTPUT"
-          echo "reponame=${GITHUB_REPOSITORY,,}" >> "${GITHUB_OUTPUT}""
+          echo "reponame=${GITHUB_REPOSITORY,,}" >> "${GITHUB_OUTPUT}"
       - name: Get Git commit timestamps
         run: echo "TIMESTAMP=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
       - name: Set up QEMU

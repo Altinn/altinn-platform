@@ -84,7 +84,7 @@ print_header "3. Configuring Azure Pipelines agent..."
   --agent "${AZP_AGENT_NAME:-$(hostname)}" \
   --url "$AZP_URL" \
   --auth PAT \
-  --token $(cat "$AZP_TOKEN_FILE") \
+  --token "$(cat "$AZP_TOKEN_FILE")" \
   --pool "${AZP_POOL:-Default}" \
   --work "${AZP_WORK:-_work}" \
   --replace \
