@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - .github/workflows/azdevops-agent-pr.yml
-      - infrastructure/images/azdevops-agent/**
+      - infrastructure/images/azure-devops-agent/**
 
 permissions:
   contents: read
@@ -39,7 +39,7 @@ jobs:
         id: docker_build
         uses: docker/build-push-action@v6
         with:
-          context: ./infrastructure/images/azdevops-agent
+          context: ./infrastructure/images/azure-devops-agent
           push: false
           platforms: linux/amd64,linux/arm64
           tags: ${{ github.repository }}/azure-devops-agent:test
