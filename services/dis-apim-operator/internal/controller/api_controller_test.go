@@ -18,67 +18,129 @@ package controller
 
 import (
 	"context"
+	"fmt"
+	"time"
 
+	apimv1alpha1 "github.com/Altinn/altinn-platform/services/dis-apim-operator/api/v1alpha1"
+	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
+	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+)
 
-	apimv1alpha1 "github.com/Altinn/altinn-platform/services/dis-apim-operator/api/v1alpha1"
+const (
+	timeout  = time.Second * 60
+	interval = time.Millisecond * 250
 )
 
 var _ = Describe("Api Controller", func() {
+
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
+		const resourceNamespace = "default"
 
 		ctx := context.Background()
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: resourceNamespace,
 		}
-		api := &apimv1alpha1.Api{}
-
-		BeforeEach(func() {
-			By("creating the custom resource for the Kind Api")
-			err := k8sClient.Get(ctx, typeNamespacedName, api)
-			if err != nil && errors.IsNotFound(err) {
-				resource := &apimv1alpha1.Api{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
-					},
-					// TODO(user): Specify other spec details if needed.
-				}
-				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
-			}
-		})
-
-		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &apimv1alpha1.Api{}
-			err := k8sClient.Get(ctx, typeNamespacedName, resource)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Cleanup the specific resource instance Api")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
-		})
 		It("should successfully reconcile the resource", func() {
-			By("Reconciling the created resource")
-			controllerReconciler := &ApiReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+			resource := &apimv1alpha1.Api{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: resourceNamespace,
+				},
+				Spec: apimv1alpha1.ApiSpec{
+					DisplayName: "test-api",
+					Path:        "/test-api",
+					Versions: []apimv1alpha1.ApiVersionSubSpec{
+						{
+							Name:        utils.ToPointer("v1"),
+							Content:     utils.ToPointer(`{"openapi": "3.0.0","info": {"title": "Minimal API v1","version": "1.0.0"},""paths": {}}`),
+							DisplayName: "the default version",
+						},
+					},
+				},
 			}
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
+			updatedApi := getUpdatedApi(ctx, typeNamespacedName)
+			Expect(updatedApi.Spec.DisplayName).To(Equal("test-api"))
+			Eventually(fakeApim.APIMVersionSets).Should(HaveLen(1))
+			apimResourceName := resourceNamespace + "-" + resourceName
+			Expect(fakeApim.APIMVersionSets[apimResourceName].Properties.DisplayName).To(Equal(utils.ToPointer("test-api")))
+			Expect(fakeApim.APIMVersionSets[apimResourceName].Name).To(Equal(utils.ToPointer(fmt.Sprintf("%s-%s", resourceNamespace, resourceName))))
+			Expect(fakeApim.APIMVersionSets[apimResourceName].Properties).NotTo(BeNil())
+			Expect(fakeApim.APIMVersionSets[apimResourceName].Properties.DisplayName).To(Equal(utils.ToPointer("test-api")))
+			Expect(*fakeApim.APIMVersionSets[apimResourceName].Properties.VersioningScheme).To(Equal(apim.VersioningSchemeSegment))
+			Expect(fakeApim.APIMVersionSets[apimResourceName].Properties.VersionQueryName).To(BeNil())
+			var apiVersionList apimv1alpha1.ApiVersionList
+			Eventually(func(g Gomega) {
+				err := k8sClient.List(ctx, &apiVersionList)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(apiVersionList.Items).To(HaveLen(1))
+			}, timeout, interval).Should(Succeed(), "list of apiVersions should have length 1")
+			Expect(apiVersionList.Items[0].Spec.DisplayName).To(Equal("the default version"))
+			Expect(*apiVersionList.Items[0].Spec.Name).To(Equal("v1"))
+			Expect(*apiVersionList.Items[0].Spec.Content).To(Equal(`{"openapi": "3.0.0","info": {"title": "Minimal API v1","version": "1.0.0"},""paths": {}}`))
+
+			By("updating the openapi content in the apiversion if it has changed")
+			Eventually(func(g Gomega) {
+				updatedApi = getUpdatedApi(ctx, typeNamespacedName)
+				updatedApi.Spec.Versions[0].Content = utils.ToPointer(`{"openapi": "3.0.0","info": {"title": "Minimal API v1","version": "1.0.0"},""paths": {"test": "test"}}`)
+				g.Expect(k8sClient.Update(ctx, &updatedApi)).To(Succeed())
+			}, timeout, interval).Should(Succeed(), "apiVersion content should eventually be updated")
+
+			Eventually(func(g Gomega) {
+				g.Expect(fakeApim.APIMVersionSets).To(HaveLen(1))
+				g.Expect(k8sClient.List(ctx, &apiVersionList)).Should(Succeed())
+				g.Expect(apiVersionList.Items).To(HaveLen(1))
+				g.Expect(*apiVersionList.Items[0].Spec.Content).To(Equal(`{"openapi": "3.0.0","info": {"title": "Minimal API v1","version": "1.0.0"},""paths": {"test": "test"}}`))
+			}, timeout, interval).Should(Succeed(), "apiVersion content should eventually be updated")
+
+			By("adding a new apiVersion if it has been added to the custom resource")
+			Eventually(func(g Gomega) {
+				updatedApi = getUpdatedApi(ctx, typeNamespacedName)
+				updatedApi.Spec.Versions = append(updatedApi.Spec.Versions, apimv1alpha1.ApiVersionSubSpec{
+					Name:        utils.ToPointer("v2"),
+					Content:     utils.ToPointer(`{"openapi": "3.0.0","info": {"title": "Minimal API v2","version": "1.0.0"},""paths": {}}`),
+					DisplayName: "the second version",
+				})
+
+				g.Expect(k8sClient.Update(ctx, &updatedApi)).To(Succeed())
+			}, timeout, interval).Should(Succeed(), "api should eventually be updated")
+			Expect(fakeApim.APIMVersionSets).To(HaveLen(1))
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.List(ctx, &apiVersionList)).To(Succeed())
+				g.Expect(apiVersionList.Items).To(HaveLen(2))
+			}, timeout, interval).Should(Succeed(), "apiVersion list should eventually have length 2")
+
+			By("deleting the api if it has been marked for deletion")
+			err := k8sClient.Get(ctx, typeNamespacedName, &updatedApi)
 			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
+			Eventually(k8sClient.Delete).WithArguments(ctx, &updatedApi).Should(Succeed())
+			Eventually(func(g Gomega) {
+				err := k8sClient.List(ctx, &apiVersionList)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(apiVersionList.Items).To(BeEmpty())
+			}, timeout, interval).Should(Succeed(), "list of apiVersions should have length 0")
+			Eventually(func(g Gomega) {
+				g.Expect(fakeApim.APIMVersionSets).To(BeEmpty())
+				err = k8sClient.Get(ctx, typeNamespacedName, &updatedApi)
+				g.Expect(errors.IsNotFound(err)).To(BeTrue())
+			}, timeout, interval).Should(Succeed(), "api should eventually be deleted")
 		})
 	})
 })
+
+func getUpdatedApi(ctx context.Context, typeNamespacedName types.NamespacedName) apimv1alpha1.Api {
+	resource := apimv1alpha1.Api{}
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, typeNamespacedName, &resource)).To(Succeed())
+	}, timeout, interval).Should(Succeed())
+	return resource
+}

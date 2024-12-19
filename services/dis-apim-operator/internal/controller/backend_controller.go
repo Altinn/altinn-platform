@@ -32,7 +32,7 @@ import (
 	apimv1alpha1 "github.com/Altinn/altinn-platform/services/dis-apim-operator/api/v1alpha1"
 )
 
-const BACKEND_FINALIZER = "finalizers.apim.dis.altinn.cloud/backend"
+const BACKEND_FINALIZER = "backend.apim.dis.altinn.cloud/finalzer"
 
 type newApimClient func(config *azure.ApimClientConfig) (*azure.APIMClient, error)
 
