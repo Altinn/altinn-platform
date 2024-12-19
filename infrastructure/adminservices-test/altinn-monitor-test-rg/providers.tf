@@ -20,3 +20,9 @@ provider "azurerm" {
     "Microsoft.KubernetesConfiguration"
   ]
 }
+
+# Dialogporten
+provider "azurerm" {
+  alias = "dp"
+  subscription_id = "8a353de8-d81d-468d-a40d-f3574b6bb3f4"
+}
