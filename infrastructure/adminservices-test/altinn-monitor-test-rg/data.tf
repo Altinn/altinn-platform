@@ -9,5 +9,5 @@ data "azurerm_resource_group" "rg_dp_test" {
 data "azurerm_log_analytics_workspace" "dp_law_test" {
   name                = "dp-be-test-insightsWorkspace"
   resource_group_name = data.azurerm_resource_group.rg_dp_test.name
-  provider = azurerm.dp
+  provider            = azurerm.dp
 }
