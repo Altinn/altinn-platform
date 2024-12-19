@@ -26,5 +26,9 @@ provider "azurerm" {
   alias = "dp"
   subscription_id = "8a353de8-d81d-468d-a40d-f3574b6bb3f4"
   features {}
-  skip_provider_registration = true
+  resource_providers_to_register = [
+    "Microsoft.Monitor",
+    "Microsoft.AlertsManagement",
+    "Microsoft.Dashboard"
+  ]
 }
