@@ -30,7 +30,7 @@ products:
   - name: Dialogporten
     slug: DDP # Product DigDir Dialogporten
     github:
-      owner: digdir
+      owner: altinn
       repositories:
         - dialogporten
         - dialogporten-frontend
