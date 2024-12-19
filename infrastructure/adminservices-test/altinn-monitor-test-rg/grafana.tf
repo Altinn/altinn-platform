@@ -102,7 +102,7 @@ resource "azurerm_role_assignment" "log_analytics_reader" {
 }
 
 # Dialogporten
-resource "azurerm_role_assignment" "log_analytics_reader" {
+resource "azurerm_role_assignment" "log_analytics_reader_dp_test" {
   principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
   scope                            = data.azurerm_log_analytics_workspace.dp_law_test.id
   role_definition_name             = "Log Analytics Reader"
