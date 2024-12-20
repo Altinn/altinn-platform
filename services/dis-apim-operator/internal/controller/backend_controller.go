@@ -78,12 +78,14 @@ func (r *BackendReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return ctrl.Result{}, err
 		}
 	}
-	c, err := r.NewClient(r.ApimClientConfig)
-	if err != nil {
-		logger.Error(err, "Failed to create APIM client")
-		return ctrl.Result{}, err
+	if r.apimClient == nil {
+		c, err := r.NewClient(r.ApimClientConfig)
+		if err != nil {
+			logger.Error(err, "Failed to create APIM client")
+			return ctrl.Result{}, err
+		}
+		r.apimClient = c
 	}
-	r.apimClient = c
 	if backend.DeletionTimestamp != nil {
 		return ctrl.Result{}, r.handleDeletion(ctx, &backend)
 	}

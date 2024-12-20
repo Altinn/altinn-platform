@@ -80,16 +80,18 @@ func (r *ApiVersionReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			return ctrl.Result{}, err
 		}
 	}
-	c, err := r.NewClient(r.ApimClientConfig)
-	if err != nil {
-		logger.Error(err, "Failed to create new client")
-		return ctrl.Result{}, err
+	if r.apimClient == nil {
+		c, err := r.NewClient(r.ApimClientConfig)
+		if err != nil {
+			logger.Error(err, "Failed to create new client")
+			return ctrl.Result{}, err
+		}
+		r.apimClient = c
 	}
-	r.apimClient = c
 	if !apiVersion.DeletionTimestamp.IsZero() {
 		return r.deleteApiVersion(ctx, apiVersion)
 	}
-	_, err = r.apimClient.GetApi(ctx, apiVersion.GetApiVersionAzureFullName(), nil)
+	_, err := r.apimClient.GetApi(ctx, apiVersion.GetApiVersionAzureFullName(), nil)
 	if azure.IgnoreNotFound(err) != nil {
 		logger.Error(err, "Failed to get API")
 		return ctrl.Result{}, err
@@ -142,7 +144,7 @@ func (r *ApiVersionReconciler) handleApiVersionUpdate(ctx context.Context, apiVe
 		_, policyErr := r.apimClient.GetApiPolicy(ctx, apiVersion.GetApiVersionAzureFullName(), nil)
 		lastPolicySha, shaErr := utils.Sha256FromContent(apiVersion.Spec.Policies.PolicyContent)
 		if shaErr != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to get policy sha: %w", err)
+			return ctrl.Result{}, fmt.Errorf("failed to get policy sha: %w", shaErr)
 		}
 		if apiVersion.Spec.Policies != nil && apiVersion.Status.LastAppliedPolicySha != lastPolicySha || azure.IsNotFoundError(policyErr) {
 			if err := r.createUpdatePolicy(ctx, apiVersion); err != nil {
@@ -229,7 +231,7 @@ func (r *ApiVersionReconciler) createUpdatePolicy(ctx context.Context, apiVersio
 	if policy.PolicyContent == nil {
 		return fmt.Errorf("policy content is nil")
 	}
-	policyContent, err := r.runPolicyTemplating(policy.PolicyValues, *policy.PolicyContent, apiVersion.Namespace)
+	policyContent, err := r.runPolicyTemplating(ctx, policy.PolicyValues, *policy.PolicyContent, apiVersion.Namespace)
 	if err != nil {
 		return fmt.Errorf("failed to run policy templating: %w", err)
 	}
@@ -264,7 +266,7 @@ func (r *ApiVersionReconciler) createUpdatePolicy(ctx context.Context, apiVersio
 	return nil
 }
 
-func (r *ApiVersionReconciler) runPolicyTemplating(values []apimv1alpha1.PolicyValue, policyContent string, apiVersionNamespace string) (string, error) {
+func (r *ApiVersionReconciler) runPolicyTemplating(ctx context.Context, values []apimv1alpha1.PolicyValue, policyContent string, apiVersionNamespace string) (string, error) {
 	data := make(map[string]string)
 	for _, v := range values {
 		if v.IdFromBackend != nil {
@@ -273,7 +275,7 @@ func (r *ApiVersionReconciler) runPolicyTemplating(values []apimv1alpha1.PolicyV
 				namespace = *v.IdFromBackend.Namespace
 			}
 			var backend apimv1alpha1.Backend
-			err := r.Get(context.Background(), client.ObjectKey{Name: v.IdFromBackend.Name, Namespace: namespace}, &backend)
+			err := r.Get(ctx, client.ObjectKey{Name: v.IdFromBackend.Name, Namespace: namespace}, &backend)
 			if err != nil {
 				return "", fmt.Errorf("failed to get backend: %w", err)
 			}

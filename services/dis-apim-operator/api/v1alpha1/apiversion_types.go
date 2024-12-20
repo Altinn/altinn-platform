@@ -35,14 +35,14 @@ type ApiVersionSpec struct {
 
 	// ApiVersionSetId - The identifier of the API Version Set this version is a part of.
 	// +kubebuilder:validation:Required
-	ApiVersionSetId string `json:"apiVersionSetId,omitempty"`
+	ApiVersionSetId string `json:"apiVersionSetId"`
 	// ApiVersionScheme - The scheme of the API version. Default value is "Segment".
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default:=Segment
 	ApiVersionScheme APIVersionScheme `json:"apiVersionScheme,omitempty"`
 	// Path - API prefix. The value is combined with the API version to form the URL of the API endpoint.
 	// +kubebuilder:validation:Required
-	Path string `json:"path,omitempty"`
+	Path string `json:"path"`
 	// ApiType - Type of API.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default:="http"
@@ -65,7 +65,7 @@ type ApiVersionSubSpec struct {
 	Name *string `json:"name,omitempty"`
 	// DisplayName - The display name of the API Version. This name is used by the developer portal as the API Version name.
 	// +kubebuilder:validation:Required
-	DisplayName string `json:"displayName,omitempty"`
+	DisplayName string `json:"displayName"`
 	// Description - Description of the API Version. May include its purpose, where to get more information, and other relevant information.
 	// +kubebuilder:validation:Optional
 	Description string `json:"description,omitempty"`
@@ -81,7 +81,7 @@ type ApiVersionSubSpec struct {
 	ContentFormat *ContentFormat `json:"contentFormat,omitempty"`
 	// Content - The contents of the API. The value is a string containing the content of the API.
 	// +kubebuilder:validation:Required
-	Content *string `json:"content,omitempty"`
+	Content *string `json:"content"`
 	// SubscriptionRquired - Indicates if subscription is required to access the API. Default value is true.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default:=true
@@ -202,23 +202,7 @@ func (av *ApiVersion) GetApiVersionAzureFullName() string {
 }
 
 func (a *ApiVersion) RequireUpdate(new ApiVersion) bool {
-	return a.Spec.Path != new.Spec.Path ||
-		a.Spec.ApiVersionScheme != new.Spec.ApiVersionScheme ||
-		!pointerValueEqual(a.Spec.ApiType, new.Spec.ApiType) ||
-		!pointerValueEqual(a.Spec.Contact, new.Spec.Contact) ||
-		!pointerValueEqual(a.Spec.ApiVersionSubSpec.Name, new.Spec.ApiVersionSubSpec.Name) ||
-		a.Spec.ApiVersionSubSpec.DisplayName != new.Spec.ApiVersionSubSpec.DisplayName ||
-		a.Spec.ApiVersionSubSpec.Description != new.Spec.ApiVersionSubSpec.Description ||
-		!pointerValueEqual(a.Spec.ApiVersionSubSpec.ServiceUrl, new.Spec.ApiVersionSubSpec.ServiceUrl) ||
-		!reflect.DeepEqual(a.Spec.ApiVersionSubSpec.Products, new.Spec.ApiVersionSubSpec.Products) ||
-		!pointerValueEqual(a.Spec.ApiVersionSubSpec.ContentFormat, new.Spec.ApiVersionSubSpec.ContentFormat) ||
-		!pointerValueEqual(a.Spec.ApiVersionSubSpec.Content, new.Spec.ApiVersionSubSpec.Content) ||
-		!pointerValueEqual(a.Spec.ApiVersionSubSpec.SubscriptionRequired, new.Spec.ApiVersionSubSpec.SubscriptionRequired) ||
-		!reflect.DeepEqual(a.Spec.ApiVersionSubSpec.Protocols, new.Spec.ApiVersionSubSpec.Protocols) ||
-		!pointerValueEqual(a.Spec.ApiVersionSubSpec.IsCurrent, new.Spec.ApiVersionSubSpec.IsCurrent) ||
-		(a.Spec.ApiVersionSubSpec.Policies == nil && new.Spec.ApiVersionSubSpec.Policies != nil) || (a.Spec.ApiVersionSubSpec.Policies != nil && new.Spec.ApiVersionSubSpec.Policies == nil) ||
-		!pointerValueEqual(a.Spec.ApiVersionSubSpec.Policies.PolicyContent, new.Spec.ApiVersionSubSpec.Policies.PolicyContent) ||
-		!pointerValueEqual(a.Spec.ApiVersionSubSpec.Policies.PolicyFormat, new.Spec.ApiVersionSubSpec.Policies.PolicyFormat)
+	return !a.Matches(new)
 }
 
 func (a *ApiVersion) Matches(new ApiVersion) bool {

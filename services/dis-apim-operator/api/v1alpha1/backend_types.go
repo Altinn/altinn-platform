@@ -28,13 +28,13 @@ import (
 type BackendSpec struct {
 	// Title - Title of the Backend. May include its purpose, where to get more information, and other relevant information.
 	// +kubebuilder:validation:Required
-	Title string `json:"title,omitempty"`
+	Title string `json:"title"`
 	// Description - Description of the Backend. May include its purpose, where to get more information, and other relevant information.
 	// +kubebuilder:validation:Optional
 	Description *string `json:"description,omitempty"`
 	// Url - URL of the Backend.
 	// +kubebuilder:validation:Required
-	Url string `json:"url,omitempty"`
+	Url string `json:"url"`
 	// ValidateCertificateChain - Whether to validate the certificate chain when using the backend.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default:=true
