@@ -58,5 +58,15 @@ var _ = Describe("Utils", func() {
 			_, err := getContentUrl(context.Background(), server.URL)
 			Expect(err).To(HaveOccurred())
 		})
+		It("should return an error for non-200 status codes", func() {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+			}))
+			defer server.Close()
+
+			_, err := getContentUrl(context.Background(), server.URL)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("unexpected status code 404"))
+		})
 	})
 })
