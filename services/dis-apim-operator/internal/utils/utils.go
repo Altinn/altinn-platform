@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -21,8 +22,12 @@ func isUrl(s string) bool {
 	return err == nil
 }
 
-func getContentUrl(url string) (*http.Response, error) {
-	resp, err := httpClient.Get(url)
+func getContentUrl(ctx context.Context, url string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

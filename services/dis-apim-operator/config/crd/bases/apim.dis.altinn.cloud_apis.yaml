@@ -101,6 +101,7 @@ spec:
                     content:
                       description: Content - The contents of the API. The value is
                         a string containing the content of the API.
+                      minLength: 1
                       type: string
                     contentFormat:
                       default: openapi+json
@@ -116,6 +117,7 @@ spec:
                       description: DisplayName - The display name of the API Version.
                         This name is used by the developer portal as the API Version
                         name.
+                      minLength: 1
                       type: string
                     isCurrent:
                       default: true
@@ -178,6 +180,12 @@ spec:
                             required:
                             - name
                             type: object
+                            x-kubernetes-validations:
+                            - message: Either value or idFromBackend must be set,
+                                but not both
+                              rule: '!has(self.value) || !has(self.idFromBackend)'
+                            - message: Either value or idFromBackend must be set
+                              rule: has(self.value) || has(self.idFromBackend)
                           type: array
                       required:
                       - policyContent
@@ -243,14 +251,14 @@ spec:
                       description: LastAppliedSpecSha - The sha256 of the last applied
                         spec.
                       type: string
-                    pollerToken:
-                      description: ResumeToken - The token used to track long-running
-                        operations.
-                      type: string
                     provisioningState:
                       description: 'ProvisioningState - The provisioning state of
                         the API. Possible values are: Creating, Succeeded, Failed,
                         Updating, Deleting, and Deleted.'
+                      type: string
+                    resumeToken:
+                      description: ResumeToken - The token used to track long-running
+                        operations.
                       type: string
                   type: object
                 description: VersionStates - A list of API Version deployed in the

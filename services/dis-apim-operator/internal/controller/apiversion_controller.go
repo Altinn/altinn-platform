@@ -133,7 +133,7 @@ func (r *ApiVersionReconciler) deleteApiVersion(ctx context.Context, apiVersion 
 }
 
 func (r *ApiVersionReconciler) handleApiVersionUpdate(ctx context.Context, apiVersion apimv1alpha1.ApiVersion) (ctrl.Result, error) {
-	latestSha, err := utils.Sha256FromContent(apiVersion.Spec.Content)
+	latestSha, err := utils.Sha256FromContent(ctx, apiVersion.Spec.Content)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get api spec sha: %w", err)
 	}
@@ -142,7 +142,7 @@ func (r *ApiVersionReconciler) handleApiVersionUpdate(ctx context.Context, apiVe
 	}
 	if apiVersion.Spec.Policies != nil {
 		_, policyErr := r.apimClient.GetApiPolicy(ctx, apiVersion.GetApiVersionAzureFullName(), nil)
-		lastPolicySha, shaErr := utils.Sha256FromContent(apiVersion.Spec.Policies.PolicyContent)
+		lastPolicySha, shaErr := utils.Sha256FromContent(ctx, apiVersion.Spec.Policies.PolicyContent)
 		if shaErr != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to get policy sha: %w", shaErr)
 		}
@@ -202,9 +202,9 @@ func (r *ApiVersionReconciler) createUpdateApimApi(ctx context.Context, apiVesri
 		logger.Info("Operation completed")
 		apiVesrion.Status.ResumeToken = ""
 		apiVesrion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateSucceeded
-		apiVesrion.Status.LastAppliedSpecSha, err = utils.Sha256FromContent(apiVesrion.Spec.Content)
+		apiVesrion.Status.LastAppliedSpecSha, err = utils.Sha256FromContent(ctx, apiVesrion.Spec.Content)
 		if apiVesrion.Spec.Policies != nil {
-			apiVesrion.Status.LastAppliedPolicyBase64, err = utils.Base64FromContent(apiVesrion.Spec.Policies.PolicyContent)
+			apiVesrion.Status.LastAppliedPolicyBase64, err = utils.Base64FromContent(ctx, apiVesrion.Spec.Policies.PolicyContent)
 		}
 		if err != nil {
 			logger.Error(err, "Failed to get spec sha")
@@ -252,7 +252,7 @@ func (r *ApiVersionReconciler) createUpdatePolicy(ctx context.Context, apiVersio
 		_ = r.Status().Update(ctx, &apiVersion)
 		return err
 	}
-	apiVersion.Status.LastAppliedPolicySha, err = utils.Sha256FromContent(apiVersion.Spec.Policies.PolicyContent)
+	apiVersion.Status.LastAppliedPolicySha, err = utils.Sha256FromContent(ctx, apiVersion.Spec.Policies.PolicyContent)
 	if err != nil {
 		logger.Error(err, "Failed to get policy sha")
 		return err

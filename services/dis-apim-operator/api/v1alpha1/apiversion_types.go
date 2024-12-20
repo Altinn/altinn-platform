@@ -42,6 +42,7 @@ type ApiVersionSpec struct {
 	ApiVersionScheme APIVersionScheme `json:"apiVersionScheme,omitempty"`
 	// Path - API prefix. The value is combined with the API version to form the URL of the API endpoint.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength:=1
 	Path string `json:"path"`
 	// ApiType - Type of API.
 	// +kubebuilder:validation:Optional
@@ -65,6 +66,7 @@ type ApiVersionSubSpec struct {
 	Name *string `json:"name,omitempty"`
 	// DisplayName - The display name of the API Version. This name is used by the developer portal as the API Version name.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength:=1
 	DisplayName string `json:"displayName"`
 	// Description - Description of the API Version. May include its purpose, where to get more information, and other relevant information.
 	// +kubebuilder:validation:Optional
@@ -81,6 +83,7 @@ type ApiVersionSubSpec struct {
 	ContentFormat *ContentFormat `json:"contentFormat,omitempty"`
 	// Content - The contents of the API. The value is a string containing the content of the API.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength:=1
 	Content *string `json:"content"`
 	// SubscriptionRquired - Indicates if subscription is required to access the API. Default value is true.
 	// +kubebuilder:validation:Optional
@@ -115,6 +118,8 @@ type ApiPolicySpec struct {
 }
 
 // PolicyValue defines the desired state of ApiVersion
+// +kubebuilder:validation:XValidation:rule="!has(self.value) || !has(self.idFromBackend)",message="Either value or idFromBackend must be set, but not both"
+// +kubebuilder:validation:XValidation:rule="has(self.value) || has(self.idFromBackend)",message="Either value or idFromBackend must be set"
 type PolicyValue struct {
 	// Name - The key of the policy value.
 	// +kubebuilder:validation:Required
@@ -144,7 +149,7 @@ type ApiVersionStatus struct {
 	ProvisioningState ProvisioningState `json:"provisioningState,omitempty"`
 	// ResumeToken - The token used to track long-running operations.
 	// +kubebuilder:validation:Optional
-	ResumeToken string `json:"pollerToken,omitempty"`
+	ResumeToken string `json:"resumeToken,omitempty"`
 	// LastAppliedSpecSha - The sha256 of the last applied spec.
 	// +kubebuilder:validation:Optional
 	LastAppliedSpecSha string `json:"lastAppliedSpecSha,omitempty"`

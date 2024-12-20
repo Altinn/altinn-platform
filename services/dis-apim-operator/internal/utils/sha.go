@@ -1,14 +1,15 @@
 package utils
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"io"
 )
 
 // Sha256FromUrlContent returns the SHA256 hash of the content at the given URL.
-func sha256FromUrlContent(url string) (string, error) {
-	resp, err := getContentUrl(url)
+func sha256FromUrlContent(ctx context.Context, url string) (string, error) {
+	resp, err := getContentUrl(ctx, url)
 	if err != nil {
 		return "", err
 	}
@@ -22,13 +23,13 @@ func sha256FromUrlContent(url string) (string, error) {
 }
 
 // Sha256FromContent returns the SHA256 hash of the given content. If the content is a URL, it will fetch the content and return the SHA256 hash.
-func Sha256FromContent(content *string) (string, error) {
+func Sha256FromContent(ctx context.Context, content *string) (string, error) {
 	if content == nil {
 		return "", nil
 	}
 	if isUrl(*content) {
 
-		return sha256FromUrlContent(*content)
+		return sha256FromUrlContent(ctx, *content)
 	}
 	h := sha256.New()
 	h.Write([]byte(*content))
