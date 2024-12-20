@@ -13,10 +13,10 @@ var _ = Describe("Sha256FromContent", func() {
 	Context("with a valid URL", func() {
 		It("should return the correct SHA256 hash", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				_, _ = fmt.Fprintln(w, "test content")
+				_, _ = fmt.Fprint(w, "test content")
 			}))
 			defer server.Close()
-			expectedHash := "a1fff0ffefb9eace7230c24e50731f0a91c62f9cefdfe77121c2f607125dffae"
+			expectedHash := "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f76863140143ff72"
 			hash, err := Sha256FromContent(&server.URL)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(hash).To(BeEquivalentTo(expectedHash))

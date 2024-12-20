@@ -4,12 +4,11 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
-	"net/http"
 )
 
 // Sha256FromUrlContent returns the SHA256 hash of the content at the given URL.
 func sha256FromUrlContent(url string) (string, error) {
-	resp, err := http.Get(url)
+	resp, err := getContentUrl(url)
 	if err != nil {
 		return "", err
 	}

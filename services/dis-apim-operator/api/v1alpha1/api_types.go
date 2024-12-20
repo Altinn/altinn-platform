@@ -34,7 +34,7 @@ type ApiSpec struct {
 
 	// DisplayName - The display name of the API. This name is used by the developer portal as the API name.
 	// +kubebuilder:validation:Required
-	DisplayName string `json:"displayName,omitempty"`
+	DisplayName string `json:"displayName"`
 	// Description - Description of the API. May include its purpose, where to get more information, and other relevant information.
 	// +kubebuilder:validation:Optional
 	Description *string `json:"description,omitempty"`
@@ -45,7 +45,7 @@ type ApiSpec struct {
 	VersioningScheme APIVersionScheme `json:"versioningScheme,omitempty"`
 	// Path - API prefix. The value is combined with the API version to form the URL of the API endpoint.
 	// +kubebuilder:validation:Required
-	Path string `json:"path,omitempty"`
+	Path string `json:"path"`
 	// ApiType - Type of API.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default:="http"
@@ -57,7 +57,7 @@ type ApiSpec struct {
 	Contact *APIContactInformation `json:"contact,omitempty"`
 	// Versions - A list of API versions associated with the API. If the API is specified using the OpenAPI definition, then the API version is set by the version field of the OpenAPI definition.
 	// +kubebuilder:validation:Required
-	Versions []ApiVersionSubSpec `json:"versions,omitempty"`
+	Versions []ApiVersionSubSpec `json:"versions"`
 }
 
 // ApiStatus defines the observed state of Api.
@@ -102,11 +102,17 @@ func init() {
 
 // GetApiAzureFullName returns the name of the Azure resource.
 func (a *Api) GetApiAzureFullName() string {
+	if a == nil {
+		return ""
+	}
 	return fmt.Sprintf("%s-%s", a.Namespace, a.Name)
 }
 
 // ToAzureApiVersionSet returns an APIVersionSetContract object.
 func (a *Api) ToAzureApiVersionSet() apim.APIVersionSetContract {
+	if a == nil {
+		return apim.APIVersionSetContract{}
+	}
 	return apim.APIVersionSetContract{
 		Properties: &apim.APIVersionSetContractProperties{
 			DisplayName:      &a.Spec.DisplayName,

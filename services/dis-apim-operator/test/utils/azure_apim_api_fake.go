@@ -203,8 +203,8 @@ func (a *AzureApimFake) GetFakeApiServer() apimfake.APIServer {
 				errResponder.SetResponseError(http.StatusInternalServerError, "Some fake internal server error occurred")
 			} else {
 				response := apim.APIClientGetResponse{}
-				if _, ok := a.APIMVersions[serviceName]; ok {
-					response.APIContract = a.APIMVersions[serviceName]
+				if _, ok := a.APIMVersions[apiID]; ok {
+					response.APIContract = a.APIMVersions[apiID]
 					response.ETag = utils.ToPointer("fake-etag")
 					responder.SetResponse(http.StatusOK, response, nil)
 				} else {

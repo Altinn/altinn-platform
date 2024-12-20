@@ -103,7 +103,7 @@ type ApiVersionSubSpec struct {
 type ApiPolicySpec struct {
 	// PolicyContent - The contents of the Policy as string.
 	// +kubebuilder:validation:Required
-	PolicyContent *string `json:"policyContent,omitempty"`
+	PolicyContent *string `json:"policyContent"`
 	// PolicyFormat - Format of the Policy in which the API is getting imported.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default:=rawxml
@@ -243,11 +243,10 @@ func (a *ApiVersion) Matches(new ApiVersion) bool {
 }
 
 func (a *ApiVersion) ToAzureCreateOrUpdateParameter() apim.APICreateOrUpdateParameter {
-	return apim.APICreateOrUpdateParameter{
+	apiCreateOrUpdateParams := apim.APICreateOrUpdateParameter{
 		Properties: &apim.APICreateOrUpdateProperties{
 			Path:                 &a.Spec.Path,
 			APIType:              a.Spec.ApiType.AzureApiType(),
-			Contact:              a.Spec.Contact.AzureAPIContactInformation(),
 			Description:          &a.Spec.Description,
 			DisplayName:          &a.Spec.DisplayName,
 			Format:               a.Spec.ContentFormat.AzureContentFormat(),
@@ -260,6 +259,10 @@ func (a *ApiVersion) ToAzureCreateOrUpdateParameter() apim.APICreateOrUpdatePara
 			APIVersion:           a.Spec.Name,
 		},
 	}
+	if a.Spec.Contact != nil {
+		apiCreateOrUpdateParams.Properties.Contact = a.Spec.Contact.AzureAPIContactInformation()
+	}
+	return apiCreateOrUpdateParams
 }
 func pointerValueEqual[T comparable](a *T, b *T) bool {
 	if a == nil && b == nil {

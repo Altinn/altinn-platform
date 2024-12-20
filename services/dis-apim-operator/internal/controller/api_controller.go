@@ -79,12 +79,14 @@ func (r *ApiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			return ctrl.Result{}, err
 		}
 	}
-	c, err := r.NewClient(r.ApimClientConfig)
-	if err != nil {
-		logger.Error(err, "Failed to create new APIM client")
-		return ctrl.Result{}, err
+	if r.apimClient == nil {
+		c, err := r.NewClient(r.ApimClientConfig)
+		if err != nil {
+			logger.Error(err, "Failed to create new APIM client")
+			return ctrl.Result{}, err
+		}
+		r.apimClient = c
 	}
-	r.apimClient = c
 	if api.DeletionTimestamp != nil {
 		return r.handleDeletion(ctx, &api)
 	}

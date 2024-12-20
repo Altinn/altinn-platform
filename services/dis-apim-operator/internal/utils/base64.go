@@ -3,12 +3,11 @@ package utils
 import (
 	"encoding/base64"
 	"io"
-	"net/http"
 )
 
 // Base64FromUrlContent returns the base64 encoding of the content at the given URL.
 func base64FromUrlContent(url string) (string, error) {
-	resp, err := http.Get(url)
+	resp, err := getContentUrl(url)
 	if err != nil {
 		return "", err
 	}

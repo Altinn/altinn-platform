@@ -135,7 +135,7 @@ func (r *ApiVersionReconciler) handleApiVersionUpdate(ctx context.Context, apiVe
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get api spec sha: %w", err)
 	}
-	if apiVersion.Status.LastAppliedSpecSha != latestSha || azure.IsNotFoundError(err) {
+	if apiVersion.Status.LastAppliedSpecSha != latestSha {
 		return r.createUpdateApimApi(ctx, apiVersion)
 	}
 	if apiVersion.Spec.Policies != nil {
@@ -226,6 +226,9 @@ func (r *ApiVersionReconciler) createUpdatePolicy(ctx context.Context, apiVersio
 	}
 	logger.Info("Creating or updating policy")
 	policy := apiVersion.Spec.Policies
+	if policy.PolicyContent == nil {
+		return fmt.Errorf("policy content is nil")
+	}
 	policyContent, err := r.runPolicyTemplating(policy.PolicyValues, *policy.PolicyContent, apiVersion.Namespace)
 	if err != nil {
 		return fmt.Errorf("failed to run policy templating: %w", err)
