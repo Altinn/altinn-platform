@@ -208,6 +208,7 @@ spec:
                       description: ServiceUrl - Absolute URL of the backend service
                         implementing this API. Cannot be more than 2000 characters
                         long.
+                      maxLength: 2000
                       type: string
                     subscriptionRequired:
                       default: true
@@ -232,8 +233,7 @@ spec:
                 type: string
               provisioningState:
                 description: 'ProvisioningState - The provisioning state of the API.
-                  Possible values are: Provisioning, Succeeded, Failed, Updating,
-                  Deleting, and Deleted.'
+                  Possible values are: Succeeded, Failed, Updating, Deleting.'
                 type: string
               versionStates:
                 additionalProperties:
@@ -253,8 +253,8 @@ spec:
                       type: string
                     provisioningState:
                       description: 'ProvisioningState - The provisioning state of
-                        the API. Possible values are: Creating, Succeeded, Failed,
-                        Updating, Deleting, and Deleted.'
+                        the API. Possible values are: Succeeded, Failed, Updating,
+                        Deleting.'
                       type: string
                     resumeToken:
                       description: ResumeToken - The token used to track long-running

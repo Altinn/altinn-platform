@@ -73,6 +73,7 @@ type ApiVersionSubSpec struct {
 	Description string `json:"description,omitempty"`
 	// ServiceUrl - Absolute URL of the backend service implementing this API. Cannot be more than 2000 characters long.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxLength:=2000
 	ServiceUrl *string `json:"serviceUrl,omitempty"`
 	// Products - Products that the API is associated with. Products are groups of APIs.
 	// +kubebuilder:validation:Optional
@@ -144,8 +145,9 @@ type FromBackend struct {
 
 // ApiVersionStatus defines the observed state of ApiVersion.
 type ApiVersionStatus struct {
-	// ProvisioningState - The provisioning state of the API. Possible values are: Creating, Succeeded, Failed, Updating, Deleting, and Deleted.
+	// ProvisioningState - The provisioning state of the API. Possible values are: Succeeded, Failed, Updating, Deleting.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:enum:=Succeeded;Failed;Updating;Deleting
 	ProvisioningState ProvisioningState `json:"provisioningState,omitempty"`
 	// ResumeToken - The token used to track long-running operations.
 	// +kubebuilder:validation:Optional

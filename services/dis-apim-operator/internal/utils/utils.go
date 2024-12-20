@@ -18,8 +18,11 @@ var httpClient = &http.Client{
 }
 
 func isUrl(s string) bool {
-	_, err := url.ParseRequestURI(s)
-	return err == nil
+	u, err := url.Parse(s)
+	if err != nil {
+		return false
+	}
+	return (u.Scheme == "http" || u.Scheme == "https") && len(u.Host) > 0
 }
 
 func getContentUrl(ctx context.Context, url string) (*http.Response, error) {

@@ -55,6 +55,7 @@ type BackendStatus struct {
 	BackendID string `json:"backendID,omitempty"`
 	// ProvisioningState - The provisioning state of the Backend.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:enum:=Succeeded;Failed
 	ProvisioningState BackendProvisioningState `json:"provisioningState,omitempty"`
 	// LastProvisioningError - The last error that occurred during provisioning.
 	// +kubebuilder:validation:Optional

@@ -62,8 +62,9 @@ type ApiSpec struct {
 
 // ApiStatus defines the observed state of Api.
 type ApiStatus struct {
-	// ProvisioningState - The provisioning state of the API. Possible values are: Provisioning, Succeeded, Failed, Updating, Deleting, and Deleted.
+	// ProvisioningState - The provisioning state of the API. Possible values are: Succeeded, Failed, Updating, Deleting.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:enum:=Succeeded;Failed;Updating;Deleting
 	ProvisioningState ProvisioningState `json:"provisioningState,omitempty"`
 	// ApiVersionSetID - The identifier of the API Version Set.
 	// +kubebuilder:validation:Optional

@@ -155,21 +155,21 @@ func (r *ApiVersionReconciler) handleApiVersionUpdate(ctx context.Context, apiVe
 	return ctrl.Result{RequeueAfter: DEFAULT_REQUE_TIME}, nil
 }
 
-func (r *ApiVersionReconciler) createUpdateApimApi(ctx context.Context, apiVesrion apimv1alpha1.ApiVersion) (ctrl.Result, error) {
+func (r *ApiVersionReconciler) createUpdateApimApi(ctx context.Context, apiVersion apimv1alpha1.ApiVersion) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-	resumeToken := apiVesrion.Status.ResumeToken
+	resumeToken := apiVersion.Status.ResumeToken
 	logger.Info("Creating or updating API")
-	apimApiParams := apiVesrion.ToAzureCreateOrUpdateParameter()
+	apimApiParams := apiVersion.ToAzureCreateOrUpdateParameter()
 	poller, err := r.apimClient.CreateUpdateApi(
 		ctx,
-		apiVesrion.GetApiVersionAzureFullName(),
+		apiVersion.GetApiVersionAzureFullName(),
 		apimApiParams,
 		&apim.APIClientBeginCreateOrUpdateOptions{ResumeToken: resumeToken})
 
 	if err != nil {
 		logger.Error(err, "Failed to create/update API")
-		apiVesrion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateFailed
-		_ = r.Status().Update(ctx, &apiVesrion)
+		apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateFailed
+		_ = r.Status().Update(ctx, &apiVersion)
 		return ctrl.Result{}, err
 	}
 	logger.Info("Watching LR operation")
@@ -182,17 +182,17 @@ func (r *ApiVersionReconciler) createUpdateApimApi(ctx context.Context, apiVesri
 	switch status {
 	case azure.OperationStatusFailed:
 		logger.Error(err, "Failed to watch LR operation")
-		apiVesrion.Status.ResumeToken = ""
-		apiVesrion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateFailed
-		err = r.Status().Update(ctx, &apiVesrion)
+		apiVersion.Status.ResumeToken = ""
+		apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateFailed
+		err = r.Status().Update(ctx, &apiVersion)
 		if err != nil {
 			logger.Error(err, "Failed to update status")
 		}
 		return ctrl.Result{}, err
 	case azure.OperationStatusInProgress:
-		apiVesrion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateUpdating
-		apiVesrion.Status.ResumeToken = token
-		err = r.Status().Update(ctx, &apiVesrion)
+		apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateUpdating
+		apiVersion.Status.ResumeToken = token
+		err = r.Status().Update(ctx, &apiVersion)
 		if err != nil {
 			logger.Error(err, "Failed to update status")
 			return ctrl.Result{}, err
@@ -200,25 +200,26 @@ func (r *ApiVersionReconciler) createUpdateApimApi(ctx context.Context, apiVesri
 		return ctrl.Result{RequeueAfter: WAITING_FOR_LRO_REQUE_TIME}, nil
 	case azure.OperationStatusSucceeded:
 		logger.Info("Operation completed")
-		apiVesrion.Status.ResumeToken = ""
-		apiVesrion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateSucceeded
-		apiVesrion.Status.LastAppliedSpecSha, err = utils.Sha256FromContent(ctx, apiVesrion.Spec.Content)
-		if apiVesrion.Spec.Policies != nil {
-			apiVesrion.Status.LastAppliedPolicyBase64, err = utils.Base64FromContent(ctx, apiVesrion.Spec.Policies.PolicyContent)
+		apiVersion.Status.ResumeToken = ""
+		apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateSucceeded
+		apiVersion.Status.LastAppliedSpecSha, err = utils.Sha256FromContent(ctx, apiVersion.Spec.Content)
+		if apiVersion.Spec.Policies != nil {
+			apiVersion.Status.LastAppliedPolicyBase64, err = utils.Base64FromContent(ctx, apiVersion.Spec.Policies.PolicyContent)
 		}
 		if err != nil {
 			logger.Error(err, "Failed to get spec sha")
 			return ctrl.Result{}, err
 		}
-		err = r.Status().Update(ctx, &apiVesrion)
+		err = r.Status().Update(ctx, &apiVersion)
 		if err != nil {
 			logger.Error(err, "Failed to update status")
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{RequeueAfter: DEFAULT_REQUE_TIME}, nil
+	default:
+		logger.Error(nil, "Unexpected operation status", "status", status)
+		return ctrl.Result{}, fmt.Errorf("unexpected operation status: %s", status)
 	}
-
-	return ctrl.Result{RequeueAfter: DEFAULT_REQUE_TIME}, nil
 }
 
 func (r *ApiVersionReconciler) createUpdatePolicy(ctx context.Context, apiVersion apimv1alpha1.ApiVersion) error {
