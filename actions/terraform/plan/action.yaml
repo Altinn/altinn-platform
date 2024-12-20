@@ -83,7 +83,6 @@ runs:
       shell: bash
       if: always()
       working-directory: ${{ inputs.working_directory }}
-      continue-on-error: true
       run: terraform fmt -check
 
     - name: Terraform Init
@@ -206,7 +205,7 @@ runs:
       shell: bash
       working-directory: ${{ inputs.working_directory }}
       run: cat summary.md >> $GITHUB_STEP_SUMMARY
-      
+
     - name: GitHub Issue
       id: issue_number
       uses: actions/github-script@v7
@@ -227,7 +226,7 @@ runs:
               if (prs.data.length > 0)
               {
                 return prs.data[0].number;
-              } 
+              }
 
               return null;
           }
