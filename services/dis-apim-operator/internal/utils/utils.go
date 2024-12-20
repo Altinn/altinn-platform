@@ -35,9 +35,11 @@ func getContentUrl(ctx context.Context, url string) (*http.Response, error) {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
+		defer closeIgnoreError(resp.Body)
 		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
 	}
 	if resp.ContentLength > maxContentSize {
+		defer closeIgnoreError(resp.Body)
 		return nil, fmt.Errorf("content size exceeds the maximum allowed size of %d bytes, actual size %d", maxContentSize, resp.ContentLength)
 	}
 	return resp, nil
