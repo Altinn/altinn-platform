@@ -30,7 +30,7 @@ var _ = Describe("Utils", func() {
 	Context("getContentUrl", func() {
 		It("should return content for a valid URL", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				_, _ = fmt.Fprintln(w, "test content")
+				_, _ = fmt.Fprint(w, "test content")
 			}))
 			defer server.Close()
 
@@ -40,7 +40,7 @@ var _ = Describe("Utils", func() {
 
 			body, err := io.ReadAll(resp.Body)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(string(body)).To(Equal("test content\n"))
+			Expect(string(body)).To(Equal("test content"))
 		})
 
 		It("should return an error for an invalid URL", func() {
