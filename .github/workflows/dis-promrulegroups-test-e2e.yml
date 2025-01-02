@@ -1,8 +1,18 @@
-name: E2E Tests
+name: dis-promrulegroups E2E Tests
 
 on:
   push:
+    branches:
+      - main
+    paths:
+      - services/dis-promrulegroups-operator/**
+      - .github/workflows/dis-promrulegroups-test-e2e.yml
   pull_request:
+    branches:
+      - main
+    paths:
+      - services/dis-promrulegroups-operator/**
+      - .github/workflows/dis-promrulegroups-test-e2e.yml
 
 jobs:
   test-e2e:
@@ -15,7 +25,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '~1.22'
+          go-version-file: 'services/dis-promrulegroups-operator/go.mod'
 
       - name: Install the latest version of kind
         run: |

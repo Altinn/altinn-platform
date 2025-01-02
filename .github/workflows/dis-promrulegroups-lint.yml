@@ -1,13 +1,26 @@
-name: Lint
+name: dis-promrulegroups Lint
 
 on:
   push:
+    branches:
+      - main
+    paths:
+      - services/dis-promrulegroups-operator/**
+      - .github/workflows/dis-promrulegroups-lint.yml
   pull_request:
+    branches:
+      - main
+    paths:
+      - services/dis-promrulegroups-operator/**
+      - .github/workflows/dis-promrulegroups-lint.yml
 
 jobs:
   lint:
     name: Run on Ubuntu
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/dis-promrulegroups-operator
     steps:
       - name: Clone the code
         uses: actions/checkout@v4
@@ -15,7 +28,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '~1.22'
+          go-version-file: 'services/dis-promrulegroups-operator/go.mod'
 
       - name: Run linter
         uses: golangci/golangci-lint-action@v6

@@ -1,13 +1,26 @@
-name: Test Chart
+name: dis-promrulegroups Test Chart
 
 on:
   push:
+    branches:
+      - main
+    paths:
+      - services/dis-promrulegroups-operator/**
+      - .github/workflows/dis-promrulegroups-test-chart.yml
   pull_request:
+    branches:
+      - main
+    paths:
+      - services/dis-promrulegroups-operator/**
+      - .github/workflows/dis-promrulegroups-test-chart.yml
 
 jobs:
   test-e2e:
     name: Run on Ubuntu
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/dis-promrulegroups-operator
     steps:
       - name: Clone the code
         uses: actions/checkout@v4
@@ -15,7 +28,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: 'services/dis-promrulegroups-operator/go.mod'
 
       - name: Install the latest version of kind
         run: |
