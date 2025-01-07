@@ -10,6 +10,7 @@ products:
       owner: altinn
       repositories:
         - altinn-platform
+        - terraform-azurerm-altinn-modules
 
   - name: Authorization
     slug: PAA # Product Altinn Authorization
