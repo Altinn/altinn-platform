@@ -65,13 +65,18 @@ locals {
   altinn_30_developers_prod               = "2d962017-75cf-47f2-a76e-50591fbf7fe9"
   altinn_30_operations                    = "143ed28a-6e6d-4ca0-8273-eecb9c1665ba"
   altinn_30_operations_prod               = "5a5ed585-9f7c-4b94-80af-9ceee8124db3"
+  dialogporten_developers                 = "857b3aa1-bde3-469c-a052-a24c81503646"
+  dialogporten_developers_prod            = "415cfc7b-40f6-4540-9aef-cb9c9050aada"
+
   grafana_editor = [
     local.altinn_30_broker_prod_developers,
     local.altinn_30_broker_test_developers,
     local.altinn_30_correspondence_prod_developer,
     local.altinn_30_correspondence_test_developer,
     local.altinn_30_developers,
-    local.altinn_30_developers_prod
+    local.altinn_30_developers_prod,
+    local.dialogporten_developers,
+    local.dialogporten_developers_prod
   ]
   grafana_admin = [local.altinn_30_operations, local.altinn_30_operations_prod]
 }
