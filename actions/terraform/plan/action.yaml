@@ -144,8 +144,8 @@ runs:
     - name: truncate terraform plan result
       shell: bash
       env:
-        PLAN_STDOUT: ${{ steps.plan.outputs.stdout }}
-        PLAN_STDERR: ${{ steps.plan.outputs.stderr }}
+        PLAN_STDOUT: "${{ steps.plan.outputs.stdout }}"
+        PLAN_STDERR: "${{ steps.plan.outputs.stderr }}"
       run: |
         plan=$(cat <<${{ env.DELIMITER }}1
         ${PLAN_STDOUT@Q}
