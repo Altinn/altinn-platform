@@ -147,7 +147,7 @@ runs:
       run: |
         plan=$(cat ${{ inputs.working_directory }}/tfplan.log)
         original_length=${#plan}
-        plan=$(echo "${plan//\`}" | grep -v 'Refreshing state' | tail --bytes 120000)
+        plan=$(echo "${plan//\`}" | grep -v 'Refreshing state' | tail --bytes 130000)
         new_length=${#plan}
         echo "PLAN<<${{ env.DELIMITER }}2" >> $GITHUB_ENV
         echo '[Lines containing Refreshing state removed]' >> $GITHUB_ENV
