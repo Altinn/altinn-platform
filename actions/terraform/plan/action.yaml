@@ -143,9 +143,6 @@ runs:
       run: echo "DELIMITER=$(uuidgen)" >> $GITHUB_ENV
     - name: truncate terraform plan result
       shell: bash
-      env:
-        PLAN_STDOUT: ${{ steps.plan.outputs.stdout }}
-        PLAN_STDERR: ${{ steps.plan.outputs.stderr }}
       run: |
         plan=$(cat <<${{ env.DELIMITER }}1
         ${{ format('{0}{1}', steps.plan.outputs.stdout, steps.plan.outputs.stderr) }}
