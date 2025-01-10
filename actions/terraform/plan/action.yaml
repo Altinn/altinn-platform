@@ -149,6 +149,7 @@ runs:
         ${{ env.DELIMITER }}1
         )
         plan=$(echo "${plan@Q}" | grep -v 'Refreshing state' | tail --bytes 200000)
+        echo "${plan}"
         echo "PLAN<<${{ env.DELIMITER }}2" >> $GITHUB_ENV
         echo '[Lines containing Refreshing state removed]' >> $GITHUB_ENV
         echo '[Maybe further truncated see logs for complete plan output]' >> $GITHUB_ENV
