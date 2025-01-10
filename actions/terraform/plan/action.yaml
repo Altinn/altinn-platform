@@ -144,8 +144,11 @@ runs:
     - name: truncate terraform plan result
       shell: bash
       run: |
+        stdout="${{steps.plan.outputs.stdout}}"
+        stderr="${{steps.plan.outputs.stderr}}"
         plan=$(cat <<${{ env.DELIMITER }}1
-        ${{ format('{0}{1}', steps.plan.outputs.stdout, steps.plan.outputs.stderr) }}
+        ${stdout@Q}
+        ${stderr@Q}
         ${{ env.DELIMITER }}1
         )
         plan=$(echo "${plan@Q}" | grep -v 'Refreshing state' | tail --bytes 200000)
