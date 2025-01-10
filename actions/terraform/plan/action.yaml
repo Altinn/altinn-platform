@@ -143,13 +143,15 @@ runs:
       run: echo "DELIMITER=$(uuidgen)" >> $GITHUB_ENV
     - name: truncate terraform plan result
       shell: bash
+      env:
+        PLAN_STDOUT: ${{ steps.plan.outputs.stdout }}
+        PLAN_STDERR: ${{ steps.plan.outputs.stderr }}
       run: |
         plan=$(cat <<${{ env.DELIMITER }}1
-        ${{ format('{0}{1}', steps.plan.outputs.stdout, steps.plan.outputs.stderr) }}
+        ${{ format('{0}{1}', env.PLAN_STDOUT, env.PLAN_STDERR) }}
         ${{ env.DELIMITER }}1
         )
         plan=$(echo "${plan@Q}" | grep -v 'Refreshing state' | tail --bytes 200000)
-        echo "${plan}"
         echo "PLAN<<${{ env.DELIMITER }}2" >> $GITHUB_ENV
         echo '[Lines containing Refreshing state removed]' >> $GITHUB_ENV
         echo '[Maybe further truncated see logs for complete plan output]' >> $GITHUB_ENV
