@@ -148,7 +148,7 @@ runs:
         echo "Reading tfplan.log"
         plan=$(cat ${{ inputs.working_directory }}/tfplan.log)
         echo "Plan result length: ${#plan}"
-        plan=$(echo "${plan//\`}" | grep -v 'Refreshing state' | tail --bytes 150000)
+        plan=$(echo "${plan//\`}" | grep -v 'Refreshing state' | tail --bytes 110000)
         echo "PLAN<<${{ env.DELIMITER }}2" >> $GITHUB_ENV
         echo '[Lines containing Refreshing state removed]' >> $GITHUB_ENV
         echo '[Maybe further truncated see logs for complete plan output]' >> $GITHUB_ENV
