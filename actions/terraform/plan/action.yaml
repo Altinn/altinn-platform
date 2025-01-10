@@ -148,7 +148,8 @@ runs:
         PLAN_STDERR: ${{ steps.plan.outputs.stderr }}
       run: |
         plan=$(cat <<${{ env.DELIMITER }}1
-        ${{ format('{0}{1}', env.PLAN_STDOUT, env.PLAN_STDERR) }}
+        ${PLAN_STDOUT@Q}
+        ${PLAN_STDERR@Q}
         ${{ env.DELIMITER }}1
         )
         plan=$(echo "${plan@Q}" | grep -v 'Refreshing state' | tail --bytes 200000)
