@@ -115,7 +115,7 @@ runs:
       if: always()
       working-directory: ${{ inputs.working_directory }}
       run: |
-        terraform plan -detailed-exitcode -no-color -input=false -out tfplan.out ${{ inputs.tf_args }}
+        terraform plan -detailed-exitcode -no-color -input=false -out tfplan.out ${{ inputs.tf_args }} >> tfplan.log 2>&1
       env:
         ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
         ARM_SUBSCRIPTION_ID: ${{ inputs.arm_subscription_id }}
@@ -144,13 +144,7 @@ runs:
     - name: truncate terraform plan result
       shell: bash
       run: |
-        stdout="${{steps.plan.outputs.stdout}}"
-        stderr="${{steps.plan.outputs.stderr}}"
-        plan=$(cat <<${{ env.DELIMITER }}1
-        ${stdout@Q}
-        ${stderr@Q}
-        ${{ env.DELIMITER }}1
-        )
+        plan=$(cat ${{ inputs.working_directory }}/tfplan.log)
         plan=$(echo "${plan@Q}" | grep -v 'Refreshing state' | tail --bytes 200000)
         echo "PLAN<<${{ env.DELIMITER }}2" >> $GITHUB_ENV
         echo '[Lines containing Refreshing state removed]' >> $GITHUB_ENV
