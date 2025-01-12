@@ -79,6 +79,7 @@ runs:
         echo "TF_STATE_FILE=$(echo ${{ env.TF_STATE_FILE_TMP }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
     - name: Terraform Format
+      continue-on-error: true
       id: fmt
       shell: bash
       if: always()
@@ -86,6 +87,7 @@ runs:
       run: terraform fmt -check
 
     - name: Terraform Init
+      continue-on-error: true
       id: init
       shell: bash
       if: always()
@@ -103,6 +105,7 @@ runs:
           -backend-config="key=${{ env.TF_STATE_FILE }}"
 
     - name: Terraform Validate
+      continue-on-error: true
       id: validate
       shell: bash
       if: always()
@@ -110,13 +113,13 @@ runs:
       run: terraform validate -no-color
 
     - name: Terraform Plan
+      continue-on-error: true
       id: plan
       shell: bash
       if: always()
       working-directory: ${{ inputs.working_directory }}
       run: |
-        terraform plan -detailed-exitcode -no-color -input=false -out tfplan.out ${{ inputs.tf_args }} >> tfplan.log 2>&1
-        cat tfplan.log
+        terraform plan -detailed-exitcode -no-color -input=false -out tfplan.out ${{ inputs.tf_args }} >> tfplan.log 2>&1 && cat tfplan.log
       env:
         ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
         ARM_SUBSCRIPTION_ID: ${{ inputs.arm_subscription_id }}
@@ -125,6 +128,7 @@ runs:
 
     - name: Artifact Key
       id: artifact_key
+      continue-on-error: true
       shell: bash
       run: |
         TF_STATE_FILE=${{ env.TF_STATE_FILE }}
@@ -133,6 +137,7 @@ runs:
 
     - name: Upload Plan
       id: artifact
+      continue-on-error: true
       uses: actions/upload-artifact@v4
       if: success()
       with:
@@ -140,9 +145,11 @@ runs:
         path: ${{ inputs.working_directory }}/tfplan.out
 
     - name: generate random delimiter
+      continue-on-error: true
       shell: bash
       run: echo "DELIMITER=$(uuidgen)" >> $GITHUB_ENV
     - name: truncate terraform plan result
+      continue-on-error: true
       shell: bash
       run: |
         plan=$(cat ${{ inputs.working_directory }}/tfplan.log)
@@ -159,6 +166,7 @@ runs:
         echo "${{ env.DELIMITER }}2" >> $GITHUB_ENV
 
     - name: Generate Terraform Summary
+      continue-on-error: true
       id: action_summary
       uses: actions/github-script@v7
       if: always()
@@ -203,6 +211,7 @@ runs:
           fs.writeFileSync('${{ inputs.working_directory }}/summary.md', output);
           core.setOutput('summary', output);
     - name: Write Terraform Summary
+      continue-on-error: true
       if: always()
       shell: bash
       working-directory: ${{ inputs.working_directory }}
@@ -210,6 +219,7 @@ runs:
 
     - name: GitHub Issue
       id: issue_number
+      continue-on-error: true
       uses: actions/github-script@v7
       with:
         result-encoding: string
@@ -235,6 +245,7 @@ runs:
 
     - name: Terraform Summary PR
       id: pr_summary
+      continue-on-error: true
       uses: actions/github-script@v7
       if: steps.issue_number.outputs.result != 'null' && steps.plan.outputs.exitcode == 2
       env:
