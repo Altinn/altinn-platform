@@ -43,7 +43,25 @@ resource "azurerm_role_assignment" "grafana_identity_reader" {
 
 # Dialogporten
 resource "azurerm_role_assignment" "monitoring_reader_rg_dp_test" {
-  scope                            = data.azurerm_resource_group.rg_dp_test.id
+
+  for_each                         = data.azurerm_resource_group.rd_dp_test
+  scope                            = each.value.id
+  role_definition_id               = "/subscriptions/${split("/", azurerm_monitor_workspace.altinn_monitor.id)[2]}/providers/Microsoft.Authorization/roleDefinitions/43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+  principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "monitoring_reader_rg_dp_stag" {
+
+  scope                            = data.azurerm_resource_group.rg_dp_stag.id
+  role_definition_id               = "/subscriptions/${split("/", azurerm_monitor_workspace.altinn_monitor.id)[2]}/providers/Microsoft.Authorization/roleDefinitions/43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+  principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "monitoring_reader_rg_dp_prod" {
+
+  scope                            = data.azurerm_resource_group.rg_dp_prod.id
   role_definition_id               = "/subscriptions/${split("/", azurerm_monitor_workspace.altinn_monitor.id)[2]}/providers/Microsoft.Authorization/roleDefinitions/43d0d8ad-25c7-4714-9337-8ba259a9fe05"
   principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
   skip_service_principal_aad_check = true
@@ -55,6 +73,21 @@ resource "azurerm_role_assignment" "grafana_identity_reader_rg_dp_test" {
   principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
   skip_service_principal_aad_check = true
 }
+
+resource "azurerm_role_assignment" "grafana_identity_reader_rg_dp_stag" {
+  scope                            = "/subscriptions/e4926efc-0577-47b3-9c3d-757925630eca"
+  role_definition_name             = "Monitoring Reader"
+  principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "grafana_identity_reader_rg_dp_prod" {
+  scope                            = "/subscriptions/c595f787-450d-4c57-84fa-abc5f95d5459"
+  role_definition_name             = "Monitoring Reader"
+  principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
+  skip_service_principal_aad_check = true
+}
+
 
 locals {
   altinn_30_broker_prod_developers        = "7708786a-aa50-4ce8-9f7f-e85459357de1"
@@ -107,9 +140,25 @@ resource "azurerm_role_assignment" "log_analytics_reader" {
 }
 
 # Dialogporten
-resource "azurerm_role_assignment" "log_analytics_reader_dp_test" {
+resource "azurerm_role_assignment" "log_analytics_reader_dp_stag" {
   principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
-  scope                            = data.azurerm_log_analytics_workspace.dp_law_test.id
+  scope                            = data.azurerm_log_analytics_workspace.dp_law_stag.id
   role_definition_name             = "Log Analytics Reader"
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "log_analytics_reader_dp_prod" {
+  principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
+  scope                            = data.azurerm_log_analytics_workspace.dp_law_prod.id
+  role_definition_name             = "Log Analytics Reader"
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "log_analytics_reader_dp_test" {
+  for_each = data.azurerm_log_analytics_workspace.dp_law_test
+
+  scope                            = each.value.id
+  role_definition_name             = "Log Analytics Reader"
+  principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
   skip_service_principal_aad_check = true
 }

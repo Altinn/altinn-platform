@@ -23,8 +23,22 @@ provider "azurerm" {
 
 # Dialogporten
 provider "azurerm" {
-  alias           = "dp"
+  alias           = "dp_test"
   subscription_id = "8a353de8-d81d-468d-a40d-f3574b6bb3f4"
+  features {}
+  resource_provider_registrations = "none"
+}
+
+provider "azurerm" {
+  alias           = "dp_stag"
+  subscription_id = "e4926efc-0577-47b3-9c3d-757925630eca"
+  features {}
+  resource_provider_registrations = "none"
+}
+
+provider "azurerm" {
+  alias           = "dp_prod"
+  subscription_id = "c595f787-450d-4c57-84fa-abc5f95d5459"
   features {}
   resource_provider_registrations = "none"
 }
