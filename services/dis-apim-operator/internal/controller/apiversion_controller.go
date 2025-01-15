@@ -142,6 +142,9 @@ func (r *ApiVersionReconciler) handleApiVersionUpdate(ctx context.Context, apiVe
 	}
 	if apiVersion.Spec.Policies != nil {
 		_, policyErr := r.apimClient.GetApiPolicy(ctx, apiVersion.GetApiVersionAzureFullName(), nil)
+		if azure.IgnoreNotFound(policyErr) != nil {
+			return ctrl.Result{}, policyErr
+		}
 		lastPolicySha, shaErr := utils.Sha256FromContent(ctx, apiVersion.Spec.Policies.PolicyContent)
 		if shaErr != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to get policy sha: %w", shaErr)
