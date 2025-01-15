@@ -52,6 +52,34 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+        # TODO: This needs a review once I'm done with the PoC
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.ARM_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.ARM_SUBSCRIPTION_ID }}
+
+      # TODO: This needs a review once I'm done with the PoC
+      - name: Populate kubeconfig with k6 context
+        id: populate_kubeconfig_with_k6_context
+        shell: bash
+        run: |
+          if ! az aks install-cli; then
+            echo "Failed to install kubectl CLI"
+            exit 1
+          fi
+
+          if ! az aks get-credentials --resource-group k6tests-rg --name k6tests-cluster; then
+            echo "Failed to populate kubeconfig"
+            exit 1
+          fi
+
+          if ! kubelogin convert-kubeconfig -l azurecli; then
+            echo "Failed to convert kubeconfig"
+            exit 1
+          fi
+
       - name: Terraform Plan
         uses: altinn/altinn-platform/actions/terraform/plan@main
         with:
@@ -73,6 +101,34 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+      # TODO: This needs a review once I'm done with the PoC
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.ARM_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.ARM_SUBSCRIPTION_ID }}
+
+      # TODO: This needs a review once I'm done with the PoC
+      - name: Populate kubeconfig with k6 context
+        id: populate_kubeconfig_with_k6_context
+        shell: bash
+        run: |
+          if ! az aks install-cli; then
+            echo "Failed to install kubectl CLI"
+            exit 1
+          fi
+
+          if ! az aks get-credentials --resource-group k6tests-rg --name k6tests-cluster; then
+            echo "Failed to populate kubeconfig"
+            exit 1
+          fi
+
+          if ! kubelogin convert-kubeconfig -l azurecli; then
+            echo "Failed to convert kubeconfig"
+            exit 1
+          fi
 
       - name: Terraform Apply
         uses: altinn/altinn-platform/actions/terraform/apply@main
