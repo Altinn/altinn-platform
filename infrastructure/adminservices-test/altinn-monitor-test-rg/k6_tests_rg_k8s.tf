@@ -5,9 +5,11 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
   dns_prefix          = "k6tests-cluster"
 
   default_node_pool {
-    name       = "default"
-    node_count = 1
-    vm_size    = "Standard_D2_v2"
+    name                 = "default"
+    auto_scaling_enabled = true
+    min_count            = 1
+    max_count            = 10
+    vm_size              = "Standard_D2_v2"
     upgrade_settings { # Adding these to keep plans clean
       drain_timeout_in_minutes      = 0
       max_surge                     = "10%"
@@ -21,6 +23,15 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
   identity {
     type = "SystemAssigned"
   }
+
+  local_account_disabled            = true
+  role_based_access_control_enabled = true
+  azure_active_directory_role_based_access_control {
+    # tenant_id = "" # Optional
+    admin_group_object_ids = ["c9c317cc-aec0-4c8b-bdad-b54333686e8a"]
+    azure_rbac_enabled     = true
+  }
+
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "spot" {
