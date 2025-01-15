@@ -29,7 +29,7 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
   azure_active_directory_role_based_access_control {
     # tenant_id = "" # Optional
     admin_group_object_ids = ["c9c317cc-aec0-4c8b-bdad-b54333686e8a"]
-    azure_rbac_enabled     = true
+    azure_rbac_enabled     = false
   }
 
 }
