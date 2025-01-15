@@ -28,13 +28,13 @@ import (
 type BackendSpec struct {
 	// Title - Title of the Backend. May include its purpose, where to get more information, and other relevant information.
 	// +kubebuilder:validation:Required
-	Title string `json:"title,omitempty"`
+	Title string `json:"title"`
 	// Description - Description of the Backend. May include its purpose, where to get more information, and other relevant information.
 	// +kubebuilder:validation:Optional
 	Description *string `json:"description,omitempty"`
 	// Url - URL of the Backend.
 	// +kubebuilder:validation:Required
-	Url string `json:"url,omitempty"`
+	Url string `json:"url"`
 	// ValidateCertificateChain - Whether to validate the certificate chain when using the backend.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default:=true
@@ -55,6 +55,7 @@ type BackendStatus struct {
 	BackendID string `json:"backendID,omitempty"`
 	// ProvisioningState - The provisioning state of the Backend.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:enum:=Succeeded;Failed
 	ProvisioningState BackendProvisioningState `json:"provisioningState,omitempty"`
 	// LastProvisioningError - The last error that occurred during provisioning.
 	// +kubebuilder:validation:Optional
@@ -73,6 +74,8 @@ const (
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="State",type=string,JSONPath=".status.provisioningState"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // Backend is the Schema for the backends API.
 type Backend struct {

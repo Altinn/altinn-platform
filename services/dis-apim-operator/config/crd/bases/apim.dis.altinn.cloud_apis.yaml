@@ -1,0 +1,272 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.4
+  name: apis.apim.dis.altinn.cloud
+spec:
+  group: apim.dis.altinn.cloud
+  names:
+    kind: Api
+    listKind: ApiList
+    plural: apis
+    singular: api
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.provisioningState
+      name: State
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Api is the Schema for the apis API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ApiSpec defines the desired state of Api.
+            properties:
+              apiType:
+                default: http
+                description: ApiType - Type of API.
+                enum:
+                - graphql
+                - http
+                - websocket
+                type: string
+              contact:
+                description: Contact - Contact details of the API owner.
+                properties:
+                  email:
+                    description: The email address of the contact person/organization.
+                      MUST be in the format of an email address
+                    type: string
+                  name:
+                    description: The identifying name of the contact person/organization
+                    type: string
+                  url:
+                    description: The URL pointing to the contact information. MUST
+                      be in the format of a URL
+                    type: string
+                type: object
+              description:
+                description: Description - Description of the API. May include its
+                  purpose, where to get more information, and other relevant information.
+                type: string
+              displayName:
+                description: DisplayName - The display name of the API. This name
+                  is used by the developer portal as the API name.
+                type: string
+              path:
+                description: Path - API prefix. The value is combined with the API
+                  version to form the URL of the API endpoint.
+                type: string
+              versioningScheme:
+                default: Segment
+                description: VersioningScheme - Indicates the versioning scheme used
+                  for the API. Possible values include, but are not limited to, "Segment",
+                  "Query", "Header". Default value is "Segment".
+                enum:
+                - Header
+                - Query
+                - Segment
+                type: string
+              versions:
+                description: Versions - A list of API versions associated with the
+                  API. If the API is specified using the OpenAPI definition, then
+                  the API version is set by the version field of the OpenAPI definition.
+                items:
+                  description: ApiVersionSubSpec defines the desired state of ApiVersion
+                  properties:
+                    content:
+                      description: Content - The contents of the API. The value is
+                        a string containing the content of the API.
+                      minLength: 1
+                      type: string
+                    contentFormat:
+                      default: openapi+json
+                      description: ContentFormat - Format of the Content in which
+                        the API is getting imported. Default value is openapi+json.
+                      type: string
+                    description:
+                      description: Description - Description of the API Version. May
+                        include its purpose, where to get more information, and other
+                        relevant information.
+                      type: string
+                    displayName:
+                      description: DisplayName - The display name of the API Version.
+                        This name is used by the developer portal as the API Version
+                        name.
+                      minLength: 1
+                      type: string
+                    isCurrent:
+                      default: true
+                      description: IsCurrent - Indicates if API Version is the current
+                        api version. Default value is true.
+                      type: boolean
+                    name:
+                      description: |-
+                        INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                        Important: Run "make" to regenerate code after modifying this file
+                        Name - Name of the API Version. If no name is provided this will be the default version
+                      type: string
+                    policies:
+                      description: Policies - The API Version Policy description.
+                      properties:
+                        policyContent:
+                          description: PolicyContent - The contents of the Policy
+                            as string.
+                          type: string
+                        policyFormat:
+                          default: rawxml
+                          description: PolicyFormat - Format of the Policy in which
+                            the API is getting imported.
+                          enum:
+                          - xml
+                          - xml-link
+                          - rawxml
+                          - rawxml-link
+                          type: string
+                        policyValues:
+                          description: PolicyValues Value references for replacing
+                            policy expressions.
+                          items:
+                            description: PolicyValue defines the desired state of
+                              ApiVersion
+                            properties:
+                              idFromBackend:
+                                description: IdFromBackend references a backend defined
+                                  in the same namespace. The PolicyValue.Name will
+                                  be replaced in the ApiPolicySpec with the id of
+                                  the backend in Azure.
+                                properties:
+                                  name:
+                                    description: Name
+                                    type: string
+                                  namespace:
+                                    description: Namespace Namespace where the backend
+                                      is defined. Default value is the same namespace
+                                      as the API Version.
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              name:
+                                description: Name - The key of the policy value.
+                                type: string
+                              value:
+                                description: Value - The value of the policy value.
+                                type: string
+                            required:
+                            - name
+                            type: object
+                            x-kubernetes-validations:
+                            - message: Either value or idFromBackend must be set,
+                                but not both
+                              rule: '!has(self.value) || !has(self.idFromBackend)'
+                            - message: Either value or idFromBackend must be set
+                              rule: has(self.value) || has(self.idFromBackend)
+                          type: array
+                      required:
+                      - policyContent
+                      type: object
+                    products:
+                      description: Products - Products that the API is associated
+                        with. Products are groups of APIs.
+                      items:
+                        type: string
+                      type: array
+                    protocols:
+                      default:
+                      - https
+                      description: Protocols - Describes protocols over which API
+                        is made available. Default value is https.
+                      items:
+                        type: string
+                      type: array
+                    serviceUrl:
+                      description: ServiceUrl - Absolute URL of the backend service
+                        implementing this API. Cannot be more than 2000 characters
+                        long.
+                      maxLength: 2000
+                      type: string
+                    subscriptionRequired:
+                      default: true
+                      description: SubscriptionRquired - Indicates if subscription
+                        is required to access the API. Default value is true.
+                      type: boolean
+                  required:
+                  - content
+                  - displayName
+                  type: object
+                type: array
+            required:
+            - displayName
+            - path
+            - versions
+            type: object
+          status:
+            description: ApiStatus defines the observed state of Api.
+            properties:
+              apiVersionSetID:
+                description: ApiVersionSetID - The identifier of the API Version Set.
+                type: string
+              provisioningState:
+                description: 'ProvisioningState - The provisioning state of the API.
+                  Possible values are: Succeeded, Failed, Updating, Deleting.'
+                type: string
+              versionStates:
+                additionalProperties:
+                  description: ApiVersionStatus defines the observed state of ApiVersion.
+                  properties:
+                    lastAppliedPolicyBase64:
+                      description: LastAppliedPolicyBase64 - The base64 of the last
+                        applied spec.
+                      type: string
+                    lastAppliedPolicySha:
+                      description: LastAppliedPolicySha - The sha256 of the last applied
+                        policy.
+                      type: string
+                    lastAppliedSpecSha:
+                      description: LastAppliedSpecSha - The sha256 of the last applied
+                        spec.
+                      type: string
+                    provisioningState:
+                      description: 'ProvisioningState - The provisioning state of
+                        the API. Possible values are: Succeeded, Failed, Updating,
+                        Deleting.'
+                      type: string
+                    resumeToken:
+                      description: ResumeToken - The token used to track long-running
+                        operations.
+                      type: string
+                  type: object
+                description: VersionStates - A list of API Version deployed in the
+                  API Management service and the current state of the API Version.
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

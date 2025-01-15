@@ -6,4 +6,47 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: api-sample
 spec:
-  # TODO(user): Add fields here
+  displayName: Example API
+  description: This is an example API.
+  versioningScheme: Segment
+  path: example
+  apiType: http
+  contact:
+    name: John Doe
+    email: john.doe@example.com
+  versions:
+    - name: v1
+      displayName: Version 1
+      description: First version of the API
+      serviceUrl: https://example.com/v1
+      products:
+        - product1
+        - product2
+      protocols:
+        - https
+      subscriptionRequired: true
+      contentFormat: swagger-link-json
+      content: https://primary-test-aca-vga.gentleground-884783d5.norwayeast.azurecontainerapps.io/swagger/doc.json
+      isCurrent: true
+      policies:
+        policyContent: |
+          <policies>
+            <inbound>
+              <set-backend-service base-url="http://example.com/api/4/" />
+              <base />
+            </inbound>
+          </policies>
+        policyFormat: xml
+    - name: v2
+      displayName: Version 2
+      description: First version of the API
+      serviceUrl: https://example.com/v2
+      products:
+        - product1
+        - product2
+      protocols:
+        - https
+      subscriptionRequired: true
+      contentFormat: swagger-link-json
+      content: https://primary-test-aca-vga.gentleground-884783d5.norwayeast.azurecontainerapps.io/swagger/doc.json
+      isCurrent: true

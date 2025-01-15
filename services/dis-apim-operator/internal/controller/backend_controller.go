@@ -32,7 +32,7 @@ import (
 	apimv1alpha1 "github.com/Altinn/altinn-platform/services/dis-apim-operator/api/v1alpha1"
 )
 
-const BACKEND_FINALIZER = "finalizers.apim.dis.altinn.cloud/backend"
+const BACKEND_FINALIZER = "backend.apim.dis.altinn.cloud/finalizer"
 
 type newApimClient func(config *azure.ApimClientConfig) (*azure.APIMClient, error)
 
@@ -78,12 +78,14 @@ func (r *BackendReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return ctrl.Result{}, err
 		}
 	}
-	c, err := r.NewClient(r.ApimClientConfig)
-	if err != nil {
-		logger.Error(err, "Failed to create APIM client")
-		return ctrl.Result{}, err
+	if r.apimClient == nil {
+		c, err := r.NewClient(r.ApimClientConfig)
+		if err != nil {
+			logger.Error(err, "Failed to create APIM client")
+			return ctrl.Result{}, err
+		}
+		r.apimClient = c
 	}
-	r.apimClient = c
 	if backend.DeletionTimestamp != nil {
 		return ctrl.Result{}, r.handleDeletion(ctx, &backend)
 	}
