@@ -26,4 +26,4 @@ jobs:
         uses: golang/govulncheck-action@v1
         with:
            go-version-file: go.mod
-           work-dir: ${{ matrix.module-dirs }}
+           work-dir: ${{ matrix.module-dir }}
