@@ -146,7 +146,7 @@ func (r *ApiVersionReconciler) handleApiVersionUpdate(ctx context.Context, apiVe
 		if shaErr != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to get policy sha: %w", shaErr)
 		}
-		if apiVersion.Spec.Policies != nil && apiVersion.Status.LastAppliedPolicySha != lastPolicySha || azure.IsNotFoundError(policyErr) {
+		if apiVersion.Status.LastAppliedPolicySha != lastPolicySha || azure.IsNotFoundError(policyErr) {
 			if err := r.createUpdatePolicy(ctx, apiVersion); err != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to create/update policy: %w", err)
 			}
