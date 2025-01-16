@@ -1,0 +1,29 @@
+name: Vulncheck
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: '0 6 * * *' #Every day at 6
+
+jobs:
+  test-build:
+    name: Check for go vulnerabilities
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      matrix:
+        module-dir:
+        - "services/dis-apim-operator"
+        - "tools/daisctl"
+    steps:
+      - uses: actions/checkout@v4
+      - id: govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+           go-version-file: go.mod
+           work-dir: ${{ matrix.module-dir }}
