@@ -22,6 +22,18 @@ prometheus:
           cloud: "AzurePublic"
           sdk:
             tenantId: "${tenant_id}"
+    tolerations:
+      - key: "kubernetes.azure.com/scalesetpriority"
+        operator: "Equal"
+        value: "spot"
+        effect: "NoSchedule"
+      - key: "workload"
+        operator: "Equal"
+        value: "prometheus"
+        effect: "NoSchedule"
+    resources:
+      requests:
+        memory: 8Gi
     priorityClassName: "system-cluster-critical"
     retention: 1d
     storageSpec:
@@ -29,4 +41,4 @@ prometheus:
         spec:
           resources:
             requests:
-              storage: 5Gi
+              storage: 15Gi
