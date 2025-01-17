@@ -9,7 +9,7 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
     auto_scaling_enabled = true
     min_count            = 1
     max_count            = 10
-    vm_size              = "Standard_D2_v2"
+    vm_size              = "Standard_D3_v2"
     upgrade_settings { # Adding these to keep plans clean
       drain_timeout_in_minutes      = 0
       max_surge                     = "10%"
