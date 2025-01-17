@@ -18,5 +18,5 @@ pool_configs = {
     max_count = "6"
   }
 }
-kubernetes_version = "1.29"
+kubernetes_version = "1.30"
 aks_sku_tier       = "Free"
