@@ -14,27 +14,25 @@ resource "azurerm_subnet" "subnets" {
 }
 
 resource "azurerm_public_ip" "pip4" {
-  name                 = "${var.name_prefix}-pip4"
-  location             = azurerm_resource_group.rg.location
-  resource_group_name  = azurerm_kubernetes_cluster.aks.node_resource_group
-  allocation_method    = "Static"
-  zones                = ["1", "2", "3"]
-  ddos_protection_mode = "Enabled"
-  sku                  = "Standard"
-  ip_version           = "IPv4"
-  domain_name_label    = var.name_prefix
+  name                = "${var.name_prefix}-pip4"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_kubernetes_cluster.aks.node_resource_group
+  allocation_method   = "Static"
+  zones               = ["1", "2", "3"]
+  sku                 = "Standard"
+  ip_version          = "IPv4"
+  domain_name_label   = var.name_prefix
 }
 
 resource "azurerm_public_ip" "pip6" {
-  name                 = "${var.name_prefix}-pip6"
-  location             = azurerm_resource_group.rg.location
-  resource_group_name  = azurerm_kubernetes_cluster.aks.node_resource_group
-  allocation_method    = "Static"
-  zones                = ["1", "2", "3"]
-  ddos_protection_mode = "Enabled"
-  sku                  = "Standard"
-  ip_version           = "IPv6"
-  domain_name_label    = var.name_prefix
+  name                = "${var.name_prefix}-pip6"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_kubernetes_cluster.aks.node_resource_group
+  allocation_method   = "Static"
+  zones               = ["1", "2", "3"]
+  sku                 = "Standard"
+  ip_version          = "IPv6"
+  domain_name_label   = var.name_prefix
 }
 
 resource "azurerm_public_ip_prefix" "prefix4" {
