@@ -34,6 +34,8 @@ prometheus:
     resources:
       requests:
         memory: 8Gi
+    nodeSelector:
+      prometheus: true
     priorityClassName: "system-cluster-critical"
     retention: 1d
     storageSpec:
