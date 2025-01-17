@@ -9,6 +9,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     git \
     iputils-ping \
     jq \
+    unzip \
     lsb-release \
     software-properties-common && \
     rm -rf /var/lib/apt/lists/*
