@@ -115,7 +115,7 @@ runs:
       if: always()
       working-directory: ${{ inputs.working_directory }}
       run: |
-        terraform plan -detailed-exitcode -no-color -input=false -out tfplan.out ${{ inputs.tf_args }} 2>&1 > tfplan.log ; cat tfplan.log
+        terraform plan -detailed-exitcode -no-color -input=false -out tfplan.out ${{ inputs.tf_args }} 2>&1 > tfplan.log  && cat tfplan.log || export EC=$?; cat tfplan.log; exit $EC
       env:
         ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
         ARM_SUBSCRIPTION_ID: ${{ inputs.arm_subscription_id }}
