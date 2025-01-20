@@ -51,7 +51,7 @@ products:
         - app-frontend-react
 
   - name: Digitalt Dødsbo
-    slug: DDD
+    slug: DDD # DigDir Digitalt Dødsbo
     github:
       owner: Altinn
       repositories:
