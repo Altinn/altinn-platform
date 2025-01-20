@@ -49,3 +49,10 @@ products:
       owner: altinn
       repositories:
         - app-frontend-react
+
+  - name: Digitalt Dødsbo
+    slug: DDD # DigDir Digitalt Dodsbo
+    github:
+      owner: Altinn
+      repositories:
+        - dd-infrastructure
