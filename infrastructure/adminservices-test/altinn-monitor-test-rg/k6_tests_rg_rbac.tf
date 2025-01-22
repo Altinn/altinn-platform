@@ -38,7 +38,7 @@ resource "kubernetes_cluster_role_v1" "sp_access" {
   rule {
     api_groups = [""]
     resources  = ["configmaps"]
-    verbs      = ["create", "update"]
+    verbs      = ["create", "update", "delete"]
   }
   rule {
     api_groups = ["bitnami.com"]
@@ -48,7 +48,17 @@ resource "kubernetes_cluster_role_v1" "sp_access" {
   rule {
     api_groups = ["k6.io"]
     resources  = ["testruns"]
-    verbs      = ["create", "update"]
+    verbs      = ["create", "update", "get", "watch", "delete"]
+  }
+  rule {
+    api_groups = [""]
+    resources  = ["pods"]
+    verbs      = ["get", "list"]
+  }
+  rule {
+    api_groups = [""]
+    resources  = ["pods/log"]
+    verbs      = ["get", "list"]
   }
 }
 
