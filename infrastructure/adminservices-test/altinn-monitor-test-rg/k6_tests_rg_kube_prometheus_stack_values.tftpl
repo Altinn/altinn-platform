@@ -37,10 +37,10 @@ prometheus:
     nodeSelector:
       prometheus: "true"
     priorityClassName: "system-cluster-critical"
-    retention: 1d
+    retention: 6h
     storageSpec:
       volumeClaimTemplate:
         spec:
           resources:
             requests:
-              storage: 15Gi
+              storage: 64Gi
