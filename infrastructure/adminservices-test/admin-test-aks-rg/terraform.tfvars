@@ -20,3 +20,4 @@ pool_configs = {
 }
 kubernetes_version = "1.30"
 aks_sku_tier       = "Free"
+flux_release_tag   = "latest"

@@ -30,3 +30,6 @@ variable "pool_configs" {
     max_count = string
   }))
 }
+variable "flux_release_tag" {
+  type = string
+}
