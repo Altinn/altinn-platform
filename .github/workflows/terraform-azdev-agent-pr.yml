@@ -18,11 +18,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Get version from tags
-        id: version
-        run: |
-          tag=${GITHUB_REF/refs\/tags\//}
-          echo "version=${tag%-demo}" >> "$GITHUB_OUTPUT"
       - name: Get Git commit timestamps
         run: echo "TIMESTAMP=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
       - name: Set up QEMU
