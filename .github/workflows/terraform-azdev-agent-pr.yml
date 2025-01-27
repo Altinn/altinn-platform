@@ -31,8 +31,6 @@ jobs:
           context: ./infrastructure/images/terraform-azure-devops-agent
           push: false
           platforms: linux/amd64,linux/arm64
-          cache-from: gha
-          cache-to: gha
           tags: ${{ github.repository }}/terraform-azure-devops-agent:test
         env:
           SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
