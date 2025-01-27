@@ -1,0 +1,41 @@
+name: Test build terraform azure devops agent
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/terraform-azdev-agent-pr.yml
+      - infrastructure/images/terraform-azure-devops-agent/**
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  build:
+    name: Test build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get version from tags
+        id: version
+        run: |
+          tag=${GITHUB_REF/refs\/tags\//}
+          echo "version=${tag%-demo}" >> "$GITHUB_OUTPUT"
+      - name: Get Git commit timestamps
+        run: echo "TIMESTAMP=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build
+        id: docker_build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./infrastructure/images/terraform-azure-devops-agent
+          push: false
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ github.repository }}/terraform-azure-devops-agent:test
+        env:
+          SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
