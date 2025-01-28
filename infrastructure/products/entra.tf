@@ -115,7 +115,7 @@ resource "azuread_group_member" "product_readers" {
 
 # https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/group_member
 resource "azuread_group_member" "admin_contributor" {
-  group_object_id  = azuread_group.developers[each.key].id
+  group_object_id  = azuread_group.developers[each.key].object_id
   member_object_id = azuread_group.admins[each.key].object_id
 
   for_each = local.products
@@ -123,7 +123,7 @@ resource "azuread_group_member" "admin_contributor" {
 
 # https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/group_member
 resource "azuread_group_member" "contributor_reader" {
-  group_object_id  = azuread_group.readers[each.key].id
+  group_object_id  = azuread_group.readers[each.key].object_id
   member_object_id = azuread_group.developers[each.key].object_id
 
   for_each = local.products
