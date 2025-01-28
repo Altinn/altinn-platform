@@ -3,7 +3,7 @@
 Image maintained by the platform team which installs some standard software that is used by our Terraform pipelines
 
 ## Maintenance
-Renovate is enbaled on this repo so it should issue a PR when there is a new version of the base image.
+Renovate is enabled on this repository and will automatically create a PR when there is a new version of the base image.
 If quicker turnaround is needed update the `Dockerfile`
 
 ### Additional software installed
