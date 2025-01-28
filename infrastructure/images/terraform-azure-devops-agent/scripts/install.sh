@@ -1,8 +1,10 @@
 #!/bin/bash
 set -e
 
+# Versions
+KUBECTL_VERSION="v1.32.1" #Get the latest version with: curl -L -s https://dl.k8s.io/release/stable.txt
+
 # Install kubectl
-KUBECTL_VERSION="v1.32.1"
 echo "Installing kubectl $KUBECTL_VERSION"
 curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
 curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256"
