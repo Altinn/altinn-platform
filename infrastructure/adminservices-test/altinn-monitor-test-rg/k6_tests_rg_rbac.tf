@@ -95,3 +95,37 @@ resource "kubernetes_role_binding_v1" "dialogporten_sp_access" {
     name      = "b22b612d-9dc5-4f8b-8816-e551749bd19c"
   }
 }
+
+resource "kubernetes_role_binding_v1" "correspondence_dev_access" {
+  metadata {
+    name      = "dev-access"
+    namespace = "correspondence"
+  }
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "ClusterRole"
+    name      = "dev-access"
+  }
+  subject {
+    kind      = "Group"
+    namespace = "correspondence"
+    name      = "954a4d24-8c7e-4382-9861-2b5d1a515253"
+  }
+}
+
+resource "kubernetes_role_binding_v1" "correspondence_sp_access" {
+  metadata {
+    name      = "github-sp-access"
+    namespace = "correspondence"
+  }
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "ClusterRole"
+    name      = "github-sp-access"
+  }
+  subject {
+    kind      = "Group"
+    namespace = "correspondence"
+    name      = "e36ca3b3-f495-45a5-bca4-4fc83424633f"
+  }
+}
