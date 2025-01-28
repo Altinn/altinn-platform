@@ -32,13 +32,14 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push
+      - name: Build
         id: docker_build
         uses: docker/build-push-action@v6
         with:
           context: ./infrastructure/images/terraform-azure-devops-agent
-          push: true
-          platforms: linux/amd64,linux/arm64
+          push: false
+          load: true
+          platforms: linux/amd64
           cache-from: gha
           cache-to: gha
           tags: ghcr.io/${{ steps.vars.outputs.reponame }}/terraform-azure-devops-agent:v${{ steps.vars.outputs.version }}
@@ -53,3 +54,15 @@ jobs:
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
+      - name: Push
+        id: docker_push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./infrastructure/images/terraform-azure-devops-agent
+          push: true
+          platforms: linux/amd64
+          cache-from: gha
+          cache-to: gha
+          tags: ghcr.io/${{ steps.vars.outputs.reponame }}/terraform-azure-devops-agent:v${{ steps.vars.outputs.version }}
+        env:
+          SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
