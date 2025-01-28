@@ -1,0 +1,2 @@
+# Checkd against kubectl with govulncheck and kubectl is not affected
+CVE-2024-45338

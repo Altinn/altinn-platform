@@ -42,5 +42,6 @@ jobs:
           format: table
           exit-code: 1
           ignore-unfixed: true
+          trivyignores: ./infrastructure/images/terraform-azure-devops-agent/.trivyignore
           vuln-type: os,library
           severity: HIGH,CRITICAL
