@@ -37,8 +37,32 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./infrastructure/images/azure-devops-agent
+          push: false
+          load: true
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: ghcr.io/${{ steps.vars.outputs.reponame }}/azure-devops-agent:v${{ steps.vars.outputs.version }}
+        env:
+          SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          image-ref: ghcr.io/${{ steps.vars.outputs.reponame }}/azure-devops-agent:v${{ steps.vars.outputs.version }}
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+      - name: Push
+        id: docker_push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./infrastructure/images/azure-devops-agent
           push: true
           platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: ghcr.io/${{ steps.vars.outputs.reponame }}/azure-devops-agent:v${{ steps.vars.outputs.version }}
         env:
           SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
