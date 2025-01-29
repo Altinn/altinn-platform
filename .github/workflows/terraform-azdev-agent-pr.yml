@@ -33,6 +33,8 @@ jobs:
           load: true
           platforms: linux/amd64
           tags: terraform-azure-devops-agent:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
         env:
           SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
       - name: Scan with trivy

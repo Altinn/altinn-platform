@@ -40,8 +40,8 @@ jobs:
           push: false
           load: true
           platforms: linux/amd64
-          cache-from: gha
-          cache-to: gha
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: ghcr.io/${{ steps.vars.outputs.reponame }}/terraform-azure-devops-agent:v${{ steps.vars.outputs.version }}
         env:
           SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
@@ -62,8 +62,8 @@ jobs:
           context: ./infrastructure/images/terraform-azure-devops-agent
           push: true
           platforms: linux/amd64
-          cache-from: gha
-          cache-to: gha
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: ghcr.io/${{ steps.vars.outputs.reponame }}/terraform-azure-devops-agent:v${{ steps.vars.outputs.version }}
         env:
           SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
