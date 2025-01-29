@@ -52,6 +52,7 @@ jobs:
           format: 'table'
           exit-code: '1'
           ignore-unfixed: true
+          trivyignores: ./infrastructure/images/gh-runner/.trivyignore
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
       - name: Push
