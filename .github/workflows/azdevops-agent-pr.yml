@@ -35,7 +35,20 @@ jobs:
         with:
           context: ./infrastructure/images/azure-devops-agent
           push: false
+          load: true
           platforms: linux/amd64
-          tags: ${{ github.repository }}/azure-devops-agent:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: azure-devops-agent:test
         env:
           SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
+      - name: Scan with trivy
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          image-ref: azure-devops-agent:test
+          format: table
+          exit-code: 1
+          ignore-unfixed: true
+          trivyignores: ./infrastructure/images/azure-devops-agent/.trivyignore
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
