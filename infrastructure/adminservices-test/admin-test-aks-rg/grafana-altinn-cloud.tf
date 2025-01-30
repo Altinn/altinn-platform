@@ -10,7 +10,7 @@ spec:
   redirectRegex:
     permanent: true
     regex: ^http(|s)://(.*)grafana.(.*)altinn.(no|cloud)(.*)
-    replacement:  https://altinn-grafana-test-b2b8dpdkcvfuhfd3.eno.grafana.azure.com$${5}
+    replacement:  https://altinn-grafana-test-b2b8dpdkcvfuhfd3.eno.grafana.azure.com\${5}
 YAML
 }
 
