@@ -63,6 +63,12 @@ resource "azurerm_kubernetes_cluster" "aks" {
     type = "SystemAssigned"
   }
 
+  monitor_metrics {}
+
+  oms_agent {
+    log_analytics_workspace_id      = azurerm_log_analytics_workspace.aks.id
+    msi_auth_for_monitoring_enabled = true
+  }
   # azure_active_directory_role_based_access_control {
   #   azure_rbac_enabled = true
   # }
