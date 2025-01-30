@@ -145,10 +145,43 @@ Azure also provides a few out-of-the-box dashboards that can be used to monitor 
 ### Services
 There are also a few services we need to maintain; mainly a Prometheus instance that is used as [the remote write target by the test pods](https://grafana.com/docs/k6/latest/results-output/real-time/prometheus-remote-write/) which then [forwards the metrics to the Azure Monitor Worspace](https://learn.microsoft.com/en-us/azure/azure-monitor/containers/prometheus-remote-write-managed-identity). Currently, the config is quite simple. The Prometheus instance was deployed via kube-prometheus-stack's Helm Chart together with AlertManager. Prometheus needs to be configured to use Workload Identity in order for it to be able to push metrics to the Azure Monitor Workspace. The rest of the prometheus configs tweaked so far were: Addition of externalLabels (likely not needed if we only use a single cluster), enableRemoteWriteReceiver to support receiving metrics via Remote Write from the test pods, a low retention period as the objective at the moment is only to keep the metrics long enough until they are remote writed to AMW (This might need to be tweaks depending on how we end up using AlertManager), configuration of the volumeClaimTemplate to select an appropriate disk type and size, and a remote write configuration block that points to the Azure Monitor Workspace. The K8s manifests also need some tweaks, mainly the ServiceAccount and Pod need some Workload Identity Labels and Annotations respectively.
 
+#### K6-Operator
 The other major service we need is the [k6-operator](https://grafana.com/docs/k6/latest/testing-guides/running-distributed-tests/) which is responsible for actually running the tests based on the TestRun manifests being applied to the cluster. The k6 operator is also deployed via a Helm Chart.
 
+
+#### SealedSecrets
 The last service is [Sealed Secrets](https://github.com/bitnami-labs/sealed-secrets) which can be used by developers that need to inject any sort of secrets into the cluster. Sealed Secrets allows for Secrets to be encrypted locally and commited to a Github repo. Only the controller running in the cluster is able to decrypt the secrets.
 
+The process is relatively simply but can be error prone. We should provide an easier interface in the long run. For now, developers will have to
+
+1. Install the kubeseal CLI https://github.com/bitnami-labs/sealed-secrets?tab=readme-ov-file#kubeseal
+
+2. Create a secret.yaml locally
+    ```
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: user-creds          # Set the name of the secret
+      namespace: team-namespace # The namespace where the team has permissions in
+    data:
+      username: <base64_encoded_string> # i.e. run echo -n 'the_username' | base64
+      password: <base64_encoded_string> # i.e. run echo -n 'the_password' | base64
+    ```
+3. Generate the SealedSecret
+    ```
+      kubeseal \
+      --cert https://raw.githubusercontent.com/Altinn/altinn-platform/refs/heads/main/infrastructure/adminservices-test/altinn-monitor-test-rg/k6_tests_rg_public_cert.pem \
+      --secret-file secret.yaml \
+      --sealed-secret-file sealedsecret.yaml \
+      --format yaml
+    ```
+4. The SealedSecret can be pushed into the repo and apply'ed into the K6 cluster.
+5. The TestRun CustomResource has to be updated to reference the Secret that get's created in-cluster after being decrypted by the SealedSecrets Operator.
+    ```
+        envFrom:
+          secretRef:
+            name: "token-generator-creds"
+    ```
 
 
 ### Potential Use-Cases
