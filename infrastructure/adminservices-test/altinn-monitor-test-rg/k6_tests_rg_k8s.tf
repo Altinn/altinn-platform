@@ -1,3 +1,54 @@
+resource "azurerm_log_analytics_workspace" "k6tests" {
+  name                = "k6tests-law"
+  location            = azurerm_resource_group.k6tests_rg.location
+  resource_group_name = azurerm_resource_group.k6tests_rg.name
+  daily_quota_gb      = 5 # TODO: check how many logs we are generating and tweak accordingly
+  retention_in_days   = 30
+}
+
+resource "azurerm_monitor_data_collection_rule" "k6tests" {
+  name                = "k6tests-dcr"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.k6tests_rg.location
+
+  destinations {
+    log_analytics {
+      workspace_resource_id = azurerm_log_analytics_workspace.k6tests.id
+      name                  = "ciworkspace"
+    }
+  }
+
+  data_flow {
+    streams      = ["Microsoft-ContainerLog", ]
+    destinations = ["ciworkspace"]
+  }
+
+  data_sources {
+    extension {
+      streams        = ["Microsoft-ContainerLog", ]
+      extension_name = "ContainerInsights"
+      extension_json = jsonencode({
+        "dataCollectionSettings" : {
+          "interval" : "1m",
+          "namespaceFilteringMode" : "Include",
+          "namespaces" : ["dialogporten", "correspondence"] # Only in the namespaces we have k6 tests running for now.
+          "enableContainerLogV2" : false
+        }
+      })
+      name = "ContainerInsightsExtension"
+    }
+  }
+
+  description = "DCR for Azure Monitor Container Insights"
+}
+
+resource "azurerm_monitor_data_collection_rule_association" "k6tests" {
+  name                    = "ContainerInsightsExtension"
+  target_resource_id      = azurerm_kubernetes_cluster.k6tests.id
+  data_collection_rule_id = azurerm_monitor_data_collection_rule.k6tests.id
+  description             = "Association of container insights data collection rule. Deleting this association will break the data collection for this AKS Cluster."
+}
+
 resource "azurerm_kubernetes_cluster" "k6tests" {
   name                = "k6tests-cluster"
   location            = azurerm_resource_group.k6tests_rg.location
@@ -31,6 +82,11 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
     # tenant_id = "" # Optional
     admin_group_object_ids = ["c9c317cc-aec0-4c8b-bdad-b54333686e8a"]
     azure_rbac_enabled     = false
+  }
+
+  oms_agent {
+    log_analytics_workspace_id      = azurerm_log_analytics_workspace.k6tests.id
+    msi_auth_for_monitoring_enabled = true
   }
 
 }
