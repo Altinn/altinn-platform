@@ -183,6 +183,25 @@ The process is relatively simply but can be error prone. We should provide an ea
             name: "token-generator-creds"
     ```
 
+#### Using different node pools
+If the node pools already exist in the cluster, scheduling pods onto them can be done by adding an extra configuration to the TestRun CustomResource
+```
+nodeSelector:
+  kubernetes.azure.com/scalesetpriority:spot
+  spot:true
+```
+Where the values under nodeSelector match the labels on the node pools.
+```
+kubectl get node/<node_name> -o json | jq '.metadata.labels'
+{
+  ...
+  "kubernetes.azure.com/scalesetpriority": "spot",
+  ...
+  "spot": "true",
+  ...
+}
+```
+If there are no node pools that match the requirements of the team, we simply need to add new node pools with suitable labels onto them.
 
 ### Potential Use-Cases
 The [Grafana K6 documentation](https://grafana.com/docs/k6/latest/testing-guides/automated-performance-testing/#model-the-scenarios-and-workload) has a lot of good information to get started.
