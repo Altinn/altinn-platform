@@ -203,6 +203,27 @@ kubectl get node/<node_name> -o json | jq '.metadata.labels'
 ```
 If there are no node pools that match the requirements of the team, we simply need to add new node pools with suitable labels onto them.
 
+NB: Azure adds taints in spot nodes by default. Therefore, an extra bit of configuration needs to be added.
+```
+tolerations:
+- key: "kubernetes.azure.com/scalesetpriority"
+  operator: "Equal"
+  value: "spot"
+  effect: "NoSchedule"
+```
+which matches
+```
+ kubectl get node/<node_name> -o json | jq '.spec.taints'
+[
+  {
+    "effect": "NoSchedule",
+    "key": "kubernetes.azure.com/scalesetpriority",
+    "value": "spot"
+  }
+]
+```
+
+
 ### Potential Use-Cases
 The [Grafana K6 documentation](https://grafana.com/docs/k6/latest/testing-guides/automated-performance-testing/#model-the-scenarios-and-workload) has a lot of good information to get started.
 - Smoke Tests: Validate that your script works and that the system performs adequately under minimal load.
