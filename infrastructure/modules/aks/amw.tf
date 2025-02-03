@@ -34,7 +34,7 @@ resource "azurerm_monitor_data_collection_rule" "amw" {
 
   description = "DCR for Azure Monitor Metrics Profile (Managed Prometheus)"
   depends_on = [
-    azurerm_monitor_data_collection_endpoint.aks
+    azurerm_monitor_data_collection_endpoint.amw
   ]
 }
 
