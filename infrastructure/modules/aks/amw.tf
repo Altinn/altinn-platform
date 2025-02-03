@@ -44,6 +44,6 @@ resource "azurerm_monitor_data_collection_rule_association" "amw" {
   data_collection_rule_id = azurerm_monitor_data_collection_rule.amw.id
   description             = "Association of data collection rule. Deleting this association will break the data collection for this AKS Cluster."
   depends_on = [
-    azurerm_monitor_data_collection_rule.aks
+    azurerm_monitor_data_collection_rule.amw
   ]
 }
