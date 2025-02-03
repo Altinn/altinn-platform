@@ -1,4 +1,4 @@
-name: admin-test-aks-rg deploy
+name: admin-test-aks-rg
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
       - .github/workflows/admin-test-aks-rg-deploy.yml
       - actions/terraform/apply/**
       - actions/terraform/plan/**
-      - infrastructure/adminservices-test/altinn-monitor-test-rg/**
+      - infrastructure/adminservices-test/admin-test-aks-rg/**
   pull_request:
     branches:
       - main
