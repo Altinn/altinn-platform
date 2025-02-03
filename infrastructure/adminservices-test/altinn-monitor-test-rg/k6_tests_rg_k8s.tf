@@ -19,13 +19,13 @@ resource "azurerm_monitor_data_collection_rule" "k6tests" {
   }
 
   data_flow {
-    streams      = ["Microsoft-ContainerLog", ]
+    streams      = ["Microsoft-ContainerLog", "KubeEvents", "KubePodInventory", "KubeNodeInventory"]
     destinations = ["ciworkspace"]
   }
 
   data_sources {
     extension {
-      streams        = ["Microsoft-ContainerLog", ]
+      streams        = ["Microsoft-ContainerLog", "KubeEvents", "KubePodInventory", "KubeNodeInventory"]
       extension_name = "ContainerInsights"
       extension_json = jsonencode({
         "dataCollectionSettings" : {
