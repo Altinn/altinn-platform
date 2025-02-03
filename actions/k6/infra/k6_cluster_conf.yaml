@@ -1,0 +1,16 @@
+prometheus_rw_server_url: http://kube-prometheus-stack-prometheus.monitoring:9090/api/v1/write
+node_types:
+  spot:
+    has_labels: true
+    has_tolerations: true
+    nodeSelector:
+      "kubernetes.azure.com/scalesetpriority": "spot"
+      spot: "true" # TODO: TestRun doesn't like that true isn't quoted on the manifest.
+    tolerations:
+      - key: "kubernetes.azure.com/scalesetpriority"
+        operator: "Equal"
+        value: "spot"
+        effect: "NoSchedule"
+  default:
+    has_labels: false
+    has_tolerations: false

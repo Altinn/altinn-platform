@@ -1,0 +1,57 @@
+name: "k6-tests-e2e"
+description: "Run k6 tests in k8s"
+inputs:
+  azure-client-id:
+    description: "TODO"
+    required: true
+  azure-tenant-id:
+    description: "TODO"
+    required: true
+  test_script_filepath:
+    description: "TODO"
+    required: true
+  namespace:
+    description: "The namespace where the k8s resources will be deployed in"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: OIDC Login to Azure Public Cloud
+      id: oidc_login_to_azure_public_cloud
+      uses: azure/login@v2
+      with:
+        client-id: ${{ inputs.azure-client-id }}
+        tenant-id: ${{ inputs.azure-tenant-id }}
+        # allow-no-subscriptions: true
+        subscription-id: 1ce8e9af-c2d6-44e7-9c5e-099a308056fe
+
+    - name: Populate kubeconfig with k6 context
+      id: populate_kubeconfig_with_k6_context
+      shell: bash
+      run: |
+        if ! az aks install-cli; then
+          echo "Failed to install kubectl CLI"
+          exit 1
+        fi
+
+        if ! az aks get-credentials --resource-group k6tests-rg --name k6tests-cluster; then
+          echo "Failed to populate kubeconfig"
+          exit 1
+        fi
+
+        if ! kubelogin convert-kubeconfig -l azurecli; then
+          echo "Failed to convert kubeconfig"
+          exit 1
+        fi
+
+    - name: Generate k8s manifests
+      uses: ./actions/k6/
+      with:
+        test_script_filepath: ${{ inputs.test_script_filepath }}
+        namespace: ${{ inputs.namespace }}
+
+    - name: Apply k8s manifests
+      shell: bash
+      run: |
+        kubectl -n ${{ inputs.namespace }} apply -f .dist/

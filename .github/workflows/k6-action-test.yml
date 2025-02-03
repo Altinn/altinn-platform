@@ -1,0 +1,63 @@
+name: Test K6 Actions
+
+on:
+  push: # Config is done via files or by hardcoding values into the "with" block
+  workflow_dispatch: # Most of the config should be similar to 'push' but allow tweaks to certain params
+    inputs:
+      test_script_filepath:
+        required: true
+        type: string
+        default: "./services/k6/first_test.js"
+      vus:
+        required: true
+        type: number
+        default: 10
+      duration:
+        required: true
+        type: string
+        default: "1m"
+      namespace:
+        required: true
+        type: string
+        default: "platform"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  k6-test-run-push:
+    if: github.event_name == 'push'
+    environment: reader
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Checkout code
+      id: checkout_code
+      uses: actions/checkout@v4
+
+    - name: Run k6 tests
+      uses: ./actions/k6-e2e/
+      with:
+        azure-client-id: ${{ vars.TF_AZURE_CLIENT_ID }}
+        azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        test_script_filepath: "./services/k6/first_test.js"
+        namespace: "platform"
+
+  k6-test-run-adhoc:
+    if: github.event_name == 'workflow_dispatch'
+    environment: reader
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Checkout code
+      id: checkout_code
+      uses: actions/checkout@v4
+
+    - name: Run k6 tests
+      uses: ./actions/k6-e2e/
+      with:
+        azure-client-id: ${{ vars.TF_AZURE_CLIENT_ID }}
+        azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        test_script_filepath:  ${{ inputs.test_script_filepath }}
+        namespace: ${{ inputs.namespace }}

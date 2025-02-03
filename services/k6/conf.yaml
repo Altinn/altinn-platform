@@ -1,0 +1,24 @@
+# Must fit w.e namespace the SP is allowed to deploy in.
+namespace: platform
+# List of key value pairs to be used when creating a Sealed Secret.
+# secret:
+#  name: "token-generator-creds"
+
+node_type: default
+
+# Test run specific tweaks
+test_run:
+  name: yt01-k8-wrapper
+  vus: 10
+  duration: 1m
+  parallelism: 2
+
+# K6 specific options
+k6:
+  env:
+    - name: API_VERSION
+      value: "v1"
+    - name: API_ENVIRONMENT
+      value: "yt01"
+
+  test_file: ""
