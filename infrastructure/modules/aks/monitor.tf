@@ -15,7 +15,7 @@ resource "azurerm_monitor_workspace" "aks" {
 }
 
 resource "random_id" "aks" {
-  byte_length = 6
+  byte_length = 3 # 3 gives 6 characters
 }
 
 resource "azurerm_storage_account" "aks" {
