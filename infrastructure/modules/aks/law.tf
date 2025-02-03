@@ -11,7 +11,7 @@ resource "azurerm_monitor_data_collection_rule" "law" {
   }
 
   data_flow {
-    streams      = var.streams
+    streams      = ["Microsoft-ContainerLog", "Microsoft-ContainerLogV2", "Microsoft-KubeEvents", "Microsoft-KubePodInventory"]
     destinations = ["${azurerm_log_analytics_workspace.aks.name}"]
   }
 
