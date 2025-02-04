@@ -117,15 +117,15 @@ resource "azurerm_kubernetes_cluster_node_pool" "prometheus" {
   vm_size               = "Standard_D3_v2"
   auto_scaling_enabled  = false
   node_count            = 1
-  priority              = "Spot" # Spot since we are still testing
-  eviction_policy       = "Delete"
-  spot_max_price        = -1 # (the current on-demand price for a Virtual Machine)
+  # priority              = "Spot" # Spot since we are still testing
+  # eviction_policy       = "Delete"
+  # spot_max_price        = -1 # (the current on-demand price for a Virtual Machine)
   node_labels = {
-    "kubernetes.azure.com/scalesetpriority" : "spot", # Automatically added by Azure
+    # "kubernetes.azure.com/scalesetpriority" : "spot", # Automatically added by Azure
     prometheus : true
   }
   node_taints = [
-    "kubernetes.azure.com/scalesetpriority=spot:NoSchedule", # Automatically added by Azure
+    # "kubernetes.azure.com/scalesetpriority=spot:NoSchedule", # Automatically added by Azure
     "workload=prometheus:NoSchedule",
   ]
 }

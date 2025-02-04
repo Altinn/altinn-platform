@@ -23,10 +23,10 @@ prometheus:
           sdk:
             tenantId: "${tenant_id}"
     tolerations:
-      - key: "kubernetes.azure.com/scalesetpriority"
-        operator: "Equal"
-        value: "spot"
-        effect: "NoSchedule"
+    #  - key: "kubernetes.azure.com/scalesetpriority"
+    #    operator: "Equal"
+    #    value: "spot"
+    #    effect: "NoSchedule"
       - key: "workload"
         operator: "Equal"
         value: "prometheus"
