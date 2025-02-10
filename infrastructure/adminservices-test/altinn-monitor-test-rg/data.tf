@@ -50,7 +50,7 @@ data "azurerm_resource_group" "rg_studio_prod" {
 
 data "azurerm_log_analytics_workspace" "studio_law_test" {
   name                = "altinn-studio-test-log"
-  resource_group_name = data.azurerm_resource_group.rg_studio_dev.name
+  resource_group_name = data.azurerm_resource_group.rg_studio_test.name
   provider            = azurerm.studio_test
 }
 
