@@ -1,0 +1,13 @@
+# An attacker can craft an input to the Parse functions that would be processed
+# non-linearly with respect to its length, resulting in extremely slow parsing.
+# This could cause a denial of service.
+CVE-2024-45338
+
+# Calling Decoder.Decode on a message which contains
+# deeply nested structures can cause a panic due to stack exhaustion.
+CVE-2024-34156
+
+# Not relevant for us.
+# We can remove the CVE whenever the current alpine image updates the package version
+# or we could change to a distroless images!
+# I would rather do that once we require less debugging tho.
