@@ -195,14 +195,14 @@ resource "azurerm_role_assignment" "log_analytics_reader_dp_test" {
 }
 
 # Studio
-resource "azurerm_role_assignment" "log_analytics_reader_dp_prod" {
+resource "azurerm_role_assignment" "log_analytics_reader_studio_prod" {
   principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
   scope                            = data.azurerm_log_analytics_workspace.studio_law_prod.id
   role_definition_name             = "Log Analytics Reader"
   skip_service_principal_aad_check = true
 }
 
-resource "azurerm_role_assignment" "log_analytics_reader_dp_test" {
+resource "azurerm_role_assignment" "log_analytics_reader_studio_test" {
   scope                            = data.azurerm_log_analytics_workspace.studio_law_test.id
   role_definition_name             = "Log Analytics Reader"
   principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
