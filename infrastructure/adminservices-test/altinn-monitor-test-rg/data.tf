@@ -38,13 +38,28 @@ data "azurerm_log_analytics_workspace" "dp_law_prod" {
 }
 
 # Studio
-data "azurerm_resource_group" "rg_studio_test" {
+data "azurerm_resource_group" "rg_studio_law_test" {
   name     = "altinn-rg"
   provider = azurerm.studio_test
 }
 
-data "azurerm_resource_group" "rg_studio_prod" {
+data "azurerm_resource_group" "rg_studio_law_prod" {
   name     = "altinn-rg"
+  provider = azurerm.studio_prod
+}
+
+data "azurerm_resource_group" "rg_studio_dev" {
+  name     = "studio-dev-rg"
+  provider = azurerm.studio_test
+}
+
+data "azurerm_resource_group" "rg_studio_stag" {
+  name     = "studio-staging-rg"
+  provider = azurerm.studio_test
+}
+
+data "azurerm_resource_group" "rg_studio_prod" {
+  name     = "studio-prod-rg"
   provider = azurerm.studio_prod
 }
 
