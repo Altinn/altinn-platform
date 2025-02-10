@@ -88,6 +88,37 @@ resource "azurerm_role_assignment" "grafana_identity_reader_rg_dp_prod" {
   skip_service_principal_aad_check = true
 }
 
+# Studio
+resource "azurerm_role_assignment" "monitoring_reader_rg_studio_test" {
+
+  scope                            = data.azurerm_resource_group.rg_studio_test.id
+  role_definition_id               = "/subscriptions/${split("/", azurerm_monitor_workspace.altinn_monitor.id)[2]}/providers/Microsoft.Authorization/roleDefinitions/43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+  principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "monitoring_reader_rg_studio_prod" {
+
+  scope                            = data.azurerm_resource_group.rg_studio_prod.id
+  role_definition_id               = "/subscriptions/${split("/", azurerm_monitor_workspace.altinn_monitor.id)[2]}/providers/Microsoft.Authorization/roleDefinitions/43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+  principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "grafana_identity_reader_rg_studio_test" {
+  scope                            = "/subscriptions/971ddbb1-27d0-4cc7-a016-461dab5cec05"
+  role_definition_name             = "Monitoring Reader"
+  principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "grafana_identity_reader_rg_studio_prod" {
+  scope                            = "/subscriptions/f66298ed-870c-40e0-bb74-6db89c1a364b"
+  role_definition_name             = "Monitoring Reader"
+  principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
+  skip_service_principal_aad_check = true
+}
+
 
 locals {
   altinn_30_broker_prod_developers        = "7708786a-aa50-4ce8-9f7f-e85459357de1"
@@ -158,6 +189,21 @@ resource "azurerm_role_assignment" "log_analytics_reader_dp_test" {
   for_each = data.azurerm_log_analytics_workspace.dp_law_test
 
   scope                            = each.value.id
+  role_definition_name             = "Log Analytics Reader"
+  principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
+  skip_service_principal_aad_check = true
+}
+
+# Studio
+resource "azurerm_role_assignment" "log_analytics_reader_studio_prod" {
+  principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
+  scope                            = data.azurerm_log_analytics_workspace.studio_law_prod.id
+  role_definition_name             = "Log Analytics Reader"
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "log_analytics_reader_studio_test" {
+  scope                            = data.azurerm_log_analytics_workspace.studio_law_test.id
   role_definition_name             = "Log Analytics Reader"
   principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
   skip_service_principal_aad_check = true

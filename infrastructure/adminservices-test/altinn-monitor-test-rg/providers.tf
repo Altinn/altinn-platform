@@ -42,3 +42,18 @@ provider "azurerm" {
   features {}
   resource_provider_registrations = "none"
 }
+
+# Studio
+provider "azurerm" {
+  alias           = "studio_test"
+  subscription_id = "971ddbb1-27d0-4cc7-a016-461dab5cec05"
+  features {}
+  resource_provider_registrations = "none"
+}
+
+provider "azurerm" {
+  alias           = "studio_prod"
+  subscription_id = "f66298ed-870c-40e0-bb74-6db89c1a364b"
+  features {}
+  resource_provider_registrations = "none"
+}
