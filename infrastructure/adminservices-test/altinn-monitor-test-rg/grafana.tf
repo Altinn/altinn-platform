@@ -89,9 +89,33 @@ resource "azurerm_role_assignment" "grafana_identity_reader_rg_dp_prod" {
 }
 
 # Studio
-resource "azurerm_role_assignment" "monitoring_reader_rg_studio_test" {
+resource "azurerm_role_assignment" "monitoring_reader_rg_studio_law_test" {
 
-  scope                            = data.azurerm_resource_group.rg_studio_test.id
+  scope                            = data.azurerm_resource_group.rg_studio_law_test.id
+  role_definition_id               = "/subscriptions/${split("/", azurerm_monitor_workspace.altinn_monitor.id)[2]}/providers/Microsoft.Authorization/roleDefinitions/43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+  principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "monitoring_reader_rg_studio_law_prod" {
+
+  scope                            = data.azurerm_resource_group.rg_studio_law_prod.id
+  role_definition_id               = "/subscriptions/${split("/", azurerm_monitor_workspace.altinn_monitor.id)[2]}/providers/Microsoft.Authorization/roleDefinitions/43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+  principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "monitoring_reader_rg_studio_dev" {
+
+  scope                            = data.azurerm_resource_group.rg_studio_dev.id
+  role_definition_id               = "/subscriptions/${split("/", azurerm_monitor_workspace.altinn_monitor.id)[2]}/providers/Microsoft.Authorization/roleDefinitions/43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+  principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "monitoring_reader_rg_studio_stag" {
+
+  scope                            = data.azurerm_resource_group.rg_studio_stag.id
   role_definition_id               = "/subscriptions/${split("/", azurerm_monitor_workspace.altinn_monitor.id)[2]}/providers/Microsoft.Authorization/roleDefinitions/43d0d8ad-25c7-4714-9337-8ba259a9fe05"
   principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
   skip_service_principal_aad_check = true

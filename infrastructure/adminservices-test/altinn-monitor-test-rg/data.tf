@@ -38,24 +38,39 @@ data "azurerm_log_analytics_workspace" "dp_law_prod" {
 }
 
 # Studio
-data "azurerm_resource_group" "rg_studio_test" {
+data "azurerm_resource_group" "rg_studio_law_test" {
   name     = "altinn-rg"
   provider = azurerm.studio_test
 }
 
-data "azurerm_resource_group" "rg_studio_prod" {
+data "azurerm_resource_group" "rg_studio_law_prod" {
   name     = "altinn-rg"
+  provider = azurerm.studio_prod
+}
+
+data "azurerm_resource_group" "rg_studio_dev" {
+  name     = "studio-dev-rg"
+  provider = azurerm.studio_test
+}
+
+data "azurerm_resource_group" "rg_studio_stag" {
+  name     = "studio-staging-rg"
+  provider = azurerm.studio_test
+}
+
+data "azurerm_resource_group" "rg_studio_prod" {
+  name     = "studio-prod-rg"
   provider = azurerm.studio_prod
 }
 
 data "azurerm_log_analytics_workspace" "studio_law_test" {
   name                = "altinn-studio-test-log"
-  resource_group_name = data.azurerm_resource_group.rg_studio_test.name
+  resource_group_name = data.azurerm_resource_group.rg_studio_law_test.name
   provider            = azurerm.studio_test
 }
 
 data "azurerm_log_analytics_workspace" "studio_law_prod" {
   name                = "altinn-studio-prod-log"
-  resource_group_name = data.azurerm_resource_group.rg_studio_prod.name
+  resource_group_name = data.azurerm_resource_group.rg_studio_law_prod.name
   provider            = azurerm.studio_prod
 }
