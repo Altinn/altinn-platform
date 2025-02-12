@@ -141,8 +141,8 @@ resource "azurerm_storage_account" "backend" {
 
 # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_container
 resource "azurerm_storage_container" "container" {
-  name                 = "tfstates"
-  storage_account_name = azurerm_storage_account.backend.name
+  name               = "tfstates"
+  storage_account_id = azurerm_storage_account.backend.id
 }
 
 # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/api_management_group
@@ -249,7 +249,7 @@ resource "azurerm_role_assignment" "admins" {
 
 # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
 resource "azurerm_role_assignment" "product_admins_storage_blob_owner" {
-  scope                = azurerm_storage_container.container.resource_manager_id
+  scope                = azurerm_storage_container.container.id
   principal_id         = azuread_group.product_admins.object_id
   role_definition_name = data.azurerm_role_definition.storage_blob_data_owner.name
   #  skip_service_principal_aad_check = true
@@ -257,7 +257,7 @@ resource "azurerm_role_assignment" "product_admins_storage_blob_owner" {
 
 # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
 resource "azurerm_role_assignment" "product_admins_user_access_administrator" {
-  scope                = azurerm_storage_container.container.resource_manager_id
+  scope                = azurerm_storage_container.container.id
   principal_id         = azuread_group.product_admins.object_id
   role_definition_name = data.azurerm_role_definition.user_access_administrator.name
   #  skip_service_principal_aad_check = true
@@ -289,7 +289,7 @@ resource "azurerm_role_assignment" "product_reader_app_config_list_keys_action" 
 
 # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
 resource "azurerm_role_assignment" "product_readers_storage_blob_owner" {
-  scope                = azurerm_storage_container.container.resource_manager_id
+  scope                = azurerm_storage_container.container.id
   principal_id         = azuread_group.product_readers.object_id
   role_definition_name = data.azurerm_role_definition.storage_blob_data_owner.name
   condition_version    = "2.0"
@@ -314,7 +314,7 @@ resource "azurerm_role_assignment" "product_readers_reader" {
 
 # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
 resource "azurerm_role_assignment" "products" {
-  scope                = azurerm_storage_container.container.resource_manager_id
+  scope                = azurerm_storage_container.container.id
   principal_id         = azuread_group.admins[each.value.slug].object_id
   role_definition_name = data.azurerm_role_definition.storage_blob_data_owner.name
 
@@ -340,7 +340,7 @@ resource "azurerm_role_assignment" "products" {
 
 # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
 resource "azurerm_role_assignment" "appregg" {
-  scope                            = azurerm_storage_container.container.resource_manager_id
+  scope                            = azurerm_storage_container.container.id
   principal_id                     = azuread_service_principal.product[each.key].object_id
   role_definition_name             = data.azurerm_role_definition.storage_blob_data_owner.name
   skip_service_principal_aad_check = true

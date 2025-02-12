@@ -22,6 +22,7 @@ terraform {
 # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs
 provider "azurerm" {
   features {} # Required
+  subscription_id = "d43d5057-8389-40d5-88c4-04db9275cbf2"
 }
 
 # https://registry.terraform.io/providers/integrations/github/latest/docs
@@ -209,4 +210,3 @@ locals {
     ]
   ]) : environment => environment }
 }
-
