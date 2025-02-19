@@ -8,6 +8,6 @@ resource "helm_release" "pyrra" {
   version          = "0.14.2"
   set {
     name  = "genericRules.enabled"
-    value = "true"
+    value = true
   }
 }
