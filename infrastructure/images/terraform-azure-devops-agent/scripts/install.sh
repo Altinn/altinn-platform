@@ -43,7 +43,7 @@ apt-get update
 # Install PowerShell
 apt-get install -y powershell
 # Install the Azure PowerShell module
-powershell -Command {Install-Module -Name Az -Repository PSGallery -Force}
+pwsh -Command "Install-Module -Name Az -Repository PSGallery -Force"
 # remove apt cache
 rm -rf /var/lib/apt/lists/*
 
@@ -53,7 +53,7 @@ rm -rf /var/lib/apt/lists/*
 ###################################
 curl -LO "https://github.com/helm/helm/releases/download/${HELM_VERSION}/helm-${HELM_VERSION}-linux-amd64.tar.gz.asc"
 curl -LO "https://github.com/helm/helm/releases/download/${HELM_VERSION}/helm-${HELM_VERSION}-linux-386.tar.gz.sha256sum.asc"
-echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
+echo "$(cat helm-${HELM_VERSION}-linux-amd64.tar.gz.sha256sum)  helm-${HELM_VERSION}-linux-amd64.tar.gz" | sha256sum --check
 tar -zxvf helm-${HELM_VERSION}-linux-amd64.tar.gz
 mv linux-amd64/helm /usr/local/bin/helm
 
