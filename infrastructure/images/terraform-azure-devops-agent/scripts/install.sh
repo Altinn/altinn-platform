@@ -43,7 +43,7 @@ apt-get update
 # Install PowerShell
 apt-get install -y powershell
 # Install the Azure PowerShell module
-Install-Module -Name Az -Repository PSGallery -Force
+powershell -Command {Install-Module -Name Az -Repository PSGallery -Force}
 # remove apt cache
 rm -rf /var/lib/apt/lists/*
 
