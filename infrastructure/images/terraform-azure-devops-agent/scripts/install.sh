@@ -3,7 +3,7 @@ set -e
 
 # Versions
 KUBECTL_VERSION="v1.32.1" #Get the latest version with: curl -L -s https://dl.k8s.io/release/stable.txt
-HELM_VERSION="v3.17.0" #Find the latest version at https://github.com/helm/helm/releases
+HELM_VERSION="v3.17.1" #Find the latest version at https://github.com/helm/helm/releases
 
 ###################################
 ### Install kubectl
@@ -51,13 +51,13 @@ rm -rf /var/lib/apt/lists/*
 ###################################
 # Install Helm
 ###################################
-curl -LO "https://github.com/helm/helm/releases/download/${HELM_VERSION}/helm-${HELM_VERSION}-linux-amd64.tar.gz.asc"
-curl -LO "https://github.com/helm/helm/releases/download/${HELM_VERSION}/helm-${HELM_VERSION}-linux-386.tar.gz.sha256sum.asc"
-echo "$(cat helm-${HELM_VERSION}-linux-386.tar.gz.sha256sum.asc) helm-${HELM_VERSION}-linux-amd64.tar.gz.asc" | sha256sum --check
-tar -zxvf helm-${HELM_VERSION}-linux-amd64.tar.gz.asc
+curl -LO "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz"
+curl -LO "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz.sha256sum"
+echo "$(cat helm-${HELM_VERSION}-linux-amd64.tar.gz helm-${HELM_VERSION}-linux-amd64.tar.gz.sha256sum" | sha256sum --check
+tar -zxvf helm-${HELM_VERSION}-linux-amd64.tar.gz
 mv linux-amd64/helm /usr/local/bin/helm
 
-rm -rf helm-${HELM_VERSION}-linux-amd64.tar.gz.asc helm-${HELM_VERSION}-linux-386.tar.gz.sha256sum.asc linux-amd64
+rm -rf helm-${HELM_VERSION}-linux-amd64.tar.gz helm-${HELM_VERSION}-linux-amd64.tar.gz.sha256sum linux-amd64
 
 
 ###################################
