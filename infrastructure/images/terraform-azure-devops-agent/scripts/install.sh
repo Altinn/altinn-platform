@@ -30,17 +30,17 @@ source /etc/os-release
 wget -q https://packages.microsoft.com/config/ubuntu/$VERSION_ID/packages-microsoft-prod.deb
 
 # Register the Microsoft repository keys
-sudo dpkg -i packages-microsoft-prod.deb
+dpkg -i packages-microsoft-prod.deb
 
 # Delete the Microsoft repository keys file
 rm packages-microsoft-prod.deb
 
 # Update the list of packages after we added packages.microsoft.com
-sudo apt-get update
+apt-get update
 
 ###################################
 # Install PowerShell
-sudo apt-get install -y powershell
+apt-get install -y powershell
 
 # remove apt cache
 rm -rf /var/lib/apt/lists/*
