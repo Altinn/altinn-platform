@@ -1,10 +1,49 @@
 local k = import 'github.com/jsonnet-libs/k8s-libsonnet/1.32/main.libsonnet';
-local yamlconf = std.parseYaml(std.extVar('userconfig'));
 local k6ClusterYamlConf = std.parseYaml(std.extVar('k6clusterconfig'));
-local suffix = std.extVar('suffix');
+// Global
+local unique_name = std.extVar('unique_name');
+local namespace = std.extVar('namespace');
+local deploy_env = std.extVar('deploy_env');
+// Testrun
+local parallelism = std.extVar('parallelism');
+local extra_env_vars = std.parseYaml(std.extVar('extra_env_vars'));
+local resources = std.parseYaml(std.extVar('resources'));
+local node_type = std.extVar('node_type');
+local sealed_secret_name = std.extVar('sealed_secret_name');
+//
 local extra_cli_args = std.extVar('extra_cli_args');
-local testscriptdir = std.extVar('testscriptdir');
-local unique_name = yamlconf.test_run.name + '-' + suffix;
+
+local slo = {
+  new(slo_name, team, application): {
+    apiVersion: 'pyrra.dev/v1alpha1',
+    kind: 'ServiceLevelObjective',
+    metadata: {
+      name: slo_name,
+      namespace: namespace,
+      labels: {
+        prometheus: 'k8s',
+        role: 'alert-rules',
+        'pyrra.dev/team': team,
+        'pyrra.dev/application': application,
+        release: 'kube-prometheus-stack',  // Important, otherwise the Prometheus instance won't pick it up
+      },
+    },
+    spec: {
+      target: '99.0',
+      window: '7d',
+      indicator: {
+        ratio: {
+          errors: {
+            metric: 'k6_http_reqs_total{ name=~".*/kuberneteswrapper/api/v1/Deployments", status=~"5...|418" }',
+          },
+          total: {
+            metric: 'k6_http_reqs_total{ name=~".*/kuberneteswrapper/api/v1/Deployments" }',
+          },
+        },
+      },
+    },
+  },
+};
 
 local testrun = {
   new(): {
@@ -12,7 +51,7 @@ local testrun = {
     kind: 'TestRun',
     metadata: {
       name: unique_name,
-      namespace: yamlconf.namespace,
+      namespace: namespace,
     },
     spec: {
       // cleanup: 'post',
@@ -21,7 +60,7 @@ local testrun = {
         std.format('--tag testid=%s --out experimental-prometheus-rw %s',
                    [unique_name, extra_cli_args]), ' '
       ),
-      parallelism: yamlconf.test_run.parallelism,
+      parallelism: parallelism,
       script: {
         configMap: {
           name: unique_name,
@@ -43,20 +82,16 @@ local testrun = {
               name: 'K6_PROMETHEUS_RW_TREND_STATS',
               value: 'avg,min,med,max,count,p(95),p(99),p(99.5),p(99.9)',
             },
-          ] + [{ name: v.name, value: std.toString(v.value) } for v in yamlconf.test_run.env],  // TODO: Values from userconf should override the defaults. atm both get added
+          ] + [{ name: v.name, value: std.toString(v.value) } for v in extra_env_vars],  // TODO: Values from userconf should override the defaults. atm both get added
         metadata: {
           labels: {
             'k6-test': unique_name,
           },
         },
-        resources: if std.objectHas(yamlconf, 'test_run') && std.objectHas(yamlconf.test_run, 'resources') then yamlconf.test_run.resources else {
-          requests: {
-            memory: '200Mi',
-          },
-        },
+        resources: resources,
         envFrom: [{
           configMapRef: {
-            name: 'deploy-environments-' + yamlconf.deploy_env,
+            name: 'deploy-environments-' + deploy_env,
           },
         }],
       },
@@ -65,10 +100,8 @@ local testrun = {
   withNodeType(node_type): {
     spec+: {
       runner+: {
-        nodeSelector: if std.objectHas(k6ClusterYamlConf.node_types, node_type)
-        then { [v.label]: std.toString(v.value) for v in k6ClusterYamlConf.node_types[node_type].nodeSelector } else {},
-        tolerations: if std.objectHas(k6ClusterYamlConf.node_types, node_type)
-        then k6ClusterYamlConf.node_types[node_type].tolerations else [],
+        nodeSelector: { [v.label]: std.toString(v.value) for v in k6ClusterYamlConf.node_types[node_type].nodeSelector },
+        tolerations: k6ClusterYamlConf.node_types[node_type].tolerations,
       },
     },
   },
@@ -85,7 +118,9 @@ local testrun = {
   },
 };
 {
-  'testrun.json': testrun.new()
-                  + testrun.withNodeType(yamlconf.node_type)
-                  + if std.objectHas(yamlconf, 'secret') then testrun.withEnvFromSecret(yamlconf.secret.name) else {},
+  ['testrun-' + unique_name + '-.json']: testrun.new()
+                                         + testrun.withNodeType(node_type)
+                                         + if sealed_secret_name != '' then testrun.withEnvFromSecret(sealed_secret_name) else {},
+  // TODO: Disable for now since most of the things are hardcoded
+  ['slo-' + unique_name + '-.json']: if false then slo.new('k8-wrapper-deployments-query', 'platform', 'k8s-wrapper') else {},
 }

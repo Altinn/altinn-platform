@@ -11,6 +11,6 @@ node_types:
         operator: "Equal"
         value: "spot"
         effect: "NoSchedule"
-  # default:
-  #  nodeSelector: {}
-  #  tolerations: []
+  default:
+    nodeSelector: []
+    tolerations: []

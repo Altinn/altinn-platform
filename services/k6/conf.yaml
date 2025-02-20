@@ -1,64 +1,6 @@
-# Must fit w.e namespace the SP is allowed to deploy in.
 namespace: platform
-# List of key value pairs to be used when creating a Sealed Secret.
-# secret:
-#  name: "token-generator-creds"
 
-tests:
-  - test_file: services/k6/first_test.js
-    deploy_env: [yt01, at22]
-    node_type: default
-    test_types:
-      - type: smoke
-        enable: true
-      - type: soak
-        enable: false
-      - type: spike
-        enable: false
-      - type: breakpoint
-        enable: false
-    test_run:
-      name: first_test
-      parallelism: 1
-      resources:
-        requests:
-          memory: "400Mi"
-          cpu: "250m"
-    env:
-      - name: FOO
-        value: "BAR"
-      #- name: K6_PROMETHEUS_RW_TREND_STATS
-      #  value: "avg,min,med,max,count,p(95),p(99)"
-      #- name: K6_VUS
-      #  value: 10
-      #- name: K6_DURATION
-      #  value: "720h"
-
-  - test_file: services/k6/second_test.js
-    deploy_env: [yt01]
-    node_type: spot
-    test_types:
-      - type: smoke
-        enable: true
-      - type: soak
-        enable: false
-      - type: spike
-        enable: false
-      - type: breakpoint
-        enable: false
-    test_run:
-      name: second_test
-      parallelism: 1
-      resources:
-        requests:
-          memory: "200Mi"
-          cpu: "100m"
-    env:
-      - name: FOO
-        value: "BAR"
-      #- name: K6_PROMETHEUS_RW_TREND_STATS
-      #  value: "avg,min,med,max,count,p(95),p(99)"
-      #- name: K6_VUS
-      #  value: 10
-      #- name: K6_DURATION
-      #  value: "720h"
+test_definitions:
+  - test_file: services/k6/test_k8s_wrapper_get_deployments.js
+    contexts:
+      - environment: at22
