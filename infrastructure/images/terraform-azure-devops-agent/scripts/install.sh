@@ -53,7 +53,7 @@ rm -rf /var/lib/apt/lists/*
 ###################################
 curl -LO "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz"
 curl -LO "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz.sha256sum"
-echo "$(cat helm-${HELM_VERSION}-linux-amd64.tar.gz) helm-${HELM_VERSION}-linux-amd64.tar.gz.sha256sum" | sha256sum --check
+echo "$(cat helm-${HELM_VERSION}-linux-amd64.tar.gz.sha256sum) helm-${HELM_VERSION}-linux-amd64.tar.gz" | sha256sum --check
 tar -zxvf helm-${HELM_VERSION}-linux-amd64.tar.gz
 mv linux-amd64/helm /usr/local/bin/helm
 
