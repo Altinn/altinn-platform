@@ -3,6 +3,7 @@ set -e
 
 # Versions
 KUBECTL_VERSION="v1.32.1" #Get the latest version with: curl -L -s https://dl.k8s.io/release/stable.txt
+HELM_VERSION="v3.17.1" #Find the latest version at https://github.com/helm/helm/releases
 
 ###################################
 ### Install kubectl
@@ -15,7 +16,7 @@ echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
 # Install kubectl
 install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 # Clean up
-rm kubectl kubectl.sha256 install.sh
+rm kubectl kubectl.sha256
 
 ###################################
 ### Install powershell
@@ -41,6 +42,25 @@ apt-get update
 ###################################
 # Install PowerShell
 apt-get install -y powershell
-
+# Install the Azure PowerShell module
+pwsh -Command "Install-Module -Name Az -Repository PSGallery -Force"
 # remove apt cache
 rm -rf /var/lib/apt/lists/*
+
+
+###################################
+# Install Helm
+###################################
+curl -LO "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz"
+curl -LO "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz.sha256sum"
+cat helm-${HELM_VERSION}-linux-amd64.tar.gz.sha256sum | sha256sum --check
+tar -zxvf helm-${HELM_VERSION}-linux-amd64.tar.gz
+mv linux-amd64/helm /usr/local/bin/helm
+
+rm -rf helm-${HELM_VERSION}-linux-amd64.tar.gz helm-${HELM_VERSION}-linux-amd64.tar.gz.sha256sum linux-amd64
+
+
+###################################
+# Remove self
+###################################
+rm install.sh
