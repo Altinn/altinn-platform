@@ -65,3 +65,5 @@ test_definitions:
           type: smoke
           enabled: true
           config_file: services/k6/test_configs/yt01_config.json # Check that yt config is added and Grafana to see both endpoints being target
+# V6
+# Scale down k8s wrapper in at22 and check Pyrra dashboard
