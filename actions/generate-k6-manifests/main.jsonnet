@@ -5,7 +5,7 @@ local unique_name = std.extVar('unique_name');
 local namespace = std.extVar('namespace');
 local deploy_env = std.extVar('deploy_env');
 // Testrun
-local parallelism = std.extVar('parallelism');
+local parallelism = std.parseInt(std.extVar('parallelism'));
 local extra_env_vars = std.parseYaml(std.extVar('extra_env_vars'));
 local resources = std.parseYaml(std.extVar('resources'));
 local node_type = std.extVar('node_type');
@@ -122,5 +122,5 @@ local testrun = {
                                          + testrun.withNodeType(node_type)
                                          + if sealed_secret_name != '' then testrun.withEnvFromSecret(sealed_secret_name) else {},
   // TODO: Disable for now since most of the things are hardcoded
-  ['slo-' + unique_name + '-.json']: if false then slo.new('k8-wrapper-deployments-query', 'platform', 'k8s-wrapper') else {},
+  ['slo-' + unique_name + '-.json']: if false then slo.new('k8-wrapper-deployments-query', 'platform', 'k8s-wrapper') else '',
 }
