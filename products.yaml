@@ -24,7 +24,7 @@ products:
   - name: Studio
     slug: PAS # Product Altinn Studio
     github:
-      owner: altinn
+      owner: Altinn
       repositories:
         - altinn-studio
 
