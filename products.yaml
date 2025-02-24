@@ -39,9 +39,10 @@ products:
   - name: Core
     slug: PAC # Product Altinn Core
     github:
-      owner: altinn
+      owner: Altinn
       repositories:
         - altinn-receipt
+        - altinn-notifications
 
   - name: Apps
     slug: APP # Apps
