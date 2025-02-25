@@ -62,44 +62,41 @@ resource "kubernetes_cluster_role_v1" "sp_access" {
   }
 }
 
-resource "kubernetes_role_binding_v1" "dialogporten_dev_access" {
-  metadata {
-    name      = "dev-access"
-    namespace = "dialogporten"
-  }
-  role_ref {
-    api_group = "rbac.authorization.k8s.io"
-    kind      = "ClusterRole"
-    name      = "dev-access"
-  }
-  subject {
-    kind      = "Group"
-    namespace = "dialogporten"
-    name      = "c403060d-5c8a-41b0-8c19-84fa60d0ce18"
-  }
-}
-
-resource "kubernetes_role_binding_v1" "dialogporten_sp_access" {
-  metadata {
-    name      = "github-sp-access"
-    namespace = "dialogporten"
-  }
-  role_ref {
-    api_group = "rbac.authorization.k8s.io"
-    kind      = "ClusterRole"
-    name      = "github-sp-access"
-  }
-  subject {
-    kind      = "Group"
-    namespace = "dialogporten"
-    name      = "b22b612d-9dc5-4f8b-8816-e551749bd19c"
+variable "k8s_rbac" {
+  type = map(
+    object(
+      {
+        namespace = string
+        dev_group = string
+        sp_group  = string
+      }
+    )
+  )
+  default = {
+    dialogporten = {
+      namespace = "dialogporten",
+      dev_group = "c403060d-5c8a-41b0-8c19-84fa60d0ce18"
+      sp_group  = "b22b612d-9dc5-4f8b-8816-e551749bd19c"
+    }
+    correspondence = {
+      namespace = "correspondence"
+      dev_group = "954a4d24-8c7e-4382-9861-2b5d1a515253"
+      sp_group  = "e36ca3b3-f495-45a5-bca4-4fc83424633f"
+    }
+    core = {
+      namespace = "core"
+      dev_group = "4dde4651-a9ca-4df1-9e05-216272284c7d"
+      sp_group  = "e87d6f10-6fc0-4a09-a9b0-e8c994ed4052"
+    }
   }
 }
 
-resource "kubernetes_role_binding_v1" "correspondence_dev_access" {
+resource "kubernetes_role_binding_v1" "dev_access" {
+  for_each = var.k8s_rbac
+
   metadata {
     name      = "dev-access"
-    namespace = "correspondence"
+    namespace = each.value.namespace
   }
   role_ref {
     api_group = "rbac.authorization.k8s.io"
@@ -108,49 +105,17 @@ resource "kubernetes_role_binding_v1" "correspondence_dev_access" {
   }
   subject {
     kind      = "Group"
-    namespace = "correspondence"
-    name      = "954a4d24-8c7e-4382-9861-2b5d1a515253"
+    namespace = each.value.namespace
+    name      = each.value.dev_group
   }
 }
 
-resource "kubernetes_role_binding_v1" "correspondence_sp_access" {
-  metadata {
-    name      = "github-sp-access"
-    namespace = "correspondence"
-  }
-  role_ref {
-    api_group = "rbac.authorization.k8s.io"
-    kind      = "ClusterRole"
-    name      = "github-sp-access"
-  }
-  subject {
-    kind      = "Group"
-    namespace = "correspondence"
-    name      = "e36ca3b3-f495-45a5-bca4-4fc83424633f"
-  }
-}
+resource "kubernetes_role_binding_v1" "sp_access" {
+  for_each = var.k8s_rbac
 
-resource "kubernetes_role_binding_v1" "core_dev_access" {
-  metadata {
-    name      = "dev-access"
-    namespace = "core"
-  }
-  role_ref {
-    api_group = "rbac.authorization.k8s.io"
-    kind      = "ClusterRole"
-    name      = "dev-access"
-  }
-  subject {
-    kind      = "Group"
-    namespace = "core"
-    name      = "4dde4651-a9ca-4df1-9e05-216272284c7d"
-  }
-}
-
-resource "kubernetes_role_binding_v1" "core_sp_access" {
   metadata {
     name      = "github-sp-access"
-    namespace = "core"
+    namespace = each.value.namespace
   }
   role_ref {
     api_group = "rbac.authorization.k8s.io"
@@ -159,7 +124,7 @@ resource "kubernetes_role_binding_v1" "core_sp_access" {
   }
   subject {
     kind      = "Group"
-    namespace = "core"
-    name      = "e87d6f10-6fc0-4a09-a9b0-e8c994ed4052"
+    namespace = each.value.namespace
+    name      = each.value.sp_group
   }
 }
