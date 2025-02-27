@@ -13,48 +13,9 @@ permissions:
   packages: read
 
 jobs:
-  build:
-    name: Test build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Get version from tags
-        id: version
-        run: |
-          tag=${GITHUB_REF/refs\/tags\//}
-          echo "version=${tag%-demo}" >> $GITHUB_OUTPUT
-      - name: Get Git commit timestamps
-        run: echo "TIMESTAMP=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to Docker
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build
-        id: docker_build
-        uses: docker/build-push-action@v6
-        with:
-          context: ./infrastructure/images/gh-runner
-          push: false
-          load: true
-          platforms: linux/amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          tags: gh-runner:test
-        env:
-          SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
-      - name: Scan with trivy
-        uses: aquasecurity/trivy-action@0.29.0
-        with:
-          image-ref: gh-runner:test
-          format: table
-          exit-code: 1
-          ignore-unfixed: true
-          trivyignores: ./infrastructure/images/gh-runner/.trivyignore
-          vuln-type: os,library
-          severity: HIGH,CRITICAL
+  scan:
+    uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yaml
+    with:
+      release_latest: false
+      image_name: gh-runner
+      workdir: ./infrastructure/images/gh-runner

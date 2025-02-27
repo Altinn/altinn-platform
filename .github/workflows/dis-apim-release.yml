@@ -1,0 +1,69 @@
+name: Release gh-runner
+
+on:
+  push:
+    tags:
+      - "ghrunner-*"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get variables from tags
+        id: vars
+        run: |
+          tag=${GITHUB_REF/refs\/tags\/ghrunner-/}
+          echo "version=${tag%-demo}" >> $GITHUB_OUTPUT
+          echo "reponame=${GITHUB_REPOSITORY,,}" >>${GITHUB_OUTPUT}
+      - name: Get Git commit timestamps
+        run: echo "TIMESTAMP=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to Docker
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        id: docker_build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./infrastructure/images/gh-runner
+          push: false
+          load: true
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: ghcr.io/${{ steps.vars.outputs.reponame }}/gh-runner:v${{ steps.vars.outputs.version }}
+        env:
+          SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          image-ref: ghcr.io/${{ steps.vars.outputs.reponame }}/gh-runner:v${{ steps.vars.outputs.version }}
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          trivyignores: ./infrastructure/images/gh-runner/.trivyignore
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+      - name: Push
+        id: docker_push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./infrastructure/images/gh-runner
+          push: true
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: ghcr.io/${{ steps.vars.outputs.reponame }}/gh-runner:v${{ steps.vars.outputs.version }}
+        env:
+          SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
