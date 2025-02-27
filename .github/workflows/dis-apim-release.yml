@@ -1,22 +1,22 @@
-name: Scan/Release gh-runner base image
+name: Scan/Release Dis Apim Operator Image
 
 on:
   pull_request:
     branches:
       - main
     paths:
-      - .github/workflows/gh-runner-pr.yml
-      - infrastructure/images/gh-runner/**
+      - .github/workflows/dis-apim-release.yml
+      - services/dis-apim-operator/**
       - .github/workflows/reusable-image-scan-and-release-ghcr.yaml
   push:
     branches:
       - main
     paths:
-      - .github/workflows/gh-runner-pr.yml
-      - infrastructure/images/gh-runner/**
+      - .github/workflows/dis-apim-release.yml
+      - services/dis-apim-operator/**
       - .github/workflows/reusable-image-scan-and-release-ghcr.yaml
     tags:
-      - "ghrunner-*"
+      - "dis-apim-*"
 
 permissions:
   contents: read
@@ -26,7 +26,7 @@ jobs:
   scan:
     uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yaml
     with:
-      release_latest: false
-      image_name: gh-runner
-      tag_prefix: ghrunner-
-      workdir: ./infrastructure/images/gh-runner
+      release_latest: true
+      tag_prefix: dis-apim-
+      image_name: dis-apim-operator
+      workdir: ./services/dis-apim-operator
