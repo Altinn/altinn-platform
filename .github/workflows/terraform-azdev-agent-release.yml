@@ -1,4 +1,4 @@
-name: Release azure devops agent
+name: Scan/Release azure devops agent
 
 on:
   pull_request:

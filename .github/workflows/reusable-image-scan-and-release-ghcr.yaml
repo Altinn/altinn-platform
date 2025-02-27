@@ -32,17 +32,19 @@ on:
                 default: false
                 type: boolean
 
-env:
-  TAG_PREFIX: ${{ inputs.tag_prefix }}
-  RELEASE_LATEST: ${{ inputs.release_latest }}
-
 jobs:
   scan:
     runs-on: ubuntu-latest
+    outputs:
+      timestamp: ${{ steps.git-info.outputs.timestamp }}
+      reponame: ${{ steps.git-info.outputs.reponame }}
     steps:
       - uses: actions/checkout@v4
       - name: Get Git commit timestamps
-        run: echo "TIMESTAMP=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
+        id: git-info
+        run: |
+          echo "timestamp=$(git log -1 --pretty=%ct)" >> ${GITHUB_OUTPUT}
+          echo "reponame=${GITHUB_REPOSITORY,,}" >> ${GITHUB_OUTPUT}
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
@@ -59,7 +61,7 @@ jobs:
           cache-to: type=gha,mode=max
           tags: ${{ inputs.image_name }}:scan
         env:
-          SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
+          SOURCE_DATE_EPOCH: ${{ steps.git-info.outputs.timestamp }}
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@0.29.0
         with:
@@ -81,9 +83,6 @@ jobs:
         run: |
           tag=${GITHUB_REF/refs\/tags\/${{ inputs.tag_prefix }}/}
           echo "version=${tag%-demo}" >> $GITHUB_OUTPUT
-          echo "reponame=${GITHUB_REPOSITORY,,}" >>${GITHUB_OUTPUT}
-      - name: Get Git commit timestamps
-        run: echo "TIMESTAMP=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
@@ -103,9 +102,9 @@ jobs:
           platforms: ${{ inputs.platforms }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          tags: ghcr.io/${{ steps.vars.outputs.reponame }}/${{inputs.image_name}}:v${{ steps.vars.outputs.version }}
+          tags: ghcr.io/${{ needs.scan.outputs.reponame }}/${{inputs.image_name}}:v${{ steps.vars.outputs.version }}
         env:
-          SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
+          SOURCE_DATE_EPOCH: ${{ needs.scan.outputs.timestamp }}
 
   release-main:
     runs-on: ubuntu-latest
@@ -113,12 +112,6 @@ jobs:
     if: inputs.scan_only == false && github.ref == 'refs/heads/main' && inputs.release_latest
     steps:
       - uses: actions/checkout@v4
-      - name: Get variables from tags
-        id: vars
-        run: |
-          echo "reponame=${GITHUB_REPOSITORY,,}" >>${GITHUB_OUTPUT}
-      - name: Get Git commit timestamps
-        run: echo "TIMESTAMP=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
@@ -138,6 +131,6 @@ jobs:
           platforms: ${{ inputs.platforms }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          tags: ghcr.io/${{ steps.vars.outputs.reponame }}/${{inputs.image_name}}:latest
+          tags: ghcr.io/${{ needs.scan.outputs.reponame }}/${{inputs.image_name}}:latest
         env:
-          SOURCE_DATE_EPOCH: ${{ env.TIMESTAMP }}
+          SOURCE_DATE_EPOCH: ${{ needs.scan.outputs.timestamp }}
