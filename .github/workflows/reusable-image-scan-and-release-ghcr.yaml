@@ -27,7 +27,39 @@ on:
                 default: 'linux/amd64,linux/arm64'
                 type: string
 
+env:
+  TAG_PREFIX: ${{ inputs.tag_prefix }}
+  RELEASE_LATEST: ${{ inputs.release_latest }}
+
 jobs:
+  ensureEnvironment:
+    runs-on: ubuntu-latest
+    outputs:
+      tag_prefix: ${{ steps.envVars.outputs.tag_prefix }}
+      release_latest: ${{ steps.envVars.outputs.release_latest }}
+    steps:
+      - name: Pass inputs as job output(s)
+        id: envVars
+        run: |
+          ## This is a hack to ensure that the if condition in the release-tag job works ref: https://github.com/actions/runner/issues/1602
+          tag_prefix=${{ env.TAG_PREFIX }}
+          release_latest=${{ env.RELEASE_LATEST }}
+          
+          if [[ "$tag_prefix" -ne "-" ]]; then
+            echo "No tag prefix provided"
+          else
+            echo "Tag prefix provided: $tag_prefix"
+          fi
+          
+          echo "tag_prefix=$tag_prefix" >> $GITHUB_OUTPUT
+
+          if [[ "$release_latest" = true ]]; then
+            echo "Release latest is true"
+          else
+            echo "Release latest is false"
+          fi
+
+          echo "release_latest=$release_latest" >> $GITHUB_OUTPUT
   scan:
     runs-on: ubuntu-latest
     steps:
@@ -38,7 +70,7 @@ jobs:
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Build and push
+      - name: Build local image
         id: docker_build
         uses: docker/build-push-action@v6
         with:
@@ -63,8 +95,10 @@ jobs:
           severity: 'CRITICAL,HIGH'
   release-tag:
     runs-on: ubuntu-latest
-    needs: scan
-    if: ${{ inputs.tag_prefix}} != '-' && github.ref == 'refs/tags/${{ inputs.tag_prefix }}*'
+    needs: 
+      - ensureEnvironment
+      - scan
+    if: ${{ needs.ensureEnvironment.outputs.tag_prefix }} != '-' && github.ref == 'refs/tags/${{ needs.ensureEnvironment.outputs.tag_prefix }}*'
     steps:
       - uses: actions/checkout@v4
       - name: Get variables from tags
@@ -100,8 +134,10 @@ jobs:
 
   release-main:
     runs-on: ubuntu-latest
-    needs: scan
-    if: github.ref == 'refs/heads/main' && ${{ inputs.release_latest }}
+    needs: 
+      - ensureEnvironment
+      - scan
+    if: github.ref == 'refs/heads/main' && ${{ needs.ensureEnvironment.outputs.release_latest }}
     steps:
       - uses: actions/checkout@v4
       - name: Get variables from tags
