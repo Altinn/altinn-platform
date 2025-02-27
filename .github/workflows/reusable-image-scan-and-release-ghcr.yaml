@@ -73,7 +73,7 @@ jobs:
   release-tag:
     runs-on: ubuntu-latest
     needs: scan
-    if: !inputs.scan_only && inputs.tag_prefix!= '-' && github.ref == format('refs/tags/{0}*', inputs.tag_prefix)
+    if: inputs.scan_only == false && inputs.tag_prefix!= '-' && github.ref == format('refs/tags/{0}*', inputs.tag_prefix)
     steps:
       - uses: actions/checkout@v4
       - name: Get variables from tags
@@ -110,7 +110,7 @@ jobs:
   release-main:
     runs-on: ubuntu-latest
     needs: scan
-    if: !inputs.scan_only && github.ref == 'refs/heads/main' && inputs.release_latest
+    if: inputs.scan_only == false && github.ref == 'refs/heads/main' && inputs.release_latest
     steps:
       - uses: actions/checkout@v4
       - name: Get variables from tags
