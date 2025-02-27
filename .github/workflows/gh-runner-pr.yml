@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/gh-runner-pr.yml
       - infrastructure/images/gh-runner/**
+      - .github/workflows/reusable-image-scan-and-release-ghcr.yaml
 
 permissions:
   contents: read
