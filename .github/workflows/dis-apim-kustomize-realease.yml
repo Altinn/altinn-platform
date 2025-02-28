@@ -38,7 +38,7 @@ jobs:
           version: latest
       - name: Build latest artifact
         run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u USERNAME --password-stdin
+          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
           container_registry=ghcr.io/${{ steps.vars.outputs.reponame }}
           artifact_name=${{ env.ARTIFACT_NAME }}
           flux push artifact oci://${container_registry}/${artifact_name}:$(git rev-parse --short HEAD) \
@@ -72,7 +72,7 @@ jobs:
           echo "tag=${tag}" >> $GITHUB_OUTPUT
       - name: Build release artifact
         run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u USERNAME --password-stdin
+          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
           container_registry=ghcr.io/${{ steps.vars.outputs.reponame }}
           artifact_name=${{ env.ARTIFACT_NAME }}
           flux push artifact oci://${container_registry}/${artifact_name}:$(git rev-parse --short HEAD) \
