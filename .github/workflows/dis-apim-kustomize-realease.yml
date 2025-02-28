@@ -67,7 +67,7 @@ jobs:
       - name: Setup vars
         id: vars
         run: |
-          tag=${GITHUB_REF/refs\/tags\/${{ env.ARTIFACT_NAME }}-/}
+          tag=${GITHUB_REF/refs\/tags\/kustomize-dis-apim-/}
           echo "reponame=${GITHUB_REPOSITORY,,}" >> ${GITHUB_OUTPUT}
           echo "tag=${tag}" >> $GITHUB_OUTPUT
       - name: Build release artifact
