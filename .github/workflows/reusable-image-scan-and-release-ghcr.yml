@@ -26,11 +26,6 @@ on:
                 required: false
                 default: 'linux/amd64,linux/arm64'
                 type: string
-            scan_only:
-                description: 'Only run the scan job'
-                required: false
-                default: false
-                type: boolean
 
 jobs:
   scan:
@@ -75,7 +70,7 @@ jobs:
   release-tag:
     runs-on: ubuntu-latest
     needs: scan
-    if: inputs.scan_only == false && inputs.tag_prefix!= '-' && github.ref == format('refs/tags/{0}*', inputs.tag_prefix)
+    if: inputs.tag_prefix!= '-' && github.ref == format('refs/tags/{0}*', inputs.tag_prefix)
     steps:
       - uses: actions/checkout@v4
       - name: Get variables from tags
@@ -109,7 +104,7 @@ jobs:
   release-main:
     runs-on: ubuntu-latest
     needs: scan
-    if: inputs.scan_only == false && github.ref == 'refs/heads/main' && inputs.release_latest
+    if: github.ref == 'refs/heads/main' && inputs.release_latest
     steps:
       - uses: actions/checkout@v4
       - name: Set up QEMU
