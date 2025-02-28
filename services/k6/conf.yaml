@@ -1,0 +1,69 @@
+namespace: platform
+# V1
+#test_definitions:
+#  - test_file: services/k6/test_k8s_wrapper_get_deployments.js
+#    contexts:
+#      - environment: at22
+#        node_type: "default"
+#        test_run:
+#          name: "k8s-wrapper-deployments"
+# V2
+#test_definitions:
+#  - test_file: services/k6/test_k8s_wrapper_get_deployments.js
+#    config_file: services/k6/test_configs/default.json # Tweak the threshold value to make it obvious
+#    contexts:
+#      - environment: at22
+#        node_type: "default"
+#        test_run:
+#          name: "k8s-wrapper-deployments"
+# V3
+#test_definitions:
+#  - test_file: services/k6/test_k8s_wrapper_get_deployments.js
+#    config_file: services/k6/test_configs/default.json
+#    contexts:
+#      - environment: at22
+#        node_type: "default"
+#        test_run:
+#          name: "k8s-wrapper-deployments"
+#        test_type:
+#          type: smoke
+#          enabled: true
+#          config_file: services/k6/test_configs/at_config.json # Check the logs to confirm httpDebug
+# V4
+#test_definitions:
+#  - test_file: services/k6/test_k8s_wrapper_get_deployments.js
+#    contexts:
+#      - environment: at22
+#        test_run:
+#          name: "k8s-wrapper-deployments"
+#        test_type:
+#          type: spike # Check Grafana to see the spike
+#          enabled: true
+# V5
+#test_definitions:
+#  - test_file: services/k6/test_k8s_wrapper_get_deployments.js
+#    contexts:
+#      - environment: at22
+#        test_run:
+#          name: "k8s-wrapper-deployments"
+#      - environment: yt01
+#        test_run:
+#          name: "k8s-wrapper-deployments" # Check Grafana to see metrics for both envs
+test_definitions:
+  - test_file: services/k6/test_k8s_wrapper_get_deployments.js
+    contexts:
+      - environment: at22
+        test_run:
+          name: "k8s-wrapper-deployments"
+
+  - test_file: services/k6/test_k8s_wrapper_get_daemonsets.js
+    contexts:
+      - environment: yt01
+        test_run:
+          name: "k8s-wrapper-daemonsets"
+        test_type:
+          type: smoke
+          enabled: true
+          config_file: services/k6/test_configs/yt01_config.json # Check that yt config is added and Grafana to see both endpoints being target
+# V6
+# Scale down k8s wrapper in at22 and check Pyrra dashboard

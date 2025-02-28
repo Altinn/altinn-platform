@@ -1,0 +1,81 @@
+name: "run-k6-tests"
+description: "Run k6 tests in k8s"
+inputs:
+  azure-client-id:
+    description: "The client id associated with the SP to authenticate towards Azure"
+    required: true
+  azure-tenant-id:
+    description: "The Azure tenant id."
+    required: true
+  azure-subscription-id:
+    description: "The subscription id where the Platform managed k8 cluster is located."
+    required: true
+
+  test_script_filepath:
+    description: "The k6 test script to run"
+    required: true
+  namespace:
+    description: "The namespace where the k8s resources will be deployed in"
+    required: true
+
+  wait_for_test_to_finish:
+    description: "Waits until the TestRun is complete. Not recommended."
+    required: false
+    default: "False"
+
+  command_line_args:
+    description: "Command line arguments to pass to the k6 archive command"
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: OIDC Login to Azure Public Cloud
+      id: oidc_login_to_azure_public_cloud
+      uses: azure/login@v2
+      with:
+        client-id: ${{ inputs.azure-client-id }}
+        tenant-id: ${{ inputs.azure-tenant-id }}
+        subscription-id: ${{ inputs.azure-subscription-id }}
+
+    - name: Populate kubeconfig with k6 context
+      id: populate_kubeconfig_with_k6_context
+      shell: bash
+      run: |
+        if ! az aks install-cli; then
+          echo "Failed to install kubectl CLI"
+          exit 1
+        fi
+
+        if ! az aks get-credentials --resource-group k6tests-rg --name k6tests-cluster; then
+          echo "Failed to populate kubeconfig"
+          exit 1
+        fi
+
+        if ! kubelogin convert-kubeconfig -l azurecli; then
+          echo "Failed to convert kubeconfig"
+          exit 1
+        fi
+
+    - name: Set reusable values
+      id: set_reusable_values
+      shell: bash
+      run: |
+        echo "suffix=$(date '+%s')" >> $GITHUB_OUTPUT
+
+    - name: Generate k8s manifests
+      uses: ./actions/generate-k6-manifests/
+      with:
+        test_script_filepath: ${{ inputs.test_script_filepath }}
+        namespace: ${{ inputs.namespace }}
+        suffix: ${{ steps.set_reusable_values.outputs.suffix }}
+        command_line_args: ${{ inputs.command_line_args }}
+
+    - name: Apply k8s manifests
+      shell: bash
+      run: |
+        kubectl -n ${{ inputs.namespace }} apply -f .dist/
+        if [ "${{ inputs.wait_for_test_to_finish }}" = "True" ]; then
+          kubectl -n ${{ inputs.namespace }} wait --for=jsonpath='{.status.stage}'=finished testrun/k8-wrapper-${{ steps.set_reusable_values.outputs.suffix }} --timeout=10m
+        fi
