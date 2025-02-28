@@ -7,7 +7,7 @@ on:
   push:
     branches:
       - main
-    paths: 
+    paths:
       - 'services/dis-apim-operator/config/**'
       - '.github/workflows/dis-apim-kustomize-release.yaml'
     tags:
@@ -18,69 +18,69 @@ permissions:
   packages: write
 
 jobs:
-    latest:
-        name: Build latest from main
-        if: github.ref == 'refs/heads/main'
-        defaults:
-            run:
-                working-directory: ./services/dis-apim-operator/config
-        runs-on: ubuntu-latest
-        steps:
-          - name: Checkout
-            uses: actions/checkout@v4
-          - name: Setup vars
-            id: vars
-            run: |
-                echo "reponame=${GITHUB_REPOSITORY,,}" >> ${GITHUB_OUTPUT}
-          - name: Setup flux
-            uses: fluxcd/flux2/action@3b42b200d376430f0e24d35f1a600447d92da531
-            with:
-              version: latest
-          - name: Build latest artifact
-            run: |
-                echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u USERNAME --password-stdin
-                container_registry=ghcr.io/${{ steps.vars.outputs.reponame }}
-                artifact_name=${{ env.ARTIFACT_NAME }}
-                flux push artifact oci://${container_registry}/${artifact_name}:$(git rev-parse --short HEAD) \
-                    --provider=generic \
-                    --reproducible \
-                    --path="." \
-                    --source="$(git config --get remote.origin.url)" \
-                    --revision="$(git branch --show-current)/$(git rev-parse HEAD)"
-                flux tag artifact oci://${container_registry}/${artifact_name}:$(git rev-parse --short HEAD) \
-                    --provider=generic \
-                    --tag latest
-    release:
-        name: Build release from tag
-        if: github.ref == 'refs/tags/kustomize-dis-apim-*'
-        defaults:
-            run:
-                working-directory: ./services/dis-apim-operator/config
-        runs-on: ubuntu-latest
-        steps:
-          - name: Checkout
-            uses: actions/checkout@v4
-          - name: Setup flux
-            uses: fluxcd/flux2/action@3b42b200d376430f0e24d35f1a600447d92da531
-            with:
-              version: latest
-          - name: Setup vars
-            id: vars
-            run: |
-                tag=${GITHUB_REF/refs\/tags\/${{ env.ARTIFACT_NAME }}-/}
-                echo "reponame=${GITHUB_REPOSITORY,,}" >> ${GITHUB_OUTPUT}
-                echo "tag=${tag}" >> $GITHUB_OUTPUT
-          - name: Build release artifact
-            run: |
-                echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u USERNAME --password-stdin
-                container_registry=ghcr.io/${{ steps.vars.outputs.reponame }}
-                artifact_name=${{ env.ARTIFACT_NAME }}
-                flux push artifact oci://${container_registry}/${artifact_name}:$(git rev-parse --short HEAD) \
-                    --provider=generic \
-                    --reproducible \
-                    --path="." \
-                    --source="$(git config --get remote.origin.url)" \
-                    --revision="$(git branch --show-current)/$(git rev-parse HEAD)"
-                flux tag artifact oci://${container_registry}/${artifact_name}:$(git rev-parse --short HEAD) \
-                    --provider=generic \
-                    --tag ${{ steps.vars.outputs.tag }}
+  latest:
+    name: Build latest from main
+    if: github.ref == 'refs/heads/main'
+    defaults:
+      run:
+        working-directory: ./services/dis-apim-operator/config
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup vars
+        id: vars
+        run: |
+          echo "reponame=${GITHUB_REPOSITORY,,}" >> ${GITHUB_OUTPUT}
+      - name: Setup flux
+        uses: fluxcd/flux2/action@3b42b200d376430f0e24d35f1a600447d92da531
+        with:
+          version: latest
+      - name: Build latest artifact
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u USERNAME --password-stdin
+          container_registry=ghcr.io/${{ steps.vars.outputs.reponame }}
+          artifact_name=${{ env.ARTIFACT_NAME }}
+          flux push artifact oci://${container_registry}/${artifact_name}:$(git rev-parse --short HEAD) \
+            --provider=generic \
+            --reproducible \
+            --path="." \
+            --source="$(git config --get remote.origin.url)" \
+            --revision="$(git branch --show-current)/$(git rev-parse HEAD)"
+          flux tag artifact oci://${container_registry}/${artifact_name}:$(git rev-parse --short HEAD) \
+            --provider=generic \
+            --tag latest
+  release:
+    name: Build release from tag
+    if: github.ref == 'refs/tags/kustomize-dis-apim-*'
+    defaults:
+      run:
+        working-directory: ./services/dis-apim-operator/config
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup flux
+        uses: fluxcd/flux2/action@3b42b200d376430f0e24d35f1a600447d92da531
+        with:
+          version: latest
+      - name: Setup vars
+        id: vars
+        run: |
+          tag=${GITHUB_REF/refs\/tags\/${{ env.ARTIFACT_NAME }}-/}
+          echo "reponame=${GITHUB_REPOSITORY,,}" >> ${GITHUB_OUTPUT}
+          echo "tag=${tag}" >> $GITHUB_OUTPUT
+      - name: Build release artifact
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u USERNAME --password-stdin
+          container_registry=ghcr.io/${{ steps.vars.outputs.reponame }}
+          artifact_name=${{ env.ARTIFACT_NAME }}
+          flux push artifact oci://${container_registry}/${artifact_name}:$(git rev-parse --short HEAD) \
+              --provider=generic \
+              --reproducible \
+              --path="." \
+              --source="$(git config --get remote.origin.url)" \
+              --revision="$(git branch --show-current)/$(git rev-parse HEAD)"
+          flux tag artifact oci://${container_registry}/${artifact_name}:$(git rev-parse --short HEAD) \
+              --provider=generic \
+              --tag ${{ steps.vars.outputs.tag }}
