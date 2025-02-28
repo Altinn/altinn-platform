@@ -7,7 +7,7 @@ on:
     paths:
       - .github/workflows/terraform-azdev-agent-pr.yml
       - infrastructure/images/terraform-azure-devops-agent/**
-      - .github/workflows/reusable-image-scan-and-release-ghcr.yaml
+      - .github/workflows/reusable-image-scan-and-release-ghcr.yml
   push:
     tags:
       - "tf-azdev-agent-*"
@@ -16,7 +16,7 @@ on:
     paths:
       - .github/workflows/terraform-azdev-agent-pr.yml
       - infrastructure/images/terraform-azure-devops-agent/**
-      - .github/workflows/reusable-image-scan-and-release-ghcr.yaml
+      - .github/workflows/reusable-image-scan-and-release-ghcr.yml
 
 jobs:
   scan:
@@ -24,7 +24,7 @@ jobs:
     permissions:
       contents: read
       packages: read
-    uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yaml
+    uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yml
     with:
       release_latest: false
       image_name: terraform-azure-devops-agent
@@ -37,7 +37,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yaml
+    uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yml
     with:
       release_latest: false
       image_name: terraform-azure-devops-agent

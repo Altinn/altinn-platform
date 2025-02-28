@@ -7,7 +7,7 @@ on:
     paths:
       - .github/workflows/k6-action-image-pr.yml
       - infrastructure/images/k6-action/**
-      - .github/workflows/reusable-image-scan-and-release-ghcr.yaml
+      - .github/workflows/reusable-image-scan-and-release-ghcr.yml
     tags:
       - "k6-action-image-*"
   pull_request:
@@ -16,14 +16,14 @@ on:
     paths:
       - .github/workflows/k6-action-image-pr.yml
       - infrastructure/images/k6-action/**
-      - .github/workflows/reusable-image-scan-and-release-ghcr.yaml
+      - .github/workflows/reusable-image-scan-and-release-ghcr.yml
 permissions:
   contents: read
   packages: write
 
 jobs:
   scan:
-    uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yaml
+    uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yml
     with:
       release_latest: false
       image_name: k6-action-image

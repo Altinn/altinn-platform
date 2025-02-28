@@ -7,14 +7,14 @@ on:
     paths:
       - .github/workflows/gh-runner-pr.yml
       - infrastructure/images/gh-runner/**
-      - .github/workflows/reusable-image-scan-and-release-ghcr.yaml
+      - .github/workflows/reusable-image-scan-and-release-ghcr.yml
   push:
     branches:
       - main
     paths:
       - .github/workflows/gh-runner-pr.yml
       - infrastructure/images/gh-runner/**
-      - .github/workflows/reusable-image-scan-and-release-ghcr.yaml
+      - .github/workflows/reusable-image-scan-and-release-ghcr.yml
     tags:
       - "ghrunner-*"
 
@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   scan:
-    uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yaml
+    uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yml
     with:
       release_latest: false
       image_name: gh-runner

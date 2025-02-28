@@ -7,14 +7,14 @@ on:
     paths:
       - .github/workflows/dis-apim-release.yml
       - services/dis-apim-operator/**
-      - .github/workflows/reusable-image-scan-and-release-ghcr.yaml
+      - .github/workflows/reusable-image-scan-and-release-ghcr.yml
   push:
     branches:
       - main
     paths:
       - .github/workflows/dis-apim-release.yml
       - services/dis-apim-operator/**
-      - .github/workflows/reusable-image-scan-and-release-ghcr.yaml
+      - .github/workflows/reusable-image-scan-and-release-ghcr.yml
     tags:
       - "dis-apim-*"
 
@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   scan:
-    uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yaml
+    uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yml
     with:
       release_latest: true
       tag_prefix: dis-apim-

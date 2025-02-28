@@ -9,21 +9,21 @@ on:
     paths:
       - .github/workflows/azdevops-agent-release.yml
       - infrastructure/images/azure-devops-agent/**
-      - .github/workflows/reusable-image-scan-and-release-ghcr.yaml
+      - .github/workflows/reusable-image-scan-and-release-ghcr.yml
   pull_request:
     branches:
       - main
     paths:
       - .github/workflows/azdevops-agent-pr.yml
       - infrastructure/images/azure-devops-agent/**
-      - .github/workflows/reusable-image-scan-and-release-ghcr.yaml
+      - .github/workflows/reusable-image-scan-and-release-ghcr.yml
 permissions:
   contents: read
   packages: write
 
 jobs:
   scan:
-    uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yaml
+    uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yml
     with:
       release_latest: false
       image_name: azure-devops-agent
