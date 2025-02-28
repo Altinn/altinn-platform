@@ -7,7 +7,7 @@ on:
     branches:
       - main
     paths:
-      - .github/workflows/azdevops-agent-pr.yml
+      - .github/workflows/azdevops-agent-release.yml
       - infrastructure/images/azure-devops-agent/**
       - .github/workflows/reusable-image-scan-and-release-ghcr.yaml
   pull_request:
