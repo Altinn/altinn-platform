@@ -9,7 +9,7 @@ on:
       - main
     paths:
       - 'services/dis-apim-operator/config/**'
-      - '.github/workflows/dis-apim-kustomize-release.yaml'
+      - '.github/workflows/dis-apim-kustomize-release.yml'
     tags:
       - 'kustomize-dis-apim-*'
 
