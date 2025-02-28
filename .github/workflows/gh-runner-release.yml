@@ -1,18 +1,18 @@
-name: Scan/Release gh-runner base image
+name: Scan/Release gh-runner base Image
 
 on:
   pull_request:
     branches:
       - main
     paths:
-      - .github/workflows/gh-runner-pr.yml
+      - .github/workflows/gh-runner-release.yml
       - infrastructure/images/gh-runner/**
       - .github/workflows/reusable-image-scan-and-release-ghcr.yml
   push:
     branches:
       - main
     paths:
-      - .github/workflows/gh-runner-pr.yml
+      - .github/workflows/gh-runner-release.yml
       - infrastructure/images/gh-runner/**
       - .github/workflows/reusable-image-scan-and-release-ghcr.yml
     tags:

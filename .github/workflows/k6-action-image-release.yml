@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - .github/workflows/k6-action-image-pr.yml
+      - .github/workflows/k6-action-image-release.yml
       - infrastructure/images/k6-action/**
       - .github/workflows/reusable-image-scan-and-release-ghcr.yml
     tags:
@@ -14,7 +14,7 @@ on:
     branches:
       - main
     paths:
-      - .github/workflows/k6-action-image-pr.yml
+      - .github/workflows/k6-action-image-release.yml
       - infrastructure/images/k6-action/**
       - .github/workflows/reusable-image-scan-and-release-ghcr.yml
 permissions:
