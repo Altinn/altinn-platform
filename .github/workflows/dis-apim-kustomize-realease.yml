@@ -52,7 +52,7 @@ jobs:
             --tag latest
   release:
     name: Build release from tag
-    if: github.ref == 'refs/tags/kustomize-dis-apim-*'
+    if: startsWith(github.ref, 'refs/tags/kustomize-dis-apim-')
     defaults:
       run:
         working-directory: ./services/dis-apim-operator/config
