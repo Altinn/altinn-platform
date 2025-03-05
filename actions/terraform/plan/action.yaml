@@ -39,7 +39,7 @@ inputs:
     default: tfstate
   tf_version:
     description: Terraform Version
-    default: 1.10.5
+    default: ~1.10.5
   tf_log_level:
     description: Terraform Log level
     default: INFO
