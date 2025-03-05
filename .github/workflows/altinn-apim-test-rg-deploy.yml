@@ -1,0 +1,86 @@
+name: altinn-apim-test-rg
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/altinn-apim-test-rg-deploy.yml
+      - actions/terraform/apply/**
+      - actions/terraform/plan/**
+      - infrastructure/adminservices-test/altinn-apim-test-rg/**
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/altinn-apim-test-rg-deploy.yml
+      - actions/terraform/apply/**
+      - actions/terraform/plan/**
+      - infrastructure/adminservices-test/altinn-apim-test-rg/**
+  workflow_dispatch:
+    inputs:
+      log_level:
+        required: true
+        description: Terraform Log Level
+        default: INFO
+        type: choice
+        options:
+          - TRACE
+          - DEBUG
+          - INFO
+          - WARN
+          - ERROR
+
+env:
+  ENVIRONMENT: test
+  TF_STATE_NAME: altinn-apim-test-rg.tfstate
+  TF_PROJECT: ./infrastructure/adminservices-test/altinn-apim-test-rg
+  ARM_CLIENT_ID: ${{ vars.TF_AZURE_CLIENT_ID }}
+  ARM_SUBSCRIPTION_ID: 1ce8e9af-c2d6-44e7-9c5e-099a308056fe
+
+permissions:
+  id-token: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  plan:
+    name: Plan
+    environment: reader
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Terraform Plan
+        uses: altinn/altinn-platform/actions/terraform/plan@main
+        with:
+          working_directory: ${{ env.TF_PROJECT }}
+          oidc_type: environment
+          oidc_value: ${{ env.ENVIRONMENT }}
+          arm_client_id: ${{ env.ARM_CLIENT_ID }}
+          arm_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
+          tf_state_name: ${{ env.TF_STATE_NAME }}
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
+          tf_version: latest
+
+  deploy:
+    name: Deploy
+    environment: test
+    if: github.ref == 'refs/heads/main'
+    needs: plan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Terraform Apply
+        uses: altinn/altinn-platform/actions/terraform/apply@main
+        with:
+          working_directory: ${{ env.TF_PROJECT }}
+          oidc_type: environment
+          oidc_value: ${{ env.ENVIRONMENT }}
+          arm_client_id: ${{ env.ARM_CLIENT_ID }}
+          arm_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
+          tf_state_name: ${{ env.TF_STATE_NAME }}
+          tf_version: latest
