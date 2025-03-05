@@ -1,0 +1,132 @@
+name: Scan and Release Docker image to GHCR
+
+on:
+    workflow_call:
+        inputs:
+            workdir:
+                description: 'Folder containing the Docker context'
+                required: true
+                type: string
+            image_name:
+                description: 'Name of the Docker image'
+                required: true
+                type: string
+            tag_prefix:
+                description: 'Tag prefix that triggers the release'
+                required: false
+                default: '-'
+                type: string
+            release_latest:
+                description: 'Push image from main branch with latest tag'
+                required: false
+                default: false
+                type: boolean
+            platforms:
+                description: 'Platforms to build the image for'
+                required: false
+                default: 'linux/amd64,linux/arm64'
+                type: string
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    name: Build and scan Docker image
+    outputs:
+      timestamp: ${{ steps.git-info.outputs.timestamp }}
+      reponame: ${{ steps.git-info.outputs.reponame }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get Git commit timestamps
+        id: git-info
+        run: |
+          echo "timestamp=$(git log -1 --pretty=%ct)" >> ${GITHUB_OUTPUT}
+          echo "reponame=${GITHUB_REPOSITORY,,}" >> ${GITHUB_OUTPUT}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build local image
+        id: docker_build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.workdir}}
+          push: false
+          load: true
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: ${{ inputs.image_name }}:scan
+        env:
+          SOURCE_DATE_EPOCH: ${{ steps.git-info.outputs.timestamp }}
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          image-ref: ${{ inputs.image_name }}:scan
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          trivyignores: ${{ inputs.workdir}}/.trivyignore
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+  release-tag:
+    runs-on: ubuntu-latest
+    needs: scan
+    if: inputs.tag_prefix!= '-' && github.ref == format('refs/tags/{0}*', inputs.tag_prefix)
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get variables from tags
+        id: vars
+        run: |
+          tag=${GITHUB_REF/refs\/tags\/${{ inputs.tag_prefix }}/}
+          echo "version=${tag%-demo}" >> $GITHUB_OUTPUT
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to Docker
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push
+        id: docker_push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.workdir }}
+          push: true
+          platforms: ${{ inputs.platforms }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: ghcr.io/${{ needs.scan.outputs.reponame }}/${{inputs.image_name}}:v${{ steps.vars.outputs.version }}
+        env:
+          SOURCE_DATE_EPOCH: ${{ needs.scan.outputs.timestamp }}
+
+  release-main:
+    runs-on: ubuntu-latest
+    needs: scan
+    if: github.ref == 'refs/heads/main' && inputs.release_latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to Docker
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push
+        id: docker_push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.workdir }}
+          push: true
+          platforms: ${{ inputs.platforms }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: ghcr.io/${{ needs.scan.outputs.reponame }}/${{inputs.image_name}}:latest
+        env:
+          SOURCE_DATE_EPOCH: ${{ needs.scan.outputs.timestamp }}
