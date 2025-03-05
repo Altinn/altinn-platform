@@ -30,6 +30,7 @@ on:
 jobs:
   scan:
     runs-on: ubuntu-latest
+    name: Build and scan Docker image
     outputs:
       timestamp: ${{ steps.git-info.outputs.timestamp }}
       reponame: ${{ steps.git-info.outputs.reponame }}

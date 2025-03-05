@@ -23,7 +23,8 @@ permissions:
   packages: write
 
 jobs:
-  scan:
+  build-and-release:
+    name: Build, scan and release
     uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yml
     with:
       release_latest: true
