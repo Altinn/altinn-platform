@@ -145,6 +145,7 @@ resource "azurerm_role_assignment" "grafana_identity_reader_rg_studio_prod" {
 
 
 locals {
+  altinn_30_appmigration_test_developers  = "8ea6868e-317e-45b5-8437-464fb8e48e7e"
   altinn_30_broker_prod_developers        = "7708786a-aa50-4ce8-9f7f-e85459357de1"
   altinn_30_broker_test_developers        = "9b99f951-3873-4310-8baf-464b4da43f26"
   altinn_30_correspondence_prod_developer = "89627577-7e88-446b-a64b-699a9208343c"
@@ -157,6 +158,7 @@ locals {
   dialogporten_developers_prod            = "415cfc7b-40f6-4540-9aef-cb9c9050aada"
 
   grafana_editor = [
+    local.altinn_30_appmigration_test_developers,
     local.altinn_30_broker_prod_developers,
     local.altinn_30_broker_test_developers,
     local.altinn_30_correspondence_prod_developer,
