@@ -41,6 +41,7 @@ resource "azurerm_container_app" "container_app" {
     external_enabled           = true
     traffic_weight {
       percentage = 100
+      latest_revision = true
     }
   }
   template {
