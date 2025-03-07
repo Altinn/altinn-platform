@@ -34,6 +34,17 @@ resource "azurerm_container_app" "container_app" {
     identity = azurerm_user_assigned_identity.acaghr_managed_identity.id
     server   = data.azurerm_container_registry.altinncr.login_server
   }
+  ingress {
+    allow_insecure_connections = false
+    target_port                = 8080
+    transport                  = "auto"
+    external_enabled           = true
+    client_certificate_mode    = "ignore"
+    traffic_weight {
+      percentage      = 100
+      latest_revision = true
+    }
+  }
   template {
     container {
       name   = "dis-demo-pgsql"
@@ -44,9 +55,38 @@ resource "azurerm_container_app" "container_app" {
         "webserver",
         "--auth-enabled"
       ]
+      startup_probe {
+        path                    = "/swagger/swagger.json"
+        initial_delay           = 0
+        interval_seconds        = 1
+        failure_count_threshold = 10
+        timeout                 = 1
+        port                    = 8080
+        transport               = "HTTP"
+      }
+      readiness_probe {
+        path                    = "/swagger/swagger.json"
+        initial_delay           = 0
+        interval_seconds        = 1
+        failure_count_threshold = 3
+        success_count_threshold = 1
+        timeout                 = 1
+        port                    = 8080
+        transport               = "HTTP"
+      }
+      liveness_probe {
+        path                    = "/swagger/swagger.json"
+        initial_delay           = 0
+        interval_seconds        = 1
+        failure_count_threshold = 3
+        timeout                 = 1
+        port                    = 8080
+        transport               = "HTTP"
+      }
     }
     min_replicas = 0
     max_replicas = 1
+
     http_scale_rule {
       name                = "http-scale-rule"
       concurrent_requests = 1000
