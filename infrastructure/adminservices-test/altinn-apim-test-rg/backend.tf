@@ -22,7 +22,6 @@ resource "azurerm_container_app_environment" "container_app_environment" {
 resource "azurerm_container_app" "container_app" {
   name                         = "${var.name_prefix}-${random_string.name.result}-aca"
   resource_group_name          = azurerm_resource_group.rg.name
-  location                     = azurerm_resource_group.rg.location
   container_app_environment_id = azurerm_container_app_environment.container_app_environment.id
   revision_mode                = "Single"
   identity {
