@@ -37,8 +37,9 @@ resource "azurerm_container_app" "container_app" {
   ingress {
     allow_insecure_connections = false
     target_port                = 8080
-    transport                  = "http"
+    transport                  = "auto"
     external_enabled           = true
+    client_certificate_mode    = "ignore"
     traffic_weight {
       percentage      = 100
       latest_revision = true
