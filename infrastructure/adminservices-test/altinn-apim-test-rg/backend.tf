@@ -37,6 +37,10 @@ resource "azurerm_container_app" "container_app" {
       image = "altinncr.azurecr.io/dis-hackaton/dis-demo-pgsql:latest"
       cpu = "0.5"
       memory = "1Gi"
+      args = [
+        "webserver",
+        "--auth-enabled"
+      ]
     }
     min_replicas = 0
     max_replicas = 1
