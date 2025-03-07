@@ -17,3 +17,11 @@ provider "azurerm" {
     "Microsoft.ApiManagement",
   ]
 }
+
+provider "azurerm" {
+  alias                           = "adminservices-prod"
+  resource_provider_registrations = "none"
+  subscription_id                 = var.admin_services_prod_subscription_id
+  use_oidc                        = true
+  features {}
+}

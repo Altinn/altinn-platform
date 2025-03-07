@@ -30,10 +30,14 @@ resource "azurerm_container_app" "container_app" {
       azurerm_user_assigned_identity.acaghr_managed_identity.id
     ]
   }
+  registry {
+    identity = azurerm_user_assigned_identity.acaghr_managed_identity.id
+    server   = data.azurerm_container_registry.altinncr.login_server
+  }
   template {
     container {
       name   = "dis-demo-pgsql"
-      image  = "altinncr.azurecr.io/dis-hackaton/dis-demo-pgsql:latest"
+      image  = "${data.azurerm_container_registry.altinncr.login_server}/dis-hackaton/dis-demo-pgsql:latest"
       cpu    = "0.5"
       memory = "1Gi"
       args = [
@@ -48,4 +52,11 @@ resource "azurerm_container_app" "container_app" {
       concurrent_requests = 1000
     }
   }
+}
+
+resource "azurerm_role_assignment" "altinncr_acrpull" {
+  principal_id                     = azurerm_user_assigned_identity.acaghr_managed_identity.principal_id
+  role_definition_name             = "AcrPull"
+  scope                            = data.azurerm_container_registry.altinncr.id
+  skip_service_principal_aad_check = true
 }
