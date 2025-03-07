@@ -36,11 +36,11 @@ resource "azurerm_container_app" "container_app" {
   }
   ingress {
     allow_insecure_connections = false
-    target_port = 8080
-    transport = "HTTP"
-    external_enabled = true
+    target_port                = 8080
+    transport                  = "HTTP"
+    external_enabled           = true
     traffic_weight {
-        percentage = 100
+      percentage = 100
     }
   }
   template {
@@ -54,32 +54,32 @@ resource "azurerm_container_app" "container_app" {
         "--auth-enabled"
       ]
       startup_probe {
-        path = "/swagger/swagger.json"
-        initial_delay = 0
-        interval_seconds = 1
+        path                    = "/swagger/swagger.json"
+        initial_delay           = 0
+        interval_seconds        = 1
         failure_count_threshold = 10
-        timeout = 1
-        port = 8080
-        transport = "HTTP"
+        timeout                 = 1
+        port                    = 8080
+        transport               = "HTTP"
       }
       readiness_probe {
-        path = "/swagger/swagger.json"
-        initial_delay = 0
-        interval_seconds = 1
+        path                    = "/swagger/swagger.json"
+        initial_delay           = 0
+        interval_seconds        = 1
         failure_count_threshold = 3
         success_count_threshold = 1
-        timeout = 1
-        port = 8080
-        transport = "HTTP"
+        timeout                 = 1
+        port                    = 8080
+        transport               = "HTTP"
       }
       liveness_probe {
-        path = "/swagger/swagger.json"
-        initial_delay = 0
-        interval_seconds = 1
+        path                    = "/swagger/swagger.json"
+        initial_delay           = 0
+        interval_seconds        = 1
         failure_count_threshold = 3
-        timeout = 1
-        port = 8080
-        transport = "HTTP"
+        timeout                 = 1
+        port                    = 8080
+        transport               = "HTTP"
       }
     }
     min_replicas = 0
