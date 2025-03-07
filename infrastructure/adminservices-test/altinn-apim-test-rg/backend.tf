@@ -60,7 +60,7 @@ resource "azurerm_container_app" "container_app" {
         failure_count_threshold = 10
         timeout                 = 1
         port                    = 8080
-        transport               = "http"
+        transport               = "HTTP"
       }
       readiness_probe {
         path                    = "/swagger/swagger.json"
@@ -70,7 +70,7 @@ resource "azurerm_container_app" "container_app" {
         success_count_threshold = 1
         timeout                 = 1
         port                    = 8080
-        transport               = "http"
+        transport               = "HTTP"
       }
       liveness_probe {
         path                    = "/swagger/swagger.json"
@@ -79,7 +79,7 @@ resource "azurerm_container_app" "container_app" {
         failure_count_threshold = 3
         timeout                 = 1
         port                    = 8080
-        transport               = "http"
+        transport               = "HTTP"
       }
     }
     min_replicas = 0
