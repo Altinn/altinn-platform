@@ -48,7 +48,7 @@ resource "azurerm_container_app" "container_app" {
   template {
     container {
       name   = "dis-demo-pgsql"
-      image  = "${data.azurerm_container_registry.altinncr.login_server}/dis-hackaton/dis-demo-pgsql:latest"
+      image  = "${data.azurerm_container_registry.altinncr.login_server}/dis-hackaton/dis-demo-pgsql:0.0.1"
       cpu    = "0.5"
       memory = "1Gi"
       args = [
