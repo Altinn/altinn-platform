@@ -15,8 +15,8 @@ resource "azurerm_api_management_logger" "apimlogger" {
   }
 }
 
-resource "azurerm_api_management_diagnostic" "apimdiagnostic" {
-  identifier               = "${var.name_prefix}-apimdiagnostic"
+resource "azurerm_api_management_diagnostic" "application_insights" {
+  identifier               = "applicationinsights"
   resource_group_name      = azurerm_resource_group.rg.name
   api_management_name      = azurerm_api_management.admin_test_apim.name
   api_management_logger_id = azurerm_api_management_logger.apimlogger.id
@@ -62,4 +62,26 @@ resource "azurerm_api_management_diagnostic" "apimdiagnostic" {
       "origin",
     ]
   }
+}
+
+
+resource "azurerm_api_management_diagnostic" "azuremonitor" {
+  identifier               = "azuremonitor"
+  resource_group_name      = azurerm_resource_group.rg.name
+  api_management_name      = azurerm_api_management.admin_test_apim.name
+  api_management_logger_id = azurerm_api_management_logger.apimlogger.id
+
+  sampling_percentage       = 0.0
+  always_log_errors         = true
+  log_client_ip             = true
+  verbosity                 = "information"
+  http_correlation_protocol = "W3C"
+
+  frontend_request {}
+
+  frontend_response {}
+
+  backend_request {}
+
+  backend_response {}
 }
