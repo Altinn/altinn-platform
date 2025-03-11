@@ -85,13 +85,6 @@ runs:
       working-directory: ${{ inputs.working_directory }}
       run: terraform fmt -check
 
-    - name: Azure login
-      uses: azure/login@v2
-      with:
-        client-id: ${{ inputs.arm_client_id }}
-        tenant-id: ${{ inputs.arm_tenant_id }}
-        subscription-id: ${{ inputs.tf_arm_subscription_id }}
-
     - name: Terraform Init
       id: init
       shell: bash
@@ -104,7 +97,7 @@ runs:
         ARM_USE_OIDC: "true"
       run: |
         terraform init -input=false \
-          -backend-config="subscription_id={{ env.ARM_SUBSCRIPTION_ID }}" \
+          -backend-config="subscription_id=${{ env.ARM_SUBSCRIPTION_ID }}" \
           -backend-config="resource_group_name=${{ inputs.tf_arm_resource_group_name }}" \
           -backend-config="storage_account_name=${{ inputs.tf_arm_storage_account_name }}" \
           -backend-config="container_name=tfstates" \
