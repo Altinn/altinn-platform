@@ -15,17 +15,17 @@ module "aks" {
   pool_configs = {
     syspool = {
       vm_size              = "standard_b2s_v2"
-      auto_scaling_enabled = "true"
-      node_count           = "1"
-      min_count            = "1"
-      max_count            = "6"
+      auto_scaling_enabled = true
+      node_count           = 1
+      min_count            = 1
+      max_count            = 6
     }
     workpool = {
       vm_size              = "standard_b2s_v2"
-      auto_scaling_enabled = "true"
-      node_count           = "0"
-      min_count            = "0"
-      max_count            = "6"
+      auto_scaling_enabled = true
+      node_count           = 0
+      min_count            = 0
+      max_count            = 6
     }
   }
   aks_acrpull_scopes = [

@@ -8,16 +8,14 @@ subnet_address_prefixes = {
 }
 pool_configs = {
   syspool = {
-    vm_size              = "standard_b2s_v2"
-    auto_scaling_enabled = true
-    min_count            = 1
-    max_count            = 3
+    vm_size   = "standard_b2s_v2"
+    min_count = "1"
+    max_count = "3"
   }
   workpool = {
-    vm_size              = "standard_b2s_v2"
-    auto_scaling_enabled = true
-    min_count            = 0
-    max_count            = 6
+    vm_size   = "standard_b2s_v2"
+    min_count = "0"
+    max_count = "6"
   }
 }
 kubernetes_version = "1.30"
