@@ -52,11 +52,3 @@ resource "azurerm_public_ip_prefix" "prefix6" {
   prefix_length       = "127"
   zones               = ["1", "2", "3"]
 }
-
-# Assign "Network Contributor" Role to AKS Managed Identity
-resource "azurerm_role_assignment" "network_contributor" {
-  scope                            = azurerm_resource_group.aks.id
-  role_definition_name             = "Network Contributor"
-  principal_id                     = azurerm_kubernetes_cluster.aks.identity[0].principal_id
-  skip_service_principal_aad_check = true
-}

@@ -12,10 +12,12 @@ variable "subscription_id" {
 }
 variable "location" {
   type        = string
+  default     = "norwayeast"
   description = "Default region for resources"
 }
 variable "aks_sku_tier" {
   type        = string
+  default     = "Free"
   description = "Kubernetes sku"
 }
 variable "kubernetes_version" {

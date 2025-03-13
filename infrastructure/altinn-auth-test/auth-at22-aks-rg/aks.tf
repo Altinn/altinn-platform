@@ -3,8 +3,6 @@ module "aks" {
   prefix             = "auth"
   environment        = "at22"
   subscription_id    = var.subscription_id
-  location           = "norwayeast"
-  aks_sku_tier       = "Free"
   kubernetes_version = "1.30"
   vnet_address_space = [
     "10.202.72.0/21",
