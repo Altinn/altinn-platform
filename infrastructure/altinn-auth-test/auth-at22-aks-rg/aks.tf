@@ -33,4 +33,7 @@ module "aks" {
   aks_acrpull_scopes = [
     "/subscriptions/a6e9ee7d-2b65-41e1-adfb-0c8c23515cf9/resourceGroups/acr/providers/Microsoft.ContainerRegistry/registries/altinncr"
   ]
+  admin_group_object_ids = [
+    "09599a84-645b-4217-853f-01700a17cd4a"
+  ]
 }
