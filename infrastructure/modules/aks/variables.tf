@@ -34,7 +34,7 @@ variable "subnet_address_prefixes" {
 }
 variable "pool_configs" {
   type = map(object({
-    vm_size              = number
+    vm_size              = string
     auto_scaling_enabled = bool
     node_count           = number
     min_count            = number
