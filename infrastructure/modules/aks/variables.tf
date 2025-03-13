@@ -34,11 +34,11 @@ variable "subnet_address_prefixes" {
 }
 variable "pool_configs" {
   type = map(object({
-    vm_size              = string
-    auto_scaling_enabled = string
-    node_count           = string
-    min_count            = string
-    max_count            = string
+    vm_size              = number
+    auto_scaling_enabled = bool
+    node_count           = number
+    min_count            = number
+    max_count            = number
   }))
   description = "variables for nodepools"
 }
