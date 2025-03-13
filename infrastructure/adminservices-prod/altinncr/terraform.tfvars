@@ -9,6 +9,12 @@ cache_rules = [
     credential_set_id = "/credentialSets/dockerhub"
   },
   {
+    name              = "postgres"
+    target_repo       = "postgres"
+    source_repo       = "docker.io/library/postgres"
+    credential_set_id = "/credentialSets/dockerhub"
+  },
+  {
     name              = "browserless"
     target_repo       = "browserless/chrome"
     source_repo       = "docker.io/browserless/chrome"
