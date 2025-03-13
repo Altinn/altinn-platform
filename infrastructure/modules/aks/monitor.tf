@@ -1,7 +1,7 @@
 resource "azurerm_log_analytics_workspace" "aks" {
-  name                = "${var.prefix}-${var.environment}-aks-law"
-  resource_group_name = azurerm_resource_group.aks.name
-  location            = azurerm_resource_group.aks.location
+  name                = var.azurerm_log_analytics_workspace_aks_name != "" ? var.azurerm_log_analytics_workspace_aks_name : "${var.prefix}-${var.environment}-aks-law"
+  resource_group_name = azurerm_resource_group.monitor.name
+  location            = azurerm_resource_group.monitor.location
   retention_in_days   = 30
   identity {
     type = "SystemAssigned"
@@ -9,9 +9,9 @@ resource "azurerm_log_analytics_workspace" "aks" {
 }
 
 resource "azurerm_monitor_workspace" "aks" {
-  name                = "${var.prefix}-${var.environment}-aks-amw"
-  resource_group_name = azurerm_resource_group.aks.name
-  location            = azurerm_resource_group.aks.location
+  name                = var.azurerm_monitor_workspace_aks_name != "" ? var.azurerm_monitor_workspace_aks_name : "${var.prefix}-${var.environment}-aks-amw"
+  resource_group_name = azurerm_resource_group.monitor.name
+  location            = azurerm_resource_group.monitor.location
 }
 
 resource "random_id" "aks" {
@@ -19,9 +19,9 @@ resource "random_id" "aks" {
 }
 
 resource "azurerm_storage_account" "aks" {
-  name                     = "${var.prefix}${var.environment}akslog${random_id.aks.hex}"
-  resource_group_name      = azurerm_resource_group.aks.name
-  location                 = azurerm_resource_group.aks.location
+  name                     = var.azurerm_storage_account_aks_name != "" ? var.azurerm_storage_account_aks_name : "${var.prefix}${var.environment}akslog${random_id.aks.hex}"
+  resource_group_name      = azurerm_resource_group.monitor.name
+  location                 = azurerm_resource_group.monitor.location
   account_tier             = "Standard"
   account_replication_type = "ZRS"
   account_kind             = "StorageV2"
@@ -35,20 +35,5 @@ resource "azurerm_storage_account" "aks" {
     ]
     virtual_network_subnet_ids = [
     ]
-  }
-}
-
-resource "azurerm_monitor_diagnostic_setting" "aks" {
-  name               = "AKS-Diagnostics"
-  target_resource_id = azurerm_kubernetes_cluster.aks.id
-  storage_account_id = azurerm_storage_account.aks.id
-
-  enabled_log {
-    category = "kube-audit-admin"
-  }
-
-  metric {
-    category = "AllMetrics"
-    enabled  = false
   }
 }

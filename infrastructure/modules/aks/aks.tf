@@ -1,8 +1,3 @@
-resource "azurerm_resource_group" "aks" {
-  name     = "${var.prefix}-${var.environment}-aks-rg"
-  location = var.location
-}
-
 resource "azurerm_kubernetes_cluster" "aks" {
   lifecycle {
     ignore_changes = [
@@ -11,7 +6,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
       windows_profile,
     ]
   }
-  name                      = "${var.prefix}-${var.environment}-aks"
+  name                      = var.azurerm_kubernetes_cluster_aks_name != "" ? var.azurerm_kubernetes_cluster_aks_name : "${var.prefix}-${var.environment}-aks"
   location                  = azurerm_resource_group.aks.location
   resource_group_name       = azurerm_resource_group.aks.name
   dns_prefix                = "${var.prefix}-${var.environment}"
@@ -69,9 +64,11 @@ resource "azurerm_kubernetes_cluster" "aks" {
     log_analytics_workspace_id      = azurerm_log_analytics_workspace.aks.id
     msi_auth_for_monitoring_enabled = true
   }
-  # azure_active_directory_role_based_access_control {
-  #   azure_rbac_enabled = true
-  # }
+
+  azure_active_directory_role_based_access_control {
+    admin_group_object_ids = var.admin_group_object_ids
+    azure_rbac_enabled     = true
+  }
 
   maintenance_window_auto_upgrade {
     frequency   = "Weekly"
@@ -111,5 +108,19 @@ resource "azurerm_kubernetes_cluster_node_pool" "workpool" {
   orchestrator_version  = var.kubernetes_version
   upgrade_settings {
     max_surge = "10%"
+  }
+}
+resource "azurerm_monitor_diagnostic_setting" "aks" {
+  name               = "AKS-Diagnostics"
+  target_resource_id = azurerm_kubernetes_cluster.aks.id
+  storage_account_id = azurerm_storage_account.aks.id
+
+  enabled_log {
+    category = "kube-audit-admin"
+  }
+
+  metric {
+    category = "AllMetrics"
+    enabled  = false
   }
 }
