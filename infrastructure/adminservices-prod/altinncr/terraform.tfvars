@@ -49,17 +49,5 @@ cache_rules = [
     target_repo       = "linkerd/*"
     source_repo       = "ghcr.io/linkerd/*"
     credential_set_id = null
-  },
-  {
-    name              = "grafana"
-    target_repo       = "grafana/*"
-    source_repo       = "docker.io/grafana/*"
-    credential_set_id = "/credentialSets/dockerhub"
-  },
-  {
-    name              = "altinn-platform"
-    target_repo       = "altinn-platform/*"
-    source_repo       = "ghcr.io/altinn-platform/*"
-    credential_set_id = null
   }
 ]
