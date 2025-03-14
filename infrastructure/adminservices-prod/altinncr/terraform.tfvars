@@ -3,6 +3,24 @@ acr_rgname      = "acr"
 acrname         = "altinncr"
 cache_rules = [
   {
+    name              = "dockerio"
+    target_repo       = "docker.io/*"
+    source_repo       = "docker.io/*"
+    credential_set_id = "/credentialSets/dockerhub"
+  },
+  {
+    name              = "quayio"
+    target_repo       = "quay.io/*"
+    source_repo       = "quay.io/*"
+    credential_set_id = null
+  },
+  {
+    name              = "ghcrio"
+    target_repo       = "ghcr.io/*"
+    source_repo       = "ghcr.io/*"
+    credential_set_id = null
+  },
+  {
     name              = "traefik"
     target_repo       = "traefik"
     source_repo       = "docker.io/library/traefik"
