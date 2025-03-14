@@ -88,6 +88,11 @@ variable "k8s_rbac" {
       dev_group = "4dde4651-a9ca-4df1-9e05-216272284c7d"
       sp_group  = "e87d6f10-6fc0-4a09-a9b0-e8c994ed4052"
     }
+    authentication = {
+      namespace = "authentication"
+      dev_group = "5c42ac79-86e2-46d0-85d3-ae751dd5f057"
+      sp_group  = "328cbe61-aeb1-4782-bb36-d288c69b4f15"
+    }
   }
 }
 

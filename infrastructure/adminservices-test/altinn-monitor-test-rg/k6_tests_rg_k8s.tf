@@ -31,7 +31,7 @@ resource "azurerm_monitor_data_collection_rule" "k6tests" {
         "dataCollectionSettings" : {
           "interval" : "1m",
           "namespaceFilteringMode" : "Include",
-          "namespaces" : ["platform", "dialogporten", "correspondence", "core"] # Only in the namespaces we have k6 tests running for now.
+          "namespaces" : [for v in var.k8s_rbac : v["namespace"]], # Only in the namespaces we have k6 tests running for now.
           "enableContainerLogV2" : false
         }
       })
