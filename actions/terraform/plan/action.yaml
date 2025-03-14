@@ -108,7 +108,9 @@ runs:
       shell: bash
       if: always()
       working-directory: ${{ inputs.working_directory }}
-      run: terraform validate -no-color
+      run: |
+        terraform version
+        terraform validate -no-color
 
     - name: Terraform Plan
       id: plan
