@@ -30,4 +30,5 @@ jobs:
       release_latest: true
       tag_prefix: dis-apim-
       image_name: dis-apim-operator
+      platforms: "linux/amd64"
       workdir: ./services/dis-apim-operator
