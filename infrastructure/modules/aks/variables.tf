@@ -80,13 +80,13 @@ variable "azurerm_kubernetes_cluster_aks_name" {
 
 variable "azurerm_kubernetes_cluster_aks_pod_cidrs" {
   type        = list(string)
-  default     = ""
+  default     = []
   description = "Optional explicit aks service cidrs"
 }
 
 variable "azurerm_kubernetes_cluster_aks_service_cidrs" {
   type        = list(string)
-  default     = ""
+  default     = []
   description = "Optional explicit aks service cidrs"
 }
 
