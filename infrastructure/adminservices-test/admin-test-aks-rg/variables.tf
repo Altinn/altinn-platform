@@ -33,3 +33,6 @@ variable "pool_configs" {
 variable "flux_release_tag" {
   type = string
 }
+variable "cert_manager_version" {
+  type = string
+}

@@ -18,6 +18,7 @@ pool_configs = {
     max_count = "6"
   }
 }
-kubernetes_version = "1.30"
-aks_sku_tier       = "Free"
-flux_release_tag   = "latest"
+kubernetes_version   = "1.30"
+aks_sku_tier         = "Free"
+flux_release_tag     = "latest"
+cert_manager_version = "1.17.x"
