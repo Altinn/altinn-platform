@@ -66,10 +66,28 @@ variable "vnet_address_space" {
 }
 
 # Optional explicit variables to override values derived from prefix and environment
+variable "azurerm_kubernetes_cluster_aks_dns_service_ip" {
+  type        = string
+  default     = ""
+  description = "Optional explicit aks dns service ip"
+}
+
 variable "azurerm_kubernetes_cluster_aks_name" {
   type        = string
   default     = ""
   description = "Optional explicit name of the AKS cluster"
+}
+
+variable "azurerm_kubernetes_cluster_aks_pod_cidrs" {
+  type        = list(string)
+  default     = ""
+  description = "Optional explicit aks service cidrs"
+}
+
+variable "azurerm_kubernetes_cluster_aks_service_cidrs" {
+  type        = list(string)
+  default     = ""
+  description = "Optional explicit aks service cidrs"
 }
 
 variable "azurerm_log_analytics_workspace_aks_name" {
