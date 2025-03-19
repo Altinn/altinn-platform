@@ -11,7 +11,12 @@ resource "azurerm_monitor_data_collection_rule" "law" {
   }
 
   data_flow {
-    streams      = ["Microsoft-ContainerLog", "Microsoft-ContainerLogV2", "Microsoft-KubeEvents", "Microsoft-KubePodInventory"]
+    streams = [
+      "Microsoft-ContainerLog",
+      "Microsoft-ContainerLogV2",
+      "Microsoft-KubeEvents",
+      "Microsoft-KubePodInventory"
+    ]
     destinations = ["${azurerm_log_analytics_workspace.aks.name}"]
   }
 
@@ -22,20 +27,55 @@ resource "azurerm_monitor_data_collection_rule" "law" {
 
   data_sources {
     syslog {
-      streams        = ["Microsoft-Syslog"]
-      facility_names = ["auth", "authpriv", "cron", "daemon", "mark", "kern", "local0", "local1", "local2", "local3", "local4", "local5", "local6", "local7", "lpr", "mail", "news", "syslog", "user", "uucp"]
-      log_levels     = ["Error", "Critical", "Alert", "Emergency"]
-      name           = "sysLogsDataSource"
+      streams = ["Microsoft-Syslog"]
+      facility_names = [
+        "auth",
+        "authpriv",
+        "cron",
+        "daemon",
+        "mark",
+        "kern",
+        "local0",
+        "local1",
+        "local2",
+        "local3",
+        "local4",
+        "local5",
+        "local6",
+        "local7",
+        "lpr",
+        "mail",
+        "news",
+        "syslog",
+        "user",
+        "uucp"
+      ]
+      log_levels = [
+        "Error",
+        "Critical",
+        "Alert",
+        "Emergency"
+      ]
+      name = "sysLogsDataSource"
     }
 
     extension {
-      streams        = ["Microsoft-ContainerLog", "Microsoft-ContainerLogV2", "Microsoft-KubeEvents", "Microsoft-KubePodInventory"]
+      streams = [
+        "Microsoft-ContainerLog",
+        "Microsoft-ContainerLogV2",
+        "Microsoft-KubeEvents",
+        "Microsoft-KubePodInventory"
+      ]
       extension_name = "ContainerInsights"
       extension_json = jsonencode({
         "dataCollectionSettings" : {
           "interval" : "5m",
           "namespaceFilteringMode" : "Exclude",
-          "namespaces" : ["kube-system", "gatekeeper-system", "azure-arc"],
+          "namespaces" : [
+            "kube-system",
+            "gatekeeper-system",
+            "azure-arc"
+          ],
           "enableContainerLogV2" : true
         }
       })
