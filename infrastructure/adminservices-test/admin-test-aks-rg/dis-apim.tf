@@ -49,7 +49,7 @@ spec:
         - op: add
           path: /metadata/annotations
           value:
-            azure.workload.identity/client-id: "${azuread_service_principal.dis_apim_sp.application_id}"
+            azure.workload.identity/client-id: "${azuread_service_principal.dis_apim_sp.client_id}"
     - target:
         kind: Deployment
       patch: |-
