@@ -25,6 +25,7 @@ output "aks_oidc_issuer_url" {
 
 output "kube_admin_config" {
   value       = azurerm_kubernetes_cluster.aks.kube_admin_config
+  sensitive   = true
   description = "Base64 encoded cert/key/user/pass used by clients to authenticate to the Kubernetes cluster"
 }
 
