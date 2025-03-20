@@ -1,15 +1,16 @@
 variable "admin_group_object_ids" {
   type        = list(string)
   description = "List of group object IDs to get admin access to the cluster"
+  validation {
+    condition     = length(var.admin_group_object_ids) > 0
+    error_message = "You must provide at least one admin group object ID."
+  }
 }
 
 variable "aks_acrpull_scopes" {
   type        = list(string)
+  default     = []
   description = "List of AKS ACR pull scopes"
-  validation {
-    condition     = length(var.aks_acrpull_scopes) > 0
-    error_message = "You must provide at least one ACR resource ID."
-  }
 }
 
 variable "aks_sku_tier" {
@@ -21,11 +22,19 @@ variable "aks_sku_tier" {
 variable "environment" {
   type        = string
   description = "Environment for resources"
+  validation {
+    condition     = length(var.environment) > 0
+    error_message = "You must provide a value for environment."
+  }
 }
 
 variable "kubernetes_version" {
   type        = string
   description = "Kubernetes version"
+  validation {
+    condition     = length(var.kubernetes_version) > 0
+    error_message = "You must provide kubernetes version in format x.y or x.y.z."
+  }
 }
 
 variable "location" {
@@ -43,26 +52,47 @@ variable "pool_configs" {
     max_count            = number
   }))
   description = "Variables for node pools"
+  validation {
+    condition     = length(var.pool_configs) > 0
+    error_message = "You must provide pool config for syspool and workpool."
+  }
 }
 
 variable "prefix" {
   type        = string
+  default     = ""
   description = "Prefix for resource names"
+  validation {
+    condition     = length(var.prefix) > 0
+    error_message = "You must provide a value for prefix for name generation."
+  }
 }
 
 variable "subscription_id" {
   type        = string
   description = "Subscription ID to deploy services"
+  validation {
+    condition     = length(var.subscription_id) > 0
+    error_message = "You must provide a subscription id where the resources will be deployed."
+  }
 }
 
 variable "subnet_address_prefixes" {
   type        = map(list(string))
   description = "List of subnets"
+  validation {
+    condition     = length(var.subnet_address_prefixes) > 0
+    error_message = "You must provide subnet address prefixes with ipv4 and ipv6 addresses for aks_syspool and aks_workpool."
+  }
 }
 
 variable "vnet_address_space" {
   type        = list(string)
   description = "VNet address space"
+  validation {
+    condition     = length(var.vnet_address_space) > 0
+    error_message = "You must provide a vnet address space with ipv4 and ipv6 addresses."
+  }
 }
 
 # Optional explicit variables to override values derived from prefix and environment
