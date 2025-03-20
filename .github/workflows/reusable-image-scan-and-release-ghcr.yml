@@ -35,19 +35,19 @@ jobs:
       timestamp: ${{ steps.git-info.outputs.timestamp }}
       reponame: ${{ steps.git-info.outputs.reponame }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Get Git commit timestamps
         id: git-info
         run: |
           echo "timestamp=$(git log -1 --pretty=%ct)" >> ${GITHUB_OUTPUT}
           echo "reponame=${GITHUB_REPOSITORY,,}" >> ${GITHUB_OUTPUT}
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3
       - name: Build local image
         id: docker_build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6
         with:
           context: ${{ inputs.workdir}}
           push: false
@@ -59,7 +59,7 @@ jobs:
         env:
           SOURCE_DATE_EPOCH: ${{ steps.git-info.outputs.timestamp }}
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.30.0
+        uses: aquasecurity/trivy-action@6c175e9c4083a92bbca2f9724c8a5e33bc2d97a5 # 0.30.0
         with:
           image-ref: ${{ inputs.image_name }}:scan
           format: 'table'
@@ -73,25 +73,25 @@ jobs:
     needs: scan
     if: inputs.tag_prefix!= '-' && github.ref == format('refs/tags/{0}*', inputs.tag_prefix)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Get variables from tags
         id: vars
         run: |
           tag=${GITHUB_REF/refs\/tags\/${{ inputs.tag_prefix }}/}
           echo "version=${tag%-demo}" >> $GITHUB_OUTPUT
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3
       - name: Login to Docker
-        uses: docker/login-action@v3
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Push
         id: docker_push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6
         with:
           context: ${{ inputs.workdir }}
           push: true
@@ -107,20 +107,20 @@ jobs:
     needs: scan
     if: github.ref == 'refs/heads/main' && inputs.release_latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3
       - name: Login to Docker
-        uses: docker/login-action@v3
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Push
         id: docker_push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6
         with:
           context: ${{ inputs.workdir }}
           push: true

@@ -27,9 +27,9 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5
         with:
           go-version-file: '${{ env.WORKDIR }}/go.mod'
           cache: true
@@ -46,14 +46,14 @@ jobs:
       run:
         working-directory: ${{ env.WORKDIR }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5
         with:
           go-version-file: '${{ env.WORKDIR }}/go.mod'
           cache: true
       - name: lint
-        uses: golangci/golangci-lint-action@v6.5.1
+        uses: golangci/golangci-lint-action@4696ba8babb6127d732c3c6dde519db15edab9ea # v6.5.1
         with:
           version: latest
           working-directory: ${{ env.WORKDIR }}
@@ -79,9 +79,9 @@ jobs:
       run:
         working-directory: ${{ env.WORKDIR }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5
         with:
           go-version-file: '${{ env.WORKDIR }}/go.mod'
           cache: true

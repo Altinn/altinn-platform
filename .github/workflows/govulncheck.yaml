@@ -21,9 +21,9 @@ jobs:
         - "services/dis-apim-operator"
         - "tools/daisctl"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - id: govulncheck
-        uses: golang/govulncheck-action@v1
+        uses: golang/govulncheck-action@b625fbe08f3bccbe446d94fbf87fcc875a4f50ee # v1
         with:
            go-version-file: go.mod
            work-dir: ${{ matrix.module-dir }}
