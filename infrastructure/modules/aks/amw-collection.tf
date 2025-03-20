@@ -1,14 +1,14 @@
 resource "azurerm_monitor_data_collection_endpoint" "amw" {
   name                = "${azurerm_monitor_workspace.aks.name}-mdce"
-  resource_group_name = azurerm_resource_group.aks.name
-  location            = azurerm_resource_group.aks.location
+  resource_group_name = azurerm_resource_group.monitor.name
+  location            = azurerm_resource_group.monitor.name
   kind                = "Linux"
 }
 
 resource "azurerm_monitor_data_collection_rule" "amw" {
   name                        = "${azurerm_monitor_workspace.aks.name}-mdcr"
-  resource_group_name         = azurerm_resource_group.aks.name
-  location                    = azurerm_resource_group.aks.location
+  resource_group_name         = azurerm_resource_group.monitor.name
+  location                    = azurerm_resource_group.monitor.name
   data_collection_endpoint_id = azurerm_monitor_data_collection_endpoint.amw.id
   kind                        = "Linux"
 
