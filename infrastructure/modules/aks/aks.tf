@@ -113,7 +113,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "workpool" {
 resource "azurerm_monitor_diagnostic_setting" "aks" {
   name               = "AKS-Diagnostics"
   target_resource_id = azurerm_kubernetes_cluster.aks.id
-  storage_account_id = azurerm_storage_account.aks.id
+  storage_account_id = azurerm_storage_account.aks_log.id
 
   enabled_log {
     category = "kube-audit-admin"

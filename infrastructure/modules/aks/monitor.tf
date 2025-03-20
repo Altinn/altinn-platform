@@ -14,12 +14,12 @@ resource "azurerm_monitor_workspace" "aks" {
   location            = azurerm_resource_group.monitor.location
 }
 
-resource "random_id" "aks" {
+resource "random_id" "aks_log" {
   byte_length = 3 # 3 gives 6 characters
 }
 
-resource "azurerm_storage_account" "aks" {
-  name                            = var.azurerm_storage_account_aks_name != "" ? var.azurerm_storage_account_aks_name : "${var.prefix}${var.environment}akslog${random_id.aks.hex}"
+resource "azurerm_storage_account" "aks_log" {
+  name                            = var.azurerm_storage_account_aks_name != "" ? var.azurerm_storage_account_aks_name : "${var.prefix}${var.environment}akslog${random_id.aks_log.hex}"
   resource_group_name             = azurerm_resource_group.monitor.name
   location                        = azurerm_resource_group.monitor.location
   account_tier                    = "Standard"
