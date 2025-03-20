@@ -41,8 +41,8 @@ resource "azurerm_kubernetes_cluster" "aks" {
     network_plugin      = "azure"
     network_plugin_mode = "overlay"
     ip_versions         = ["IPv4", "IPv6"] # Azure did not like IPv6 first
-    pod_cidrs           = var.azurerm_kubernetes_cluster_aks_pod_cidrs != "" ? var.azurerm_kubernetes_cluster_aks_pod_cidrs : ["10.240.0.0/16", "fd10:59f0:8c79:240::/64"]
-    service_cidrs       = var.azurerm_kubernetes_cluster_aks_service_cidrs != "" ? var.azurerm_kubernetes_cluster_aks_service_cidrs : ["10.250.0.0/24", "fd10:59f0:8c79:250::/108"]
+    pod_cidrs           = length(var.azurerm_kubernetes_cluster_aks_pod_cidrs) > 0 ? var.azurerm_kubernetes_cluster_aks_pod_cidrs : ["10.240.0.0/16", "fd10:59f0:8c79:240::/64"]
+    service_cidrs       = length(var.azurerm_kubernetes_cluster_aks_service_cidrs) > 0 ? var.azurerm_kubernetes_cluster_aks_service_cidrs : ["10.250.0.0/24", "fd10:59f0:8c79:250::/108"]
     dns_service_ip      = var.azurerm_kubernetes_cluster_aks_dns_service_ip != "" ? var.azurerm_kubernetes_cluster_aks_dns_service_ip : "10.250.0.10"
     load_balancer_sku   = "standard"
 
