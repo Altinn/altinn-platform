@@ -7,7 +7,7 @@ products:
   - name: Platform
     slug: PAP # Product Altinn Platform
     github:
-      owner: altinn
+      owner: Altinn
       repositories:
         - altinn-platform
         - terraform-azurerm-altinn-modules
