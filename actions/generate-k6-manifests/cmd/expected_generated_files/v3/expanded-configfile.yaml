@@ -1,0 +1,19 @@
+namespace: platform
+test_definitions:
+    - test_file: services/k6/k8s_wrapper/get_deployments.js
+      config_file: services/k6/test_configs/default.json
+      contexts:
+        - environment: at22
+          node_type: default
+          test_type:
+            type: smoke
+            enabled: true
+            config_file: services/k6/test_configs/at_config.json
+          test_run:
+            name: k8s-wrapper-deployments
+            parallelism: 1
+            resources:
+                requests:
+                    memory: 200Mi
+                    cpu: 250m
+            env: []
