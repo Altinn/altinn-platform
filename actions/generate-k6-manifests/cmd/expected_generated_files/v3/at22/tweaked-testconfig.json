@@ -1,0 +1,14 @@
+{
+  "httpDebug": "full",
+  "stages": [
+    {
+      "duration": "1m",
+      "target": 1
+    }
+  ],
+  "thresholds": {
+    "http_req_duration": [
+      "p(95)\u003c1000"
+    ]
+  }
+}
