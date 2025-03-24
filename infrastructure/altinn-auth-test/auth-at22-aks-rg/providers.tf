@@ -20,8 +20,9 @@ terraform {
 
 provider "azurerm" {
   features {}
-  subscription_id = var.subscription_id
-  use_oidc        = true
+  subscription_id     = var.subscription_id
+  use_oidc            = true
+  storage_use_azuread = true
   resource_providers_to_register = [
     "Microsoft.Monitor",
     "Microsoft.AlertsManagement",
