@@ -18,11 +18,10 @@ package v1alpha1
 
 import (
 	"fmt"
-	"reflect"
-
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"reflect"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -101,9 +100,12 @@ type ApiVersionSubSpec struct {
 	// Policies - The API Version Policy description.
 	// +kubebuilder:validation:Optional
 	Policies *ApiPolicySpec `json:"policies,omitempty"`
+	// Diagnostics - The API Version Diagnostic settings.
+	// +kubebuilder:validation:Optional
+	Diagnostics *ApiDiagnosticSpec `json:"diagnostics,omitempty"`
 }
 
-// ApiPolicySpec defines the desired state of ApiVersion
+// ApiPolicySpec defines the desired policy of ApiVersion
 type ApiPolicySpec struct {
 	// PolicyContent - The contents of the Policy as string.
 	// +kubebuilder:validation:Required
@@ -141,6 +143,43 @@ type FromBackend struct {
 	// Namespace Namespace where the backend is defined. Default value is the same namespace as the API Version.
 	// +kubebuilder:validation:Optional
 	Namespace *string `json:"namespace,omitempty"`
+}
+
+// ApiDiagnosticSpec defines the desired diagnostic settings for the ApiVersion.
+type ApiDiagnosticSpec struct {
+	// LoggerName - The name of the logger to receive the diagnostic data. Operator will lookup the loggerId by this name
+	// +kubebuilder:validation:Optional
+	LoggerName *string `json:"loggerId,omitempty"`
+	// SamplingPercentage - Percentage of the calls to log.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum:=0
+	// +kubebuilder:validation:Maximum:=100
+	SamplingPercentage *int32 `json:"samplingPercentage,omitempty"`
+	// EnbaleMetrics - Indicates if metrics should be collected.
+	EnableMetrics *bool `json:"enableMetrics,omitempty"`
+	// Frontend Diagnostic settings for incoming/outgoing HTTP messages to the Gateway. If not specified, the default values are used.
+	// +kubebuilder:validation:Optional
+	Frontend *PipelineDiagnosticSettings `json:"frontend,omitempty"`
+	// Backend Diagnostic settings for incoming/outgoing HTTP messages to the Backend. If not specified, the default values are used.
+	// +kubebuilder:validation:Optional
+	Backend *PipelineDiagnosticSettings `json:"backend,omitempty"`
+}
+
+// PipelineDiagnosticSettings defines the desired diagnostic settings for the ApiVersion.
+type PipelineDiagnosticSettings struct {
+	// Request - Diagnostic settings for incoming HTTP messages. If not specified, the default values are used.
+	// +kubebuilder:validation:Optional
+	Request *HttpMessageDiagnostic `json:"request,omitempty"`
+	// Response - Diagnostic settings for outgoing HTTP messages. If not specified, the default values are used.
+	// +kubebuilder:validation:Optional
+	Response *HttpMessageDiagnostic `json:"response,omitempty"`
+}
+
+// HttpMessageDiagnostic defines the desired diagnostic settings for the ApiVersion.
+type HttpMessageDiagnostic struct {
+	// Headers - Array of HTTP Headers to log. Defaults to [Ocp-Apim-Subscription-Key, Content-Type, X-Forwarded-For].
+	// +kubebuilder:validation:Optional
+	Headers []*string `json:"headers,omitempty"`
 }
 
 // ApiVersionStatus defines the observed state of ApiVersion.
@@ -208,6 +247,10 @@ func (av *ApiVersion) GetApiVersionAzureFullName() string {
 	return fmt.Sprintf("%s-%s", av.Namespace, av.Name)
 }
 
+func (av *ApiVersion) GetApiVersionDiagnosticAzureFullName() string {
+	return "applicationinsights"
+}
+
 func (a *ApiVersion) RequireUpdate(new ApiVersion) bool {
 	return !a.Matches(new)
 }
@@ -230,7 +273,14 @@ func (a *ApiVersion) Matches(new ApiVersion) bool {
 		((a.Spec.ApiVersionSubSpec.Policies == nil && new.Spec.ApiVersionSubSpec.Policies == nil) ||
 			(a.Spec.ApiVersionSubSpec.Policies != nil && new.Spec.ApiVersionSubSpec.Policies != nil &&
 				pointerValueEqual(a.Spec.ApiVersionSubSpec.Policies.PolicyContent, new.Spec.ApiVersionSubSpec.Policies.PolicyContent) &&
-				pointerValueEqual(a.Spec.ApiVersionSubSpec.Policies.PolicyFormat, new.Spec.ApiVersionSubSpec.Policies.PolicyFormat)))
+				pointerValueEqual(a.Spec.ApiVersionSubSpec.Policies.PolicyFormat, new.Spec.ApiVersionSubSpec.Policies.PolicyFormat))) &&
+		((a.Spec.ApiVersionSubSpec.Diagnostics == nil && new.Spec.ApiVersionSubSpec.Diagnostics == nil) ||
+			(a.Spec.ApiVersionSubSpec.Diagnostics != nil && new.Spec.ApiVersionSubSpec.Diagnostics != nil &&
+				pointerValueEqual(a.Spec.ApiVersionSubSpec.Diagnostics.LoggerName, new.Spec.ApiVersionSubSpec.Diagnostics.LoggerName) &&
+				pointerValueEqual(a.Spec.ApiVersionSubSpec.Diagnostics.SamplingPercentage, new.Spec.ApiVersionSubSpec.Diagnostics.SamplingPercentage) &&
+				pointerValueEqual(a.Spec.ApiVersionSubSpec.Diagnostics.EnableMetrics, new.Spec.ApiVersionSubSpec.Diagnostics.EnableMetrics) &&
+				reflect.DeepEqual(a.Spec.ApiVersionSubSpec.Diagnostics.Frontend, new.Spec.ApiVersionSubSpec.Diagnostics.Frontend) &&
+				reflect.DeepEqual(a.Spec.ApiVersionSubSpec.Diagnostics.Backend, new.Spec.ApiVersionSubSpec.Diagnostics.Backend)))
 }
 
 func (a *ApiVersion) ToAzureCreateOrUpdateParameter() apim.APICreateOrUpdateParameter {
@@ -255,6 +305,205 @@ func (a *ApiVersion) ToAzureCreateOrUpdateParameter() apim.APICreateOrUpdatePara
 	}
 	return apiCreateOrUpdateParams
 }
+
+func (a *ApiVersion) GetAzureAPIAppInsightsDiagnosticSettings(loggerId string) apim.DiagnosticContract {
+	defaultSettings := apim.DiagnosticContract{
+		Properties: &apim.DiagnosticContractProperties{
+			LoggerID:  &loggerId,
+			AlwaysLog: utils.ToPointer(apim.AlwaysLogAllErrors),
+			Backend: &apim.PipelineDiagnosticSettings{
+				Request: &apim.HTTPMessageDiagnostic{
+					Body: &apim.BodyDiagnosticSettings{
+						Bytes: utils.ToPointer(int32(0)),
+					},
+					DataMasking: nil,
+					Headers: []*string{
+						utils.ToPointer("Ocp-Apim-Subscription-Key"),
+						utils.ToPointer("Content-Type"),
+						utils.ToPointer("X-Forwarded-For"),
+					},
+				},
+				Response: &apim.HTTPMessageDiagnostic{
+					Body: &apim.BodyDiagnosticSettings{
+						Bytes: utils.ToPointer(int32(0)),
+					},
+					DataMasking: nil,
+					Headers: []*string{
+						utils.ToPointer("Ocp-Apim-Subscription-Key"),
+						utils.ToPointer("Content-Type"),
+						utils.ToPointer("X-Forwarded-For"),
+					},
+				},
+			},
+			Frontend: &apim.PipelineDiagnosticSettings{
+				Request: &apim.HTTPMessageDiagnostic{
+					Body: &apim.BodyDiagnosticSettings{
+						Bytes: utils.ToPointer(int32(0)),
+					},
+					DataMasking: nil,
+					Headers: []*string{
+						utils.ToPointer("Ocp-Apim-Subscription-Key"),
+						utils.ToPointer("Content-Type"),
+						utils.ToPointer("X-Forwarded-For"),
+					},
+				},
+				Response: &apim.HTTPMessageDiagnostic{
+					Body: &apim.BodyDiagnosticSettings{
+						Bytes: utils.ToPointer(int32(0)),
+					},
+					DataMasking: nil,
+					Headers: []*string{
+						utils.ToPointer("Ocp-Apim-Subscription-Key"),
+						utils.ToPointer("Content-Type"),
+						utils.ToPointer("X-Forwarded-For"),
+					},
+				},
+			},
+			HTTPCorrelationProtocol: utils.ToPointer(apim.HTTPCorrelationProtocolW3C),
+			Metrics:                 utils.ToPointer(true),
+			Sampling: &apim.SamplingSettings{
+				Percentage:   utils.ToPointer(50.0),
+				SamplingType: utils.ToPointer(apim.SamplingTypeFixed),
+			},
+			Verbosity: utils.ToPointer(apim.VerbosityError),
+		},
+	}
+	if a.Spec.Diagnostics != nil {
+		if a.Spec.Diagnostics.SamplingPercentage != nil {
+			defaultSettings.Properties.Sampling.Percentage = utils.ToPointer(float64(*a.Spec.Diagnostics.SamplingPercentage))
+		}
+
+		if a.Spec.Diagnostics.EnableMetrics != nil {
+			defaultSettings.Properties.Metrics = a.Spec.Diagnostics.EnableMetrics
+		}
+		if a.Spec.Diagnostics.Frontend != nil {
+			if a.Spec.Diagnostics.Frontend.Request != nil {
+				if a.Spec.Diagnostics.Frontend.Request.Headers != nil {
+					defaultSettings.Properties.Frontend.Request.Headers = a.Spec.Diagnostics.Frontend.Request.Headers
+				}
+			}
+			if a.Spec.Diagnostics.Frontend.Response != nil {
+				if a.Spec.Diagnostics.Frontend.Response.Headers != nil {
+					defaultSettings.Properties.Frontend.Response.Headers = a.Spec.Diagnostics.Frontend.Response.Headers
+				}
+			}
+		}
+		if a.Spec.Diagnostics.Backend != nil {
+			if a.Spec.Diagnostics.Backend.Request != nil {
+				if a.Spec.Diagnostics.Backend.Request.Headers != nil {
+					defaultSettings.Properties.Backend.Request.Headers = a.Spec.Diagnostics.Backend.Request.Headers
+				}
+			}
+			if a.Spec.Diagnostics.Backend.Response != nil {
+				if a.Spec.Diagnostics.Backend.Response.Headers != nil {
+					defaultSettings.Properties.Backend.Response.Headers = a.Spec.Diagnostics.Backend.Response.Headers
+				}
+			}
+		}
+	}
+
+	return defaultSettings
+}
+
+func (a *ApiVersion) GetAzureAPIAzureMonitorDiagnosticSettings(loggerId string) apim.DiagnosticContract {
+	defaultSettings := apim.DiagnosticContract{
+		Properties: &apim.DiagnosticContractProperties{
+			LoggerID:  &loggerId,
+			AlwaysLog: utils.ToPointer(apim.AlwaysLogAllErrors),
+			Backend: &apim.PipelineDiagnosticSettings{
+				Request: &apim.HTTPMessageDiagnostic{
+					Body: &apim.BodyDiagnosticSettings{
+						Bytes: utils.ToPointer(int32(0)),
+					},
+					DataMasking: nil,
+					Headers: []*string{
+						utils.ToPointer("Ocp-Apim-Subscription-Key"),
+						utils.ToPointer("Content-Type"),
+						utils.ToPointer("X-Forwarded-For"),
+					},
+				},
+				Response: &apim.HTTPMessageDiagnostic{
+					Body: &apim.BodyDiagnosticSettings{
+						Bytes: utils.ToPointer(int32(0)),
+					},
+					DataMasking: nil,
+					Headers: []*string{
+						utils.ToPointer("Ocp-Apim-Subscription-Key"),
+						utils.ToPointer("Content-Type"),
+						utils.ToPointer("X-Forwarded-For"),
+					},
+				},
+			},
+			Frontend: &apim.PipelineDiagnosticSettings{
+				Request: &apim.HTTPMessageDiagnostic{
+					Body: &apim.BodyDiagnosticSettings{
+						Bytes: utils.ToPointer(int32(0)),
+					},
+					DataMasking: nil,
+					Headers: []*string{
+						utils.ToPointer("Ocp-Apim-Subscription-Key"),
+						utils.ToPointer("Content-Type"),
+						utils.ToPointer("X-Forwarded-For"),
+					},
+				},
+				Response: &apim.HTTPMessageDiagnostic{
+					Body: &apim.BodyDiagnosticSettings{
+						Bytes: utils.ToPointer(int32(0)),
+					},
+					DataMasking: nil,
+					Headers: []*string{
+						utils.ToPointer("Ocp-Apim-Subscription-Key"),
+						utils.ToPointer("Content-Type"),
+						utils.ToPointer("X-Forwarded-For"),
+					},
+				},
+			},
+			Metrics: utils.ToPointer(true),
+			Sampling: &apim.SamplingSettings{
+				Percentage:   utils.ToPointer(50.0),
+				SamplingType: utils.ToPointer(apim.SamplingTypeFixed),
+			},
+			LogClientIP: utils.ToPointer(true),
+			Verbosity:   utils.ToPointer(apim.VerbosityError),
+		},
+	}
+	if a.Spec.Diagnostics != nil {
+		if a.Spec.Diagnostics.SamplingPercentage != nil {
+			defaultSettings.Properties.Sampling.Percentage = utils.ToPointer(float64(*a.Spec.Diagnostics.SamplingPercentage))
+		}
+
+		if a.Spec.Diagnostics.EnableMetrics != nil {
+			defaultSettings.Properties.Metrics = a.Spec.Diagnostics.EnableMetrics
+		}
+		if a.Spec.Diagnostics.Frontend != nil {
+			if a.Spec.Diagnostics.Frontend.Request != nil {
+				if a.Spec.Diagnostics.Frontend.Request.Headers != nil {
+					defaultSettings.Properties.Frontend.Request.Headers = a.Spec.Diagnostics.Frontend.Request.Headers
+				}
+			}
+			if a.Spec.Diagnostics.Frontend.Response != nil {
+				if a.Spec.Diagnostics.Frontend.Response.Headers != nil {
+					defaultSettings.Properties.Frontend.Response.Headers = a.Spec.Diagnostics.Frontend.Response.Headers
+				}
+			}
+		}
+		if a.Spec.Diagnostics.Backend != nil {
+			if a.Spec.Diagnostics.Backend.Request != nil {
+				if a.Spec.Diagnostics.Backend.Request.Headers != nil {
+					defaultSettings.Properties.Backend.Request.Headers = a.Spec.Diagnostics.Backend.Request.Headers
+				}
+			}
+			if a.Spec.Diagnostics.Backend.Response != nil {
+				if a.Spec.Diagnostics.Backend.Response.Headers != nil {
+					defaultSettings.Properties.Backend.Response.Headers = a.Spec.Diagnostics.Backend.Response.Headers
+				}
+			}
+		}
+	}
+
+	return defaultSettings
+}
+
 func pointerValueEqual[T comparable](a *T, b *T) bool {
 	if a == nil && b == nil {
 		return true

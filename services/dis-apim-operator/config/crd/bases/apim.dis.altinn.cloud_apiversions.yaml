@@ -92,6 +92,79 @@ spec:
                 description: Description - Description of the API Version. May include
                   its purpose, where to get more information, and other relevant information.
                 type: string
+              diagnostics:
+                description: Diagnostics - The API Version Diagnostic settings.
+                properties:
+                  backend:
+                    description: Backend Diagnostic settings for incoming/outgoing
+                      HTTP messages to the Backend. If not specified, the default
+                      values are used.
+                    properties:
+                      request:
+                        description: Request - Diagnostic settings for incoming HTTP
+                          messages. If not specified, the default values are used.
+                        properties:
+                          headers:
+                            description: Headers - Array of HTTP Headers to log. Defaults
+                              to [Ocp-Apim-Subscription-Key, Content-Type, X-Forwarded-For].
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                      response:
+                        description: Response - Diagnostic settings for outgoing HTTP
+                          messages. If not specified, the default values are used.
+                        properties:
+                          headers:
+                            description: Headers - Array of HTTP Headers to log. Defaults
+                              to [Ocp-Apim-Subscription-Key, Content-Type, X-Forwarded-For].
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                    type: object
+                  enableMetrics:
+                    description: EnbaleMetrics - Indicates if metrics should be collected.
+                    type: boolean
+                  frontend:
+                    description: Frontend Diagnostic settings for incoming/outgoing
+                      HTTP messages to the Gateway. If not specified, the default
+                      values are used.
+                    properties:
+                      request:
+                        description: Request - Diagnostic settings for incoming HTTP
+                          messages. If not specified, the default values are used.
+                        properties:
+                          headers:
+                            description: Headers - Array of HTTP Headers to log. Defaults
+                              to [Ocp-Apim-Subscription-Key, Content-Type, X-Forwarded-For].
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                      response:
+                        description: Response - Diagnostic settings for outgoing HTTP
+                          messages. If not specified, the default values are used.
+                        properties:
+                          headers:
+                            description: Headers - Array of HTTP Headers to log. Defaults
+                              to [Ocp-Apim-Subscription-Key, Content-Type, X-Forwarded-For].
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                    type: object
+                  loggerId:
+                    description: LoggerName - The name of the logger to receive the
+                      diagnostic data. Operator will lookup the loggerId by this name
+                    type: string
+                  samplingPercentage:
+                    description: SamplingPercentage - Percentage of the calls to log.
+                    format: int32
+                    maximum: 100
+                    minimum: 0
+                    type: integer
+                type: object
               displayName:
                 description: DisplayName - The display name of the API Version. This
                   name is used by the developer portal as the API Version name.
