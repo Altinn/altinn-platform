@@ -16,3 +16,11 @@ resource "azurerm_role_assignment" "aks_acrpull" {
 
   depends_on = [azurerm_kubernetes_cluster.aks]
 }
+
+# Assign "Storage Blob Data Contributor" Role to Terraform running user
+resource "azurerm_role_assignment" "terraform_blob_contributor" {
+  scope                            = azurerm_resource_group.monitor.id
+  role_definition_name             = "Storage Blob Data Contributor"
+  principal_id                     = data.azurerm_client_config.current.object_id
+  skip_service_principal_aad_check = true
+}
