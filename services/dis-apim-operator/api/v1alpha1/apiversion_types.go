@@ -149,7 +149,7 @@ type FromBackend struct {
 type ApiDiagnosticSpec struct {
 	// LoggerName - The name of the logger to receive the diagnostic data. Operator will lookup the loggerId by this name
 	// +kubebuilder:validation:Optional
-	LoggerName *string `json:"loggerId,omitempty"`
+	LoggerName *string `json:"loggerName,omitempty"`
 	// SamplingPercentage - Percentage of the calls to log.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Minimum:=0
