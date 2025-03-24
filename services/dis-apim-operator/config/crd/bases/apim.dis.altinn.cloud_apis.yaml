@@ -184,7 +184,7 @@ spec:
                                   type: array
                               type: object
                           type: object
-                        loggerId:
+                        loggerName:
                           description: LoggerName - The name of the logger to receive
                             the diagnostic data. Operator will lookup the loggerId
                             by this name
