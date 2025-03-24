@@ -155,6 +155,10 @@ func (r *ApiVersionReconciler) handleApiVersionUpdate(ctx context.Context, apiVe
 			}
 		}
 	}
+	err = r.createUpdateDiagnostics(ctx, apiVersion)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to create/update Diagnostics: %w", err)
+	}
 	return ctrl.Result{RequeueAfter: DEFAULT_REQUE_TIME}, nil
 }
 
@@ -259,6 +263,57 @@ func (r *ApiVersionReconciler) createUpdatePolicy(ctx context.Context, apiVersio
 	apiVersion.Status.LastAppliedPolicySha, err = utils.Sha256FromContent(ctx, apiVersion.Spec.Policies.PolicyContent)
 	if err != nil {
 		logger.Error(err, "Failed to get policy sha")
+		return err
+	}
+	apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateSucceeded
+	err = r.Status().Update(ctx, &apiVersion)
+	if err != nil {
+		logger.Error(err, "Failed to update status")
+		return err
+	}
+	return nil
+}
+
+func (r *ApiVersionReconciler) createUpdateDiagnostics(ctx context.Context, apiVersion apimv1alpha1.ApiVersion) error {
+	logger := log.FromContext(ctx)
+	logger.Info("Creating or updating diagnostics")
+	diagnostics := apiVersion.Spec.Diagnostics
+	loggerId := r.ApimClientConfig.DefaultLoogerId
+	azuremonitorLoggerId := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ApiManagement/service/%s/loggers/azuremonitor", r.ApimClientConfig.SubscriptionId, r.ApimClientConfig.ResourceGroup, r.ApimClientConfig.ApimServiceName)
+	if diagnostics != nil && diagnostics.LoggerName != nil {
+		lookedUpId, err := r.apimClient.GetLoggerByName(ctx, *diagnostics.LoggerName)
+		if err != nil {
+			return fmt.Errorf("failed to get logger: %w", err)
+		}
+		if lookedUpId == nil {
+			return fmt.Errorf("logger not found")
+		}
+		loggerId = *lookedUpId
+	}
+	_, err := r.apimClient.CreateUpdateApiDiagnosticSettings(
+		ctx,
+		apiVersion.GetApiVersionAzureFullName(),
+		azure.DiagnosticsIdApplicationInsights,
+		apiVersion.GetAzureAPIAppInsightsDiagnosticSettings(loggerId),
+		nil,
+	)
+	if err != nil {
+		logger.Error(err, "Failed to create/update appinsights diagnostics")
+		apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateFailed
+		_ = r.Status().Update(ctx, &apiVersion)
+		return err
+	}
+	_, err = r.apimClient.CreateUpdateApiDiagnosticSettings(
+		ctx,
+		apiVersion.GetApiVersionAzureFullName(),
+		azure.DiagnosticsIdAzureMonitor,
+		apiVersion.GetAzureAPIAzureMonitorDiagnosticSettings(azuremonitorLoggerId),
+		nil,
+	)
+	if err != nil {
+		logger.Error(err, "Failed to create/update azuremonitor diagnostics")
+		apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateFailed
+		_ = r.Status().Update(ctx, &apiVersion)
 		return err
 	}
 	apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateSucceeded

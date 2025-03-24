@@ -3,6 +3,8 @@ package azure
 import (
 	"context"
 	"errors"
+	"fmt"
+	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	"net/http"
 
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/config"
@@ -109,6 +111,46 @@ func (c *APIMClient) CreateUpdateBackend(ctx context.Context, backendId string, 
 func (c *APIMClient) DeleteBackend(ctx context.Context, backendId string, etag string, options *apim.BackendClientDeleteOptions) (apim.BackendClientDeleteResponse, error) {
 	client := c.apimClientFactory.NewBackendClient()
 	return client.Delete(ctx, c.ApimClientConfig.ResourceGroup, c.ApimClientConfig.ApimServiceName, backendId, etag, options)
+}
+
+func (c *APIMClient) GetApiDiagnosticSettings(ctx context.Context, apiId string, diagnosticsId string, options *apim.APIDiagnosticClientGetOptions) (apim.APIDiagnosticClientGetResponse, error) {
+	client := c.apimClientFactory.NewAPIDiagnosticClient()
+	return client.Get(ctx, c.ApimClientConfig.ResourceGroup, c.ApimClientConfig.ApimServiceName, apiId, diagnosticsId, options)
+}
+
+func (c *APIMClient) CreateUpdateApiDiagnosticSettings(ctx context.Context, apiId string, diagnosticsType DiagnosticsType, parameters apim.DiagnosticContract, options *apim.APIDiagnosticClientCreateOrUpdateOptions) (apim.APIDiagnosticClientCreateOrUpdateResponse, error) {
+	client := c.apimClientFactory.NewAPIDiagnosticClient()
+	return client.CreateOrUpdate(ctx, c.ApimClientConfig.ResourceGroup, c.ApimClientConfig.ApimServiceName, apiId, string(diagnosticsType), parameters, options)
+}
+
+func (c *APIMClient) DeleteApiDiagnosticSettings(ctx context.Context, apiId string, diagnosticsId string, etag string, options *apim.APIDiagnosticClientDeleteOptions) (apim.APIDiagnosticClientDeleteResponse, error) {
+	client := c.apimClientFactory.NewAPIDiagnosticClient()
+	return client.Delete(ctx, c.ApimClientConfig.ResourceGroup, c.ApimClientConfig.ApimServiceName, apiId, diagnosticsId, etag, options)
+}
+
+func (c *APIMClient) GetLoggerByName(ctx context.Context, loggerName string) (*string, error) {
+	client := c.apimClientFactory.NewLoggerClient()
+	pager := client.NewListByServicePager(c.ApimClientConfig.ResourceGroup, c.ApimClientConfig.ApimServiceName, &apim.LoggerClientListByServiceOptions{
+		Filter: utils.ToPointer(fmt.Sprintf("name eq '%s'", loggerName)),
+	})
+	if pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if page.Value == nil || len(page.Value) == 0 {
+			return nil, fmt.Errorf("no logger found with name %s", loggerName)
+		}
+		if len(page.Value) > 1 {
+			return nil, fmt.Errorf("multiple loggers found with name %s", loggerName)
+		}
+		for _, logger := range page.Value {
+			if *logger.Name == loggerName {
+				return logger.ID, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("no logger found with name %s", loggerName)
 }
 
 func IsNotFoundError(err error) bool {
