@@ -21,7 +21,7 @@ resource "azurerm_monitor_data_collection_rule" "amw" {
 
   data_flow {
     streams      = ["Microsoft-PrometheusMetrics"]
-    destinations = ["${azurerm_monitor_workspace.aks.name}"]
+    destinations = [azurerm_monitor_workspace.aks.name]
   }
 
 
