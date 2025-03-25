@@ -98,6 +98,21 @@ var _ = Describe("ApiVersion Controller", func() {
 				g.Expect(fakeApim.ApiDiagnostics).To(HaveLen(2))
 			}, timeout, interval).Should(Succeed(), "apiVersion content should eventually be updated")
 
+			By("removing policy and diagnostics to the apiversion if they are nil")
+			Eventually(func(g Gomega) {
+				updatedApiVersion = getUpdatedApiVersion(ctx, typeNamespacedName)
+				updatedApiVersion.Spec.Policies = nil
+				updatedApiVersion.Spec.Diagnostics = nil
+				g.Expect(k8sClient.Update(ctx, &updatedApiVersion)).To(Succeed())
+			}, timeout, interval).Should(Succeed(), "apiVersion content should eventually be updated")
+
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, typeNamespacedName, &updatedApiVersion)).To(Succeed())
+				g.Expect(fakeApim.APIMVersions).To(HaveLen(1))
+				g.Expect(fakeApim.Policies).To(HaveLen(0))
+				g.Expect(fakeApim.ApiDiagnostics).To(HaveLen(0))
+			}, timeout, interval).Should(Succeed(), "apiVersion content should eventually be updated")
+
 			By("deleting the apiversion if it has been marked for deletion")
 			err := k8sClient.Get(ctx, typeNamespacedName, &updatedApiVersion)
 			Expect(err).NotTo(HaveOccurred())
