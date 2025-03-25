@@ -1,10 +1,10 @@
 package v1alpha1
 
 import (
-	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
-	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2"
 	"testing"
 
+	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
+	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )

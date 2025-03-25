@@ -73,8 +73,8 @@ var _ = Describe("ApiVersion Controller", func() {
 				g.Expect(k8sClient.Get(ctx, typeNamespacedName, &updatedApiVersion)).To(Succeed())
 				g.Expect(*updatedApiVersion.Spec.Content).To(Equal(`{"openapi": "3.0.0","info": {"title": "Minimal API v1","version": "1.0.0"},"paths": {"test": "test"}}`))
 				g.Expect(fakeApim.APIMVersions).To(HaveLen(1))
-				g.Expect(fakeApim.Policies).To(HaveLen(0))
-				g.Expect(fakeApim.ApiDiagnostics).To(HaveLen(0))
+				g.Expect(fakeApim.Policies).To(BeEmpty())
+				g.Expect(fakeApim.ApiDiagnostics).To(BeEmpty())
 			}, timeout, interval).Should(Succeed(), "apiVersion content should eventually be updated")
 
 			By("adding policy and diagnostics to the apiversion if they are set")
@@ -109,8 +109,8 @@ var _ = Describe("ApiVersion Controller", func() {
 			Eventually(func(g Gomega) {
 				g.Expect(k8sClient.Get(ctx, typeNamespacedName, &updatedApiVersion)).To(Succeed())
 				g.Expect(fakeApim.APIMVersions).To(HaveLen(1))
-				g.Expect(fakeApim.Policies).To(HaveLen(0))
-				g.Expect(fakeApim.ApiDiagnostics).To(HaveLen(0))
+				g.Expect(fakeApim.Policies).To(BeEmpty())
+				g.Expect(fakeApim.ApiDiagnostics).To(BeEmpty())
 			}, timeout, interval).Should(Succeed(), "apiVersion content should eventually be updated")
 
 			By("deleting the apiversion if it has been marked for deletion")
