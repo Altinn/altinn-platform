@@ -426,7 +426,7 @@ func (a *AzureApimFake) GetFakeLoggerServer() apimfake.LoggerServer {
 			filterRegex := regexp.MustCompile(`name eq '(.*)'`)
 			if options.Filter != nil {
 				matches := filterRegex.FindStringSubmatch(*options.Filter)
-				if matches != nil && len(matches) > 1 {
+				if len(matches) > 1 {
 					response.Value = []*apim.LoggerContract{
 						{
 							ID:   utils.ToPointer("subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/apim-fake/providers/Microsoft.ApiManagement/service/apim-fake/loggers/fake-logger"),

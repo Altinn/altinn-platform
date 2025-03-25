@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	"net/http"
 
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/config"
+	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
@@ -138,7 +138,7 @@ func (c *APIMClient) GetLoggerByName(ctx context.Context, loggerName string) (*s
 		if err != nil {
 			return nil, err
 		}
-		if page.Value == nil || len(page.Value) == 0 {
+		if len(page.Value) == 0 {
 			return nil, fmt.Errorf("no logger found with name %s", loggerName)
 		}
 		if len(page.Value) > 1 {

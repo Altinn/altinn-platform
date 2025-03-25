@@ -18,10 +18,11 @@ package v1alpha1
 
 import (
 	"fmt"
+	"reflect"
+
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"reflect"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -307,105 +308,24 @@ func (a *ApiVersion) ToAzureCreateOrUpdateParameter() apim.APICreateOrUpdatePara
 }
 
 func (a *ApiVersion) GetAzureAPIAppInsightsDiagnosticSettings(loggerId string) apim.DiagnosticContract {
-	defaultSettings := apim.DiagnosticContract{
-		Properties: &apim.DiagnosticContractProperties{
-			LoggerID:  &loggerId,
-			AlwaysLog: utils.ToPointer(apim.AlwaysLogAllErrors),
-			Backend: &apim.PipelineDiagnosticSettings{
-				Request: &apim.HTTPMessageDiagnostic{
-					Body: &apim.BodyDiagnosticSettings{
-						Bytes: utils.ToPointer(int32(0)),
-					},
-					DataMasking: nil,
-					Headers: []*string{
-						utils.ToPointer("Ocp-Apim-Subscription-Key"),
-						utils.ToPointer("Content-Type"),
-						utils.ToPointer("X-Forwarded-For"),
-					},
-				},
-				Response: &apim.HTTPMessageDiagnostic{
-					Body: &apim.BodyDiagnosticSettings{
-						Bytes: utils.ToPointer(int32(0)),
-					},
-					DataMasking: nil,
-					Headers: []*string{
-						utils.ToPointer("Ocp-Apim-Subscription-Key"),
-						utils.ToPointer("Content-Type"),
-						utils.ToPointer("X-Forwarded-For"),
-					},
-				},
-			},
-			Frontend: &apim.PipelineDiagnosticSettings{
-				Request: &apim.HTTPMessageDiagnostic{
-					Body: &apim.BodyDiagnosticSettings{
-						Bytes: utils.ToPointer(int32(0)),
-					},
-					DataMasking: nil,
-					Headers: []*string{
-						utils.ToPointer("Ocp-Apim-Subscription-Key"),
-						utils.ToPointer("Content-Type"),
-						utils.ToPointer("X-Forwarded-For"),
-					},
-				},
-				Response: &apim.HTTPMessageDiagnostic{
-					Body: &apim.BodyDiagnosticSettings{
-						Bytes: utils.ToPointer(int32(0)),
-					},
-					DataMasking: nil,
-					Headers: []*string{
-						utils.ToPointer("Ocp-Apim-Subscription-Key"),
-						utils.ToPointer("Content-Type"),
-						utils.ToPointer("X-Forwarded-For"),
-					},
-				},
-			},
-			HTTPCorrelationProtocol: utils.ToPointer(apim.HTTPCorrelationProtocolW3C),
-			Metrics:                 utils.ToPointer(true),
-			Sampling: &apim.SamplingSettings{
-				Percentage:   utils.ToPointer(50.0),
-				SamplingType: utils.ToPointer(apim.SamplingTypeFixed),
-			},
-			Verbosity: utils.ToPointer(apim.VerbosityError),
-		},
-	}
+	defaultSettings := getDefaultDiagnosticSettings(loggerId, false)
 	if a.Spec.Diagnostics != nil {
-		if a.Spec.Diagnostics.SamplingPercentage != nil {
-			defaultSettings.Properties.Sampling.Percentage = utils.ToPointer(float64(*a.Spec.Diagnostics.SamplingPercentage))
-		}
-
-		if a.Spec.Diagnostics.EnableMetrics != nil {
-			defaultSettings.Properties.Metrics = a.Spec.Diagnostics.EnableMetrics
-		}
-		if a.Spec.Diagnostics.Frontend != nil {
-			if a.Spec.Diagnostics.Frontend.Request != nil {
-				if a.Spec.Diagnostics.Frontend.Request.Headers != nil {
-					defaultSettings.Properties.Frontend.Request.Headers = a.Spec.Diagnostics.Frontend.Request.Headers
-				}
-			}
-			if a.Spec.Diagnostics.Frontend.Response != nil {
-				if a.Spec.Diagnostics.Frontend.Response.Headers != nil {
-					defaultSettings.Properties.Frontend.Response.Headers = a.Spec.Diagnostics.Frontend.Response.Headers
-				}
-			}
-		}
-		if a.Spec.Diagnostics.Backend != nil {
-			if a.Spec.Diagnostics.Backend.Request != nil {
-				if a.Spec.Diagnostics.Backend.Request.Headers != nil {
-					defaultSettings.Properties.Backend.Request.Headers = a.Spec.Diagnostics.Backend.Request.Headers
-				}
-			}
-			if a.Spec.Diagnostics.Backend.Response != nil {
-				if a.Spec.Diagnostics.Backend.Response.Headers != nil {
-					defaultSettings.Properties.Backend.Response.Headers = a.Spec.Diagnostics.Backend.Response.Headers
-				}
-			}
-		}
+		return overrideDefaults(defaultSettings, a.Spec.Diagnostics)
 	}
 
 	return defaultSettings
 }
 
 func (a *ApiVersion) GetAzureAPIAzureMonitorDiagnosticSettings(loggerId string) apim.DiagnosticContract {
+	defaultSettings := getDefaultDiagnosticSettings(loggerId, true)
+	if a.Spec.Diagnostics != nil {
+		return overrideDefaults(defaultSettings, a.Spec.Diagnostics)
+	}
+
+	return defaultSettings
+}
+
+func getDefaultDiagnosticSettings(loggerId string, azureMonitor bool) apim.DiagnosticContract {
 	defaultSettings := apim.DiagnosticContract{
 		Properties: &apim.DiagnosticContractProperties{
 			LoggerID:  &loggerId,
@@ -467,41 +387,46 @@ func (a *ApiVersion) GetAzureAPIAzureMonitorDiagnosticSettings(loggerId string) 
 			Verbosity:   utils.ToPointer(apim.VerbosityError),
 		},
 	}
-	if a.Spec.Diagnostics != nil {
-		if a.Spec.Diagnostics.SamplingPercentage != nil {
-			defaultSettings.Properties.Sampling.Percentage = utils.ToPointer(float64(*a.Spec.Diagnostics.SamplingPercentage))
-		}
+	if !azureMonitor {
+		defaultSettings.Properties.HTTPCorrelationProtocol = utils.ToPointer(apim.HTTPCorrelationProtocolW3C)
+	}
+	return defaultSettings
+}
 
-		if a.Spec.Diagnostics.EnableMetrics != nil {
-			defaultSettings.Properties.Metrics = a.Spec.Diagnostics.EnableMetrics
+func overrideDefaults(defaults apim.DiagnosticContract, overrides *ApiDiagnosticSpec) apim.DiagnosticContract {
+	if overrides.SamplingPercentage != nil {
+		defaults.Properties.Sampling.Percentage = utils.ToPointer(float64(*overrides.SamplingPercentage))
+	}
+
+	if overrides.EnableMetrics != nil {
+		defaults.Properties.Metrics = overrides.EnableMetrics
+	}
+	if overrides.Frontend != nil {
+		if overrides.Frontend.Request != nil {
+			if overrides.Frontend.Request.Headers != nil {
+				defaults.Properties.Frontend.Request.Headers = overrides.Frontend.Request.Headers
+			}
 		}
-		if a.Spec.Diagnostics.Frontend != nil {
-			if a.Spec.Diagnostics.Frontend.Request != nil {
-				if a.Spec.Diagnostics.Frontend.Request.Headers != nil {
-					defaultSettings.Properties.Frontend.Request.Headers = a.Spec.Diagnostics.Frontend.Request.Headers
-				}
-			}
-			if a.Spec.Diagnostics.Frontend.Response != nil {
-				if a.Spec.Diagnostics.Frontend.Response.Headers != nil {
-					defaultSettings.Properties.Frontend.Response.Headers = a.Spec.Diagnostics.Frontend.Response.Headers
-				}
+		if overrides.Frontend.Response != nil {
+			if overrides.Frontend.Response.Headers != nil {
+				defaults.Properties.Frontend.Response.Headers = overrides.Frontend.Response.Headers
 			}
 		}
-		if a.Spec.Diagnostics.Backend != nil {
-			if a.Spec.Diagnostics.Backend.Request != nil {
-				if a.Spec.Diagnostics.Backend.Request.Headers != nil {
-					defaultSettings.Properties.Backend.Request.Headers = a.Spec.Diagnostics.Backend.Request.Headers
-				}
+	}
+	if overrides.Backend != nil {
+		if overrides.Backend.Request != nil {
+			if overrides.Backend.Request.Headers != nil {
+				defaults.Properties.Backend.Request.Headers = overrides.Backend.Request.Headers
 			}
-			if a.Spec.Diagnostics.Backend.Response != nil {
-				if a.Spec.Diagnostics.Backend.Response.Headers != nil {
-					defaultSettings.Properties.Backend.Response.Headers = a.Spec.Diagnostics.Backend.Response.Headers
-				}
+		}
+		if overrides.Backend.Response != nil {
+			if overrides.Backend.Response.Headers != nil {
+				defaults.Properties.Backend.Response.Headers = overrides.Backend.Response.Headers
 			}
 		}
 	}
 
-	return defaultSettings
+	return defaults
 }
 
 func pointerValueEqual[T comparable](a *T, b *T) bool {
