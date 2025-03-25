@@ -155,9 +155,11 @@ func (r *ApiVersionReconciler) handleApiVersionUpdate(ctx context.Context, apiVe
 			}
 		}
 	}
-	err = r.createUpdateDiagnostics(ctx, apiVersion)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to create/update Diagnostics: %w", err)
+	if apiVersion.Spec.Diagnostics != nil {
+		err = r.createUpdateDiagnostics(ctx, apiVersion)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to create/update Diagnostics: %w", err)
+		}
 	}
 	return ctrl.Result{RequeueAfter: DEFAULT_REQUE_TIME}, nil
 }
