@@ -154,11 +154,18 @@ func (r *ApiVersionReconciler) handleApiVersionUpdate(ctx context.Context, apiVe
 				return ctrl.Result{}, fmt.Errorf("failed to create/update policy: %w", err)
 			}
 		}
+	} else {
+		if err = r.ensurePoliciesDeleted(ctx, apiVersion); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to delete policy: %w", err)
+		}
 	}
 	if apiVersion.Spec.Diagnostics != nil {
-		err = r.createUpdateDiagnostics(ctx, apiVersion)
-		if err != nil {
+		if err = r.createUpdateDiagnostics(ctx, apiVersion); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to create/update Diagnostics: %w", err)
+		}
+	} else {
+		if err = r.ensureDiagnosticsDeleted(ctx, apiVersion); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to delete Diagnostics: %w", err)
 		}
 	}
 	return ctrl.Result{RequeueAfter: DEFAULT_REQUE_TIME}, nil
@@ -233,9 +240,6 @@ func (r *ApiVersionReconciler) createUpdateApimApi(ctx context.Context, apiVersi
 
 func (r *ApiVersionReconciler) createUpdatePolicy(ctx context.Context, apiVersion apimv1alpha1.ApiVersion) error {
 	logger := log.FromContext(ctx)
-	if apiVersion.Spec.Policies == nil {
-		return nil
-	}
 	logger.Info("Creating or updating policy")
 	policy := apiVersion.Spec.Policies
 	if policy.PolicyContent == nil {
@@ -278,11 +282,10 @@ func (r *ApiVersionReconciler) createUpdatePolicy(ctx context.Context, apiVersio
 
 func (r *ApiVersionReconciler) createUpdateDiagnostics(ctx context.Context, apiVersion apimv1alpha1.ApiVersion) error {
 	logger := log.FromContext(ctx)
-	logger.Info("Creating or updating diagnostics")
 	diagnostics := apiVersion.Spec.Diagnostics
 	loggerId := r.ApimClientConfig.DefaultLoogerId
 	azuremonitorLoggerId := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ApiManagement/service/%s/loggers/azuremonitor", r.ApimClientConfig.SubscriptionId, r.ApimClientConfig.ResourceGroup, r.ApimClientConfig.ApimServiceName)
-	if diagnostics != nil && diagnostics.LoggerName != nil {
+	if diagnostics.LoggerName != nil {
 		lookedUpId, err := r.apimClient.GetLoggerByName(ctx, *diagnostics.LoggerName)
 		if err != nil {
 			return fmt.Errorf("failed to get logger: %w", err)
@@ -323,6 +326,52 @@ func (r *ApiVersionReconciler) createUpdateDiagnostics(ctx context.Context, apiV
 	if err != nil {
 		logger.Error(err, "Failed to update status")
 		return err
+	}
+	return nil
+}
+
+func (r *ApiVersionReconciler) ensurePoliciesDeleted(ctx context.Context, apiVersion apimv1alpha1.ApiVersion) error {
+	logger := log.FromContext(ctx)
+	policy, err := r.apimClient.GetApiPolicy(ctx, apiVersion.GetApiVersionAzureFullName(), nil)
+	if azure.IgnoreNotFound(err) != nil {
+		logger.Error(err, "Failed to get policy")
+		return err
+	}
+	if err == nil {
+		_, err := r.apimClient.DeleteApiPolicy(ctx, *policy.Name, *policy.ETag, nil)
+		if azure.IgnoreNotFound(err) != nil {
+			logger.Error(err, "Failed to delete policy")
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *ApiVersionReconciler) ensureDiagnosticsDeleted(ctx context.Context, apiVersion apimv1alpha1.ApiVersion) error {
+	logger := log.FromContext(ctx)
+	appInsightsDiag, err := r.apimClient.GetApiDiagnosticSettings(ctx, apiVersion.GetApiVersionAzureFullName(), string(azure.DiagnosticsIdApplicationInsights), nil)
+	if azure.IgnoreNotFound(err) != nil {
+		logger.Error(err, "Failed to get appinsights diagnostics")
+		return err
+	}
+	if err == nil {
+		_, err = r.apimClient.DeleteApiDiagnosticSettings(ctx, apiVersion.GetApiVersionAzureFullName(), *appInsightsDiag.Name, *appInsightsDiag.ETag, nil)
+		if err != nil {
+			logger.Error(err, "Failed to delete appinsights diagnostics")
+			return err
+		}
+	}
+	azureMonitorDiag, err := r.apimClient.GetApiDiagnosticSettings(ctx, apiVersion.GetApiVersionAzureFullName(), string(azure.DiagnosticsIdAzureMonitor), nil)
+	if azure.IgnoreNotFound(err) != nil {
+		logger.Error(err, "Failed to get azuremonitor diagnostics")
+		return err
+	}
+	if err == nil {
+		_, err = r.apimClient.DeleteApiDiagnosticSettings(ctx, apiVersion.GetApiVersionAzureFullName(), *azureMonitorDiag.Name, *azureMonitorDiag.ETag, nil)
+		if err != nil {
+			logger.Error(err, "Failed to delete azuremonitor diagnostics")
+			return err
+		}
 	}
 	return nil
 }
