@@ -57,6 +57,11 @@ data "azurerm_role_definition" "azure_kubernetes_service_cluster_user_role" {
   role_definition_id = "4abbcc35-e782-43d8-92c5-2d3f1bd2253f"
 }
 
+# https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#containers
+data "azurerm_role_definition" "azure_kubernetes_service_cluster_admin_role" {
+  role_definition_id = "0ab0b1a8-8aac-4efd-b8c2-3ee1fb270be8"
+}
+
 # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/resources
 data "azurerm_resource_group" "tfstate" {
   name = var.arm_resource_group_name
@@ -197,6 +202,14 @@ resource "azurerm_role_assignment" "reader_azure_kubernetes_service_cluster_user
   scope                            = azurerm_management_group.parent.id
   principal_id                     = azuread_service_principal.reader.object_id
   role_definition_name             = data.azurerm_role_definition.azure_kubernetes_service_cluster_user_role.name
+  skip_service_principal_aad_check = true
+}
+
+# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
+resource "azurerm_role_assignment" "reader_azure_kubernetes_service_cluster_admin_role" {
+  scope                            = azurerm_management_group.parent.id
+  principal_id                     = azuread_service_principal.reader.object_id
+  role_definition_name             = data.azurerm_role_definition.azure_kubernetes_service_cluster_admin_role.name
   skip_service_principal_aad_check = true
 }
 
