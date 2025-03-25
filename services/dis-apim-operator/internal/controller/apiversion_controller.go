@@ -283,7 +283,7 @@ func (r *ApiVersionReconciler) createUpdatePolicy(ctx context.Context, apiVersio
 func (r *ApiVersionReconciler) createUpdateDiagnostics(ctx context.Context, apiVersion apimv1alpha1.ApiVersion) error {
 	logger := log.FromContext(ctx)
 	diagnostics := apiVersion.Spec.Diagnostics
-	loggerId := r.ApimClientConfig.DefaultLoogerId
+	loggerId := r.ApimClientConfig.DefaultLoggerId
 	azuremonitorLoggerId := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ApiManagement/service/%s/loggers/azuremonitor", r.ApimClientConfig.SubscriptionId, r.ApimClientConfig.ResourceGroup, r.ApimClientConfig.ApimServiceName)
 	if diagnostics.LoggerName != nil {
 		lookedUpId, err := r.apimClient.GetLoggerByName(ctx, *diagnostics.LoggerName)
