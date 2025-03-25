@@ -89,6 +89,7 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
     msi_auth_for_monitoring_enabled = true
   }
 
+  automatic_upgrade_channel = "stable"
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "spot" {
