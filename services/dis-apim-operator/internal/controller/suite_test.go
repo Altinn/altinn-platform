@@ -104,6 +104,9 @@ var _ = BeforeSuite(func() {
 		APIVersionSetServer: fakeApim.FakeApiVersionServer,
 		APIServer:           fakeApim.FakeApiServer,
 		BackendServer:       fakeApim.FakeBackendServer,
+		APIPolicyServer:     fakeApim.FakeApiPolicyServer,
+		APIDiagnosticServer: fakeApim.FakeApiDiagnosticServer,
+		LoggerServer:        fakeApim.FakeLoggerServer,
 	})
 
 	apimClientConfig := &azure.ApimClientConfig{
