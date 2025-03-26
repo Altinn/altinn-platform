@@ -98,7 +98,7 @@ spec:
                   backend:
                     description: Backend Diagnostic settings for incoming/outgoing
                       HTTP messages to the Backend. If not specified, the default
-                      values are used.
+                      values are set at runtime.
                     properties:
                       request:
                         description: Request - Diagnostic settings for incoming HTTP
@@ -107,6 +107,7 @@ spec:
                           headers:
                             description: Headers - Array of HTTP Headers to log. Defaults
                               to [Ocp-Apim-Subscription-Key, Content-Type, X-Forwarded-For].
+                              Defaults set at runtime.
                             items:
                               type: string
                             type: array
@@ -118,6 +119,7 @@ spec:
                           headers:
                             description: Headers - Array of HTTP Headers to log. Defaults
                               to [Ocp-Apim-Subscription-Key, Content-Type, X-Forwarded-For].
+                              Defaults set at runtime.
                             items:
                               type: string
                             type: array
@@ -125,11 +127,12 @@ spec:
                     type: object
                   enableMetrics:
                     description: EnbaleMetrics - Indicates if metrics should be collected.
+                      Defaults to true, value set at runtime.
                     type: boolean
                   frontend:
                     description: Frontend Diagnostic settings for incoming/outgoing
                       HTTP messages to the Gateway. If not specified, the default
-                      values are used.
+                      values are set at runtime.
                     properties:
                       request:
                         description: Request - Diagnostic settings for incoming HTTP
@@ -138,6 +141,7 @@ spec:
                           headers:
                             description: Headers - Array of HTTP Headers to log. Defaults
                               to [Ocp-Apim-Subscription-Key, Content-Type, X-Forwarded-For].
+                              Defaults set at runtime.
                             items:
                               type: string
                             type: array
@@ -149,6 +153,7 @@ spec:
                           headers:
                             description: Headers - Array of HTTP Headers to log. Defaults
                               to [Ocp-Apim-Subscription-Key, Content-Type, X-Forwarded-For].
+                              Defaults set at runtime.
                             items:
                               type: string
                             type: array
@@ -156,10 +161,12 @@ spec:
                     type: object
                   loggerName:
                     description: LoggerName - The name of the logger to receive the
-                      diagnostic data. Operator will lookup the loggerId by this name
+                      diagnostic data. Operator will lookup the loggerId by this name.
+                      Default logger set at runtime
                     type: string
                   samplingPercentage:
                     description: SamplingPercentage - Percentage of the calls to log.
+                      Default value set at runtime.
                     format: int32
                     maximum: 100
                     minimum: 0

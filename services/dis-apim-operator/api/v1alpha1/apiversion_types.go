@@ -148,20 +148,20 @@ type FromBackend struct {
 
 // ApiDiagnosticSpec defines the desired diagnostic settings for the ApiVersion.
 type ApiDiagnosticSpec struct {
-	// LoggerName - The name of the logger to receive the diagnostic data. Operator will lookup the loggerId by this name
+	// LoggerName - The name of the logger to receive the diagnostic data. Operator will lookup the loggerId by this name. Default logger set at runtime
 	// +kubebuilder:validation:Optional
 	LoggerName *string `json:"loggerName,omitempty"`
-	// SamplingPercentage - Percentage of the calls to log.
+	// SamplingPercentage - Percentage of the calls to log. Default value set at runtime.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Minimum:=0
 	// +kubebuilder:validation:Maximum:=100
 	SamplingPercentage *int32 `json:"samplingPercentage,omitempty"`
-	// EnbaleMetrics - Indicates if metrics should be collected.
+	// EnbaleMetrics - Indicates if metrics should be collected. Defaults to true, value set at runtime.
 	EnableMetrics *bool `json:"enableMetrics,omitempty"`
-	// Frontend Diagnostic settings for incoming/outgoing HTTP messages to the Gateway. If not specified, the default values are used.
+	// Frontend Diagnostic settings for incoming/outgoing HTTP messages to the Gateway. If not specified, the default values are set at runtime.
 	// +kubebuilder:validation:Optional
 	Frontend *PipelineDiagnosticSettings `json:"frontend,omitempty"`
-	// Backend Diagnostic settings for incoming/outgoing HTTP messages to the Backend. If not specified, the default values are used.
+	// Backend Diagnostic settings for incoming/outgoing HTTP messages to the Backend. If not specified, the default values are set at runtime.
 	// +kubebuilder:validation:Optional
 	Backend *PipelineDiagnosticSettings `json:"backend,omitempty"`
 }
@@ -178,7 +178,7 @@ type PipelineDiagnosticSettings struct {
 
 // HttpMessageDiagnostic defines the desired diagnostic settings for the ApiVersion.
 type HttpMessageDiagnostic struct {
-	// Headers - Array of HTTP Headers to log. Defaults to [Ocp-Apim-Subscription-Key, Content-Type, X-Forwarded-For].
+	// Headers - Array of HTTP Headers to log. Defaults to [Ocp-Apim-Subscription-Key, Content-Type, X-Forwarded-For]. Defaults set at runtime.
 	// +kubebuilder:validation:Optional
 	Headers []*string `json:"headers,omitempty"`
 }
