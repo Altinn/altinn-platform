@@ -126,7 +126,7 @@ spec:
                         type: object
                     type: object
                   enableMetrics:
-                    description: EnbaleMetrics - Indicates if metrics should be collected.
+                    description: EnableMetrics - Indicates if metrics should be collected.
                       Defaults to true, value set at runtime.
                     type: boolean
                   frontend:
