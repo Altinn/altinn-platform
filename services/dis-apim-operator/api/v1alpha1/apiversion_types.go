@@ -156,7 +156,7 @@ type ApiDiagnosticSpec struct {
 	// +kubebuilder:validation:Minimum:=0
 	// +kubebuilder:validation:Maximum:=100
 	SamplingPercentage *int32 `json:"samplingPercentage,omitempty"`
-	// EnbaleMetrics - Indicates if metrics should be collected. Defaults to true, value set at runtime.
+	// EnableMetrics - Indicates if metrics should be collected. Defaults to true, value set at runtime.
 	EnableMetrics *bool `json:"enableMetrics,omitempty"`
 	// Frontend Diagnostic settings for incoming/outgoing HTTP messages to the Gateway. If not specified, the default values are set at runtime.
 	// +kubebuilder:validation:Optional
@@ -326,6 +326,11 @@ func (a *ApiVersion) GetAzureAPIAzureMonitorDiagnosticSettings(loggerId string) 
 }
 
 func getDefaultDiagnosticSettings(loggerId string, azureMonitor bool) apim.DiagnosticContract {
+	var defaultHeaders = []*string{
+		utils.ToPointer("Ocp-Apim-Subscription-Key"),
+		utils.ToPointer("Content-Type"),
+		utils.ToPointer("X-Forwarded-For"),
+	}
 	defaultSettings := apim.DiagnosticContract{
 		Properties: &apim.DiagnosticContractProperties{
 			LoggerID:  &loggerId,
@@ -336,22 +341,14 @@ func getDefaultDiagnosticSettings(loggerId string, azureMonitor bool) apim.Diagn
 						Bytes: utils.ToPointer(int32(0)),
 					},
 					DataMasking: nil,
-					Headers: []*string{
-						utils.ToPointer("Ocp-Apim-Subscription-Key"),
-						utils.ToPointer("Content-Type"),
-						utils.ToPointer("X-Forwarded-For"),
-					},
+					Headers:     defaultHeaders,
 				},
 				Response: &apim.HTTPMessageDiagnostic{
 					Body: &apim.BodyDiagnosticSettings{
 						Bytes: utils.ToPointer(int32(0)),
 					},
 					DataMasking: nil,
-					Headers: []*string{
-						utils.ToPointer("Ocp-Apim-Subscription-Key"),
-						utils.ToPointer("Content-Type"),
-						utils.ToPointer("X-Forwarded-For"),
-					},
+					Headers:     defaultHeaders,
 				},
 			},
 			Frontend: &apim.PipelineDiagnosticSettings{
@@ -360,22 +357,14 @@ func getDefaultDiagnosticSettings(loggerId string, azureMonitor bool) apim.Diagn
 						Bytes: utils.ToPointer(int32(0)),
 					},
 					DataMasking: nil,
-					Headers: []*string{
-						utils.ToPointer("Ocp-Apim-Subscription-Key"),
-						utils.ToPointer("Content-Type"),
-						utils.ToPointer("X-Forwarded-For"),
-					},
+					Headers:     defaultHeaders,
 				},
 				Response: &apim.HTTPMessageDiagnostic{
 					Body: &apim.BodyDiagnosticSettings{
 						Bytes: utils.ToPointer(int32(0)),
 					},
 					DataMasking: nil,
-					Headers: []*string{
-						utils.ToPointer("Ocp-Apim-Subscription-Key"),
-						utils.ToPointer("Content-Type"),
-						utils.ToPointer("X-Forwarded-For"),
-					},
+					Headers:     defaultHeaders,
 				},
 			},
 			Metrics: utils.ToPointer(true),
