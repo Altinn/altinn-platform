@@ -1,10 +1,13 @@
 FROM alpine:3.21.3@sha256:a8560b36e8b8210634f77d9f7f9efd7ffa463e380b75e2e74aff4511df3ef88c
+COPY --from=golang:1.24-alpine@sha256:43c094ad24b6ac0546c62193baeb3e6e49ce14d3250845d166c77c25f64b0386 /usr/local/go/ /usr/local/go/
+ENV PATH="/usr/local/go/bin:${PATH}"
 
-ARG KUBECTL_VERSION=1.32.1
+ARG KUBECTL_VERSION=1.32.3
 ARG KUBESEAL_VERSION=0.28.0
 ARG JSONNET_VERSION=0.20.0
-ARG K6_VERSION=0.56.0
+ARG K6_VERSION=0.57.0
 ARG JB_VERSION=0.6.0
+ARG K8S_LIBSONNET_VERSION=1.32
 
 RUN apk --update-cache upgrade && \
     apk add --no-cache \
@@ -21,7 +24,7 @@ RUN mkdir /tools_download
 WORKDIR /tools_download
 
 # Install kubectl
-RUN curl -LO "https://dl.k8s.io/release/"v$KUBECTL_VERSION"/bin/linux/amd64/kubectl" &&\
+RUN curl -LO "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl" &&\
     chmod +x kubectl && mv kubectl /usr/local/bin
 
 # Install kubeseal
@@ -45,6 +48,14 @@ RUN curl -OL "https://github.com/jsonnet-bundler/jsonnet-bundler/releases/downlo
 RUN curl -OL "https://github.com/grafana/k6/releases/download/v${K6_VERSION}/k6-v${K6_VERSION}-linux-amd64.tar.gz" &&\
     tar -xvzf k6-v${K6_VERSION}-linux-amd64.tar.gz k6-v${K6_VERSION}-linux-amd64/k6 &&\
     chmod +x k6-v${K6_VERSION}-linux-amd64/k6 && mv k6-v${K6_VERSION}-linux-amd64/k6 /usr/local/bin
+
+RUN mkdir -p /jsonnet/vendor
+
+WORKDIR /jsonnet/vendor
+
+# Download k8s libsonnet library
+RUN jb init && \
+    jb install github.com/jsonnet-libs/k8s-libsonnet/${K8S_LIBSONNET_VERSION}@main
 
 WORKDIR /
 
