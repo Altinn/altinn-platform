@@ -30,3 +30,4 @@ jobs:
       image_name: k6-action-image
       tag_prefix: k6-action-image-
       workdir: ./infrastructure/images/k6-action
+      platforms: linux/amd64
