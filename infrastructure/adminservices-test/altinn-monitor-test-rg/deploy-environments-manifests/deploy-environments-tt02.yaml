@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: deploy-environments-tt02
-  namespace: platform
-data:
-  BASE_URL: "https://platform.tt02.altinn.no"

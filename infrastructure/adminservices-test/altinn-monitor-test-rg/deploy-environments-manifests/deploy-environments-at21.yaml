@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: deploy-environments-at21
-  namespace: platform
-data:
-  BASE_URL: "https://platform.at21.altinn.no/"

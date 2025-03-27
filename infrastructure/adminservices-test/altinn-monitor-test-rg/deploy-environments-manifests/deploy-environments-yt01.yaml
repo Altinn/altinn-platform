@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: deploy-environments-yt01
-  namespace: platform
-data:
-  BASE_URL: "https://platform.yt01.altinn.cloud"
