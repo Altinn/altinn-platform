@@ -12,7 +12,7 @@ func main() {
 	if !ok {
 		log.Fatal("INPUT_CONFIG_FILE is mandatory")
 	}
-	g := cmd.K8sManifestGenerator{
+	var g cmd.Generator = cmd.K8sManifestGenerator{
 		UserConfigFile:            userConfigFile,
 		ConfigDirectory:           ".conf",
 		DistDirectory:             ".dist",

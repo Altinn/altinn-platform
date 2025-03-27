@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 )
@@ -82,6 +83,7 @@ func (cFile *ConfigFile) HasValidTestTypes() bool {
 	for _, td := range cFile.TestDefinitions {
 		for _, c := range td.Contexts {
 			if c.TestTypeDefinition != nil && !cFile.IsValidTestType(*c.TestTypeDefinition.Type) {
+				fmt.Printf("detected invalid test type: %s\n", *c.TestTypeDefinition.Type)
 				return false
 			}
 		}
@@ -93,6 +95,7 @@ func (cFile *ConfigFile) HasValidDeploymentEnvironments() bool {
 	for _, td := range cFile.TestDefinitions {
 		for _, c := range td.Contexts {
 			if !cFile.IsValidDeploymentEnvironment(c.Environment) {
+				fmt.Printf("detected invalid environment: %s\n", c.Environment)
 				return false
 			}
 		}

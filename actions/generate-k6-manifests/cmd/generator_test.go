@@ -106,7 +106,7 @@ func TestGenerate(t *testing.T) {
 		fmt.Printf("Testing Generation for %s\n", version)
 		testVersion := version
 		distDir, confDir, buildDir := generateTempDirectories()
-		g := initGenerator(fmt.Sprintf("./example_configfiles/%s.yaml", testVersion), confDir, distDir, buildDir)
+		var g Generator = initGenerator(fmt.Sprintf("./example_configfiles/%s.yaml", testVersion), confDir, distDir, buildDir)
 		g.Generate()
 
 		validateConfigFolder(confDir, testVersion, t)

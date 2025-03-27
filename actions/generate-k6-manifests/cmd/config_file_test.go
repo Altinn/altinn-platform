@@ -22,6 +22,7 @@ var validEnvironmentsTests = []struct {
 	{"prod", true},
 	{"custom", true},
 	{"randomstring", false},
+	{"tt02", true},
 }
 
 func TestIsValidDeploymentEnvironment(t *testing.T) {
@@ -31,6 +32,7 @@ func TestIsValidDeploymentEnvironment(t *testing.T) {
 			"at22",
 			"at23",
 			"at24",
+			"tt02",
 			"yt01",
 			"prod",
 			"custom",
