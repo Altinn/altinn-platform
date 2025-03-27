@@ -1,4 +1,13 @@
 resource "azurerm_kubernetes_cluster" "aks" {
+  lifecycle {
+    ignore_changes = [
+      workload_autoscaler_profile,
+      default_node_pool[0].node_count,
+      windows_profile,
+      kubernetes_version,
+      default_node_pool[0].orchestrator_version,
+    ]
+  }
   name                      = "${var.name_prefix}-aks"
   location                  = azurerm_resource_group.rg.location
   resource_group_name       = azurerm_resource_group.rg.name
@@ -71,6 +80,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "workpool" {
   lifecycle {
     ignore_changes = [
       node_count,
+      orchestrator_version,
     ]
   }
   name                  = "workpool"
