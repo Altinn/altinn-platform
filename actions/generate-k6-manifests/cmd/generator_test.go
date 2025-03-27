@@ -20,8 +20,8 @@ func initGenerator(userConfigFile, confDir, distDir, buildDir string) *K8sManife
 		ConfigDirectory:           confDir,
 		DistDirectory:             distDir,
 		BuildDirectory:            buildDir,
-		DefaultScenariosDirectory: "../default_scenarios/",
-		RepoRootDirectory:         "../../../",
+		DefaultScenariosDirectory: "../default_scenarios",
+		RepoRootDirectory:         "../../..",
 	}
 }
 

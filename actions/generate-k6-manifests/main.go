@@ -14,11 +14,11 @@ func main() {
 	}
 	g := cmd.K8sManifestGenerator{
 		UserConfigFile:            userConfigFile,
-		ConfigDirectory:           ".conf/",
-		DistDirectory:             ".dist/",
-		BuildDirectory:            ".build/",
-		DefaultScenariosDirectory: "./actions/generate-k6-manifests/default_scenarios/",
-		RepoRootDirectory:         "./",
+		ConfigDirectory:           ".conf",
+		DistDirectory:             ".dist",
+		BuildDirectory:            ".build",
+		DefaultScenariosDirectory: "./actions/generate-k6-manifests/default_scenarios",
+		RepoRootDirectory:         ".",
 	}
 	g.Generate()
 }

@@ -16,5 +16,3 @@ mv actions/generate-k6-manifests/generate-k6-manifests . && \
 ./generate-k6-manifests
 
 rm ./generate-k6-manifests
-
-rm -rf .build

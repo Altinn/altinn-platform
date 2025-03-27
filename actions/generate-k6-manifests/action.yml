@@ -1,5 +1,5 @@
 name: "k6-tests-manifests-generator"
-description: "Generates the manifests needed to run k6 in k8s"
+description: "Generates the manifests needed to run k6 tests in k8s"
 inputs:
   config_file:
     description: "The config file with the information needed to generate the manifests"

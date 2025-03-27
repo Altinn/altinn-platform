@@ -1,11 +1,10 @@
-package main
+package cmd
 
 import (
 	"fmt"
 	"log"
 	"testing"
 
-	"github.com/Altinn/altinn-platform/actions/generate-k6-manifests/cmd"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -26,7 +25,7 @@ var validEnvironmentsTests = []struct {
 }
 
 func TestIsValidDeploymentEnvironment(t *testing.T) {
-	configFile := cmd.ConfigFile{
+	configFile := ConfigFile{
 		ValidEnvironmentValues: []string{
 			"at21",
 			"at22",
@@ -54,7 +53,7 @@ test_definitions:
     contexts:
       - environment: yt01
 `
-	configFile := cmd.ConfigFile{
+	configFile := ConfigFile{
 		ValidEnvironmentValues: []string{
 			"at21",
 			"at22",
@@ -127,7 +126,7 @@ test_definitions:
     contexts:
       - environment: at22
 `
-	configFile := cmd.ConfigFile{
+	configFile := ConfigFile{
 		ValidEnvironmentValues: []string{
 			"at21",
 			"at22",
