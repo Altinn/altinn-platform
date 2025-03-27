@@ -12,6 +12,10 @@ terraform {
       source  = "gavinbunney/kubectl"
       version = "~> 1.19.0"
     }
+    azapi = {
+      source  = "Azure/azapi"
+      version = "~> 2.0"
+    }
   }
   backend "azurerm" {
     use_azuread_auth = true
@@ -43,4 +47,9 @@ provider "kubectl" {
   client_key             = base64decode(azurerm_kubernetes_cluster.aks.kube_config.0.client_key)
   host                   = azurerm_kubernetes_cluster.aks.kube_config.0.host
   cluster_ca_certificate = base64decode(azurerm_kubernetes_cluster.aks.kube_config.0.cluster_ca_certificate)
+}
+
+provider "azapi" {
+  use_oidc         = true
+  enable_preflight = true
 }

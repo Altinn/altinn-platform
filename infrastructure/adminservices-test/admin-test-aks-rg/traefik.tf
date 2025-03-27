@@ -1,59 +1,47 @@
-resource "kubectl_manifest" "flux_traefik_ocirepo" {
+resource "azapi_resource" "traefik" {
   depends_on = [azurerm_kubernetes_cluster_extension.flux_ext]
-  yaml_body  = <<YAML
-apiVersion: source.toolkit.fluxcd.io/v1beta2
-kind: OCIRepository
-metadata:
-  name: traefik
-  namespace: flux-system
-spec:
-  provider: azure
-  interval: 5m
-  url: oci://altinncr.azurecr.io/manifests/infra/traefik
-  ref:
-    tag: ${var.flux_release_tag}
-YAML
-}
-
-resource "kubectl_manifest" "flux_traefik_kustomization" {
-  depends_on = [kubectl_manifest.flux_traefik_ocirepo]
-  yaml_body  = <<YAML
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
-  name: traefik
-  namespace: flux-system
-spec:
-  sourceRef:
-    kind: OCIRepository
-    name: traefik
-  interval: 5m
-  retryInterval: 5m
-  path: ./
-  prune: true
-  wait: true
-  timeout: 5m
-  patches:
-    - patch: |-
-        apiVersion: helm.toolkit.fluxcd.io/v2
-        kind: HelmRelease
-        metadata:
-          name: altinn-traefik
-        spec:
-          values:
-            service:
-              spec:
-                externalTrafficPolicy: Local
-              ipFamilyPolicy: PreferDualStack
-              ipFamilies:
-                - IPv4
-                - IPv6
-              annotations:
-                service.beta.kubernetes.io/azure-load-balancer-resource-group: ${azurerm_kubernetes_cluster.aks.node_resource_group}
-                service.beta.kubernetes.io/azure-load-balancer-ipv4: ${azurerm_public_ip.pip4.ip_address}
-                service.beta.kubernetes.io/azure-load-balancer-ipv6: ${azurerm_public_ip.pip6.ip_address}
-      target:
-        kind: HelmRelease
-        name: altinn-traefik
-YAML
+  type       = "Microsoft.KubernetesConfiguration/fluxConfigurations@2024-11-01"
+  name       = "traefik"
+  parent_id  = azurerm_kubernetes_cluster.aks.id
+  body = {
+    properties = {
+      kustomizations = {
+        traefik = {
+          force = false
+          path  = "./"
+          postBuild = {
+            substitute = {
+              AKS_SYSP00L_IP_PREFIX_0 : "${var.subnet_address_prefixes["aks_syspool"][0]}"
+              AKS_SYSP00L_IP_PREFIX_1 : "${var.subnet_address_prefixes["aks_syspool"][1]}"
+              AKS_WORKPOOL_IP_PREFIX_0 : "${var.subnet_address_prefixes["aks_workpool"][0]}"
+              AKS_WORKPOOL_IP_PREFIX_1 : "${var.subnet_address_prefixes["aks_workpool"][1]}"
+              AKS_NODE_RG : "${azurerm_kubernetes_cluster.aks.node_resource_group}"
+              PUBLIC_IP_V4 : "${azurerm_public_ip.pip4.ip_address}"
+              PUBLIC_IP_V6 : "${azurerm_public_ip.pip6.ip_address}"
+              # EXTERNAL_TRAFFIC_POLICY: Cluster (Local is default)
+            }
+          }
+          prune                  = false
+          retryIntervalInSeconds = 300
+          syncIntervalInSeconds  = 300
+          timeoutInSeconds       = 300
+          wait                   = true
+        }
+      }
+      namespace = "flux-system"
+      ociRepository = {
+        insecure = false
+        repositoryRef = {
+          tag = var.flux_release_tag
+        }
+        syncIntervalInSeconds = 300
+        timeoutInSeconds      = 300
+        url                   = "oci://altinncr.azurecr.io/manifests/infra/traefik"
+        useWorkloadIdentity   = true
+      }
+      reconciliationWaitDuration = "PT5M"
+      waitForReconciliation      = true
+      sourceKind                 = "OCIRepository"
+    }
+  }
 }
