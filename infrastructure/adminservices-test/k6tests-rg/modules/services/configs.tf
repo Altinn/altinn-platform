@@ -39,18 +39,26 @@ locals {
     },
   ]
 
-  namespaces_deployenvs = distinct(flatten([
-    for n in local.namespaces : [
-      for d in local.deploy_envs : {
-        namespace  = n
-        deploy_env = d
-      }
-    ]
-  ]))
+  namespaces_deployenvs = distinct(
+    flatten(
+      [for n in local.namespaces :
+        [for d in local.deploy_envs :
+          {
+            namespace  = n
+            deploy_env = d
+          }
+        ]
+      ]
+    )
+  )
 }
 
 resource "kubernetes_config_map_v1" "deploy_environments_manifests" {
-  for_each = { for entry in local.namespaces_deployenvs : "${entry.namespace}.${entry.deploy_env.name}" => entry }
+  for_each = {
+    for entry in local.namespaces_deployenvs :
+    "${entry.namespace}.${entry.deploy_env.name}"
+    => entry
+  }
   metadata {
     name      = "deploy-environments-${each.value.deploy_env.name}"
     namespace = each.value.namespace

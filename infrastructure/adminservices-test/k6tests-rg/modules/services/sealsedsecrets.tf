@@ -1,5 +1,4 @@
 resource "helm_release" "sealed_secrets" {
-  depends_on       = [azurerm_kubernetes_cluster.k6tests]
   name             = "sealedsecrets"
   namespace        = "sealedsecrets-system"
   create_namespace = true
