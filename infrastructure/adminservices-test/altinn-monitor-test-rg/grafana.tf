@@ -29,7 +29,7 @@ resource "azurerm_role_assignment" "tf_grafana_admin" {
 
 resource "azurerm_role_assignment" "monitoring_reader_rg" {
   scope                            = azurerm_resource_group.rg.id
-  role_definition_id               = "/subscriptions/${split("/", azurerm_monitor_workspace.altinn_monitor.id)[2]}/providers/Microsoft.Authorization/roleDefinitions/43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+  role_definition_name             = "Monitoring Reader"
   principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
   skip_service_principal_aad_check = true
 }
@@ -46,7 +46,7 @@ resource "azurerm_role_assignment" "monitoring_reader_rg_dp_test" {
 
   for_each                         = data.azurerm_resource_group.rd_dp_test
   scope                            = each.value.id
-  role_definition_id               = "/subscriptions/${split("/", azurerm_monitor_workspace.altinn_monitor.id)[2]}/providers/Microsoft.Authorization/roleDefinitions/43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+  role_definition_name             = "Monitoring Reader"
   principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
   skip_service_principal_aad_check = true
 }
@@ -54,7 +54,7 @@ resource "azurerm_role_assignment" "monitoring_reader_rg_dp_test" {
 resource "azurerm_role_assignment" "monitoring_reader_rg_dp_stag" {
 
   scope                            = data.azurerm_resource_group.rg_dp_stag.id
-  role_definition_id               = "/subscriptions/${split("/", azurerm_monitor_workspace.altinn_monitor.id)[2]}/providers/Microsoft.Authorization/roleDefinitions/43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+  role_definition_name             = "Monitoring Reader"
   principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
   skip_service_principal_aad_check = true
 }
@@ -62,7 +62,7 @@ resource "azurerm_role_assignment" "monitoring_reader_rg_dp_stag" {
 resource "azurerm_role_assignment" "monitoring_reader_rg_dp_prod" {
 
   scope                            = data.azurerm_resource_group.rg_dp_prod.id
-  role_definition_id               = "/subscriptions/${split("/", azurerm_monitor_workspace.altinn_monitor.id)[2]}/providers/Microsoft.Authorization/roleDefinitions/43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+  role_definition_name             = "Monitoring Reader"
   principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
   skip_service_principal_aad_check = true
 }
@@ -92,7 +92,7 @@ resource "azurerm_role_assignment" "grafana_identity_reader_rg_dp_prod" {
 resource "azurerm_role_assignment" "monitoring_reader_rg_studio_law_test" {
 
   scope                            = data.azurerm_resource_group.rg_studio_law_test.id
-  role_definition_id               = "/subscriptions/${split("/", azurerm_monitor_workspace.altinn_monitor.id)[2]}/providers/Microsoft.Authorization/roleDefinitions/43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+  role_definition_name             = "Monitoring Reader"
   principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
   skip_service_principal_aad_check = true
 }
@@ -100,7 +100,7 @@ resource "azurerm_role_assignment" "monitoring_reader_rg_studio_law_test" {
 resource "azurerm_role_assignment" "monitoring_reader_rg_studio_law_prod" {
 
   scope                            = data.azurerm_resource_group.rg_studio_law_prod.id
-  role_definition_id               = "/subscriptions/${split("/", azurerm_monitor_workspace.altinn_monitor.id)[2]}/providers/Microsoft.Authorization/roleDefinitions/43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+  role_definition_name             = "Monitoring Reader"
   principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
   skip_service_principal_aad_check = true
 }
@@ -108,7 +108,7 @@ resource "azurerm_role_assignment" "monitoring_reader_rg_studio_law_prod" {
 resource "azurerm_role_assignment" "monitoring_reader_rg_studio_dev" {
 
   scope                            = data.azurerm_resource_group.rg_studio_dev.id
-  role_definition_id               = "/subscriptions/${split("/", azurerm_monitor_workspace.altinn_monitor.id)[2]}/providers/Microsoft.Authorization/roleDefinitions/43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+  role_definition_name             = "Monitoring Reader"
   principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
   skip_service_principal_aad_check = true
 }
@@ -116,7 +116,7 @@ resource "azurerm_role_assignment" "monitoring_reader_rg_studio_dev" {
 resource "azurerm_role_assignment" "monitoring_reader_rg_studio_stag" {
 
   scope                            = data.azurerm_resource_group.rg_studio_stag.id
-  role_definition_id               = "/subscriptions/${split("/", azurerm_monitor_workspace.altinn_monitor.id)[2]}/providers/Microsoft.Authorization/roleDefinitions/43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+  role_definition_name             = "Monitoring Reader"
   principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
   skip_service_principal_aad_check = true
 }
@@ -124,7 +124,7 @@ resource "azurerm_role_assignment" "monitoring_reader_rg_studio_stag" {
 resource "azurerm_role_assignment" "monitoring_reader_rg_studio_prod" {
 
   scope                            = data.azurerm_resource_group.rg_studio_prod.id
-  role_definition_id               = "/subscriptions/${split("/", azurerm_monitor_workspace.altinn_monitor.id)[2]}/providers/Microsoft.Authorization/roleDefinitions/43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+  role_definition_name             = "Monitoring Reader"
   principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
   skip_service_principal_aad_check = true
 }
