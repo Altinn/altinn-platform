@@ -48,7 +48,7 @@ products:
   - name: Apps
     slug: APP # Apps
     github:
-      owner: altinn
+      owner: Altinn
       repositories:
         - app-frontend-react
         - altinn-tools
