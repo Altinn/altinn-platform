@@ -51,3 +51,8 @@ cache_rules = [
     credential_set_id = null
   }
 ]
+
+acr_push_object_ids = [
+  "c5a4a3da-2990-4734-9281-c40368ac0861",
+  "fc900cb0-fb05-45f9-be11-f4a663b3c9a3",
+]
