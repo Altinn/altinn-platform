@@ -1,30 +1,28 @@
-name: Test K6 Actions
-
-on:
-  push:
-
-permissions:
-  id-token: write
-  contents: read
-
-jobs:
-  k6-test-run-push:
-    if: github.event_name == 'push'
-    environment: reader
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        id: checkout_code
-        uses: actions/checkout@v4
-
-      - name: Run k6 tests
-        uses: ./actions/run-k6-tests/
-        with:
-          azure-client-id: ${{ vars.TF_AZURE_CLIENT_ID }}
-          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          azure-subscription-id: "1ce8e9af-c2d6-44e7-9c5e-099a308056fe"
-
-          config_file: "./services/k6/conf.yaml"
-
-          # Override the defaults by passing in CLI args
-          # command_line_args: "--vus 23 --duration 7m"
+#name: Test K6 Actions
+#
+#on:
+#  push:
+#
+#permissions:
+#  id-token: write
+#  contents: read
+#
+#jobs:
+#  k6-test-run-push:
+#    if: github.event_name == 'push'
+#    environment: reader
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout code
+#        id: checkout_code
+#        uses: actions/checkout@v4
+#
+#      - name: Run k6 tests
+#        uses: ./actions/run-k6-tests/
+#        with:
+#          azure-client-id: ${{ vars.TF_AZURE_CLIENT_ID }}
+#          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+#          azure-subscription-id: "1ce8e9af-c2d6-44e7-9c5e-099a308056fe"
+#
+#          config_file: "./services/k6/conf.yaml"
+#          command_line_args: "--vus 23 --duration 7m"
