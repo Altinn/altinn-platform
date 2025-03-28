@@ -1,37 +1,35 @@
-resource "kubectl_manifest" "flux_whoami_ocirepo" {
-  depends_on = [kubectl_manifest.flux_traefik_kustomization]
-  yaml_body  = <<YAML
-apiVersion: source.toolkit.fluxcd.io/v1beta2
-kind: OCIRepository
-metadata:
-  name: whoami
-  namespace: flux-system
-spec:
-  provider: azure
-  interval: 5m
-  url: oci://altinncr.azurecr.io/manifests/infra/whoami
-  ref:
-    tag: ${var.flux_release_tag}
-YAML
-}
-
-resource "kubectl_manifest" "flux_whoami_kustomization" {
-  depends_on = [kubectl_manifest.flux_whoami_ocirepo]
-  yaml_body  = <<YAML
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
-  name: whoami
-  namespace: flux-system
-spec:
-  sourceRef:
-    kind: OCIRepository
-    name: whoami
-  interval: 5m
-  retryInterval: 5m
-  path: ./
-  prune: true
-  wait: true
-  timeout: 5m
-YAML
+resource "azapi_resource" "whoami" {
+  depends_on = [azurerm_kubernetes_cluster_extension.flux_ext]
+  type       = "Microsoft.KubernetesConfiguration/fluxConfigurations@2024-11-01"
+  name       = "whoami"
+  parent_id  = azurerm_kubernetes_cluster.aks.id
+  body = {
+    properties = {
+      kustomizations = {
+        whoami = {
+          force                  = false
+          path                   = "./"
+          prune                  = false
+          retryIntervalInSeconds = 300
+          syncIntervalInSeconds  = 300
+          timeoutInSeconds       = 300
+          wait                   = true
+        }
+      }
+      namespace = "flux-system"
+      ociRepository = {
+        insecure = false
+        repositoryRef = {
+          tag = var.flux_release_tag
+        }
+        syncIntervalInSeconds = 300
+        timeoutInSeconds      = 300
+        url                   = "oci://altinncr.azurecr.io/manifests/infra/whoami"
+        useWorkloadIdentity   = true
+      }
+      reconciliationWaitDuration = "PT5M"
+      waitForReconciliation      = true
+      sourceKind                 = "OCIRepository"
+    }
+  }
 }
