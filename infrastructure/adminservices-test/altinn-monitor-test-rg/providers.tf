@@ -4,10 +4,6 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.0"
     }
-    kubernetes = {
-      source  = "hashicorp/kubernetes"
-      version = "2.35.1"
-    }
   }
   backend "azurerm" {
     use_azuread_auth = true
