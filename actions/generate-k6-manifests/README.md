@@ -19,14 +19,14 @@ Generated manifests are written to a .dist/ folder at the root of the directory.
 
 ```
 - name: Generate k8s manifests
-  uses: ./actions/generate-k6-manifests/
+  uses: Altinn/altinn-platform/actions/generate-k6-manifests@main
   with:
     config_file: "./services/k6/conf.yaml"
 ```
 or
 ```
 - name: Generate k8s manifests
-  uses: ./actions/generate-k6-manifests/
+  uses: Altinn/altinn-platform/actions/generate-k6-manifests@main
   with:
     config_file: "./services/k6/ad-hoc-test-conf.yaml"
     command_line_args: "--vus 23 --duration 7m"

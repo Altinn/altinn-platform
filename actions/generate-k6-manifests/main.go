@@ -17,7 +17,7 @@ func main() {
 		ConfigDirectory:           ".conf",
 		DistDirectory:             ".dist",
 		BuildDirectory:            ".build",
-		DefaultScenariosDirectory: "./actions/generate-k6-manifests/default_scenarios",
+		DefaultScenariosDirectory: "/actions/generate-k6-manifests/default_scenarios",
 		RepoRootDirectory:         ".",
 	}
 	g.Generate()

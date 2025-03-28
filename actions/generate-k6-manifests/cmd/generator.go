@@ -275,7 +275,7 @@ func (r K8sManifestGenerator) CallKubectl(uniqName string, namespace string) {
 
 func (r K8sManifestGenerator) CallJsonnet(uniqName string, namespace string, environment string, parallelism int, nodeType string, sealedSecretName string, extraEnvVars []byte, resources []byte) {
 	var errb strings.Builder
-	k6ClusterConfigFile, err := os.ReadFile(fmt.Sprintf("%s/actions/generate-k6-manifests/infra/k6_cluster_conf.yaml", r.RepoRootDirectory))
+	k6ClusterConfigFile, err := os.ReadFile("/actions/generate-k6-manifests/infra/k6_cluster_conf.yaml")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -296,7 +296,7 @@ func (r K8sManifestGenerator) CallJsonnet(uniqName string, namespace string, env
 		"--ext-str", fmt.Sprintf("resources=%s", resources),
 		"--ext-str", fmt.Sprintf("extra_cli_args=%s", os.Getenv("INPUT_COMMAND_LINE_ARGS")),
 		"--ext-str", fmt.Sprintf("k6clusterconfig=%s", k6ClusterConfigFile),
-		"--multi", newpath, fmt.Sprintf("%s/actions/generate-k6-manifests/jsonnet/main.jsonnet", r.RepoRootDirectory),
+		"--multi", newpath, "/actions/generate-k6-manifests/jsonnet/main.jsonnet",
 	)
 	cmd.Stderr = &errb
 	err = cmd.Run()
