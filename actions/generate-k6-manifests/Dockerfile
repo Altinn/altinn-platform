@@ -6,6 +6,7 @@ FROM ghcr.io/altinn/altinn-platform/k6-action-image:v0.0.2
 ADD generate.sh /generate.sh
 ADD . actions/generate-k6-manifests
 
+# This was just to test calling this from another repo. Will remove eventually.
 RUN cd actions/generate-k6-manifests && ls && go build . && chmod +x generate-k6-manifests && mv generate-k6-manifests /usr/local/bin && cd /
 
 CMD ["/generate.sh"]
