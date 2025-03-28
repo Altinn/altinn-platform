@@ -1,8 +1,0 @@
-{
-    "thresholds": {
-        "http_req_duration": [
-            "p(95)<1000"
-        ]
-    },
-    "httpDebug": "full"
-}
