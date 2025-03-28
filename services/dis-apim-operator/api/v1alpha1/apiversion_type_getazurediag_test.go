@@ -51,7 +51,7 @@ var _ = Describe("ApiVersion", func() {
 	})
 
 	Describe("GetAzureAPIDiagnosticSettings", func() {
-		It("should return the default diagnostic settings when input is nil", func() {
+		It("should return the specified diagnostic settings for the api", func() {
 			diagnosticSettings := apiVersion.GetAzureAPIAppInsightsDiagnosticSettings(defaultLoggerID)
 
 			Expect(diagnosticSettings.Properties.LoggerID).To(Equal(&defaultLoggerID))
