@@ -52,6 +52,7 @@ runs:
 
     - name: Generate k8s manifests
       uses: ./actions/generate-k6-manifests/
+      # uses: Altinn/altinn-platform/actions/generate-k6-manifests@v1.0.0
       with:
         config_file: ${{ inputs.config_file }}
         command_line_args: ${{ inputs.command_line_args }}
