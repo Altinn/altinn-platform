@@ -47,6 +47,7 @@ jobs:
           -c "cd actions/generate-k6-manifests && go test -v ./..."
 
   build-and-release:
+    needs: test
     name: Build, scan and release
     uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yml
     with:
