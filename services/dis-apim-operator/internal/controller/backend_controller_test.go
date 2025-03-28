@@ -32,19 +32,20 @@ import (
 var _ = Describe("Backend Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
+		const resourceNamespace = "test-ut"
 
 		ctx := context.Background()
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: resourceNamespace,
 		}
 
 		It("should set success status when azure resource created", func() {
 			resource := &apimv1alpha1.Backend{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
-					Namespace: "default",
+					Namespace: resourceNamespace,
 				},
 				Spec: apimv1alpha1.BackendSpec{
 					Title:       "test-backend",
@@ -89,6 +90,29 @@ var _ = Describe("Backend Controller", func() {
 				g.Expect(errors.IsNotFound(err)).To(BeTrue())
 				g.Expect(fakeApim.Backends).To(BeEmpty())
 			}, timeout, interval).Should(Succeed())
+			By("Ignoring events in namespaces that are not being watched")
+			// Create a Backend in a namespace that the controller does not watch
+			otherNamespaceBackend := &apimv1alpha1.Backend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: apimv1alpha1.BackendSpec{
+					Title:       "test-backend",
+					Description: utils.ToPointer("Test backend for the operator"),
+					Url:         "https://test.example.com",
+				},
+			}
+			Expect(k8sClient.Create(ctx, otherNamespaceBackend)).To(Succeed())
+			// Fetch the updated Backend resource
+			otherNamespaceBackend = &apimv1alpha1.Backend{}
+			Consistently(func() error {
+				return k8sClient.Get(ctx, types.NamespacedName{Name: resourceName, Namespace: "default"}, otherNamespaceBackend)
+			}).Should(Succeed())
+			// Ensure that the controller has not processed the Backend in the other namespace
+			Consistently(func() int {
+				return len(fakeApim.Backends)
+			}).Should(Equal(0))
 			// Example: If you expect a certain status condition after reconciliation, verify it here.
 		})
 	})

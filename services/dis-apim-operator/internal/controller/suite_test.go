@@ -19,6 +19,8 @@ package controller
 import (
 	"context"
 	"fmt"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -106,11 +108,22 @@ var _ = BeforeSuite(func() {
 		BackendServer:       fakeApim.FakeBackendServer,
 	})
 
+	//create test-ut namespace
+	namespace := &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-ut",
+		},
+	}
+	Eventually(func() error {
+		return k8sClient.Create(ctx, namespace)
+	}).Should(Succeed())
+
 	apimClientConfig := &azure.ApimClientConfig{
 		AzureConfig: config.AzureConfig{
 			SubscriptionId:  "fake-subscription-id",
 			ResourceGroup:   "fake-resource-group",
 			ApimServiceName: "fake-apim-service",
+			NamespaceSuffix: "-ut",
 		},
 		FactoryOptions: &arm.ClientOptions{
 			ClientOptions: azcore.ClientOptions{

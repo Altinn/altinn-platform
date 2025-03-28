@@ -128,6 +128,7 @@ func (r *BackendReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 func (r *BackendReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&apimv1alpha1.Backend{}).
+		WithEventFilter(getCommonPredicateFuncs(r.ApimClientConfig.NamespaceSuffix)).
 		Named("backend").
 		Complete(r)
 }

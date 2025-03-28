@@ -142,6 +142,7 @@ func (r *ApiReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&apimv1alpha1.Api{}).
+		WithEventFilter(getCommonPredicateFuncs(r.ApimClientConfig.NamespaceSuffix)).
 		Owns(&apimv1alpha1.ApiVersion{}).
 		Named("api").
 		Complete(r)

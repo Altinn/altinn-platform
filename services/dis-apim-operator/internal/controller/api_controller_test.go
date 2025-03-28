@@ -40,7 +40,7 @@ var _ = Describe("Api Controller", func() {
 
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
-		const resourceNamespace = "default"
+		const resourceNamespace = "test-ut"
 
 		ctx := context.Background()
 
