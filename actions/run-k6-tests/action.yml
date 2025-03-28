@@ -59,5 +59,4 @@ runs:
     - name: Apply k8s manifests
       shell: bash
       run: |
-        # kubectl apply -f .dist/
-        kubectl apply -Rf .dist/
+        kubectl apply -f .dist/ -R

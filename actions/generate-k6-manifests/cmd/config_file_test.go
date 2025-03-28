@@ -12,7 +12,7 @@ var validEnvironmentsTests = []struct {
 	envName  string // input
 	expected bool   // expected result
 }{
-	{"at21", true},
+	{"at21", false},
 	{"at22", true},
 	{"at23", true},
 	{"at24", true},
@@ -28,7 +28,6 @@ var validEnvironmentsTests = []struct {
 func TestIsValidDeploymentEnvironment(t *testing.T) {
 	configFile := ConfigFile{
 		ValidEnvironmentValues: []string{
-			"at21",
 			"at22",
 			"at23",
 			"at24",
@@ -57,7 +56,6 @@ test_definitions:
 `
 	configFile := ConfigFile{
 		ValidEnvironmentValues: []string{
-			"at21",
 			"at22",
 			"at23",
 			"at24",
@@ -130,7 +128,6 @@ test_definitions:
 `
 	configFile := ConfigFile{
 		ValidEnvironmentValues: []string{
-			"at21",
 			"at22",
 			"at23",
 			"at24",

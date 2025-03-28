@@ -36,7 +36,7 @@ or
 Keep test logic separate from test configuration. You should use a config file to host the [k6 configuration](https://grafana.com/docs/k6/latest/using-k6/k6-options/reference/#config).
 To override configuration options, you have 3 options. You can pass an extra config file that will override whatever options were configured on the default configuration file or add new ones that didn't exist before. You can pass in env variables in the conf.yaml. And lastly, you can pass command line arguments.
 
-Do not hardcode environment specific values in the test files (e.g. base url). The recommended approach is to pass a configuration option specificing the env to target (at21, yt01, tt02, prod, etc.)
+Do not hardcode environment specific values in the test files (e.g. base url). The recommended approach is to pass a configuration option specificing the env to target (at22, yt01, tt02, prod, etc.)
 and then use the injected env var.
 
 e.g. if you want to target the yt01 environment, you can pass a configuration option in the conf.yaml file such that the correct env vars (such as the BASE_URL) will be available at run time.
