@@ -1,7 +1,7 @@
 {
     "stages": [
         {
-            "duration": "480m",
+            "duration": "8h",
             "target": 1
         }
     ]
