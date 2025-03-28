@@ -15,9 +15,11 @@ resource "azurerm_dashboard_grafana" "grafana" {
     resource_id = azurerm_monitor_workspace.altinn_monitor.id
   }
 
+  /* # TODO: Find best way to add this again
   azure_monitor_workspace_integrations {
     resource_id = azurerm_monitor_workspace.k6tests_amw.id
   }
+  */
 }
 
 resource "azurerm_role_assignment" "tf_grafana_admin" {
