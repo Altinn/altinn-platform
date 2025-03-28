@@ -1,6 +1,8 @@
 FROM ghcr.io/altinn/altinn-platform/k6-action-image:v0.0.2
 
 # ADD ./default_scenarios/ actions/generate-k6-manifests/default_scenarios/
+# ADD ./infra/ actions/generate-k6-manifests/infra/
+# ADD ./jsonnet/ actions/generate-k6-manifests/jsonnet/
 ADD generate.sh /generate.sh
 ADD . actions/generate-k6-manifests
 
