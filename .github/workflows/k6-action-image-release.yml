@@ -35,15 +35,12 @@ jobs:
       - name: Run tests
         shell: bash
         run: |
-          # Static files will already be in the iamge eventually
+          # TODO:
           docker run \
-          -v ./actions/generate-k6-manifests/default_scenarios:/actions/generate-k6-manifests/default_scenarios/ \
-          -v ./actions/generate-k6-manifests/infra/:/actions/generate-k6-manifests/infra/  \
-          -v ./actions/generate-k6-manifests/jsonnet/:/actions/generate-k6-manifests/jsonnet/ \
           -v .:/github/workspace \
           --workdir /github/workspace \
           --entrypoint /bin/bash \
-          ghcr.io/altinn/altinn-platform/k6-action-image:v0.0.2 \
+          ghcr.io/altinn/altinn-platform/k6-action-image:v0.0.3 \
           -c "cd actions/generate-k6-manifests && go test -v ./..."
 
   build-and-release:
