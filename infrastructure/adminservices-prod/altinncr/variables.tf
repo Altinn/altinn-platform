@@ -22,7 +22,7 @@ variable "cache_rules" {
 }
 
 variable "acr_push_object_ids" {
-  type        = list(string)
+  type        = set(string)
   description = "object_ids that should be granted AcrPush role on the container registry"
   default     = []
 }
