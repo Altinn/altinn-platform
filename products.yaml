@@ -48,9 +48,10 @@ products:
   - name: Apps
     slug: APP # Apps
     github:
-      owner: altinn
+      owner: Altinn
       repositories:
         - app-frontend-react
+        - altinn-tools
 
   - name: Digitalt Dødsbo
     slug: DDD # DigDir Digitalt Dodsbo

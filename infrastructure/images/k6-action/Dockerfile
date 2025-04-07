@@ -1,9 +1,9 @@
 FROM alpine:3.21.3@sha256:a8560b36e8b8210634f77d9f7f9efd7ffa463e380b75e2e74aff4511df3ef88c
-COPY --from=golang:1.24-alpine@sha256:43c094ad24b6ac0546c62193baeb3e6e49ce14d3250845d166c77c25f64b0386 /usr/local/go/ /usr/local/go/
+COPY --from=golang:1.24-alpine@sha256:7772cb5322baa875edd74705556d08f0eeca7b9c4b5367754ce3f2f00041ccee /usr/local/go/ /usr/local/go/
 ENV PATH="/usr/local/go/bin:${PATH}"
 
 ARG KUBECTL_VERSION=1.32.3
-ARG KUBESEAL_VERSION=0.28.0
+ARG KUBESEAL_VERSION=0.29.0
 ARG JSONNET_VERSION=0.20.0
 ARG K6_VERSION=0.57.0
 ARG JB_VERSION=0.6.0
@@ -57,8 +57,13 @@ WORKDIR /jsonnet/vendor
 RUN jb init && \
     jb install github.com/jsonnet-libs/k8s-libsonnet/${K8S_LIBSONNET_VERSION}@main
 
-WORKDIR /
+
+ADD default_scenarios /actions/generate-k6-manifests/default_scenarios/
+ADD infra /actions/generate-k6-manifests/infra/
+ADD jsonnet /actions/generate-k6-manifests/jsonnet/
 
 RUN rm -rf /tools_download && rm -rf /var/cache/apk/*
+
+WORKDIR /
 
 CMD ["/bin/bash"]
