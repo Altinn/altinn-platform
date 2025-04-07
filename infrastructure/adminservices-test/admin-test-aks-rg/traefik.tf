@@ -18,7 +18,6 @@ resource "azapi_resource" "traefik" {
               AKS_NODE_RG : "${azurerm_kubernetes_cluster.aks.node_resource_group}"
               PUBLIC_IP_V4 : "${azurerm_public_ip.pip4.ip_address}"
               PUBLIC_IP_V6 : "${azurerm_public_ip.pip6.ip_address}"
-              # EXTERNAL_TRAFFIC_POLICY: Cluster (Local is default)
             }
           }
           prune                  = false
