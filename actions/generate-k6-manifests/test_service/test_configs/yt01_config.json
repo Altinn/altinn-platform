@@ -1,0 +1,13 @@
+{
+    "stages": [
+        {
+            "duration": "1m",
+            "target": 10
+        }
+    ],
+    "thresholds": {
+        "http_req_duration": [
+            "p(95)<300"
+        ]
+    }
+}
