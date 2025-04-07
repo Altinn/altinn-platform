@@ -57,3 +57,14 @@ provider "azurerm" {
   features {}
   resource_provider_registrations = "none"
 }
+
+// TODO: Remove in a next PR. This can't be removed before the infra is destroyed.
+provider "helm" {
+  kubernetes {
+    config_path = "~/.kube/config"
+  }
+}
+// TODO: Remove in a next PR. This can't be removed before the infra is destroyed.
+provider "kubernetes" {
+  config_path = "~/.kube/config"
+}
