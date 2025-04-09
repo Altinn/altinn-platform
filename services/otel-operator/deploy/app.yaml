@@ -15,7 +15,7 @@ spec:
   values:
     manager:
       image:
-        repository: ghcr.io/open-telemetry/opentelemetry-operator/opentelemetry-operator
+        repository: altinncr.azurecr.io/ghcr.io/open-telemetry/opentelemetry-operator/opentelemetry-operator
         tag: "0.120.0"
       serviceMonitor:
         enabled: false
