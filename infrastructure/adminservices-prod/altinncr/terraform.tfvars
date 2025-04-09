@@ -57,6 +57,6 @@ acr_push_object_ids = [
   "fc900cb0-fb05-45f9-be11-f4a663b3c9a3", # SP: GitHub: altinn/altinn-tools
 ]
 
-acr_pull_object_ids = [ 
+acr_pull_object_ids = [
   "416302ed-fbab-41a4-8c8d-61f486fa79ca", # Group: Altinn-30-Test-Developers 
 ]
