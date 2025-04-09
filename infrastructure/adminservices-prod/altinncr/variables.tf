@@ -26,3 +26,9 @@ variable "acr_push_object_ids" {
   description = "object_ids that should be granted AcrPush role on the container registry"
   default     = []
 }
+
+variable "acr_pull_object_ids" {
+  type        = set(string)
+  description = "object_ids that should be granted AcrPull and Reader role on the container registry"
+  default     = []
+}
