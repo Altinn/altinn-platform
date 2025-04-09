@@ -10,7 +10,7 @@ spec:
         secretKeyRef:
           name: app-insights-connstring
           key: connectionString
-  image: otel/opentelemetry-collector-contrib:0.122.0
+  image: altinncr.azurecr.io/docker.io/otel/opentelemetry-collector-contrib:0.122.0
   podAnnotations:
     linkerd.io/inject: "enabled"
     config.linkerd.io/skip-outbound-ports: "443"
