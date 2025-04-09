@@ -22,13 +22,19 @@ variable "cache_rules" {
 }
 
 variable "acr_push_object_ids" {
-  type        = set(string)
-  description = "object_ids that should be granted AcrPush role on the container registry"
+  type = set(object({
+    object_id = string
+    type      = string
+  }))
+  description = "{object_id, type} objects that should be granted AcrPush role on the container registry. Type should be either ServicePrincipal, Group or User."
   default     = []
 }
 
 variable "acr_pull_object_ids" {
-  type        = set(string)
-  description = "object_ids that should be granted AcrPull and Reader role on the container registry"
+  type = set(object({
+    object_id = string
+    type      = string
+  }))
+  description = "{object_id, type} objects that should be granted AcrPull and Reader role on the container registry. Type should be either ServicePrincipal, Group or User."
   default     = []
 }
