@@ -1,0 +1,42 @@
+crds:
+  enabled: false
+alertmanager:
+  enabled: true
+grafana:
+  enabled: false
+prometheus:
+  enabled: true
+  serviceAccount:
+    annotations:
+      azure.workload.identity/client-id: "${client_id}"
+  prometheusSpec:
+    podMetadata:
+      labels:
+        azure.workload.identity/use: "true"
+    externalLabels:
+      cluster: "${cluster_name}"
+    enableRemoteWriteReceiver: true
+    remoteWrite:
+      - url: "${remote_write_endpoint}"
+        azureAd:
+          cloud: "AzurePublic"
+          sdk:
+            tenantId: "${tenant_id}"
+    tolerations:
+      - key: "workload"
+        operator: "Equal"
+        value: "prometheus"
+        effect: "NoSchedule"
+    resources:
+      requests:
+        memory: 8Gi
+    nodeSelector:
+      workload: "prometheus"
+    priorityClassName: "system-cluster-critical"
+    retention: 8d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          resources:
+            requests:
+              storage: 64Gi
