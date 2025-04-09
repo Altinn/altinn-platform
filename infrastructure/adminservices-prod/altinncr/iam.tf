@@ -1,5 +1,5 @@
 resource "azurerm_role_assignment" "altinncr_acrpush" {
-  for_each                         = { for puller in var.acr_push_object_ids : puller.object_id => puller }
+  for_each                         = { for pusher in var.acr_push_object_ids : pusher.object_id => pusher }
   principal_id                     = each.value.object_id
   role_definition_name             = "AcrPush"
   principal_type                   = each.value.type
