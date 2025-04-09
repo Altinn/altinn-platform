@@ -49,6 +49,18 @@ cache_rules = [
     target_repo       = "linkerd/*"
     source_repo       = "ghcr.io/linkerd/*"
     credential_set_id = null
+  },
+  {
+    name              = "otel-operator"
+    target_repo       = "open-telemetry/opentelemetry-operator/opentelemetry-operator"
+    source_repo       = "ghcr.io/open-telemetry/opentelemetry-operator/opentelemetry-operator"
+    credential_set_id = null
+  },
+    {
+    name              = "otel-collector"
+    target_repo       = "otel/opentelemetry-collector-contrib"
+    source_repo       = "docker.io/otel/opentelemetry-collector-contrib"
+    credential_set_id = "/credentialSets/dockerhub"
   }
 ]
 
