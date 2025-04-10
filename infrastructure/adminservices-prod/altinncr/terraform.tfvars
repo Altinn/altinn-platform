@@ -53,10 +53,19 @@ cache_rules = [
 ]
 
 acr_push_object_ids = [
-  "c5a4a3da-2990-4734-9281-c40368ac0861", # SP: GitHub: altinn/altinn-platform
-  "fc900cb0-fb05-45f9-be11-f4a663b3c9a3", # SP: GitHub: altinn/altinn-tools
+  {
+    object_id = "c5a4a3da-2990-4734-9281-c40368ac0861" # SP: GitHub: altinn/altinn-platform
+    type      = "ServicePrincipal"
+  },
+  {
+    object_id = "fc900cb0-fb05-45f9-be11-f4a663b3c9a3" # SP: GitHub: altinn/altinn-tools
+    type      = "ServicePrincipal"
+  },
 ]
 
 acr_pull_object_ids = [
-  "416302ed-fbab-41a4-8c8d-61f486fa79ca", # Group: Altinn-30-Test-Developers 
+  {
+    object_id = "416302ed-fbab-41a4-8c8d-61f486fa79ca" # Group: Altinn-30-Test-Developers 
+    type      = "Group"
+  }
 ]
