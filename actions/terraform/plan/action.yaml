@@ -54,63 +54,25 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Terraform Install
-      id: install
-      uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
-      with:
-        terraform_version: ${{ inputs.tf_version }}
-        terraform_wrapper: true
-
-    - name: Terraform Set Logger
-      id: logger
-      shell: bash
-      run: export TF_LOG="${{ inputs.tf_log_level == '' && 'INFO' || inputs.tf_log_level }}"
-
-    - name: Terraform Set State File Path
-      id: state_file_path_tmp
-      shell: bash
-      run: |
-        echo "TF_STATE_FILE_TMP=github.com/${GITHUB_REPOSITORY}/${{ inputs.oidc_type == 'environment' && 'environments' || 'branches' }}/${{ inputs.oidc_value }}/${{ inputs.tf_state_name }}" >> $GITHUB_ENV
-
-    - name: Terraform Set State File Path Lower
-      id: state_file_path
-      shell: bash
-      run: |
-        echo "TF_STATE_FILE=$(echo ${{ env.TF_STATE_FILE_TMP }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-
-    - name: Terraform Format
-      id: fmt
-      shell: bash
-      if: always()
-      working-directory: ${{ inputs.working_directory }}
-      run: terraform fmt -check
-
     - name: Terraform Init
-      id: init
-      shell: bash
-      if: always()
-      working-directory: ${{ inputs.working_directory }}
-      env:
-        ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
-        ARM_TENANT_ID: ${{ inputs.arm_tenant_id }}
-        ARM_SUBSCRIPTION_ID: ${{ inputs.tf_arm_subscription_id }}
-        ARM_USE_OIDC: "true"
-      run: |
-        terraform init -input=false \
-          -backend-config="subscription_id=${{ inputs.tf_arm_subscription_id }}" \
-          -backend-config="resource_group_name=${{ inputs.tf_arm_resource_group_name }}" \
-          -backend-config="storage_account_name=${{ inputs.tf_arm_storage_account_name }}" \
-          -backend-config="container_name=tfstates" \
-          -backend-config="key=${{ env.TF_STATE_FILE }}"
+      uses: Altinn/altinn-platform/actions/terraform/init@main
+      with:
+        working_directory: ${{ inputs.working_directory }}
 
-    - name: Terraform Validate
-      id: validate
-      shell: bash
-      if: always()
-      working-directory: ${{ inputs.working_directory }}
-      run: |
-        terraform version
-        terraform validate -no-color
+        oidc_type: ${{ inputs.oidc_type }}
+        oidc_value: ${{ inputs.oidc_value }}
+
+        arm_client_id: ${{ inputs.arm_client_id }}
+        arm_subscription_id: ${{ inputs.arm_subscription_id }}
+        arm_tenant_id: ${{ inputs.arm_tenant_id }}
+
+        tf_arm_subscription_id: ${{ inputs.tf_arm_subscription_id }}
+        tf_arm_resource_group_name: ${{ inputs.tf_arm_resource_group_name }}
+        tf_arm_storage_account_name: ${{ inputs.tf_arm_storage_account_name }}
+        tf_state_name: ${{ inputs.tf_state_name }}
+
+        tf_version: ${{ inputs.tf_version }}
+        tf_log_level: ${{ inputs.tf_log_level }}
 
     - name: Terraform Plan
       id: plan
