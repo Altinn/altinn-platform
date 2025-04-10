@@ -33,7 +33,7 @@ jobs:
         run: |
           echo "reponame=${GITHUB_REPOSITORY,,}" >> ${GITHUB_OUTPUT}
       - name: Setup flux
-        uses: fluxcd/flux2/action@f0fecf7399c151cfa9491c0c244c420dbf1afa83
+        uses: fluxcd/flux2/action@09af0becc535746ac1d06206fbf9539a8d9bc624
         with:
           version: latest
       - name: Build latest artifact
@@ -61,7 +61,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Setup flux
-        uses: fluxcd/flux2/action@f0fecf7399c151cfa9491c0c244c420dbf1afa83
+        uses: fluxcd/flux2/action@09af0becc535746ac1d06206fbf9539a8d9bc624
         with:
           version: latest
       - name: Setup vars
