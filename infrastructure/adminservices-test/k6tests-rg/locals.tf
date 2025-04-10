@@ -34,7 +34,7 @@ locals {
     }
   }
   namespaces                  = toset([for v in local.k8s_rbac : v["namespace"]])
-  k6tests_cluster_name        = data.azurerm_kubernetes_cluster.k6tests.name
+  k6tests_cluster_name        = module.foundational.k6tests_cluster_name
   k6tests_resource_group_name = module.foundational.k6tests_resource_group_name
   oidc_issuer_url             = data.azurerm_kubernetes_cluster.k6tests.oidc_issuer_url
 
