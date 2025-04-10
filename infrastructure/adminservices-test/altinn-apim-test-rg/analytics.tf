@@ -3,6 +3,7 @@ resource "azurerm_application_insights" "appinsights" {
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
   application_type    = "web"
+  workspace_id        = azurerm_log_analytics_workspace.apimlogs.id
 }
 
 resource "azurerm_api_management_logger" "apimlogger" {
