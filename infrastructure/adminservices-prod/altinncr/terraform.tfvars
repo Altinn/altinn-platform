@@ -65,7 +65,7 @@ acr_push_object_ids = [
 
 acr_pull_object_ids = [
   {
-    object_id = "416302ed-fbab-41a4-8c8d-61f486fa79ca", # Group: Altinn-30-Test-Developers 
+    object_id = "416302ed-fbab-41a4-8c8d-61f486fa79ca" # Group: Altinn-30-Test-Developers 
     type      = "Group"
   }
 ]
