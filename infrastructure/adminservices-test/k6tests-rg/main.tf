@@ -14,7 +14,7 @@ module "foundational" {
   log_analytics_workspace_daily_quota_gb    = local.log_analytics_workspace_daily_quota_gb
   log_analytics_workspace_retention_in_days = local.log_analytics_workspace_retention_in_days
 
-  suffix = "-${random_string.suffix.result}"
+  suffix = local.suffix
 }
 
 module "services" {
@@ -28,7 +28,8 @@ module "services" {
   k6tests_cluster_name = local.k6tests_cluster_name
   oidc_issuer_url      = local.oidc_issuer_url
 
-  remote_write_endpoint = local.remote_write_endpoint
+  remote_write_endpoint   = local.remote_write_endpoint
+  data_collection_rule_id = local.data_collection_rule_id
 
-  suffix = "-${random_string.suffix.result}"
+  suffix = local.suffix
 }
