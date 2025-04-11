@@ -90,13 +90,12 @@ runs:
       shell: bash
       if: always()
       working-directory: ${{ inputs.working_directory }}
-      env:
-        ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
-        ARM_TENANT_ID: ${{ inputs.arm_tenant_id }}
-        ARM_SUBSCRIPTION_ID: ${{ inputs.tf_arm_subscription_id }}
-        ARM_USE_OIDC: "true"
       run: |
         terraform init -input=false \
+          -backend-config="use_oidc=true" \
+          -backend-config="use_azuread_auth=true" \
+          -backend-config="tenant_id=${{ inputs.arm_tenant_id }}" \
+          -backend-config="client_id=${{ inputs.arm_client_id }}" \
           -backend-config="subscription_id=${{ inputs.tf_arm_subscription_id }}" \
           -backend-config="resource_group_name=${{ inputs.tf_arm_resource_group_name }}" \
           -backend-config="storage_account_name=${{ inputs.tf_arm_storage_account_name }}" \
