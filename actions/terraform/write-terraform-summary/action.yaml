@@ -1,0 +1,183 @@
+name: Write Terraform Summary
+description: Write Terraform Summary
+inputs:
+  working_directory:
+    description: The directory where the Terraform project is located.
+    default: ./infrastructure
+    required: true
+
+  oidc_type:
+    description: Specifies a part of subject for OpenID Connect (OIDC), can be values 'branch' or 'environment'
+    required: true
+  oidc_value:
+    description: Name of branch or environment
+    required: true
+
+  gh_token:
+    description: GitHub Token
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: generate random delimiter
+      shell: bash
+      run: echo "DELIMITER=$(uuidgen)" >> $GITHUB_ENV
+
+    - name: truncate terraform plan result
+      shell: bash
+      run: |
+        plan=$(cat ${{ inputs.working_directory }}/tfplan.log)
+        original_length=${#plan}
+        plan=$(echo "${plan//\`}" | grep -v 'Refreshing state' | tail --bytes 120000)
+        new_length=${#plan}
+        echo "PLAN<<${{ env.DELIMITER }}2" >> $GITHUB_ENV
+        echo '[Lines containing Refreshing state removed]' >> $GITHUB_ENV
+        if [ $new_length -lt $original_length ]; then
+          echo '[Truncated to 120000 bytes! See logoutput for complete plan]' >> $GITHUB_ENV
+        fi
+        echo "${plan}" >> $GITHUB_ENV
+        echo >> $GITHUB_ENV
+        echo "${{ env.DELIMITER }}2" >> $GITHUB_ENV
+
+    - name: Generate Terraform Summary
+      id: action_summary
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      if: always()
+      env:
+        VALIDATE_OUTPUT: ${{ env.VALIDATE_STEP_OUTPUT }}
+      with:
+        github-token: ${{ inputs.gh_token }}
+        script: |
+          // 1. Prep the output
+          const output = `# Terraform ${{ inputs.oidc_type }} ${{ inputs.oidc_value }}
+          #### Initialization ⚙️\`${{ env.INIT_STEP_OUTCOME }}\`
+          #### Format and Style 🖌\`${{ env.FMT_STEP_OUTCOME }}\`
+          #### Validation 🤖\`${{ env.VALIDATE_STEP_OUTCOME }}\`
+          <details><summary>Validation Output</summary>
+
+          \`\`\`\n
+          ${process.env.VALIDATE_OUTPUT}
+          \`\`\`
+
+          </details>
+
+          #### Plan 📖\`${{ env.PLAN_STEP_OUTCOME }}\`
+
+          <details><summary>Show Plan</summary>
+
+          \`\`\`\n
+          ${{ env.PLAN }}
+          \`\`\`
+
+          </details>
+
+          | Context | Values |
+          | - | - |
+          | Pusher | @${{ github.actor }} |
+          | Action | \`${{ github.event_name }}\` |
+          | Working Directory | \`${{ inputs.working_directory }}\` |
+          | State | \`${{ env.TF_STATE_FILE }}\` |
+          | Artifact | \`${{ env.ARTIFACT_KEY }}\` |`;
+
+          // 2. Set the output variable
+          const fs = require('fs');
+          fs.writeFileSync('${{ inputs.working_directory }}/summary.md', output);
+          core.setOutput('summary', output);
+    - name: Write Terraform Summary
+      if: always()
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      run: cat summary.md >> $GITHUB_STEP_SUMMARY
+
+    - name: GitHub Issue
+      id: issue_number
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      with:
+        result-encoding: string
+        script: |
+          if (context.issue.number) {
+            // Return issue number if present
+            return context.issue.number;
+          } else {
+            // Otherwise return issue number from commit
+              const prs = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                commit_sha: context.sha,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+              });
+
+              if (prs.data.length > 0)
+              {
+                return prs.data[0].number;
+              }
+
+              return null;
+          }
+
+    - name: Terraform Summary PR
+      id: pr_summary
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      if: steps.issue_number.outputs.result != 'null' && env.PLAN_STEP_EXITCODE == 2
+      env:
+        ISSUE_NUMBER: ${{ steps.issue_number.outputs.result }}
+      with:
+        github-token: ${{ inputs.gh_token }}
+        script: |
+          // 1. Retrieve existing bot comments for the PR
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: ${{ env.ISSUE_NUMBER }},
+          })
+          const botComment = comments.find(comment => {
+            return comment.user.type === 'Bot' && comment.body.includes('Terraform ${{ inputs.oidc_type }} ${{ inputs.oidc_value }}')
+          })
+
+          // 2. Prepare format of the comment
+          const output = `# Terraform ${{ inputs.oidc_type }} ${{ inputs.oidc_value }}
+          #### Format and Style 🖌\`${{ env.FMT_STEP_OUTCOME }}\`
+          #### Initialization ⚙️\`${{ env.INIT_STEP_OUTCOME }}\`
+          #### Validation 🤖\`${{ env.VALIDATE_STEP_OUTCOME }}\`
+          <details><summary>Validation Output</summary>
+
+          \`\`\`\n
+          ${{ env.VALIDATE_STEP_OUTPUT }}
+          \`\`\`
+
+          </details>
+
+          #### Plan 📖\`${{ env.PLAN_STEP_OUTCOME }}\`
+
+          <details><summary>Show Plan</summary>
+
+          \`\`\`\n
+          ${{ env.PLAN }}
+          \`\`\`
+
+          </details>
+
+          | Context | Values |
+          | - | - |
+          | Pusher | @${{ github.actor }} |
+          | Action | \`${{ github.event_name }}\` |
+          | Working Directory | \`${{ inputs.working_directory }}\` |
+          | State File | \`${{ env.TF_STATE_FILE }}\` |
+          | Plan File | \`${{ env.ARTIFACT_KEY }}\``;
+
+          // 3. If we have a comment, update it, otherwise create a new one
+          if (botComment) {
+            github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: output
+            })
+          } else {
+            github.rest.issues.createComment({
+              issue_number: ${{ env.ISSUE_NUMBER }},
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+          }

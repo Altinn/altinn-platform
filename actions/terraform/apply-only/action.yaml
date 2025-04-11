@@ -1,0 +1,82 @@
+name: Terraform Plan
+description: Run terraform plan
+inputs:
+  working_directory:
+    description: The directory where the Terraform project is located.
+    default: ./infrastructure
+    required: true
+
+  oidc_type:
+    description: Specifies a part of subject for OpenID Connect (OIDC), can be values 'branch' or 'environment'
+    required: true
+  oidc_value:
+    description: Name of branch or environment
+    required: true
+
+  arm_client_id:
+    required: true
+    description: Federated Azure Client ID.
+  arm_subscription_id:
+    required: true
+    description: Azure Subscription ID
+  arm_tenant_id:
+    description: Azure Tenant ID
+    default: cd0026d8-283b-4a55-9bfa-d0ef4a8ba21c
+
+  tf_arm_subscription_id:
+    required: true
+    default: d43d5057-8389-40d5-88c4-04db9275cbf2
+    description: Azure Subscription ID for the storage account that persists the terraform state
+  tf_arm_resource_group_name:
+    description: Azure resource group for the storage account that persists the terraform state
+    default: terraform-rg
+  tf_arm_storage_account_name:
+    description: Name of the azure storage account that persists the terraform state
+    default: altinnterraformstorage02
+  tf_state_name:
+    description: Name of Terraform state file
+    required: true
+    default: tfstate
+  tf_version:
+    description: Terraform Version
+    default: ~1.10.5
+  tf_log_level:
+    description: Terraform Log level
+    default: INFO
+  tf_args:
+    description: Terraform arguments
+    required: false
+  tf_output_file:
+    description: JSON file for dumping tf state output
+    default: tf_output.json
+
+runs:
+  using: composite
+  steps:
+    - name: Artifact Key
+      id: artifact_key
+      shell: bash
+      run: |
+        TF_STATE_FILE=${{ env.TF_STATE_FILE }}
+        ARTIFACT_KEY="${TF_STATE_FILE////_}.tfplan"
+        echo "ARTIFACT_KEY=$ARTIFACT_KEY" >> $GITHUB_ENV
+
+    - name: Download Plan
+      id: artifact
+      uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4.2.1
+      with:
+        name: ${{ env.ARTIFACT_KEY }}
+        path: ${{ inputs.working_directory }}
+
+    - name: Terraform Apply
+      id: apply
+      working-directory: ${{ inputs.working_directory }}
+      shell: bash
+      run: |
+        terraform apply -input=false -auto-approve ${{ inputs.tf_args }} tfplan.out
+        terraform output -json >> ${{ inputs.tf_output_file }}
+      env:
+        ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
+        ARM_SUBSCRIPTION_ID: ${{ inputs.arm_subscription_id }}
+        ARM_TENANT_ID: ${{ inputs.arm_tenant_id }}
+        ARM_USE_OIDC: "true"
