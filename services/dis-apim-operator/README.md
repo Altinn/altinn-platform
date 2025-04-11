@@ -4,6 +4,25 @@
 ## Description
 // TODO(user): An in-depth paragraph about your project and overview of use
 
+### Overview
+The dis-apim-operator is a Kubernetes operator that manages the deployment of APIs in Azure API Management (APIM) using custom resources (CRs). 
+
+It provides a way to define and manage APIs, API versions, API diagnostics, Backends, and policies in a declarative manner.
+
+It leverages the [Azure/azure-sdk-for-go](https://github.com/Azure/azure-sdk-for-go) to interact with the Azure API Management service and perform operations such as creating, updating, and deleting APIs and their associated resources.
+
+### Features
+
+#### Custom Diagnostics settings for API
+
+It is possible to configure custom diagnostics settings for the API. This is done by defining the diagnostics section for the API Version.
+
+If the logs should be sent to another Applications Insights than the default one the owner of the APIM must [define a custom logger in the APIM](https://learn.microsoft.com/en-us/azure/api-management/api-management-howto-app-insights?tabs=rest).
+
+Once the custom logger is created the owner of the APIM must inform the owner of the API about the name of the logger (in most cases the name of the application insights).
+
+The LoggerName is then specified in the diagnostics section of the API version, the operator will the lookup the loggerID based on the name. This is done using the api [Logger - List By Service](https://learn.microsoft.com/en-us/rest/api/apimanagement/logger/list-by-service?view=rest-apimanagement-2024-05-01&tabs=HTTP) with the [azure-sdk-for-go](https://github.com/Azure/azure-sdk-for-go/blob/main/sdk/resourcemanager/apimanagement/armapimanagement/logger_client.go) This is to not having to define the long loggerID in the CR.
+
 ## Getting Started
 
 ### Prerequisites

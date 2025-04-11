@@ -248,10 +248,6 @@ func (av *ApiVersion) GetApiVersionAzureFullName() string {
 	return fmt.Sprintf("%s-%s", av.Namespace, av.Name)
 }
 
-func (av *ApiVersion) GetApiVersionDiagnosticAzureFullName() string {
-	return "applicationinsights"
-}
-
 func (a *ApiVersion) RequireUpdate(new ApiVersion) bool {
 	return !a.Matches(new)
 }
