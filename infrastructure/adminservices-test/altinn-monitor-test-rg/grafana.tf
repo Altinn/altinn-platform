@@ -14,10 +14,6 @@ resource "azurerm_dashboard_grafana" "grafana" {
   azure_monitor_workspace_integrations {
     resource_id = azurerm_monitor_workspace.altinn_monitor.id
   }
-
-  azure_monitor_workspace_integrations {
-    resource_id = azurerm_monitor_workspace.k6tests_amw.id
-  }
 }
 
 resource "azurerm_role_assignment" "tf_grafana_admin" {
