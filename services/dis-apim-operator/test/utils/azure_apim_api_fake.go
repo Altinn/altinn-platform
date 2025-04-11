@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"net/http"
+	"regexp"
 
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	azfake "github.com/Azure/azure-sdk-for-go/sdk/azcore/fake"
@@ -14,9 +15,14 @@ type AzureApimFake struct {
 	APIMVersionSets         map[string]apim.APIVersionSetContract
 	APIMVersions            map[string]apim.APIContract
 	Backends                map[string]apim.BackendContract
+	Policies                map[string]apim.PolicyContract
+	ApiDiagnostics          map[string]apim.DiagnosticContract
 	FakeApiServer           apimfake.APIServer
 	FakeApiVersionServer    apimfake.APIVersionSetServer
 	FakeBackendServer       apimfake.BackendServer
+	FakeApiPolicyServer     apimfake.APIPolicyServer
+	FakeApiDiagnosticServer apimfake.APIDiagnosticServer
+	FakeLoggerServer        apimfake.LoggerServer
 	createUpdateServerError bool
 	getServerError          bool
 	deleteServerError       bool
@@ -45,6 +51,8 @@ func NewFakeAPIMClientStruct() AzureApimFake {
 		APIMVersionSets:         map[string]apim.APIVersionSetContract{},
 		APIMVersions:            map[string]apim.APIContract{},
 		Backends:                map[string]apim.BackendContract{},
+		Policies:                map[string]apim.PolicyContract{},
+		ApiDiagnostics:          map[string]apim.DiagnosticContract{},
 		createUpdateServerError: false,
 		deleteServerError:       false,
 		getServerError:          false,
@@ -52,6 +60,9 @@ func NewFakeAPIMClientStruct() AzureApimFake {
 	aaf.FakeApiServer = aaf.GetFakeApiServer()
 	aaf.FakeApiVersionServer = aaf.GetFakeApiVersionServer()
 	aaf.FakeBackendServer = aaf.GetFakeBackendServer()
+	aaf.FakeApiPolicyServer = aaf.GetFakeAPIPolicyServer()
+	aaf.FakeApiDiagnosticServer = aaf.GetFakeApiDiagnosticServer()
+	aaf.FakeLoggerServer = aaf.GetFakeLoggerServer()
 	return aaf
 }
 
@@ -278,6 +289,157 @@ func (a *AzureApimFake) GetFakeApiVersionServer() apimfake.APIVersionSetServer {
 		GetEntityTag:          nil,
 		NewListByServicePager: nil,
 		Update:                nil,
+	}
+	return fakeServer
+}
+
+func (a *AzureApimFake) GetFakeAPIPolicyServer() apimfake.APIPolicyServer {
+	fakeServer := apimfake.APIPolicyServer{
+		CreateOrUpdate: func(ctx context.Context, resourceGroupName string, serviceName string, apiID string, policyID apim.PolicyIDName, parameters apim.PolicyContract, options *apim.APIPolicyClientCreateOrUpdateOptions) (resp azfake.Responder[apim.APIPolicyClientCreateOrUpdateResponse], errResp azfake.ErrorResponder) {
+			responder := azfake.Responder[apim.APIPolicyClientCreateOrUpdateResponse]{}
+			errResponder := azfake.ErrorResponder{}
+			if a.createUpdateServerError {
+				errResponder.SetResponseError(http.StatusInternalServerError, "Some fake internal server error occurred")
+			} else {
+				response := apim.APIPolicyClientCreateOrUpdateResponse{
+					PolicyContract: apim.PolicyContract{
+						ID:         utils.ToPointer("/subscriptions/fake-subscription/resourceGroups/fake-resource-group/providers/APIM/Api/" + apiID + "/policies/" + string(policyID)),
+						Name:       utils.ToPointer(string(policyID)),
+						Type:       utils.ToPointer("Microsoft.ApiManagement/service/apis/policies"),
+						Properties: parameters.Properties,
+					},
+				}
+				a.Policies[*response.Name] = response.PolicyContract
+				responder.SetResponse(http.StatusOK, response, nil)
+			}
+			return responder, errResponder
+		},
+		Delete: func(ctx context.Context, resourceGroupName string, serviceName string, apiID string, policyID apim.PolicyIDName, ifMatch string, options *apim.APIPolicyClientDeleteOptions) (resp azfake.Responder[apim.APIPolicyClientDeleteResponse], errResp azfake.ErrorResponder) {
+			responder := azfake.Responder[apim.APIPolicyClientDeleteResponse]{}
+			errResponder := azfake.ErrorResponder{}
+			if a.deleteServerError {
+				errResponder.SetResponseError(http.StatusInternalServerError, "Some fake internal server error occurred")
+			} else {
+				response := apim.APIPolicyClientDeleteResponse{}
+				if _, ok := a.Policies[string(policyID)]; ok {
+					delete(a.Policies, string(policyID))
+					responder.SetResponse(http.StatusOK, response, nil)
+				} else {
+					errResponder.SetResponseError(http.StatusNotFound, "Policy not found")
+				}
+			}
+			return responder, errResponder
+		},
+		Get: func(ctx context.Context, resourceGroupName string, serviceName string, apiID string, policyID apim.PolicyIDName, options *apim.APIPolicyClientGetOptions) (resp azfake.Responder[apim.APIPolicyClientGetResponse], errResp azfake.ErrorResponder) {
+			responder := azfake.Responder[apim.APIPolicyClientGetResponse]{}
+			errResponder := azfake.ErrorResponder{}
+			if a.getServerError {
+				errResponder.SetResponseError(http.StatusInternalServerError, "Some fake internal server error occurred")
+			} else {
+				response := apim.APIPolicyClientGetResponse{}
+				if _, ok := a.Policies[string(policyID)]; ok {
+					response.PolicyContract = a.Policies[string(policyID)]
+					response.ETag = utils.ToPointer("fake-etag")
+					responder.SetResponse(http.StatusOK, response, nil)
+				} else {
+					errResponder.SetResponseError(http.StatusNotFound, "Policy not found")
+				}
+			}
+			return responder, errResponder
+		},
+		GetEntityTag: nil,
+		ListByAPI:    nil,
+	}
+	return fakeServer
+}
+
+func (a *AzureApimFake) GetFakeApiDiagnosticServer() apimfake.APIDiagnosticServer {
+	fakeServer := apimfake.APIDiagnosticServer{
+		CreateOrUpdate: func(ctx context.Context, resourceGroupName string, serviceName string, apiID string, diagnosticID string, parameters apim.DiagnosticContract, options *apim.APIDiagnosticClientCreateOrUpdateOptions) (resp azfake.Responder[apim.APIDiagnosticClientCreateOrUpdateResponse], errResp azfake.ErrorResponder) {
+			responder := azfake.Responder[apim.APIDiagnosticClientCreateOrUpdateResponse]{}
+			errResponder := azfake.ErrorResponder{}
+			if a.createUpdateServerError {
+				errResponder.SetResponseError(http.StatusInternalServerError, "Some fake internal server error occurred")
+			} else {
+				response := apim.APIDiagnosticClientCreateOrUpdateResponse{
+					DiagnosticContract: apim.DiagnosticContract{
+						ID:         utils.ToPointer("/subscriptions/fake-subscription/resourceGroups/fake-resource-group/providers/APIM/Api/" + apiID + "/diagnostics/" + diagnosticID),
+						Name:       utils.ToPointer(diagnosticID),
+						Type:       utils.ToPointer("Microsoft.ApiManagement/service/apis/diagnostics"),
+						Properties: parameters.Properties,
+					},
+				}
+				a.ApiDiagnostics[*response.Name] = response.DiagnosticContract
+				responder.SetResponse(http.StatusOK, response, nil)
+			}
+			return responder, errResponder
+		},
+		Delete: func(ctx context.Context, resourceGroupName string, serviceName string, apiID string, diagnosticID string, ifMatch string, options *apim.APIDiagnosticClientDeleteOptions) (resp azfake.Responder[apim.APIDiagnosticClientDeleteResponse], errResp azfake.ErrorResponder) {
+			responder := azfake.Responder[apim.APIDiagnosticClientDeleteResponse]{}
+			errResponder := azfake.ErrorResponder{}
+			if a.deleteServerError {
+				errResponder.SetResponseError(http.StatusInternalServerError, "Some fake internal server error occurred")
+			} else {
+				response := apim.APIDiagnosticClientDeleteResponse{}
+				if _, ok := a.ApiDiagnostics[diagnosticID]; ok {
+					delete(a.ApiDiagnostics, diagnosticID)
+					responder.SetResponse(http.StatusOK, response, nil)
+				} else {
+					errResponder.SetResponseError(http.StatusNotFound, "Diagnostic not found")
+				}
+			}
+			return responder, errResponder
+		},
+		Get: func(ctx context.Context, resourceGroupName string, serviceName string, apiID string, diagnosticID string, options *apim.APIDiagnosticClientGetOptions) (resp azfake.Responder[apim.APIDiagnosticClientGetResponse], errResp azfake.ErrorResponder) {
+			responder := azfake.Responder[apim.APIDiagnosticClientGetResponse]{}
+			errResponder := azfake.ErrorResponder{}
+			if a.getServerError {
+				errResponder.SetResponseError(http.StatusInternalServerError, "Some fake internal server error occurred")
+			} else {
+				response := apim.APIDiagnosticClientGetResponse{}
+				if _, ok := a.ApiDiagnostics[diagnosticID]; ok {
+					response.DiagnosticContract = a.ApiDiagnostics[diagnosticID]
+					response.ETag = utils.ToPointer("fake-etag")
+					responder.SetResponse(http.StatusOK, response, nil)
+				} else {
+					errResponder.SetResponseError(http.StatusNotFound, "Diagnostic not found")
+				}
+			}
+			return responder, errResponder
+		},
+		GetEntityTag:          nil,
+		NewListByServicePager: nil,
+		Update:                nil,
+	}
+	return fakeServer
+}
+
+func (a *AzureApimFake) GetFakeLoggerServer() apimfake.LoggerServer {
+	fakeServer := apimfake.LoggerServer{
+		CreateOrUpdate: nil,
+		Delete:         nil,
+		Get:            nil,
+		GetEntityTag:   nil,
+		NewListByServicePager: func(resourceGroupName string, serviceName string, options *apim.LoggerClientListByServiceOptions) (resp azfake.PagerResponder[apim.LoggerClientListByServiceResponse]) {
+			responder := azfake.PagerResponder[apim.LoggerClientListByServiceResponse]{}
+			response := apim.LoggerClientListByServiceResponse{}
+			filterRegex := regexp.MustCompile(`name eq '(.*)'`)
+			if options.Filter != nil {
+				matches := filterRegex.FindStringSubmatch(*options.Filter)
+				if len(matches) > 1 {
+					response.Value = []*apim.LoggerContract{
+						{
+							ID:   utils.ToPointer("subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/apim-fake/providers/Microsoft.ApiManagement/service/apim-fake/loggers/fake-logger"),
+							Name: &matches[1],
+							Type: nil,
+						},
+					}
+				}
+			}
+			responder.AddPage(http.StatusOK, response, nil)
+			return responder
+		},
+		Update: nil,
 	}
 	return fakeServer
 }
