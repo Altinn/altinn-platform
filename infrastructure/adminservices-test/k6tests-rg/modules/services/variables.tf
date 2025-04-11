@@ -29,3 +29,7 @@ variable "oidc_issuer_url" {
 variable "remote_write_endpoint" {
   type = string
 }
+
+variable "data_collection_rule_id" {
+  type = string
+}

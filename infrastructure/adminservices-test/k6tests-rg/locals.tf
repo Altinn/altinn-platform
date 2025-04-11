@@ -48,4 +48,8 @@ locals {
   )
   dcr_immutable_id      = data.azurerm_monitor_data_collection_rule.k6tests.immutable_id
   remote_write_endpoint = "${local.dce_metrics_ingestion_endpoint}/dataCollectionRules/${local.dcr_immutable_id}/streams/Microsoft-PrometheusMetrics/api/v1/write?api-version=2023-04-24"
+
+  suffix = "-${random_string.suffix.result}"
+
+  data_collection_rule_id = data.azurerm_monitor_data_collection_endpoint.k6tests.id
 }

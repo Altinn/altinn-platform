@@ -50,13 +50,8 @@ resource "helm_release" "kube_prometheus_stack" {
   ]
 }
 
-data "azurerm_monitor_data_collection_rule" "prometheus" {
-  name                = "k6tests-amw${var.suffix}"
-  resource_group_name = "MA_k6tests-amw_norwayeast_managed"
-}
-
 resource "azurerm_role_assignment" "monitoring_metrics_publisher" {
-  scope                = data.azurerm_monitor_data_collection_rule.prometheus.id
+  scope                = var.data_collection_rule_id
   role_definition_name = "Monitoring Metrics Publisher"
   principal_id         = azuread_service_principal.prometheus.object_id
 }
