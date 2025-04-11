@@ -37,7 +37,8 @@ env:
   TF_STATE_NAME: k6tests-rg.tfstate
   TF_PROJECT: ./infrastructure/adminservices-test/k6tests-rg
   TF_FOUNDATIONAL_MODULE: module.foundational
-  ARM_CLIENT_ID: ${{ vars.TF_AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_CLIENT_ID: ${{ secrets.TF_AZURE_CLIENT_ID }}
   ARM_SUBSCRIPTION_ID: 1ce8e9af-c2d6-44e7-9c5e-099a308056fe
 
 permissions:
@@ -61,22 +62,34 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ env.ARM_SUBSCRIPTION_ID }}
 
+      - name: Terraform Init
+        id: terraform_init
+        uses: Altinn/altinn-platform/actions/terraform/init@main
+        with:
+          working_directory: ${{ env.TF_PROJECT }}
+          oidc_type: environment
+          oidc_value: ${{ env.ENVIRONMENT }}
+          arm_client_id: ${{ env.ARM_CLIENT_ID }}
+          arm_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
+          tf_state_name: ${{ env.TF_STATE_NAME }}
+
       - name: Get k6tests_cluster_name and k6tests_resource_group_name from Terraform output
         if: ${{ ! contains(github.event.pull_request.labels.*.name, 'partial-plan-apply') }}
         id: get_outputs_from_terraform
         shell: bash
+        working-directory: ${{ env.TF_PROJECT }}
         run: |
           if ! terraform output k6tests_cluster_name; then
             echo "Failed to get cluster name from terraform output"
             exit 1
           fi
-          echo "CLUSTER_NAME=$(terraform output k6tests_cluster_name)" >> "$GITHUB_OUTPUT"
+          echo "CLUSTER_NAME=$(terraform output -raw k6tests_cluster_name)" >> "$GITHUB_OUTPUT"
 
           if ! terraform output k6tests_resource_group_name; then
             echo "Failed to get resource group name from terraform output"
             exit 1
           fi
-          echo "RESOURCE_GROUP_NAME=$(terraform output k6tests_resource_group_name)" >> "$GITHUB_OUTPUT"
+          echo "RESOURCE_GROUP_NAME=$(terraform output -raw k6tests_resource_group_name)" >> "$GITHUB_OUTPUT"
 
       - name: Populate kubeconfig with k6 context
         id: populate_kubeconfig_with_k6_context
@@ -102,7 +115,7 @@ jobs:
           fi
 
       - name: Terraform Plan Foundational Module
-        uses: altinn/altinn-platform/actions/terraform/plan@main
+        uses: Altinn/altinn-platform/actions/terraform/plan-only@main
         if: contains(github.event.pull_request.labels.*.name, 'partial-plan-apply')
         with:
           working_directory: ${{ env.TF_PROJECT }}
@@ -116,7 +129,8 @@ jobs:
           tf_args: -target=${{ env.TF_FOUNDATIONAL_MODULE }}
 
       - name: Terraform Plan
-        uses: altinn/altinn-platform/actions/terraform/plan@main
+        id: terraform_plan
+        uses: Altinn/altinn-platform/actions/terraform/plan-only@main
         if: ${{ ! contains(github.event.pull_request.labels.*.name, 'partial-plan-apply') }}
         with:
           working_directory: ${{ env.TF_PROJECT }}
@@ -127,6 +141,23 @@ jobs:
           tf_state_name: ${{ env.TF_STATE_NAME }}
           gh_token: ${{ secrets.GITHUB_TOKEN }}
           tf_version: ${{ env.TF_VERSION }}
+
+      - name: Write Terraform Summary
+        uses: Altinn/altinn-platform/actions/terraform/write-terraform-summary@main
+        with:
+          working_directory: ${{ env.TF_PROJECT }}
+          oidc_type: environment
+          oidc_value: ${{ env.ENVIRONMENT }}
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          VALIDATE_STEP_OUTPUT: ${{steps.terraform_init.outputs.validate_step_stdout}}
+          VALIDATE_STEP_OUTCOME: ${{steps.terraform_init.outputs.validate_step_outcome}}
+          FMT_STEP_OUTPUT: ${{steps.terraform_init.outputs.fmt_step_stdout}}
+          FMT_STEP_OUTCOME: ${{steps.terraform_init.outputs.fmt_step_outcome}}
+          INIT_STEP_OUTPUT: ${{steps.terraform_init.outputs.init_step_stdout}}
+          INIT_STEP_OUTCOME: ${{steps.terraform_init.outputs.init_step_outcome}}
+          PLAN_STEP_EXITCODE: ${{steps.terraform_plan.outputs.plan_step_exitcode}}
+          PLAN_STEP_OUTCOME: ${{steps.terraform_plan.outputs.plan_step_outcome}}
 
   deploy:
     name: Deploy
@@ -145,27 +176,41 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ env.ARM_SUBSCRIPTION_ID }}
 
+      - name: Terraform Init
+        uses: Altinn/altinn-platform/actions/terraform/init@main
+        with:
+          working_directory: ${{ env.TF_PROJECT }}
+          oidc_type: environment
+          oidc_value: ${{ env.ENVIRONMENT }}
+          arm_client_id: ${{ env.ARM_CLIENT_ID }}
+          arm_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
+          tf_state_name: ${{ env.TF_STATE_NAME }}
+
       - name: Get k6tests_cluster_name and k6tests_resource_group_name from Terraform output
         if: ${{ ! contains(github.event.pull_request.labels.*.name, 'partial-plan-apply') }}
         id: get_outputs_from_terraform
         shell: bash
+        working-directory: ${{ env.TF_PROJECT }}
         run: |
           if ! terraform output k6tests_cluster_name; then
             echo "Failed to get cluster name from terraform output"
             exit 1
           fi
-          echo "CLUSTER_NAME=$(terraform output k6tests_cluster_name)" >> "$GITHUB_OUTPUT"
+          echo "CLUSTER_NAME=$(terraform output -raw k6tests_cluster_name)" >> "$GITHUB_OUTPUT"
 
           if ! terraform output k6tests_resource_group_name; then
             echo "Failed to get resource group name from terraform output"
             exit 1
           fi
-          echo "RESOURCE_GROUP_NAME=$(terraform output k6tests_resource_group_name)" >> "$GITHUB_OUTPUT"
+          echo "RESOURCE_GROUP_NAME=$(terraform output -raw k6tests_resource_group_name)" >> "$GITHUB_OUTPUT"
 
       - name: Populate kubeconfig with k6 context
         id: populate_kubeconfig_with_k6_context
         if: ${{ ! contains(github.event.pull_request.labels.*.name, 'partial-plan-apply') }}
         shell: bash
+        env:
+          CLUSTER_NAME: ${{ steps.get_outputs_from_terraform.outputs.CLUSTER_NAME }}
+          RESOURCE_GROUP_NAME: ${{ steps.get_outputs_from_terraform.outputs.RESOURCE_GROUP_NAME }}
         run: |
           if ! az aks install-cli; then
             echo "Failed to install kubectl CLI"
@@ -183,7 +228,7 @@ jobs:
           fi
 
       - name: Terraform Apply Foundational Module
-        uses: altinn/altinn-platform/actions/terraform/apply@main
+        uses: Altinn/altinn-platform/actions/terraform/apply-only@main
         if: contains(github.event.pull_request.labels.*.name, 'partial-plan-apply')
         with:
           working_directory: ${{ env.TF_PROJECT }}
@@ -196,7 +241,7 @@ jobs:
           tf_args: -target=${{ env.TF_FOUNDATIONAL_MODULE }}
 
       - name: Terraform Apply
-        uses: altinn/altinn-platform/actions/terraform/apply@main
+        uses: Altinn/altinn-platform/actions/terraform/apply-only@main
         if: ${{ ! contains(github.event.pull_request.labels.*.name, 'partial-plan-apply') }}
         with:
           working_directory: ${{ env.TF_PROJECT }}
