@@ -65,7 +65,7 @@
 | <a name="input_location"></a> [location](#input\_location) | Default region for resources | `string` | `"norwayeast"` | no |
 | <a name="input_pool_configs"></a> [pool\_configs](#input\_pool\_configs) | Variables for node pools | <pre>map(object({<br/>    vm_size              = string<br/>    auto_scaling_enabled = bool<br/>    node_count           = number<br/>    min_count            = number<br/>    max_count            = number<br/>  }))</pre> | n/a | yes |
 | <a name="input_prefix"></a> [prefix](#input\_prefix) | Prefix for resource names | `string` | `""` | no |
-| <a name="input_subnet_address_prefixes"></a> [subnet\_address\_prefixes](#input\_subnet\_address\_prefixes) | List of subnets | `map(list(string))` | n/a | yes |
+| <a name="input_subnet_address_prefixes"></a> [subnet\_address\_prefixes](#input\_subnet\_address\_prefixes) | List of subnets | <pre>object({<br/>    aks_syspool  = list(string)<br/>    aks_workpool = list(string)<br/>  })</pre> | n/a | yes |
 | <a name="input_subscription_id"></a> [subscription\_id](#input\_subscription\_id) | Subscription ID to deploy services | `string` | n/a | yes |
 | <a name="input_vnet_address_space"></a> [vnet\_address\_space](#input\_vnet\_address\_space) | VNet address space | `list(string)` | n/a | yes |
 
@@ -78,6 +78,7 @@
 | <a name="output_aks_name"></a> [aks\_name](#output\_aks\_name) | The name of the managed Kubernetes Cluster |
 | <a name="output_aks_node_resource_group"></a> [aks\_node\_resource\_group](#output\_aks\_node\_resource\_group) | The name of the Resource Group in which the managed Kubernetes Cluster exists |
 | <a name="output_aks_oidc_issuer_url"></a> [aks\_oidc\_issuer\_url](#output\_aks\_oidc\_issuer\_url) | The OIDC issuer URL that is associated with the cluster |
+| <a name="output_azurerm_kubernetes_cluster_id"></a> [azurerm\_kubernetes\_cluster\_id](#output\_azurerm\_kubernetes\_cluster\_id) | Resource id of aks cluster |
 | <a name="output_kube_admin_config"></a> [kube\_admin\_config](#output\_kube\_admin\_config) | Base64 encoded cert/key/user/pass used by clients to authenticate to the Kubernetes cluster |
 | <a name="output_pip4_ip_address"></a> [pip4\_ip\_address](#output\_pip4\_ip\_address) | The IPv4 address value that was allocated |
 | <a name="output_pip6_ip_address"></a> [pip6\_ip\_address](#output\_pip6\_ip\_address) | The IPv6 address value that was allocated |
