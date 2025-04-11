@@ -11,7 +11,7 @@ variable "azurerm_kubernetes_cluster_id" {
 variable "flux_release_tag" {
   type        = string
   default     = "latest"
-  description = "Flux release tag on oci images"
+  description = "OCI image that Flux should watch and reconcile"
 }
 
 variable "pip4_ip_address" {
@@ -25,6 +25,9 @@ variable "pip6_ip_address" {
 }
 
 variable "subnet_address_prefixes" {
-  type        = map(list(string))
+  type = object({
+    aks_syspool  = list(string)
+    aks_workpool = list(string)
+  })
   description = "list of subnets"
 }

@@ -28,9 +28,10 @@ resource "azapi_resource" "linkerd" {
           path                   = "./post-deploy/"
           prune                  = true
           retryIntervalInSeconds = 300
-          syncIntervalInSeconds  = 31557600
-          timeoutInSeconds       = 300
-          wait                   = true
+          # Set syncIntervalInSeconds to 1 year to not run regularly, will run on updates force=true
+          syncIntervalInSeconds = 31557600
+          timeoutInSeconds      = 300
+          wait                  = true
         }
       }
       ociRepository = {
