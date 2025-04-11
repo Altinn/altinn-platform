@@ -16,7 +16,7 @@ variable "flux_release_tag" {
 
 variable "pip4_ip_address" {
   type        = string
-  description = "AKS ipv4 pulic ip"
+  description = "AKS ipv4 public ip"
 }
 
 variable "pip6_ip_address" {
