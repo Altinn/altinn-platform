@@ -23,6 +23,11 @@ output "aks_oidc_issuer_url" {
   description = "The OIDC issuer URL that is associated with the cluster"
 }
 
+output "azurerm_kubernetes_cluster_id" {
+  value       = azurerm_kubernetes_cluster.aks.id
+  description = "Resource id of aks cluster"
+}
+
 output "kube_admin_config" {
   value       = azurerm_kubernetes_cluster.aks.kube_admin_config
   sensitive   = true

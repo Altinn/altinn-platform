@@ -6,11 +6,14 @@ resource "azurerm_virtual_network" "aks" {
 }
 
 resource "azurerm_subnet" "aks" {
-  for_each             = var.subnet_address_prefixes
+  for_each = merge(
+    { for idx, prefix in var.subnet_address_prefixes.aks_syspool : "aks_syspool-${idx}" => prefix },
+    { for idx, prefix in var.subnet_address_prefixes.aks_workpool : "aks_workpool-${idx}" => prefix }
+  )
   name                 = each.key
   resource_group_name  = azurerm_resource_group.aks.name
   virtual_network_name = azurerm_virtual_network.aks.name
-  address_prefixes     = each.value
+  address_prefixes     = [each.value]
 }
 
 resource "azurerm_public_ip" "pip4" {

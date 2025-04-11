@@ -78,7 +78,10 @@ variable "subscription_id" {
 }
 
 variable "subnet_address_prefixes" {
-  type        = map(list(string))
+  type = object({
+    aks_syspool  = list(string)
+    aks_workpool = list(string)
+  })
   description = "List of subnets"
   validation {
     condition     = length(var.subnet_address_prefixes) > 0
