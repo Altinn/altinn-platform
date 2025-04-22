@@ -1,0 +1,14 @@
+name: "k6-tests-manifests-generator"
+description: "Generates the manifests needed to run k6 tests in k8s"
+inputs:
+  config_file:
+    description: "The config file with the information needed to generate the manifests"
+    required: true
+
+  command_line_args:
+    description: "Command line arguments to pass to the k6 command"
+    required: false
+    default: ""
+runs:
+  using: "docker"
+  image: "Dockerfile"
