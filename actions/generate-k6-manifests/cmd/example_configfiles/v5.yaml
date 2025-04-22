@@ -1,0 +1,10 @@
+namespace: platform
+test_definitions:
+  - test_file: actions/generate-k6-manifests/test_service/k8s_wrapper/get_deployments.js
+    contexts:
+      - environment: at22
+        test_run:
+          name: "k8s-wrapper-deployments"
+      - environment: yt01
+        test_run:
+          name: "k8s-wrapper-deployments" # Check Grafana to see metrics for both envs
