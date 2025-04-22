@@ -7,6 +7,9 @@ CVE-2024-45338
 # deeply nested structures can cause a panic due to stack exhaustion.
 CVE-2024-34156
 
+# Denial of Service in the Key Exchange of golang.org/x/crypto/ssh
+CVE-2025-22869
+
 # Not relevant for us.
 # We can remove the CVE whenever the current alpine image updates the package version
 # or we could change to a distroless images!
