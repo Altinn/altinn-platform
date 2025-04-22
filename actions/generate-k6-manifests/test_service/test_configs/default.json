@@ -1,0 +1,7 @@
+{
+    "thresholds": {
+        "http_req_duration": [
+            "avg<123"
+        ]
+    }
+}
