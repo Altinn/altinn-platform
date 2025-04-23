@@ -50,5 +50,7 @@ jobs:
       release_latest: false
       image_name: k6-action-image
       tag_prefix: k6-action-image-
-      workdir: ./infrastructure/images/k6-action
+      workdir: .
+      file: ./infrastructure/images/k6-action/Dockerfile
+      trivyignore: ./infrastructure/images/k6-action/.trivyignore
       platforms: linux/amd64

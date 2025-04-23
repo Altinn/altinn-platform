@@ -58,9 +58,12 @@ RUN jb init && \
     jb install github.com/jsonnet-libs/k8s-libsonnet/${K8S_LIBSONNET_VERSION}@main
 
 
-ADD default_scenarios /actions/generate-k6-manifests/default_scenarios/
-ADD infra /actions/generate-k6-manifests/infra/
-ADD jsonnet /actions/generate-k6-manifests/jsonnet/
+COPY infrastructure/images/k6-action/default_scenarios /actions/generate-k6-manifests/default_scenarios/
+COPY infrastructure/images/k6-action/infra /actions/generate-k6-manifests/infra/
+COPY infrastructure/images/k6-action/jsonnet /actions/generate-k6-manifests/jsonnet/
+
+COPY actions/generate-k6-manifests actions/generate-k6-manifests
+RUN cd actions/generate-k6-manifests && go build . && chmod +x generate-k6-manifests && mv generate-k6-manifests /usr/local/bin && cd /
 
 RUN rm -rf /tools_download && rm -rf /var/cache/apk/*
 
