@@ -1,5 +1,6 @@
-FROM ghcr.io/altinn/altinn-platform/k6-action-image:v0.0.3
+FROM ghcr.io/altinn/altinn-platform/k6-action-image:v0.0.1
 
-ADD generate.sh /generate.sh
+COPY generate.sh /generate.sh
+RUN chmod +x /generate.sh
 
 CMD ["/generate.sh"]

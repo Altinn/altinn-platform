@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env sh
+set -euo
 
 rm -rf .build .dist .conf
 mkdir -p .build .dist .conf
