@@ -32,15 +32,18 @@ jobs:
       - name: Set up Docker
         uses: docker/setup-docker-action@b60f85385d03ac8acfca6d9996982511d8620a19 # v4.3.0
 
+      - name: Build Image
+        shell: bash
+        run: |
+          docker build --file ./infrastructure/images/k6-action/Dockerfile --tag k6-action-image:test . && \
+          docker build --file ./actions/generate-k6-manifests/Dockerfile.test --tag k6-generate-manifests:test .
       - name: Run tests
         shell: bash
         run: |
           docker run \
-          -v .:/github/workspace \
-          --workdir /github/workspace \
-          --entrypoint /bin/bash \
-          ghcr.io/altinn/altinn-platform/k6-action-image:v0.0.3 \
-          -c "cd actions/generate-k6-manifests && go test -v ./..."
+          --entrypoint /bin/sh \
+          k6-generate-manifests:test \
+          -c "go test -v ./..."
 
   build-and-release:
     needs: test

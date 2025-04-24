@@ -1,0 +1,7 @@
+FROM k6-action-image:test
+COPY --from=golang:1.24-alpine@sha256:7772cb5322baa875edd74705556d08f0eeca7b9c4b5367754ce3f2f00041ccee /usr/local/go/ /usr/local/go/
+ENV PATH="/usr/local/go/bin:${PATH}"
+
+COPY actions/generate-k6-manifests /actions/generate-k6-manifests
+WORKDIR /actions/generate-k6-manifests
+RUN go test -v ./...

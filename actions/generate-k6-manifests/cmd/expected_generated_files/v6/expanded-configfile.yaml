@@ -17,6 +17,7 @@ test_definitions:
                     memory: 1000Mi
                     cpu: "1"
             env: []
+            secrets: []
     - test_file: actions/generate-k6-manifests/test_service/k8s_wrapper/get_daemonsets.js
       config_file: ""
       contexts:
@@ -38,3 +39,4 @@ test_definitions:
                   value: "3"
                 - name: FEATURE_FLAG1
                   value: enabled
+            secrets: []

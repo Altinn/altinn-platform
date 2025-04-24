@@ -17,6 +17,7 @@ test_definitions:
                     memory: 200Mi
                     cpu: 250m
             env: []
+            secrets: []
         - environment: yt01
           node_type: spot
           test_type:
@@ -31,3 +32,4 @@ test_definitions:
                     memory: 200Mi
                     cpu: 250m
             env: []
+            secrets: []
