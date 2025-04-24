@@ -1,6 +1,4 @@
-FROM alpine:3.21.3@sha256:a8560b36e8b8210634f77d9f7f9efd7ffa463e380b75e2e74aff4511df3ef88c
-COPY --from=golang:1.24-alpine@sha256:7772cb5322baa875edd74705556d08f0eeca7b9c4b5367754ce3f2f00041ccee /usr/local/go/ /usr/local/go/
-ENV PATH="/usr/local/go/bin:${PATH}"
+FROM golang:1.24-alpine@sha256:7772cb5322baa875edd74705556d08f0eeca7b9c4b5367754ce3f2f00041ccee AS builder
 
 ARG KUBECTL_VERSION=1.32.3
 ARG KUBESEAL_VERSION=0.29.0
@@ -57,16 +55,22 @@ WORKDIR /jsonnet/vendor
 RUN jb init && \
     jb install github.com/jsonnet-libs/k8s-libsonnet/${K8S_LIBSONNET_VERSION}@main
 
+# Build Generator code
+WORKDIR /actions/generate-k6-manifests
+COPY actions/generate-k6-manifests .
+RUN go build . && \
+    chmod +x generate-k6-manifests && \
+    mv generate-k6-manifests /usr/local/bin
 
+# Final image with the needed binaries and helper files
+FROM alpine:3.21.3@sha256:a8560b36e8b8210634f77d9f7f9efd7ffa463e380b75e2e74aff4511df3ef88c
+COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /jsonnet/vendor /jsonnet/vendor
 COPY infrastructure/images/k6-action/default_scenarios /actions/generate-k6-manifests/default_scenarios/
 COPY infrastructure/images/k6-action/infra /actions/generate-k6-manifests/infra/
 COPY infrastructure/images/k6-action/jsonnet /actions/generate-k6-manifests/jsonnet/
 
-COPY actions/generate-k6-manifests actions/generate-k6-manifests
-RUN cd actions/generate-k6-manifests && go build . && chmod +x generate-k6-manifests && mv generate-k6-manifests /usr/local/bin && cd /
+# err:Error loading shared library libstdc++.so.6: No such file or directory (needed by /usr/local/bin/jsonnet)
+RUN apk add --no-cache libstdc++
 
-RUN rm -rf /tools_download && rm -rf /var/cache/apk/*
-
-WORKDIR /
-
-CMD ["/bin/bash"]
+CMD ["/bin/sh"]
