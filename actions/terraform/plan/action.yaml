@@ -55,6 +55,7 @@ runs:
   using: composite
   steps:
     - name: Terraform Init
+      id: terraform_init
       uses: Altinn/altinn-platform/actions/terraform/init@main
       with:
         working_directory: ${{ inputs.working_directory }}
@@ -103,163 +104,20 @@ runs:
         name: ${{ env.ARTIFACT_KEY }}
         path: ${{ inputs.working_directory }}/tfplan.out
 
-    - name: generate random delimiter
-      shell: bash
-      run: echo "DELIMITER=$(uuidgen)" >> $GITHUB_ENV
-    - name: truncate terraform plan result
-      shell: bash
-      run: |
-        plan=$(cat ${{ inputs.working_directory }}/tfplan.log)
-        original_length=${#plan}
-        plan=$(echo "${plan//\`}" | grep -v 'Refreshing state' | tail --bytes 120000)
-        new_length=${#plan}
-        echo "PLAN<<${{ env.DELIMITER }}2" >> $GITHUB_ENV
-        echo '[Lines containing Refreshing state removed]' >> $GITHUB_ENV
-        if [ $new_length -lt $original_length ]; then
-          echo '[Truncated to 120000 bytes! See logoutput for complete plan]' >> $GITHUB_ENV
-        fi
-        echo "${plan}" >> $GITHUB_ENV
-        echo >> $GITHUB_ENV
-        echo "${{ env.DELIMITER }}2" >> $GITHUB_ENV
-
-    - name: Generate Terraform Summary
-      id: action_summary
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
-      if: always()
-      env:
-        VALIDATE_OUTPUT: ${{ steps.validate.outputs.stdout }}
-      with:
-        github-token: ${{ inputs.gh_token }}
-        script: |
-          // 1. Prep the output
-          const output = `# Terraform ${{ inputs.oidc_type }} ${{ inputs.oidc_value }}
-          #### Initialization ⚙️\`${{ steps.init.outcome }}\`
-          #### Format and Style 🖌\`${{ steps.fmt.outcome }}\`
-          #### Validation 🤖\`${{ steps.validate.outcome }}\`
-          <details><summary>Validation Output</summary>
-
-          \`\`\`\n
-          ${process.env.VALIDATE_OUTPUT}
-          \`\`\`
-
-          </details>
-
-          #### Plan 📖\`${{ steps.plan.outcome }}\`
-
-          <details><summary>Show Plan</summary>
-
-          \`\`\`\n
-          ${{ env.PLAN }}
-          \`\`\`
-
-          </details>
-
-          | Context | Values |
-          | - | - |
-          | Pusher | @${{ github.actor }} |
-          | Action | \`${{ github.event_name }}\` |
-          | Working Directory | \`${{ inputs.working_directory }}\` |
-          | State | \`${{ env.TF_STATE_FILE }}\` |
-          | Artifact | \`${{ env.ARTIFACT_KEY }}\` |`;
-
-          // 2. Set the output variable
-          const fs = require('fs');
-          fs.writeFileSync('${{ inputs.working_directory }}/summary.md', output);
-          core.setOutput('summary', output);
     - name: Write Terraform Summary
-      if: always()
-      shell: bash
-      working-directory: ${{ inputs.working_directory }}
-      run: cat summary.md >> $GITHUB_STEP_SUMMARY
-
-    - name: GitHub Issue
-      id: issue_number
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: Altinn/altinn-platform/actions/terraform/write-terraform-summary@main
       with:
-        result-encoding: string
-        script: |
-          if (context.issue.number) {
-            // Return issue number if present
-            return context.issue.number;
-          } else {
-            // Otherwise return issue number from commit
-              const prs = await github.rest.repos.listPullRequestsAssociatedWithCommit({
-                commit_sha: context.sha,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-              });
-
-              if (prs.data.length > 0)
-              {
-                return prs.data[0].number;
-              }
-
-              return null;
-          }
-
-    - name: Terraform Summary PR
-      id: pr_summary
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
-      if: steps.issue_number.outputs.result != 'null' && steps.plan.outputs.exitcode == 2
+        working_directory: ${{ inputs.working_directory }}
+        oidc_type: ${{ inputs.oidc_type }}
+        oidc_value: ${{ inputs.oidc_value }}
+        gh_token: ${{ inputs.gh_token }}
       env:
-        ISSUE_NUMBER: ${{ steps.issue_number.outputs.result }}
-      with:
-        github-token: ${{ inputs.gh_token }}
-        script: |
-          // 1. Retrieve existing bot comments for the PR
-          const { data: comments } = await github.rest.issues.listComments({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            issue_number: ${{ env.ISSUE_NUMBER }},
-          })
-          const botComment = comments.find(comment => {
-            return comment.user.type === 'Bot' && comment.body.includes('Terraform ${{ inputs.oidc_type }} ${{ inputs.oidc_value }}')
-          })
+        VALIDATE_STEP_OUTPUT: ${{steps.terraform_init.outputs.validate_step_stdout}}
+        VALIDATE_STEP_OUTCOME: ${{steps.terraform_init.outputs.validate_step_outcome}}
+        FMT_STEP_OUTPUT: ${{steps.terraform_init.outputs.fmt_step_stdout}}
+        FMT_STEP_OUTCOME: ${{steps.terraform_init.outputs.fmt_step_outcome}}
+        INIT_STEP_OUTPUT: ${{steps.terraform_init.outputs.init_step_stdout}}
+        INIT_STEP_OUTCOME: ${{steps.terraform_init.outputs.init_step_outcome}}
 
-          // 2. Prepare format of the comment
-          const output = `# Terraform ${{ inputs.oidc_type }} ${{ inputs.oidc_value }}
-          #### Format and Style 🖌\`${{ steps.fmt.outcome }}\`
-          #### Initialization ⚙️\`${{ steps.init.outcome }}\`
-          #### Validation 🤖\`${{ steps.validate.outcome }}\`
-          <details><summary>Validation Output</summary>
-
-          \`\`\`\n
-          ${{ steps.validate.outputs.stdout }}
-          \`\`\`
-
-          </details>
-
-          #### Plan 📖\`${{ steps.plan.outcome }}\`
-
-          <details><summary>Show Plan</summary>
-
-          \`\`\`\n
-          ${{ env.PLAN }}
-          \`\`\`
-
-          </details>
-
-          | Context | Values |
-          | - | - |
-          | Pusher | @${{ github.actor }} |
-          | Action | \`${{ github.event_name }}\` |
-          | Working Directory | \`${{ inputs.working_directory }}\` |
-          | State File | \`${{ env.TF_STATE_FILE }}\` |
-          | Plan File | \`${{ env.ARTIFACT_KEY }}\``;
-
-          // 3. If we have a comment, update it, otherwise create a new one
-          if (botComment) {
-            github.rest.issues.updateComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: botComment.id,
-              body: output
-            })
-          } else {
-            github.rest.issues.createComment({
-              issue_number: ${{ env.ISSUE_NUMBER }},
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: output
-            })
-          }
+        PLAN_STEP_EXITCODE: ${{ steps.plan.outputs.exitcode }}
+        PLAN_STEP_OUTCOME: ${{ steps.plan.outcome }}
