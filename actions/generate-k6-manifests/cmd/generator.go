@@ -23,7 +23,7 @@ type Generator interface {
 	HandleConfigFileOverride(base map[string]interface{}, overrideConfigFile string) map[string]interface{}
 	CallK6Archive(uniqName string, testConfigFileToUse string, testFile string)
 	CallKubectl(uniqName string, namespace string)
-	CallJsonnet(uniqName string, namespace string, environment string, parallelism int, nodeType string, sealedSecretName string, extraEnvVars []byte, resources []byte)
+	CallJsonnet(uniqName string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte)
 }
 
 type K8sManifestGenerator struct {
@@ -130,12 +130,18 @@ func (r K8sManifestGenerator) Generate() {
 				if err != nil {
 					log.Fatalf("error: %v", err)
 				}
+
+				secretReferences, err := yaml.Marshal(c.TestRun.SecretReferences)
+				if err != nil {
+					log.Fatalf("error: %v", err)
+				}
+
 				resources, err := yaml.Marshal(c.TestRun.Resources)
 				if err != nil {
 					log.Fatalf("error: %v", err)
 				}
 				// TODO: Revisit how best to handle secrets.
-				r.CallJsonnet(uniqName, cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, "", extraEnvVars, resources)
+				r.CallJsonnet(uniqName, cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, extraEnvVars, resources)
 			}
 		}
 	}
@@ -273,7 +279,7 @@ func (r K8sManifestGenerator) CallKubectl(uniqName string, namespace string) {
 	}
 }
 
-func (r K8sManifestGenerator) CallJsonnet(uniqName string, namespace string, environment string, parallelism int, nodeType string, sealedSecretName string, extraEnvVars []byte, resources []byte) {
+func (r K8sManifestGenerator) CallJsonnet(uniqName string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte) {
 	var errb strings.Builder
 	k6ClusterConfigFile, err := os.ReadFile("/actions/generate-k6-manifests/infra/k6_cluster_conf.yaml")
 	if err != nil {
@@ -291,7 +297,7 @@ func (r K8sManifestGenerator) CallJsonnet(uniqName string, namespace string, env
 		"--ext-str", fmt.Sprintf("deploy_env=%s", environment),
 		"--ext-str", fmt.Sprintf("parallelism=%d", parallelism),
 		"--ext-str", fmt.Sprintf("node_type=%s", nodeType),
-		"--ext-str", fmt.Sprintf("sealed_secret_name=%s", sealedSecretName),
+		"--ext-str", fmt.Sprintf("secret_references=%s", secretReferences),
 		"--ext-str", fmt.Sprintf("extra_env_vars=%s", extraEnvVars),
 		"--ext-str", fmt.Sprintf("resources=%s", resources),
 		"--ext-str", fmt.Sprintf("extra_cli_args=%s", os.Getenv("INPUT_COMMAND_LINE_ARGS")),

@@ -7,9 +7,9 @@ local deploy_env = std.extVar('deploy_env');
 // Testrun
 local parallelism = std.parseInt(std.extVar('parallelism'));
 local extra_env_vars = std.parseYaml(std.extVar('extra_env_vars'));
+local secret_references = std.parseYaml(std.extVar('secret_references'));
 local resources = std.parseYaml(std.extVar('resources'));
 local node_type = std.extVar('node_type');
-local sealed_secret_name = std.extVar('sealed_secret_name');
 //
 local extra_cli_args = std.extVar('extra_cli_args');
 
@@ -90,7 +90,7 @@ local testrun = {
           },
         },
         resources: resources,
-        envFrom: [{
+        envFrom+: [{
           configMapRef: {
             name: 'deploy-environments-' + deploy_env,
           },
@@ -106,14 +106,17 @@ local testrun = {
       },
     },
   },
-  withEnvFromSecret(secret_name): {
+  withEnvFromSecret(secret_references): {
     spec+: {
       runner+: {
-        envFrom+: [{
-          secretRef: {
-            name: secret_name,
-          },
-        }],
+        envFrom+: [
+          {
+            secretRef: {
+              name: secret_name,
+            },
+          }
+          for secret_name in secret_references
+        ],
       },
     },
   },
@@ -121,7 +124,7 @@ local testrun = {
 {
   'testrun.json': testrun.new()
                   + testrun.withNodeType(node_type)
-                  + if sealed_secret_name != '' then testrun.withEnvFromSecret(sealed_secret_name) else {},
+                  + if std.length(secret_references) != 0 then testrun.withEnvFromSecret(secret_references) else {},
   // TODO: Disable for now since most of the things are hardcoded
   'slo.json': if false then slo.new('k8-wrapper-deployments-query', 'platform', 'k8s-wrapper', '.*/kuberneteswrapper/api/v1/Deployments') else null,
 }
