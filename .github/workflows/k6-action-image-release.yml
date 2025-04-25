@@ -56,4 +56,4 @@ jobs:
       workdir: .
       file: ./infrastructure/images/k6-action/Dockerfile
       trivyignore: ./infrastructure/images/k6-action/.trivyignore
-      platforms: linux/amd64
+      platforms: linux/arm64,linux/amd64
