@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"text/template"
@@ -98,7 +99,7 @@ func postTest(version string) {
 	}
 }
 
-var generateExamplesVersion = []string{"v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"}
+var generateExamplesVersion = []string{"v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"}
 
 func TestGenerate(t *testing.T) {
 	for _, version := range generateExamplesVersion {
@@ -266,6 +267,66 @@ func TestGetInfoFromFilePath(t *testing.T) {
 		}
 		if actualDeployEnv != tt.expectedDeployEnv {
 			t.Errorf("getInfoFromFilePath(%s): expected %s, actual %s", tt.path, tt.expectedDeployEnv, actualDeployEnv)
+		}
+	}
+}
+
+var envVarOverrides = []struct {
+	originalEnv map[string]string
+	extraEnv    map[string]string
+	mergedEnv   map[string]string
+}{
+	{
+		originalEnv: map[string]string{},
+		extraEnv:    map[string]string{},
+		mergedEnv:   map[string]string{},
+	},
+	{
+		originalEnv: map[string]string{"ENVFROMFILE1": "ENV1"},
+		extraEnv:    map[string]string{},
+		mergedEnv:   map[string]string{"ENVFROMFILE1": "ENV1"},
+	},
+	{
+		originalEnv: map[string]string{},
+		extraEnv:    map[string]string{"ENVFROMFILE1": "ENV1"},
+		mergedEnv:   map[string]string{"ENVFROMFILE1": "ENV1"},
+	},
+	{
+		originalEnv: map[string]string{"ENVFROMFILE1": "ENV1"},
+		extraEnv:    map[string]string{"ENVFROMFILE2": "ENV2"},
+		mergedEnv:   map[string]string{"ENVFROMFILE1": "ENV1", "ENVFROMFILE2": "ENV2"},
+	},
+	{
+		originalEnv: map[string]string{"ENVFROMFILE1": "ENV1"},
+		extraEnv:    map[string]string{"ENVFROMFILE1": "ENV2", "FOO": "BAR"},
+		mergedEnv:   map[string]string{"ENVFROMFILE1": "ENV2", "FOO": "BAR"},
+	},
+}
+
+func TestEnvOverride(t *testing.T) {
+	for _, tt := range envVarOverrides {
+		var original []*Env
+		var extra []*Env
+		for k, v := range tt.originalEnv {
+			original = append(original, &Env{
+				Name:  &k,
+				Value: &v,
+			})
+		}
+		for k, v := range tt.extraEnv {
+			extra = append(extra, &Env{
+				Name:  &k,
+				Value: &v,
+			})
+		}
+		result := handleExtraEnvVars(original, extra)
+		resultMap := make(map[string]string)
+		for _, v := range result {
+			resultMap[*v.Name] = *v.Value
+		}
+		eq := reflect.DeepEqual(tt.mergedEnv, resultMap)
+		if !eq {
+			t.Errorf("TestEnvOverride: expected %v, actual %v", tt.mergedEnv, resultMap)
 		}
 	}
 }

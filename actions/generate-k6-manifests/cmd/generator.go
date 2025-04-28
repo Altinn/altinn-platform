@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -12,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	orderedmap "github.com/elliotchance/orderedmap/v3"
 	yaml "gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -72,6 +74,57 @@ func (r K8sManifestGenerator) Initialize(filePath string) *ConfigFile {
 	return &cf
 }
 
+func parseEnvFile(filePath string) []*Env {
+	envFromFile := []*Env{}
+	tempFile, err := os.Open(filePath)
+
+	if err != nil {
+		log.Fatalf("error opening file: %s", err)
+	}
+	defer tempFile.Close()
+
+	scanner := bufio.NewScanner(tempFile)
+	for scanner.Scan() {
+		line := scanner.Text()
+		// Skip empty lines and comments
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		keyValue := strings.Split(line, "=")
+		if len(keyValue) != 2 {
+			log.Fatalf("expected %s to have the format KEY=VALUE", keyValue)
+		}
+		envFromFile = append(envFromFile, &Env{
+			Name:  &keyValue[0],
+			Value: &keyValue[1],
+		})
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Fatalf("error reading from file: %s", err)
+	}
+	return envFromFile
+}
+
+func handleExtraEnvVars(original []*Env, extra []*Env) []*Env {
+	newEnv := []*Env{}
+	m := orderedmap.NewOrderedMap[string, string]()
+	for _, o := range original {
+		m.Set(*o.Name, *o.Value)
+	}
+	for _, e := range extra {
+		m.Set(*e.Name, *e.Value)
+	}
+	for k, v := range m.AllFromFront() {
+		newEnv = append(newEnv, &Env{
+			Name:  &k,
+			Value: &v,
+		})
+	}
+	return newEnv
+}
+
 func (r K8sManifestGenerator) Generate() {
 	fmt.Println("Generating K6 Manifests")
 
@@ -89,6 +142,10 @@ func (r K8sManifestGenerator) Generate() {
 	fmt.Printf("Wrote config file into: %s/expanded-configfile.yaml\n", r.ConfigDirectory)
 
 	for _, td := range cf.TestDefinitions {
+		var envFileSlice []*Env
+		if td.EnvFile != "" {
+			envFileSlice = parseEnvFile(fmt.Sprintf("%s/%s", r.RepoRootDirectory, td.EnvFile))
+		}
 		for i, c := range td.Contexts {
 			if c.TestTypeDefinition.Enabled {
 				var configFile map[string]interface{}
@@ -125,8 +182,9 @@ func (r K8sManifestGenerator) Generate() {
 				}
 
 				r.CallKubectl(uniqName, cf.Namespace)
-
-				extraEnvVars, err := yaml.Marshal(c.TestRun.Env)
+				// merge env file with overrides.
+				mergedEnvs := handleExtraEnvVars(envFileSlice, c.TestRun.Env)
+				mergedEnvsMarshalled, err := yaml.Marshal(mergedEnvs)
 				if err != nil {
 					log.Fatalf("error: %v", err)
 				}
@@ -140,8 +198,7 @@ func (r K8sManifestGenerator) Generate() {
 				if err != nil {
 					log.Fatalf("error: %v", err)
 				}
-				// TODO: Revisit how best to handle secrets.
-				r.CallJsonnet(uniqName, cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, extraEnvVars, resources)
+				r.CallJsonnet(uniqName, cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, mergedEnvsMarshalled, resources)
 			}
 		}
 	}

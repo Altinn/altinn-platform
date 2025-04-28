@@ -2,6 +2,7 @@ namespace: platform
 test_definitions:
     - test_file: actions/generate-k6-manifests/test_service/k8s_wrapper/get_deployments.js
       config_file: ""
+      env_file: ""
       contexts:
         - environment: at22
           node_type: spot
@@ -20,6 +21,7 @@ test_definitions:
             secrets: []
     - test_file: actions/generate-k6-manifests/test_service/k8s_wrapper/get_daemonsets.js
       config_file: ""
+      env_file: ""
       contexts:
         - environment: yt01
           node_type: default
