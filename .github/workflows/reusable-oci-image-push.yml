@@ -1,0 +1,120 @@
+name: Build kustomize oci artifact and push to altinncr
+
+on:
+    workflow_call:
+      inputs:
+        image_name:
+          description: 'Name of the OCI image to push'
+          required: true
+          type: string
+        workdir:
+          description: 'Folder containing the OCI context'
+          required: true
+          type: string
+        tag:
+          description: 'Tag to push in addition to the short commit sha tag'
+          required: false
+          default: ''
+          type: string
+        validate:
+          description: 'Perform simple folder structure validation'
+          required: false
+          default: false
+          type: boolean
+        from_tag:
+          description: 'Tag to re-tag. If not set a new image will be build with the commit sha tag and the optional tag'
+          required: false
+          default: ''
+          type: string
+      secrets:
+        azure_app_id:
+          description: 'Azure application id used to authenticate to altinncr'
+          required: true
+        azure_subscription_id:
+          description: 'Azure subscription id used to authenticate to altinncr'
+          required: true
+        azure_tenant_id:
+          description: 'Azure tenant id used to authenticate to altinncr'
+          required: true
+
+jobs:
+  latest:
+    name: Build new image from repo
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.from_tag == ''
+    defaults:
+      run:
+        working-directory: ${{ github.event.inputs.workdir }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate folder structure
+        if: github.event.inputs.validate == 'true'
+        run: |
+          # Loop over a list of environment names and check that the kustomization.yaml file exists in each environment folder
+          environments=("at22" "at23" "at24", "tt02", "yt01", "prod")
+          for env in "${environments[@]}"; do
+          if [ ! -f "./${env}/kustomization.yaml" ]; then
+            echo "Error: kustomization.yaml not found in ./${env}/"
+            exit 1
+          fi
+          done
+          echo "Validation successful: kustomization.yaml exists in all specified environment folders."
+      - name: Setup flux
+        uses: fluxcd/flux2/action@d9b66f69597f30bb3e50167ce86804f4d55385cb
+        with:
+          version: latest
+      - name: az login
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ secrets.azure_app_id }}
+          subscription-id: ${{ secrets.azure_subscription_id }}
+          tenant-id: ${{ secrets.azure_tenant_id }}
+      - name: Login to altinncr
+        run: |
+          az acr login --name altinncr
+      - name: Build and push artifact with commit sha tag
+        run: |
+          artifact_name=${{ github.event.inputs.image_name }}
+          container_registry=altinncr.azurecr.io
+          short_sha=$(git rev-parse --short HEAD)
+          repo_url=$(git config --get remote.origin.url)
+          branch_sha=$(git branch --show-current)/$(git rev-parse HEAD)
+          # Build and push the OCI artifact
+          flux push artifact oci://${container_registry}/${artifact_name}:&{short_sha} \
+            --provider=azure \
+            --reproducible \
+            --path="." \
+            --source="${repo_url}" \
+            --revision="${branch_sha}"
+      - name: Tag artifact with custom tag
+        if: github.event.inputs.tag != ''
+        run: |
+          artifact_name=${{ github.event.inputs.image_name }}
+          container_registry=altinncr.azurecr.io
+          flux tag artifact oci://${container_registry}/${artifact_name}:$(git rev-parse --short HEAD) \
+            --provider=azure \
+            --tag ${{ github.event.inputs.tag }}
+  release:
+    name: Re-tag existing image
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.from_tag != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup flux
+        uses: fluxcd/flux2/action@d9b66f69597f30bb3e50167ce86804f4d55385cb
+        with:
+          version: latest
+      - name: az login
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ secrets.azure_app_id }}
+          subscription-id: ${{ secrets.azure_subscription_id }}
+          tenant-id: ${{ secrets.azure_tenant_id }}
+      - name: Login to altinncr
+        run: |
+          az acr login --name altinncr
+      - name: Tag release artifact
+        run: |
+          artifact_name=${{ github.event.inputs.image_name }}
+          container_registry=altinncr.azurecr.io
+          flux tag artifact oci://${container_registry}/${artifact_name}:${{ github.event.inputs.from_tag }} \
+              --provider=azure \
+              --tag ${{ github.event.inputs.tag }}
