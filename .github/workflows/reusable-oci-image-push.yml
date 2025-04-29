@@ -1,10 +1,9 @@
 name: Build kustomize oci artifact and push to altinncr
-description: |
-  This workflow expects the calling workflow to have checked out the repository and prepared the expected file and folder structure.
-  This workflow builds a kustomize OCI artifact and pushes it to altinncr.
-  If the `from_tag` input is set, it will re-tag an existing image with the specified tag.
-  If the `from_tag` input is not set, it will build a new image with the commit sha tag and an optional custom tag.
-  The `validate` input can be set to true to perform a simple folder structure validation for dis syncroot images.
+# This workflow expects the calling workflow to have checked out the repository and prepared the expected file and folder structure.
+# This workflow builds a kustomize OCI artifact and pushes it to altinncr.
+# If the `from_tag` input is set, it will re-tag an existing image with the specified tag.
+# If the `from_tag` input is not set, it will build a new image with the commit sha tag and an optional custom tag.
+# The `validate` input can be set to true to perform a simple folder structure validation for dis syncroot images.
 
 on:
   workflow_call:
