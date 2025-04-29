@@ -1,41 +1,41 @@
 name: Build kustomize oci artifact and push to altinncr
 
 on:
-    workflow_call:
-      inputs:
-        image_name:
-          description: 'Name of the OCI image to push'
-          required: true
-          type: string
-        workdir:
-          description: 'Folder containing the OCI context'
-          required: true
-          type: string
-        tag:
-          description: 'Tag to push in addition to the short commit sha tag'
-          required: false
-          default: ''
-          type: string
-        validate:
-          description: 'Perform simple folder structure validation'
-          required: false
-          default: false
-          type: boolean
-        from_tag:
-          description: 'Tag to re-tag. If not set a new image will be build with the commit sha tag and the optional tag'
-          required: false
-          default: ''
-          type: string
-      secrets:
-        azure_app_id:
-          description: 'Azure application id used to authenticate to altinncr'
-          required: true
-        azure_subscription_id:
-          description: 'Azure subscription id used to authenticate to altinncr'
-          required: true
-        azure_tenant_id:
-          description: 'Azure tenant id used to authenticate to altinncr'
-          required: true
+  workflow_call:
+    inputs:
+      image_name:
+        description: 'Name of the OCI image to push'
+        required: true
+        type: string
+      workdir:
+        description: 'Folder containing the OCI context'
+        required: true
+        type: string
+      tag:
+        description: 'Tag to push in addition to the short commit sha tag'
+        required: false
+        default: ''
+        type: string
+      validate:
+        description: 'Perform simple folder structure validation'
+        required: false
+        default: false
+        type: boolean
+      from_tag:
+        description: 'Tag to re-tag. If not set a new image will be build with the commit sha tag and the optional tag'
+        required: false
+        default: ''
+        type: string
+    secrets:
+      azure_app_id:
+        description: 'Azure application id used to authenticate to altinncr'
+        required: true
+      azure_subscription_id:
+        description: 'Azure subscription id used to authenticate to altinncr'
+        required: true
+      azure_tenant_id:
+        description: 'Azure tenant id used to authenticate to altinncr'
+        required: true
 
 jobs:
   latest:
