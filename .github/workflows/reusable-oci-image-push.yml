@@ -40,7 +40,7 @@ on:
 jobs:
   latest:
     name: Build new image from repo
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.from_tag == ''
+    if: github.event.inputs.from_tag == ''
     defaults:
       run:
         working-directory: ${{ github.event.inputs.workdir }}
@@ -96,10 +96,10 @@ jobs:
           short_sha=$(git rev-parse --short HEAD)
           flux tag artifact "oci://${container_registry}/${ARTIFACT_NAME}:${short_sha}" \
             --provider=azure \
-            --tag ${EXTRA_TAG}
+            --tag "${EXTRA_TAG}"
   release:
     name: Re-tag existing image
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.from_tag != ''
+    if: github.event.inputs.from_tag != ''
     runs-on: ubuntu-latest
     steps:
       - name: Setup flux
@@ -124,4 +124,4 @@ jobs:
           container_registry=altinncr.azurecr.io
           flux tag artifact "oci://${container_registry}/${ARTIFACT_NAME}:${FROM_TAG} \
               --provider=azure \
-              --tag ${TO_TAG}
+              --tag "${TO_TAG}"
