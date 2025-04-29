@@ -1,4 +1,10 @@
 name: Build kustomize oci artifact and push to altinncr
+description: |
+  This workflow expects the calling workflow to have checked out the repository and prepared the expected file and folder structure.
+  This workflow builds a kustomize OCI artifact and pushes it to altinncr.
+  If the `from_tag` input is set, it will re-tag an existing image with the specified tag.
+  If the `from_tag` input is not set, it will build a new image with the commit sha tag and an optional custom tag.
+  The `validate` input can be set to true to perform a simple folder structure validation for dis syncroot images.
 
 on:
   workflow_call:
@@ -40,14 +46,14 @@ on:
 jobs:
   latest:
     name: Build new image from repo
-    if: github.event.inputs.from_tag == ''
+    if: inputs.from_tag == ''
     defaults:
       run:
-        working-directory: ${{ github.event.inputs.workdir }}
+        working-directory: ${{ inputs.workdir }}
     runs-on: ubuntu-latest
     steps:
       - name: Validate folder structure
-        if: github.event.inputs.validate
+        if: inputs.validate
         run: |
           # Loop over a list of environment names and check that the kustomization.yaml file exists in each environment folder
           environments=("at22" "at23" "at24" "tt02" "yt01" "prod")
@@ -73,7 +79,7 @@ jobs:
           az acr login --name altinncr
       - name: Build and push artifact with commit sha tag
         env:
-          ARTIFACT_NAME: ${{ github.event.inputs.image_name }}
+          ARTIFACT_NAME: ${{ inputs.image_name }}
         run: |
           container_registry=altinncr.azurecr.io
           short_sha=$(git rev-parse --short HEAD)
@@ -87,10 +93,10 @@ jobs:
             --source="${repo_url}" \
             --revision="${branch_sha}"
       - name: Tag artifact with custom tag
-        if: github.event.inputs.tag != ''
-        env: 
-          ARTIFACT_NAME: ${{ github.event.inputs.image_name }}
-          EXTRA_TAG: ${{ github.event.inputs.tag }}
+        if: inputs.tag != ''
+        env:
+          ARTIFACT_NAME: ${{ inputs.image_name }}
+          EXTRA_TAG: ${{ inputs.tag }}
         run: |
           container_registry=altinncr.azurecr.io
           short_sha=$(git rev-parse --short HEAD)
@@ -99,7 +105,7 @@ jobs:
             --tag "${EXTRA_TAG}"
   release:
     name: Re-tag existing image
-    if: github.event.inputs.from_tag != ''
+    if: inputs.from_tag != ''
     runs-on: ubuntu-latest
     steps:
       - name: Setup flux
@@ -117,9 +123,9 @@ jobs:
           az acr login --name altinncr
       - name: Tag release artifact
         env:
-          ARTIFACT_NAME: ${{ github.event.inputs.image_name }}
-          FROM_TAG: ${{ github.event.inputs.from_tag }}
-          TO_TAG: ${{ github.event.inputs.tag }}
+          ARTIFACT_NAME: ${{ inputs.image_name }}
+          FROM_TAG: ${{ inputs.from_tag }}
+          TO_TAG: ${{ inputs.tag }}
         run: |
           container_registry=altinncr.azurecr.io
           flux tag artifact "oci://${container_registry}/${ARTIFACT_NAME}:${FROM_TAG} \
