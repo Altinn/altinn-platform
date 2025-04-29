@@ -40,7 +40,7 @@ resource "azapi_resource" "otel_collector" {
   body = {
     properties = {
       kustomizations = {
-        otel-operator = {
+        otel-collector = {
           force                  = false
           path                   = "./"
           prune                  = false
