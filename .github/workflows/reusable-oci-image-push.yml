@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Validate folder structure
-        if: github.event.inputs.validate == 'true'
+        if: github.event.inputs.validate
         run: |
           # Loop over a list of environment names and check that the kustomization.yaml file exists in each environment folder
           environments=("at22" "at23" "at24" "tt02" "yt01" "prod")
