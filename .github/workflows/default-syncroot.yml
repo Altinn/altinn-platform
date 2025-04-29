@@ -29,17 +29,14 @@ jobs:
         with:
           image_name: ${{ env.ARTIFACT_NAME }}
           tag: latest
-          workdir: ./infrastructure/images/oci-syncroot
+          workdir: ./infrastructure/images/default-syncroot
           validate: true
           azure_subscription_id: ${{ secrets.AZURE_ALTINNACR_SUBSCRIPTION_ID }}
           azure_app_id: ${{ secrets.AZURE_ALTINNACR_APP_ID }}
           azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
   release:
     name: Build release from tag
-    if: startsWith(github.ref, 'refs/tags/kustomize-dis-apim-')
-    defaults:
-      run:
-        working-directory: ./services/dis-apim-operator/config
+    if: startsWith(github.ref, 'refs/tags/default-syncroot-')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -55,7 +52,7 @@ jobs:
           image_name: ${{ env.ARTIFACT_NAME }}
           from_tag: ${{ steps.get_tags.outputs.short_sha }}
           tag: ${{ steps.get_tags.outputs.tag }}
-          workdir: ./infrastructure/images/oci-syncroot
+          workdir: ./infrastructure/images/default-syncroot
           azure_subscription_id: ${{ secrets.AZURE_ALTINNACR_SUBSCRIPTION_ID }}
           azure_app_id: ${{ secrets.AZURE_ALTINNACR_APP_ID }}
           azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
