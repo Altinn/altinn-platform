@@ -9,6 +9,3 @@ test_definitions:
           env:
             - name: FOO
               value: BAR
-          secrets:
-            - super-secret-1
-            - super-secret-2

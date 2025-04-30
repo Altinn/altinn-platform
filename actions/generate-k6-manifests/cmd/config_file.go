@@ -16,6 +16,7 @@ type ConfigFile struct {
 type TestDefinition struct {
 	TestFile   string         `yaml:"test_file"`
 	ConfigFile string         `yaml:"config_file"`
+	EnvFile    string         `yaml:"env_file"`
 	Contexts   []*TestContext `yaml:"contexts"`
 }
 

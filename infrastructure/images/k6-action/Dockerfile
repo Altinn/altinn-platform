@@ -17,8 +17,6 @@ RUN apk --update-cache upgrade && \
     make \
     yq
 
-RUN mkdir /tools_download
-
 WORKDIR /tools_download
 
 # Install kubectl
@@ -46,8 +44,6 @@ RUN curl -OL "https://github.com/jsonnet-bundler/jsonnet-bundler/releases/downlo
 RUN curl -OL "https://github.com/grafana/k6/releases/download/v${K6_VERSION}/k6-v${K6_VERSION}-linux-amd64.tar.gz" &&\
     tar -xvzf k6-v${K6_VERSION}-linux-amd64.tar.gz k6-v${K6_VERSION}-linux-amd64/k6 &&\
     chmod +x k6-v${K6_VERSION}-linux-amd64/k6 && mv k6-v${K6_VERSION}-linux-amd64/k6 /usr/local/bin
-
-RUN mkdir -p /jsonnet/vendor
 
 WORKDIR /jsonnet/vendor
 

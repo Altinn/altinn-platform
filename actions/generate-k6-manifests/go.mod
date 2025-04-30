@@ -5,6 +5,7 @@ go 1.23.0
 toolchain go1.23.6
 
 require (
+	github.com/elliotchance/orderedmap/v3 v3.1.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.32.2
 )

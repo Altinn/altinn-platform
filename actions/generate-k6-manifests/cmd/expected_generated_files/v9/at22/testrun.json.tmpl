@@ -1,0 +1,67 @@
+{
+   "apiVersion": "k6.io/v1alpha1",
+   "kind": "TestRun",
+   "metadata": {
+      "name": "{{ .UniqueName }}",
+      "namespace": "platform"
+   },
+   "spec": {
+      "arguments": "--tag testid={{ .UniqueName }} --tag namespace=platform --tag deploy_env={{ .DeployEnv }} --out experimental-prometheus-rw",
+      "cleanup": "post",
+      "parallelism": 1,
+      "runner": {
+         "env": [
+            {
+               "name": "K6_NO_USAGE_REPORT",
+               "value": "true"
+            },
+            {
+               "name": "K6_PROMETHEUS_RW_SERVER_URL",
+               "value": "http://kube-prometheus-stack-prometheus.monitoring:9090/api/v1/write"
+            },
+            {
+               "name": "K6_PROMETHEUS_RW_TREND_STATS",
+               "value": "avg,min,med,max,count,p(95),p(99),p(99.5),p(99.9)"
+            },
+            {
+               "name": "ENVFROMFILE1",
+               "value": "ENV1"
+            },
+            {
+               "name": "ENVFROMFILE2",
+               "value": "ENV2"
+            },
+            {
+               "name": "FOO",
+               "value": "BAR"
+            }
+         ],
+         "envFrom": [
+            {
+               "configMapRef": {
+                  "name": "deploy-environments-{{ .DeployEnv }}"
+               }
+            }
+         ],
+         "metadata": {
+            "labels": {
+               "k6-test": "{{ .UniqueName }}"
+            }
+         },
+         "nodeSelector": { },
+         "resources": {
+            "requests": {
+               "cpu": "250m",
+               "memory": "200Mi"
+            }
+         },
+         "tolerations": [ ]
+      },
+      "script": {
+         "configMap": {
+            "file": "archive.tar",
+            "name": "{{ .UniqueName }}"
+         }
+      }
+   }
+}
