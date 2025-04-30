@@ -38,14 +38,8 @@ locals {
   k6tests_resource_group_name = module.foundational.k6tests_resource_group_name
   oidc_issuer_url             = data.azurerm_kubernetes_cluster.k6tests.oidc_issuer_url
 
-  # Hacky, the value doesn't exist in the provider.
-  # Opened an issue+PR: https://github.com/hashicorp/terraform-provider-azurerm/issues/29290
-  # This can be removed once a new release of the provider is released.
-  dce_metrics_ingestion_endpoint = replace(
-    data.azurerm_monitor_data_collection_endpoint.k6tests.logs_ingestion_endpoint,
-    "ingest",
-    "metrics.ingest"
-  )
+  dce_metrics_ingestion_endpoint = data.azurerm_monitor_data_collection_endpoint.k6tests.metrics_ingestion_endpoint
+
   dcr_immutable_id      = data.azurerm_monitor_data_collection_rule.k6tests.immutable_id
   remote_write_endpoint = "${local.dce_metrics_ingestion_endpoint}/dataCollectionRules/${local.dcr_immutable_id}/streams/Microsoft-PrometheusMetrics/api/v1/write?api-version=2023-04-24"
 
