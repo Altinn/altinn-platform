@@ -42,7 +42,7 @@ inputs:
   tf_version:
     required: false
     description: Terraform Version
-    default: ~1.10.5
+    default: ~1.11.0
   tf_log_level:
     required: false
     description: Terraform Log level
