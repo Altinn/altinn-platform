@@ -47,9 +47,6 @@ inputs:
     required: false
     description: Terraform Log level
     default: INFO
-  tf_args:
-    description: Terraform arguments
-    required: false
 
 outputs:
   init_step_stdout:
