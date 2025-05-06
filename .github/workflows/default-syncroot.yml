@@ -1,0 +1,58 @@
+name: Build default-syncroot image
+
+env:
+  ARTIFACT_NAME: dis/default-syncroot
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'infrastructure/images/default-syncroot/**'
+      - '.github/workflows/default-syncroot.yml'
+    tags:
+      - 'default-syncroot-*'
+
+permissions:
+  contents: read
+
+jobs:
+  latest:
+    name: Build latest from main
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build and push latest artifact
+        uses: ./.github/workflows/reusable-oci-image-push.yml
+        with:
+          image_name: ${{ env.ARTIFACT_NAME }}
+          tag: latest
+          workdir: ./infrastructure/images/default-syncroot
+          validate: true
+          azure_subscription_id: ${{ secrets.AZURE_ALTINNACR_SUBSCRIPTION_ID }}
+          azure_app_id: ${{ secrets.AZURE_ALTINNACR_APP_ID }}
+          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+  release:
+    name: Build release from tag
+    if: startsWith(github.ref, 'refs/tags/default-syncroot-')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Get tag short sha
+        id: get_tags
+        run: |
+          echo "tag=${GITHUB_REF/refs\/tags\/default-syncroot-/}" >> $GITHUB_OUTPUT
+          echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+      - name: Re-tag existing image
+        uses: ./.github/workflows/reusable-oci-image-push.yml
+        with:
+          image_name: ${{ env.ARTIFACT_NAME }}
+          from_tag: ${{ steps.get_tags.outputs.short_sha }}
+          tag: ${{ steps.get_tags.outputs.tag }}
+          workdir: ./infrastructure/images/default-syncroot
+          azure_subscription_id: ${{ secrets.AZURE_ALTINNACR_SUBSCRIPTION_ID }}
+          azure_app_id: ${{ secrets.AZURE_ALTINNACR_APP_ID }}
+          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
