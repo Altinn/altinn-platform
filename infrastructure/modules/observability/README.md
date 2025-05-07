@@ -1,6 +1,6 @@
-# terraform‑azurerm‑observability
+# dis-observability-module
 
-A lightweight Terraform module that bootstraps a **Log Analytics Workspace, Application Insights (workspace‑based), Azure Monitor Workspace** and pushes the App Insights connection string into your Kubernetes cluster (namespace `monitoring`) as a `Secret`.
+A lightweight Terraform module that bootstraps a **Log Analytics Workspace, Application Insights (workspace‑based), Azure Monitor Workspace**.
 
 ---
 
@@ -59,13 +59,13 @@ A lightweight Terraform module that bootstraps a **Log Analytics Workspace, Ap
 
 ```hcl
 module "observability" {
-  source      = "github.com/your-org/terraform-azurerm-observability"
+  source      = "../some/path"
 
   prefix      = "acme"
   environment = "dev"
   location    = "westeurope"
 
-  kubeconfig_path = pathexpand("~/.kube/config")
+  kubeconfig_path = "~/.kube/config"
   kube_context    = "aks-dev"
 
   tags = {
