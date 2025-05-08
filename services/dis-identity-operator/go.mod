@@ -1,8 +1,8 @@
 module github.com/Altinn/altinn-platform/services/dis-identity-operator
 
-go 1.23.0
+go 1.24.0
 
-godebug default=go1.23
+godebug default=go1.24
 
 require (
 	github.com/onsi/ginkgo/v2 v2.22.0
