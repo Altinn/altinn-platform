@@ -64,7 +64,7 @@ jobs:
           done
           echo "Validation successful: kustomization.yaml exists in all specified environment folders."
       - name: Setup flux
-        uses: fluxcd/flux2/action@d9b66f69597f30bb3e50167ce86804f4d55385cb
+        uses: fluxcd/flux2/action@8d9cbe7693cde4200b70e9ae4749cecb47d3f445
         with:
           version: latest
       - name: az login
@@ -109,7 +109,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup flux
-        uses: fluxcd/flux2/action@d9b66f69597f30bb3e50167ce86804f4d55385cb
+        uses: fluxcd/flux2/action@8d9cbe7693cde4200b70e9ae4749cecb47d3f445
         with:
           version: latest
       - name: az login
