@@ -94,14 +94,19 @@ func IsPrometheusCRDsInstalled() bool {
 	}
 	crdList := GetNonEmptyLines(output)
 	for _, crd := range prometheusCRDs {
+		found := false
 		for _, line := range crdList {
 			if strings.Contains(line, crd) {
-				return true
+				found = true
+				break
 			}
+		}
+		if !found {
+			return false
 		}
 	}
 
-	return false
+	return true
 }
 
 // UninstallCertManager uninstalls the cert manager
