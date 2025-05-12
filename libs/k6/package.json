@@ -1,0 +1,23 @@
+{
+    "name": "altinn-k6-library",
+    "repository": "https://github.com/Altinn/altinn-platform",
+    "version": "0.0.1",
+    "description": "Library with functionality reusable across tests",
+    "devDependencies": {
+        "esbuild": "0.14.51",
+        "eslint": "8.20.0",
+        "eslint-config-prettier": "8.5.0",
+        "eslint-plugin-prettier": "4.2.1",
+        "prettier": "2.7.1"
+    },
+    "engines": {},
+    "scripts": {
+        "lint": "eslint --max-warnings 0 src",
+        "fix": "eslint --fix src",
+        "build": "esbuild ./src/index.js --external:k6/http --bundle --sourcemap --minify --format=cjs --legal-comments=none --outfile=./build/index.js",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [],
+    "author": "altinn/team-platform",
+    "dependencies": {}
+}
