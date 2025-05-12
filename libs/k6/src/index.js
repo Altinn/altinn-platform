@@ -1,1 +1,1 @@
-export { slack } from './slack/slack.js';
+export { postSlackMessage } from './slack/slack.js';
