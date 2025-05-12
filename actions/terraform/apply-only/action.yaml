@@ -6,13 +6,6 @@ inputs:
     default: ./infrastructure
     required: true
 
-  oidc_type:
-    description: Specifies a part of subject for OpenID Connect (OIDC), can be values 'branch' or 'environment'
-    required: true
-  oidc_value:
-    description: Name of branch or environment
-    required: true
-
   arm_client_id:
     required: true
     description: Federated Azure Client ID.
@@ -23,25 +16,6 @@ inputs:
     description: Azure Tenant ID
     default: cd0026d8-283b-4a55-9bfa-d0ef4a8ba21c
 
-  tf_arm_subscription_id:
-    required: true
-    default: d43d5057-8389-40d5-88c4-04db9275cbf2
-    description: Azure Subscription ID for the storage account that persists the terraform state
-  tf_arm_resource_group_name:
-    description: Azure resource group for the storage account that persists the terraform state
-    default: terraform-rg
-  tf_arm_storage_account_name:
-    description: Name of the azure storage account that persists the terraform state
-    default: altinnterraformstorage02
-  tf_state_name:
-    description: Name of Terraform state file
-    required: true
-    default: tfstate
-  tf_version:
-    description: Terraform Version
-  tf_log_level:
-    description: Terraform Log level
-    default: INFO
   tf_args:
     description: Terraform arguments
     required: false
