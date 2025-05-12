@@ -42,7 +42,8 @@ inputs:
   tf_version:
     required: false
     description: Terraform Version
-    default: ~1.11.0
+    # renovate: datasource=github-releases depName=terraform packageName=hashicorp/terraform versioning=semver
+    default: 1.11.4
   tf_log_level:
     required: false
     description: Terraform Log level
