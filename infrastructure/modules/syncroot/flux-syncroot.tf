@@ -8,11 +8,6 @@ resource "azapi_resource" "flux_syncroot" {
         syncroot = {
           force = false
           path  = "./${var.environment}"
-          postBuild = {
-            substitute = {
-              DISABLE_IPV6 = "false"
-            }
-          }
           prune                  = false
           retryIntervalInSeconds = 300
           syncIntervalInSeconds  = 300
