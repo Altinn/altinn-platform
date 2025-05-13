@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -25,7 +26,7 @@ type Generator interface {
 	HandleConfigFileOverride(base map[string]interface{}, overrideConfigFile string) map[string]interface{}
 	CallK6Archive(uniqName string, testConfigFileToUse string, testFile string)
 	CallKubectl(uniqName string, namespace string)
-	CallJsonnet(uniqName string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte)
+	CallJsonnet(uniqName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte)
 }
 
 type K8sManifestGenerator struct {
@@ -125,6 +126,25 @@ func handleExtraEnvVars(original []*Env, extra []*Env) []*Env {
 	return newEnv
 }
 
+func chooseCorrectSlackChannel(deploy_env string) string {
+	branch, ok := os.LookupEnv("GITHUB_REF")
+
+	if ok && branch == "refs/heads/main" {
+		aux := map[string]string{
+			"at22": "slack-dev",
+			"at23": "slack-dev",
+			"at24": "slack-dev",
+			"yt01": "slack-dev",
+
+			"tt02": "slack-prod",
+			"prod": "slack-prod",
+		}
+		return aux[deploy_env]
+	}
+
+	return "slack-test"
+}
+
 func (r K8sManifestGenerator) Generate() {
 	fmt.Println("Generating K6 Manifests")
 
@@ -155,7 +175,9 @@ func (r K8sManifestGenerator) Generate() {
 						configFile = r.HandleConfigFileOverride(configFile, c.TestTypeDefinition.ConfigFile)
 					}
 				}
-				uniqName := fmt.Sprintf("%s-%s-%d-%d", c.Environment, *c.TestRun.Name, i, time.Now().UnixMilli())
+
+				manifestGenerationTimestamp := time.Now().UnixMilli()
+				uniqName := fmt.Sprintf("%s-%s-%d-%d", c.Environment, *c.TestRun.Name, i, manifestGenerationTimestamp)
 
 				marshalledConfigFile, err := json.MarshalIndent(configFile, "", "  ")
 				if err != nil {
@@ -183,13 +205,38 @@ func (r K8sManifestGenerator) Generate() {
 
 				r.CallKubectl(uniqName, cf.Namespace)
 				// merge env file with overrides.
-				mergedEnvs := handleExtraEnvVars(envFileSlice, c.TestRun.Env)
+				githubRepositoryEnvName := "GITHUB_REPOSITORY"
+				githubServerUrlEnvName := "GITHUB_SERVER_URL"
+				githubRunIdEnvName := "GITHUB_RUN_ID"
+
+				githubRepositoryEnvValue := os.Getenv(githubRepositoryEnvName)
+				githubServerUrlEnvValue := os.Getenv(githubServerUrlEnvName)
+				githubRunIdEnvValue := os.Getenv(githubRunIdEnvName)
+
+				githubRelatedEnvVars := []*Env{
+					&Env{
+						Name:  &githubRepositoryEnvName,
+						Value: &githubRepositoryEnvValue,
+					},
+					&Env{
+						Name:  &githubServerUrlEnvName,
+						Value: &githubServerUrlEnvValue,
+					},
+					&Env{
+						Name:  &githubRunIdEnvName,
+						Value: &githubRunIdEnvValue,
+					},
+				}
+
+				testRunEnvWithGithubContext := handleExtraEnvVars(c.TestRun.Env, githubRelatedEnvVars)
+				mergedEnvs := handleExtraEnvVars(envFileSlice, testRunEnvWithGithubContext)
 				mergedEnvsMarshalled, err := yaml.Marshal(mergedEnvs)
 				if err != nil {
 					log.Fatalf("error: %v", err)
 				}
 
-				secretReferences, err := yaml.Marshal(c.TestRun.SecretReferences)
+				slackChannel := chooseCorrectSlackChannel(c.Environment)
+				secretReferences, err := yaml.Marshal(append(c.TestRun.SecretReferences, &slackChannel))
 				if err != nil {
 					log.Fatalf("error: %v", err)
 				}
@@ -198,7 +245,7 @@ func (r K8sManifestGenerator) Generate() {
 				if err != nil {
 					log.Fatalf("error: %v", err)
 				}
-				r.CallJsonnet(uniqName, cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, mergedEnvsMarshalled, resources)
+				r.CallJsonnet(uniqName, strconv.FormatInt(manifestGenerationTimestamp, 10), cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, mergedEnvsMarshalled, resources)
 			}
 		}
 	}
@@ -336,7 +383,7 @@ func (r K8sManifestGenerator) CallKubectl(uniqName string, namespace string) {
 	}
 }
 
-func (r K8sManifestGenerator) CallJsonnet(uniqName string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte) {
+func (r K8sManifestGenerator) CallJsonnet(uniqName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte) {
 	var errb strings.Builder
 	k6ClusterConfigFile, err := os.ReadFile("/actions/generate-k6-manifests/infra/k6_cluster_conf.yaml")
 	if err != nil {
@@ -350,6 +397,7 @@ func (r K8sManifestGenerator) CallJsonnet(uniqName string, namespace string, env
 	cmd := exec.Command("jsonnet",
 		"--jpath", "/jsonnet/vendor",
 		"--ext-str", fmt.Sprintf("unique_name=%s", uniqName),
+		"--ext-str", fmt.Sprintf("manifest_generation_timestamp=%s", manifestGenerationTimestamp),
 		"--ext-str", fmt.Sprintf("namespace=%s", namespace),
 		"--ext-str", fmt.Sprintf("deploy_env=%s", environment),
 		"--ext-str", fmt.Sprintf("parallelism=%d", parallelism),
