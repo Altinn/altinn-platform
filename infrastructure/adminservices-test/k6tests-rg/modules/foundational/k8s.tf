@@ -10,6 +10,10 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
     type = "SystemAssigned"
   }
 
+  key_vault_secrets_provider {
+    secret_rotation_enabled = true
+  }
+
   local_account_disabled            = true
   role_based_access_control_enabled = true
   azure_active_directory_role_based_access_control {
@@ -26,13 +30,13 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
   automatic_upgrade_channel = "stable"
 
   default_node_pool {
-    name                 = "default"
-    auto_scaling_enabled = true
-    min_count            = 1
-    max_count            = 3
-    vm_size              = "Standard_D3_v2"
+    name                        = "default"
+    auto_scaling_enabled        = true
+    min_count                   = 1
+    max_count                   = 3
+    vm_size                     = "Standard_D3_v2"
     temporary_name_for_rotation = "tmpdefault"
-    max_pods = 200
+    max_pods                    = 200
 
     upgrade_settings { # Adding these to keep plans clean
       drain_timeout_in_minutes      = 0
