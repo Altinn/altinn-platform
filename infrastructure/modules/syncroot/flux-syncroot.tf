@@ -1,6 +1,6 @@
 resource "azapi_resource" "flux_syncroot" {
   type      = "Microsoft.KubernetesConfiguration/fluxConfigurations@2024-11-01"
-  name      = "syncroot"
+  name      = "syncroot-${var.team_name}-${var.environment}"
   parent_id = var.azurerm_kubernetes_cluster_id
   body = {
     properties = {
@@ -30,7 +30,7 @@ resource "azapi_resource" "flux_syncroot" {
         url                   = "oci://altinncr.azurecr.io/${var.team_name}/syncroot"
         useWorkloadIdentity   = true
       }
-      namespace                  = var.team_name
+      namespace                  = var.namespace != "" ? var.namespace : var.team_name
       reconciliationWaitDuration = "PT5M"
       waitForReconciliation      = true
       sourceKind                 = "OCIRepository"
