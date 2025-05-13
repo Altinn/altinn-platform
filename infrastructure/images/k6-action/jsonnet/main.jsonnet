@@ -2,6 +2,7 @@ local k = import 'github.com/jsonnet-libs/k8s-libsonnet/1.32/main.libsonnet';
 local k6ClusterYamlConf = std.parseYaml(std.extVar('k6clusterconfig'));
 // Global
 local unique_name = std.extVar('unique_name');
+local manifest_generation_timestamp = std.extVar('manifest_generation_timestamp');
 local namespace = std.extVar('namespace');
 local deploy_env = std.extVar('deploy_env');
 // Testrun
@@ -82,6 +83,18 @@ local testrun = {
             {
               name: 'K6_PROMETHEUS_RW_TREND_STATS',
               value: 'avg,min,med,max,count,p(95),p(99),p(99.5),p(99.9)',
+            },
+            {
+              name: 'NAMESPACE',
+              value: namespace,
+            },
+            {
+              name: 'TESTID',
+              value: unique_name,
+            },
+            {
+              name: 'MANIFEST_GENERATION_TIMESTAMP',
+              value: manifest_generation_timestamp,
             },
           ] + [{ name: v.name, value: std.toString(v.value) } for v in extra_env_vars],  // TODO: Values from userconf should override the defaults. atm both get added
         metadata: {

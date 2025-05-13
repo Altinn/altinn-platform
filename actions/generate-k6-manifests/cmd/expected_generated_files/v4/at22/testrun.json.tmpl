@@ -22,12 +22,41 @@
             {
                "name": "K6_PROMETHEUS_RW_TREND_STATS",
                "value": "avg,min,med,max,count,p(95),p(99),p(99.5),p(99.9)"
+            },
+            {
+               "name": "NAMESPACE",
+               "value": "platform"
+            },
+            {
+               "name": "TESTID",
+               "value": "{{ .UniqueName }}"
+            },
+            {
+               "name": "MANIFEST_GENERATION_TIMESTAMP",
+               "value": "{{ .ManifestGenerationTimestamp }}"
+            },
+            {
+               "name": "GITHUB_REPOSITORY",
+               "value": ""
+            },
+            {
+               "name": "GITHUB_SERVER_URL",
+               "value": ""
+            },
+            {
+               "name": "GITHUB_RUN_ID",
+               "value": ""
             }
          ],
          "envFrom": [
             {
                "configMapRef": {
-                  "name": "deploy-environments-{{ .DeployEnv }}"
+                  "name": "deploy-environments-at22"
+               }
+            },
+            {
+               "secretRef": {
+                  "name": "slack-test"
                }
             }
          ],

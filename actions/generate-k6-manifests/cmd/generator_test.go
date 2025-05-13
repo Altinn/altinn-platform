@@ -48,15 +48,29 @@ func validateConfigFolder(confDir string, testVersion string, t *testing.T) {
 }
 
 func validateTestRun(path, testVersion, deployEnv, dirName string, t *testing.T) {
-	generatedFile, knownExpectedFile, equalContents := readFileAndCompareWithTemplatedFile(path, fmt.Sprintf("./expected_generated_files/%s/%s/testrun.json.tmpl", testVersion, deployEnv), map[string]string{"UniqueName": dirName, "DeployEnv": deployEnv})
+	manifestGenerationTimestamp := strings.Split(dirName, "-")[len(strings.Split(dirName, "-"))-1]
+	generatedFile, knownExpectedFile, equalContents := readFileAndCompareWithTemplatedFile(
+		path,
+		fmt.Sprintf("./expected_generated_files/%s/%s/testrun.json.tmpl", testVersion, deployEnv),
+		map[string]string{
+			"UniqueName":                  dirName,
+			"DeployEnv":                   deployEnv,
+			"ManifestGenerationTimestamp": manifestGenerationTimestamp,
+		},
+	)
 	if !equalContents {
 		t.Errorf("generate %s: expected \n%s, actual \n%s", testVersion, knownExpectedFile, generatedFile)
 	}
 }
 
 func validateConfigMap(path, testVersion, deployEnv, dirName string, t *testing.T) {
-	generatedFile, knownExpectedFile, _ := readFileAndCompareWithTemplatedFile(path, fmt.Sprintf("./expected_generated_files/%s/%s/configmap.json.tmpl", testVersion, deployEnv), map[string]string{"UniqueName": dirName})
-
+	generatedFile, knownExpectedFile, _ := readFileAndCompareWithTemplatedFile(
+		path,
+		fmt.Sprintf("./expected_generated_files/%s/%s/configmap.json.tmpl", testVersion, deployEnv),
+		map[string]string{
+			"UniqueName": dirName,
+		},
+	)
 	var knownExpectedConfigMap corev1.ConfigMap
 	var generatedConfigMap corev1.ConfigMap
 
@@ -91,15 +105,27 @@ func preTest(version string) {
 	if version == "v7" {
 		os.Setenv("INPUT_COMMAND_LINE_ARGS", "-e runFullTestSet=true -e tokenGeneratorUserName=olanordmenn -e orgNoRecipient=1234 -e resourceId=abcd")
 	}
+	if version == "v10" {
+		os.Setenv("GITHUB_REPOSITORY", "octocat/Hello-World")
+		os.Setenv("GITHUB_SERVER_URL", "https://github.com")
+		os.Setenv("GITHUB_RUN_ID", "14965885066")
+		os.Setenv("GITHUB_REF", "refs/heads/main")
+	}
 }
 
 func postTest(version string) {
 	if version == "v7" {
 		os.Unsetenv("INPUT_COMMAND_LINE_ARGS")
 	}
+	if version == "v10" {
+		os.Unsetenv("GITHUB_REPOSITORY")
+		os.Unsetenv("GITHUB_SERVER_URL")
+		os.Unsetenv("GITHUB_RUN_ID")
+		os.Unsetenv("GITHUB_REF")
+	}
 }
 
-var generateExamplesVersion = []string{"v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"}
+var generateExamplesVersion = []string{"v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10"}
 
 func TestGenerate(t *testing.T) {
 	for _, version := range generateExamplesVersion {

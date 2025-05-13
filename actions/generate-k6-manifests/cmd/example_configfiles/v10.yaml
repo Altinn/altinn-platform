@@ -1,0 +1,8 @@
+namespace: platform
+test_definitions:
+  - test_file: actions/generate-k6-manifests/test_service/k8s_wrapper/get_deployments.js
+    contexts:
+      - environment: at22
+      - environment: yt01
+      - environment: tt02
+      - environment: prod

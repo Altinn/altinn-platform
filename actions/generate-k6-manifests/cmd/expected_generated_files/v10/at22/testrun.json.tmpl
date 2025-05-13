@@ -37,15 +37,15 @@
             },
             {
                "name": "GITHUB_REPOSITORY",
-               "value": ""
+               "value": "octocat/Hello-World"
             },
             {
                "name": "GITHUB_SERVER_URL",
-               "value": ""
+               "value": "https://github.com"
             },
             {
                "name": "GITHUB_RUN_ID",
-               "value": ""
+               "value": "14965885066"
             }
          ],
          "envFrom": [
@@ -56,17 +56,7 @@
             },
             {
                "secretRef": {
-                  "name": "super-secret-1"
-               }
-            },
-            {
-               "secretRef": {
-                  "name": "super-secret-2"
-               }
-            },
-            {
-               "secretRef": {
-                  "name": "slack-test"
+                  "name": "slack-dev"
                }
             }
          ],
@@ -75,14 +65,24 @@
                "k6-test": "{{ .UniqueName }}"
             }
          },
-         "nodeSelector": { },
+         "nodeSelector": {
+            "kubernetes.azure.com/scalesetpriority": "spot",
+            "spot": "true"
+         },
          "resources": {
             "requests": {
                "cpu": "250m",
                "memory": "200Mi"
             }
          },
-         "tolerations": [ ]
+         "tolerations": [
+            {
+               "effect": "NoSchedule",
+               "key": "kubernetes.azure.com/scalesetpriority",
+               "operator": "Equal",
+               "value": "spot"
+            }
+         ]
       },
       "script": {
          "configMap": {
