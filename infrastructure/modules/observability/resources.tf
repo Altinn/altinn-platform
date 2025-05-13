@@ -26,26 +26,3 @@ resource "azurerm_application_insights" "obs" {
 
   tags = var.tags
 }
-
-resource "kubernetes_namespace" "monitoring" {
-  metadata {
-    name = "monitoring"
-  }
-}
-
-
-resource "kubernetes_secret" "app_insights_conn" {
-  metadata {
-    name      = "app-insights-connstring"
-    namespace = kubernetes_namespace.monitoring.metadata[0].name
-    labels = {
-      "app.kubernetes.io/managed-by" = "terraform"
-    }
-  }
-
-  data = {
-    connectionString = base64encode(azurerm_application_insights.obs.connection_string)
-  }
-
-  type = "Opaque"
-}

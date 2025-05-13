@@ -72,3 +72,12 @@ variable "kube_context" {
   default     = ""
   description = "Optional kube-context; leave blank to use the current context."
 }
+
+variable "oidc_issuer_url" {
+  type        = string
+  description = "Oidc issuer url needed for federation"
+  validation {
+    condition     = length(var.oidc_issuer_url) > 0
+    error_message = "You must provide a value for oidc_issuer_url."
+  }
+}

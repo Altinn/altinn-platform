@@ -34,6 +34,7 @@ A lightweight Terraform module that bootstraps a **Log Analytics Workspace, Ap
 |------|-------------|------|---------|:--------:|
 | <a name="input_prefix"></a> [prefix](#input_prefix) | Prefix for generated resource names. | `string` | `""` | **yes** |
 | <a name="input_environment"></a> [environment](#input_environment) | Environment identifier (`dev`, `prod`, …). | `string` | `""` | **yes** |
+| <a name="input_oidc_issuer_url"></a> [oidc_issuer_url](#input_oidc_issuer_url) | oidc issuer url from AKS. | `string` | `""` | **yes** |
 | <a name="input_location"></a> [location](#input_location) | Azure region for all resources. | `string` | `"norwayeast"` | no |
 | <a name="input_azurerm_resource_group_obs_name"></a> [azurerm_resource_group_obs_name](#input_azurerm_resource_group_obs_name) | Explicit name of the observability resource‑group (leave empty to let the module create one). | `string` | `""` | no |
 | <a name="input_log_analytics_workspace_name"></a> [log_analytics_workspace_name](#input_log_analytics_workspace_name) | Custom name for the Log Analytics Workspace. | `string` | `""` | no |
