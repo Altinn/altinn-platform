@@ -56,6 +56,7 @@ function fetchToken(url, tokenOptions, type) {
 
 function addEnvAndTtlToTokenOptions(tokenOptions, env) {
     if (!'env' in tokenOptions) {
+        console.log("adding env to tokenOptions");
         tokenOptions.env = env;
     }
     if (!'ttl' in tokenOptions) {
