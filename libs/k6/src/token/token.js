@@ -101,12 +101,6 @@ export function getAmToken(organization, userId, env='yt01') {
     return fetchToken(url.toString(), tokenOptions, `personal token (userId:${tokenOptions.userid}, partyuuid:${tokenOptions.partyuuid}, scopes:${tokenOptions.scopes}, tokenGeneratorEnv:${tokenGeneratorEnv})`);
   }
 
-// exports.getEnterpriseToken = getEnterpriseToken;
-// exports.getEnterpriseTokenWithType = getEnterpriseTokenWithType;
-// exports.getPersonalToken = getPersonalToken;
-// exports.getPersonalTokenSSN = getPersonalTokenSSN;
-// exports.getAmToken = getAmToken;
-
   
   
   
