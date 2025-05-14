@@ -93,7 +93,9 @@ export function getEnterpriseTokenWithType(serviceOwner, type, env='yt01') {
 
 export function getPersonalToken(tokenOptions, env='yt01') {
     const url = new URL(`https://altinn-testtools-token-generator.azurewebsites.net/api/GetPersonalToken`);
+    console.log(tokenOptions);
     tokenOptions = addEnvAndTtlToTokenOptions(tokenOptions, env);
+    console.log(tokenOptions);
     for (const key in tokenOptions) {
         if (tokenOptions.hasOwnProperty(key)) {
             url.searchParams.append(key, tokenOptions[key]);
