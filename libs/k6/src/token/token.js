@@ -55,14 +55,13 @@ function fetchToken(url, tokenOptions, type) {
 }
 
 function addEnvAndTtlToTokenOptions(tokenOptions, env) {
-    if (!'env' in tokenOptions) {
+    if (!('env' in tokenOptions)) {
         console.log("adding env to tokenOptions");
         tokenOptions.env = env;
     }
-    if (!'ttl' in tokenOptions) {
+    if (!('ttl' in tokenOptions)) {
         tokenOptions.ttl = tokenTtl;
     }
-    return tokenOptions;
 }
 
 export function getEnterpriseToken(tokenOptions, env='yt01') {  
@@ -95,7 +94,7 @@ export function getEnterpriseTokenWithType(serviceOwner, type, env='yt01') {
 export function getPersonalToken(tokenOptions, env='yt01') {
     const url = new URL(`https://altinn-testtools-token-generator.azurewebsites.net/api/GetPersonalToken`);
     console.log(tokenOptions);
-    tokenOptions = addEnvAndTtlToTokenOptions(tokenOptions, env);
+    addEnvAndTtlToTokenOptions(tokenOptions, env);
     console.log(tokenOptions);
     for (const key in tokenOptions) {
         if (tokenOptions.hasOwnProperty(key)) {
