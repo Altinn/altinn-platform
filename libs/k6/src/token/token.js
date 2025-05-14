@@ -20,7 +20,13 @@ let cachedTokens = {};
 let cachedTokensIssuedAt = {};
 
 function getCacheKey(tokenType, tokenOptions) {
-  return `${tokenType}|${tokenOptions.scopes}|${tokenOptions.orgName}|${tokenOptions.orgNo}|${tokenOptions.ssn}`;
+    var cacheKey = `${tokenType}`;
+    for (const key in tokenOptions) {
+        if (tokenOptions.hasOwnProperty(key)) {
+            cacheKey += `|${tokenOptions[key]}`;
+        }
+    }
+    return cacheKey;
 }
 
 function fetchToken(url, tokenOptions, type) {
@@ -53,18 +59,31 @@ export function getEnterpriseToken(serviceOwner, env='yt01') {
         scopes: serviceOwner.scopes, 
         orgNo: serviceOwner.orgno
     }
-    const url = `https://altinn-testtools-token-generator.azurewebsites.net/api/GetEnterpriseToken?env=${env}&scopes=${encodeURIComponent(tokenOptions.scopes)}&orgNo=${tokenOptions.orgNo}&ttl=${tokenTtl}`;
-    //console.log(url)
-    return fetchToken(url, tokenOptions, `enterprise token (orgno:${tokenOptions.orgNo}, scopes:${tokenOptions.scopes},  environment:${env})`);
+    const url = new URL(`https://altinn-testtools-token-generator.azurewebsites.net/api/GetEnterpriseToken`);
+    url.searchParams.append('env', env);
+    url.searchParams.append('ttl', tokenTtl);
+    for (const key in tokenOptions) {
+        if (tokenOptions.hasOwnProperty(key)) {
+            url.searchParams.append(key, tokenOptions[key]);
+        }
+    }
+    return fetchToken(url.toString(), tokenOptions, `enterprise token (orgno:${tokenOptions.orgNo}, scopes:${tokenOptions.scopes},  environment:${env})`);
 }
 
 export function getEnterpriseTokenWithType(serviceOwner, type, env='yt01') {  
-  const tokenOptions = {
+    const tokenOptions = {
       scopes: serviceOwner.scopes, 
       orgNo: serviceOwner.orgno
-  }
-  const url = `https://altinn-testtools-token-generator.azurewebsites.net/api/GetEnterpriseToken?env=${env}&scopes=${encodeURIComponent(tokenOptions.scopes)}&orgNo=${tokenOptions.orgNo}&ttl=${tokenTtl}`;
-  return fetchToken(url, tokenOptions, `enterprise token (orgno:${tokenOptions.orgNo}, type:${type}, scopes:${tokenOptions.scopes},  environment:${env})`);
+    }
+    const url = new URL(`https://altinn-testtools-token-generator.azurewebsites.net/api/GetEnterpriseToken`);
+    url.searchParams.append('env', env);
+    url.searchParams.append('ttl', tokenTtl);
+    for (const key in tokenOptions) {
+        if (tokenOptions.hasOwnProperty(key)) {
+            url.searchParams.append(key, tokenOptions[key]);
+        }
+    }
+    return fetchToken(url, tokenOptions, `enterprise token (orgno:${tokenOptions.orgNo}, type:${type}, scopes:${tokenOptions.scopes},  environment:${env})`);
 }
 
 export function getPersonalToken(endUser, env='yt01') {
@@ -72,8 +91,15 @@ export function getPersonalToken(endUser, env='yt01') {
         scopes: endUser.scopes, 
         userId: endUser.userId
     }
-    const url = `https://altinn-testtools-token-generator.azurewebsites.net/api/GetPersonalToken?env=${env}&userId=${tokenOptions.userId}&scopes=${tokenOptions.scopes}&ttl=${tokenTtl}`;
-    return fetchToken(url, tokenOptions, `personal token (userId:${tokenOptions.userId}, scopes:${tokenOptions.scopes}, environment:${env})`);
+    const url = new URL(`https://altinn-testtools-token-generator.azurewebsites.net/api/GetPersonalToken`);
+    url.searchParams.append('env', env);
+    url.searchParams.append('ttl', tokenTtl);
+    for (const key in tokenOptions) {
+        if (tokenOptions.hasOwnProperty(key)) {
+            url.searchParams.append(key, tokenOptions[key]);
+        }
+    }
+    return fetchToken(url.toString(), tokenOptions, `personal token (userId:${tokenOptions.ssn}, scopes:${tokenOptions.scopes}, environment:${env})`);
   }
 
 export function getPersonalTokenSSN(endUser, env='yt01') {
@@ -81,8 +107,15 @@ export function getPersonalTokenSSN(endUser, env='yt01') {
         scopes: endUser.scopes, 
         ssn: endUser.ssn
     }
-    const url = `https://altinn-testtools-token-generator.azurewebsites.net/api/GetPersonalToken?env=${env}&ssn=${tokenOptions.ssn}&scopes=${tokenOptions.scopes}&ttl=${tokenTtl}`;
-    return fetchToken(url, tokenOptions, `personal token (userId:${tokenOptions.ssn}, scopes:${tokenOptions.scopes}, environment:${env})`);
+    const url = new URL(`https://altinn-testtools-token-generator.azurewebsites.net/api/GetPersonalToken`);
+    url.searchParams.append('env', env);
+    url.searchParams.append('ttl', tokenTtl);
+    for (const key in tokenOptions) {
+        if (tokenOptions.hasOwnProperty(key)) {
+            url.searchParams.append(key, tokenOptions[key]);
+        }
+    }
+    return fetchToken(url.toString(), tokenOptions, `personal token (userId:${tokenOptions.ssn}, scopes:${tokenOptions.scopes}, environment:${env})`);
   }
 
 export function getAmToken(organization, userId, env='yt01') {
@@ -93,10 +126,12 @@ export function getAmToken(organization, userId, env='yt01') {
     }
     const url = new URL(`https://altinn-testtools-token-generator.azurewebsites.net/api/GetPersonalToken`);
     url.searchParams.append('env', env);
-    url.searchParams.append('userid', tokenOptions.userid);
-    url.searchParams.append('partyuuid', tokenOptions.partyuuid);
-    url.searchParams.append('scopes', tokenOptions.scopes);
     url.searchParams.append('ttl', tokenTtl);
+    for (const key in tokenOptions) {
+        if (tokenOptions.hasOwnProperty(key)) {
+            url.searchParams.append(key, tokenOptions[key]);
+        }
+    }
     console.log(url.toString())
     return fetchToken(url.toString(), tokenOptions, `personal token (userId:${tokenOptions.userid}, partyuuid:${tokenOptions.partyuuid}, scopes:${tokenOptions.scopes}, environment:${env})`);
   }
