@@ -61,18 +61,6 @@ variable "tags" {
   default = {}
 }
 
-variable "kubeconfig_path" {
-  type        = string
-  default     = "~/.kube/config"
-  description = "Path to the kubeconfig that reaches your cluster."
-}
-
-variable "kube_context" {
-  type        = string
-  default     = ""
-  description = "Optional kube-context; leave blank to use the current context."
-}
-
 variable "oidc_issuer_url" {
   type        = string
   description = "Oidc issuer url needed for federation"

@@ -9,14 +9,14 @@ A lightweight Terraform module that bootstraps a **Log Analytics Workspace, Ap
 | Name | Version |
 |------|---------|
 | <a name="requirement_azurerm"></a> [azurerm](#requirement_azurerm) | >= 4.0.0 |
-| <a name="requirement_kubernetes"></a> [kubernetes](#requirement_kubernetes) | >= 2.36.0 |
+| <a name="requirement_azuread"></a> [azuread](#requirement_azuread) | >= 3.1.0 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
 | <a name="provider_azurerm"></a> [azurerm](#provider_azurerm) | >= 4.0.0 |
-| <a name="provider_kubernetes"></a> [kubernetes](#provider_kubernetes) | >= 2.36.0 |
+| <a name="provider_azuread"></a> [kubernetes](#provider_azuread) | >= 3.1.0 |
 
 ## Resources
 
@@ -66,8 +66,7 @@ module "observability" {
   environment = "dev"
   location    = "westeurope"
 
-  kubeconfig_path = "~/.kube/config"
-  kube_context    = "aks-dev"
+  oidc_issuer_url = "https://westeurope.oic.prod-aks.azure.com/00000000-0000-0000-0000-000000000000/11111111-1111-1111-1111-111111111111/"
 
   tags = {
     project    = "billing-api"
