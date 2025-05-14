@@ -72,7 +72,7 @@ function buildHeaders() {
   };
 }
 
-function postSlackMessage(data, reportType = 'performance') {
+export function postSlackMessage(data, reportType = 'performance') {
   if (!__ENV.SLACK_WEBHOOK_URL) {
     console.error('SLACK_WEBHOOK_URL environment variable is not defined');
     return;
@@ -95,5 +95,3 @@ function postSlackMessage(data, reportType = 'performance') {
     console.error('Error sending Slack message:', error);
   }
 }
-
-exports.postSlackMessage = postSlackMessage;
