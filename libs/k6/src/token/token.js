@@ -48,7 +48,7 @@ function fetchToken(url, tokenOptions, type) {
   return cachedTokens[cacheKey];
 }
 
-function getEnterpriseToken(serviceOwner, env='yt01') {  
+export function getEnterpriseToken(serviceOwner, env='yt01') {  
     const tokenOptions = {
         scopes: serviceOwner.scopes, 
         orgNo: serviceOwner.orgno
@@ -58,7 +58,7 @@ function getEnterpriseToken(serviceOwner, env='yt01') {
     return fetchToken(url, tokenOptions, `enterprise token (orgno:${tokenOptions.orgNo}, scopes:${tokenOptions.scopes},  tokenGeneratorEnv:${tokenGeneratorEnv})`);
 }
 
-function getEnterpriseTokenWithType(serviceOwner, type, env='yt01') {  
+export function getEnterpriseTokenWithType(serviceOwner, type, env='yt01') {  
   const tokenOptions = {
       scopes: serviceOwner.scopes, 
       orgNo: serviceOwner.orgno
@@ -67,7 +67,7 @@ function getEnterpriseTokenWithType(serviceOwner, type, env='yt01') {
   return fetchToken(url, tokenOptions, `enterprise token (orgno:${tokenOptions.orgNo}, type:${type}, scopes:${tokenOptions.scopes},  tokenGeneratorEnv:${tokenGeneratorEnv})`);
 }
 
-function getPersonalToken(endUser, env='yt01') {
+export function getPersonalToken(endUser, env='yt01') {
     const tokenOptions = {
         scopes: endUser.scopes, 
         userId: endUser.userId
@@ -76,7 +76,7 @@ function getPersonalToken(endUser, env='yt01') {
     return fetchToken(url, tokenOptions, `personal token (userId:${tokenOptions.userId}, scopes:${tokenOptions.scopes}, tokenGeneratorEnv:${tokenGeneratorEnv})`);
   }
 
-function getPersonalTokenSSN(endUser, env='yt01') {
+export function getPersonalTokenSSN(endUser, env='yt01') {
     const tokenOptions = {
         scopes: endUser.scopes, 
         ssn: endUser.ssn
@@ -85,7 +85,7 @@ function getPersonalTokenSSN(endUser, env='yt01') {
     return fetchToken(url, tokenOptions, `personal token (userId:${tokenOptions.ssn}, scopes:${tokenOptions.scopes}, tokenGeneratorEnv:${tokenGeneratorEnv})`);
   }
 
-function getAmToken(organization, userId, env='yt01') {
+export function getAmToken(organization, userId, env='yt01') {
     const tokenOptions = {
         scopes: "altinn:portal/enduser",
         userid: userId,
@@ -101,11 +101,11 @@ function getAmToken(organization, userId, env='yt01') {
     return fetchToken(url.toString(), tokenOptions, `personal token (userId:${tokenOptions.userid}, partyuuid:${tokenOptions.partyuuid}, scopes:${tokenOptions.scopes}, tokenGeneratorEnv:${tokenGeneratorEnv})`);
   }
 
-exports.getEnterpriseToken = getEnterpriseToken;
-exports.getEnterpriseTokenWithType = getEnterpriseTokenWithType;
-exports.getPersonalToken = getPersonalToken;
-exports.getPersonalTokenSSN = getPersonalTokenSSN;
-exports.getAmToken = getAmToken;
+// exports.getEnterpriseToken = getEnterpriseToken;
+// exports.getEnterpriseTokenWithType = getEnterpriseTokenWithType;
+// exports.getPersonalToken = getPersonalToken;
+// exports.getPersonalTokenSSN = getPersonalTokenSSN;
+// exports.getAmToken = getAmToken;
 
   
   
