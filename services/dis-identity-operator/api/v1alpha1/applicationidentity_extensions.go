@@ -52,11 +52,21 @@ func (a *ApplicationIdentity) GenerateFederatedCredentials(issuer string) *manag
 			AzureName: fmt.Sprintf("%s-%s", a.Namespace, a.Name),
 			Issuer:    &issuer,
 			Owner: &genruntime.KnownResourceReference{
-				Name: fmt.Sprintf("%s-%s", a.Namespace, a.Name),
+				Name: a.Name,
 			},
 			Subject: &subject,
 		},
 	}
 
 	return credential
+}
+
+func (a *ApplicationIdentity) ReplaceCondition(conditionType ConditionType, condition metav1.Condition) {
+	for i, c := range a.Status.Conditions {
+		if c.Type == string(conditionType) {
+			a.Status.Conditions[i] = condition
+			return
+		}
+	}
+	a.Status.Conditions = append(a.Status.Conditions, condition)
 }

@@ -22,6 +22,7 @@ import (
 
 	managedidentity "github.com/Azure/azure-service-operator/v2/api/managedidentity/v1api20230131"
 	"github.com/Azure/azure-service-operator/v2/pkg/genruntime/conditions"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,7 +33,6 @@ import (
 
 	applicationv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-identity-operator/internal/config"
-	"github.com/Altinn/altinn-platform/services/dis-identity-operator/internal/utils"
 )
 
 const applicationIdentityFinalizer = "applicationidentity.application.dis.altinn.cloud/finalizer"
@@ -62,7 +62,7 @@ func (r *ApplicationIdentityReconciler) Reconcile(ctx context.Context, req ctrl.
 	// Fetch the ApplicationIdentity instance
 	applicationIdentity := &applicationv1alpha1.ApplicationIdentity{}
 	if err := r.Get(ctx, req.NamespacedName, applicationIdentity); err != nil {
-		if errors.IsNotFound(err) {
+		if !errors.IsNotFound(err) {
 			logger.Error(err, "unable to fetch ApplicationIdentity")
 		}
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -76,110 +76,101 @@ func (r *ApplicationIdentityReconciler) Reconcile(ctx context.Context, req ctrl.
 		}
 	}
 	// Check if the UserAssignedIdentity already exists
+
+	// Check if the ApplicationIdentity instance is marked to be deleted
+	if applicationIdentity.GetDeletionTimestamp() != nil {
+		// Verify that the UserAssignedIdentity is deleted
+		uaIDRemoved, err := r.removeUserAssignedIdentity(ctx, applicationIdentity)
+		if err != nil {
+			logger.Error(err, "unable to remove UserAssignedIdentity")
+			return ctrl.Result{}, err
+		}
+
+		if !uaIDRemoved {
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+		// Remove the finalizer from the ApplicationIdentity instance
+		controllerutil.RemoveFinalizer(applicationIdentity, applicationIdentityFinalizer)
+		if err := r.Update(ctx, applicationIdentity); err != nil {
+			logger.Error(err, "unable to update ApplicationIdentity with finalizer")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	}
 	uaID := &managedidentity.UserAssignedIdentity{}
 	err := r.Get(ctx, client.ObjectKey{
 		Name:      applicationIdentity.Name,
 		Namespace: applicationIdentity.Namespace,
 	}, uaID)
-	// Check if the ApplicationIdentity instance is marked to be deleted
-	if applicationIdentity.GetDeletionTimestamp() != nil {
-		// Verify that the UserAssignedIdentity is deleted
-		if errors.IsNotFound(err) {
-			// Remove the finalizer from the ApplicationIdentity instance
-			controllerutil.RemoveFinalizer(applicationIdentity, applicationIdentityFinalizer)
-			if err := r.Update(ctx, applicationIdentity); err != nil {
-				logger.Error(err, "unable to update ApplicationIdentity with finalizer")
-				return ctrl.Result{}, err
-			}
-			return ctrl.Result{}, nil
-		}
-		if uaID != nil && uaID.GetDeletionTimestamp() == nil {
-			if err := r.Delete(ctx, uaID); err != nil {
-				logger.Error(err, "unable to delete UserAssignedIdentity")
-				return ctrl.Result{}, err
-			}
-		}
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-	}
-
+	// Check UserAssignedIdentity status
+	uaIDReady := false
 	if client.IgnoreNotFound(err) != nil {
 		logger.Error(err, "unable to fetch UserAssignedIdentity")
 		return ctrl.Result{}, err
 	} else if errors.IsNotFound(err) {
-		return r.createNewUserAssignedIdentity(ctx, applicationIdentity)
+		return ctrl.Result{}, r.createNewUserAssignedIdentity(ctx, applicationIdentity)
 	} else {
-		ready, err := r.updateApplicationIdentityStatus(ctx, applicationIdentity, uaID)
+		uaIDReady, err = r.updateUserAssignedIdentityStatus(ctx, applicationIdentity, uaID)
 		if err != nil {
 			logger.Error(err, "unable to update ApplicationIdentity status")
 			return ctrl.Result{}, err
 		}
-		if !ready {
-			return ctrl.Result{Requeue: true}, nil
+	}
+	if !uaIDReady {
+		return ctrl.Result{}, nil
+	}
+
+	// Check FederatedIdentityCredential status
+	fedCredsReady := false
+	fedCreds := &managedidentity.FederatedIdentityCredential{}
+	err = r.Get(ctx, client.ObjectKey{
+		Name:      applicationIdentity.Name,
+		Namespace: applicationIdentity.Namespace,
+	}, fedCreds)
+	if client.IgnoreNotFound(err) != nil {
+		logger.Error(err, "unable to fetch FederatedIdentityCredential")
+		return ctrl.Result{}, err
+	} else if errors.IsNotFound(err) {
+		return ctrl.Result{}, r.createFederation(ctx, applicationIdentity)
+	} else {
+		fedCredsReady, err = r.updateFederatedCredentialsStatus(ctx, applicationIdentity, *fedCreds)
+		if err != nil {
+			logger.Error(err, "unable to update ApplicationIdentity status")
+			return ctrl.Result{}, err
+		}
+	}
+	if !fedCredsReady {
+		return ctrl.Result{}, nil
+	}
+
+	// CHeck ServiceAccount status
+	sa := &corev1.ServiceAccount{}
+	err = r.Get(ctx, client.ObjectKey{
+		Name:      applicationIdentity.Name,
+		Namespace: applicationIdentity.Namespace,
+	}, sa)
+	if client.IgnoreNotFound(err) != nil {
+		logger.Error(err, "unable to fetch ServiceAccount")
+		return ctrl.Result{}, err
+	} else if errors.IsNotFound(err) {
+		err = r.createServiceAccount(ctx, applicationIdentity)
+		if err != nil {
+			logger.Error(err, "unable to create ServiceAccount")
+			return ctrl.Result{}, err
+		}
+	} else {
+		err = r.updateServiceAccount(ctx, applicationIdentity, sa)
+		if err != nil {
+			logger.Error(err, "unable to update ServiceAccount")
+			return ctrl.Result{}, err
 		}
 	}
 	return ctrl.Result{}, nil
 }
 
-func (r *ApplicationIdentityReconciler) createNewUserAssignedIdentity(ctx context.Context, applicationIdentity *applicationv1alpha1.ApplicationIdentity) (ctrl.Result, error) {
-	logger := logf.FromContext(ctx)
-	// Create a new UserAssignedIdentity object
-	uaID := applicationIdentity.GenerateUserAssignedIdentity(r.Config.TargetResourceGroup)
-	err := controllerutil.SetControllerReference(applicationIdentity, uaID, r.Scheme)
-	if err != nil {
-		logger.Error(err, "unable to set controller reference for UserAssignedIdentity")
-		return ctrl.Result{}, err
-	}
-	// Create the UserAssignedIdentity
-	if err := r.Create(ctx, uaID); err != nil {
-		logger.Error(err, "unable to create UserAssignedIdentity")
-		return ctrl.Result{}, err
-	}
-	// Update the status of the ApplicationIdentity with the UserAssignedIdentity information
-	applicationIdentity.Status.Conditions = []metav1.Condition{
-		{
-			Type:   "Ready",
-			Status: "False",
-			LastTransitionTime: metav1.Time{
-				Time: metav1.Now().Time,
-			},
-			ObservedGeneration: applicationIdentity.Generation,
-			Reason:             "Creating",
-			Message:            "Creating Underlying Identity",
-		},
-	}
-	applicationIdentity.Status.AzureAudiences = applicationIdentity.Spec.AzureAudiences
-	// Update the status of the ApplicationIdentity
-	if err := r.Status().Update(ctx, applicationIdentity); err != nil {
-		logger.Error(err, "unable to update ApplicationIdentity status")
-		return ctrl.Result{}, err
-	}
-	return ctrl.Result{}, nil
-}
-
-func (r *ApplicationIdentityReconciler) updateApplicationIdentityStatus(ctx context.Context, applicationIdentity *applicationv1alpha1.ApplicationIdentity, uaID *managedidentity.UserAssignedIdentity) (bool, error) {
-	logger := logf.FromContext(ctx)
-	// Update the status of the ApplicationIdentity from the UserAssignedIdentity status
-	readyCondition := getReadyConditionFromStatus(uaID.Status.Conditions)
-	ready := false
-	if readyCondition.Status == "True" {
-		applicationIdentity.Status.Conditions = []metav1.Condition{getMetav1ConditionFromAzureCondition(readyCondition, applicationIdentity.Generation)}
-		applicationIdentity.Status.PrincipalID = uaID.Status.PrincipalId
-		applicationIdentity.Status.ClientID = uaID.Status.ClientId
-		applicationIdentity.Status.ManagedIdentityName = utils.ToPointer(uaID.Spec.AzureName)
-		ready = true
-	} else {
-		applicationIdentity.Status.Conditions = []metav1.Condition{getMetav1ConditionFromAzureCondition(readyCondition, applicationIdentity.Generation)}
-	}
-	if err := r.Status().Update(ctx, applicationIdentity); err != nil {
-		logger.Error(err, "unable to update ApplicationIdentity status")
-		return false, err
-	}
-	return ready, nil
-}
-
-func getMetav1ConditionFromAzureCondition(azureCondition conditions.Condition, generation int64) metav1.Condition {
+func getMetav1ConditionFromAzureCondition(conditionType applicationv1alpha1.ConditionType, azureCondition conditions.Condition, generation int64) metav1.Condition {
 	return metav1.Condition{
-		Type:               conditions.ConditionTypeReady,
+		Type:               string(conditionType),
 		Status:             azureCondition.Status,
 		LastTransitionTime: metav1.Now(),
 		Reason:             azureCondition.Reason,

@@ -53,8 +53,21 @@ type ApplicationIdentityStatus struct {
 	ManagedIdentityName *string `json:"managedIdentityName,omitempty"`
 }
 
+type ConditionType string
+
+const (
+	// ConditionReady indicates the overall ApplicationIdentity status.
+	ConditionReady ConditionType = "Ready"
+	// ConditionUserAssignedIdentityType indicates the state of the user assigned identity.
+	ConditionUserAssignedIdentityType ConditionType = "UserAssignedIdentityReady"
+	// ConditionFederatedIdentityType indicates the state of the federated identity.
+	ConditionFederatedIdentityType ConditionType = "FederatedIdentityReady"
+)
+
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].reason"
 
 // ApplicationIdentity is the Schema for the applicationidentities API.
 type ApplicationIdentity struct {
