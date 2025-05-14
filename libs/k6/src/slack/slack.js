@@ -1,7 +1,7 @@
 import http from 'k6/http';
 
-import { createDefaultPayload } from './payload';
-import { config } from '../config';
+import { createDefaultPayload } from './payload.js';
+import { config } from '../config.js';
 
 function performanceMetrics(data) {
   const numberOfRequests = data.metrics.http_reqs.values['count'];
