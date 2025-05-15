@@ -8,13 +8,6 @@ resource "azapi_resource" "eso" {
         external-secrets-operator = {
           force                  = false
           path                   = "./"
-          postBuild = {
-            substitute = {
-              KV_URI : "${var.obs_kv_uri}"
-              CLIENT_ID : "${var.obs_client_id}"
-              TENANT_ID : "${var.obs_tenant_id}"
-            }
-          }
           prune                  = false
           retryIntervalInSeconds = 300
           syncIntervalInSeconds  = 300
