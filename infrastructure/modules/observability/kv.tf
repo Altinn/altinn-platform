@@ -26,4 +26,9 @@ resource "azurerm_key_vault_secret" "conn_string" {
   name         = "connectionString"
   value        = azurerm_application_insights.obs.connection_string
   key_vault_id = azurerm_key_vault.obs_kv.id
+  expiration_date = timeadd(timestamp(), "8760h") # 1 year
+
+  lifecycle {
+    ignore_changes = [expiration_date]   # stop perpetual updates
+  }
 }
