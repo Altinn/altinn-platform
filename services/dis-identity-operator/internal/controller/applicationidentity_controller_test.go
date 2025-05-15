@@ -21,13 +21,16 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	managedidentity "github.com/Azure/azure-service-operator/v2/api/managedidentity/v1api20230131"
+	"github.com/Azure/azure-service-operator/v2/pkg/genruntime/conditions"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	applicationv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
+	"github.com/Altinn/altinn-platform/services/dis-identity-operator/internal/utils"
 )
 
 var _ = Describe("ApplicationIdentity Controller", func() {
@@ -44,8 +47,9 @@ var _ = Describe("ApplicationIdentity Controller", func() {
 
 		BeforeEach(func() {
 			By("creating the custom resource for the Kind ApplicationIdentity")
-			err := k8sClient.Get(ctx, typeNamespacedName, applicationidentity)
-			if err != nil && errors.IsNotFound(err) {
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(ctx, typeNamespacedName, applicationidentity)
+				g.Expect(errors.IsNotFound(err)).To(BeTrue())
 				resource := &applicationv1alpha1.ApplicationIdentity{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
@@ -53,8 +57,8 @@ var _ = Describe("ApplicationIdentity Controller", func() {
 					},
 					// TODO(user): Specify other spec details if needed.
 				}
-				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
-			}
+				g.Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+			}, timeout, interval).Should(Succeed())
 		})
 
 		AfterEach(func() {
@@ -64,21 +68,143 @@ var _ = Describe("ApplicationIdentity Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Cleanup the specific resource instance ApplicationIdentity")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			}, timeout, interval).Should(Succeed())
+			Eventually(func(g Gomega) {
+				uaIdentity := &applicationv1alpha1.ApplicationIdentity{}
+				g.Expect(errors.IsNotFound(k8sClient.Get(ctx, typeNamespacedName, resource))).To(BeTrue())
+				g.Expect(errors.IsNotFound(k8sClient.Get(ctx, typeNamespacedName, uaIdentity))).To(BeTrue())
+			}, timeout, interval).ShouldNot(Succeed())
 		})
 		It("should successfully reconcile the resource", func() {
-			By("Reconciling the created resource")
-			controllerReconciler := &ApplicationIdentityReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
-			}
-
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())
 			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
+			appIdentity := &applicationv1alpha1.ApplicationIdentity{}
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(ctx, typeNamespacedName, appIdentity)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(appIdentity.Status.Conditions).NotTo(BeEmpty())
+			}, timeout, interval).Should(Succeed())
 			// Example: If you expect a certain status condition after reconciliation, verify it here.
+		})
+		It("should create UserAssignedIdentity object", func() {
+			appIdentity := &applicationv1alpha1.ApplicationIdentity{}
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(ctx, typeNamespacedName, appIdentity)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(appIdentity.Status.Conditions).NotTo(BeEmpty())
+			}, timeout, interval).Should(Succeed())
+			uaID := &managedidentity.UserAssignedIdentity{}
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(ctx, typeNamespacedName, uaID)
+				g.Expect(err).NotTo(HaveOccurred())
+			}, timeout, interval).Should(Succeed())
+		})
+		It("should update ApplicationIdentity status and create Creds when UAID is updated", func() {
+			appIdentity := &applicationv1alpha1.ApplicationIdentity{}
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(ctx, typeNamespacedName, appIdentity)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(appIdentity.Status.Conditions).NotTo(BeEmpty())
+			}, timeout, interval).Should(Succeed())
+			uaID := &managedidentity.UserAssignedIdentity{}
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(ctx, typeNamespacedName, uaID)
+				g.Expect(err).NotTo(HaveOccurred())
+			}, timeout, interval).Should(Succeed())
+			// Update the UAID status
+			uaID.Status.Conditions = []conditions.Condition{
+				{
+					Type:               "Ready",
+					Status:             "True",
+					Reason:             "Succeeded",
+					ObservedGeneration: uaID.Generation,
+					LastTransitionTime: metav1.Now(),
+				},
+			}
+			uaID.Status.ClientId = utils.ToPointer("325e4fc8-5e58-4942-be61-11b8ee679ff2")
+			uaID.Status.PrincipalId = utils.ToPointer("3fb69913-169d-4c23-8ab7-39278f71d314")
+			Eventually(func(g Gomega) {
+				err := k8sClient.Status().Update(ctx, uaID)
+				g.Expect(err).NotTo(HaveOccurred())
+			}, timeout, interval).Should(Succeed())
+			// Verify that the ApplicationIdentity status is updated
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(ctx, typeNamespacedName, appIdentity)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(appIdentity.Status.PrincipalID).To(Equal(uaID.Status.PrincipalId))
+				g.Expect(appIdentity.Status.ClientID).To(Equal(uaID.Status.ClientId))
+			}, timeout, interval).Should(Succeed())
+			// Verify that the FederatedIdentityCredential is created
+			federatedCredential := &managedidentity.FederatedIdentityCredential{}
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(ctx, typeNamespacedName, federatedCredential)
+				g.Expect(err).NotTo(HaveOccurred())
+			}, timeout, interval).Should(Succeed())
+		})
+		It("should update ApplicationIdentity status and create ServiceAccount when Creds is updated", func() {
+			appIdentity := &applicationv1alpha1.ApplicationIdentity{}
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(ctx, typeNamespacedName, appIdentity)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(appIdentity.Status.Conditions).NotTo(BeEmpty())
+			}, timeout, interval).Should(Succeed())
+			uaID := &managedidentity.UserAssignedIdentity{}
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(ctx, typeNamespacedName, uaID)
+				g.Expect(err).NotTo(HaveOccurred())
+			}, timeout, interval).Should(Succeed())
+			// Update the UAID status
+			uaID.Status.Conditions = []conditions.Condition{
+				{
+					Type:               "Ready",
+					Status:             "True",
+					Reason:             "Succeeded",
+					ObservedGeneration: uaID.Generation,
+					LastTransitionTime: metav1.Now(),
+				},
+			}
+			uaID.Status.ClientId = utils.ToPointer("325e4fc8-5e58-4942-be61-11b8ee679ff2")
+			uaID.Status.PrincipalId = utils.ToPointer("3fb69913-169d-4c23-8ab7-39278f71d314")
+			Eventually(func(g Gomega) {
+				err := k8sClient.Status().Update(ctx, uaID)
+				g.Expect(err).NotTo(HaveOccurred())
+			}, timeout, interval).Should(Succeed())
+			// Verify that the FederatedIdentityCredential is created
+			federatedCredential := &managedidentity.FederatedIdentityCredential{}
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(ctx, typeNamespacedName, federatedCredential)
+				g.Expect(err).NotTo(HaveOccurred())
+			}, timeout, interval).Should(Succeed())
+			// Update the FederatedIdentityCredential status
+			federatedCredential.Status.Conditions = []conditions.Condition{
+				{
+					Type:               "Ready",
+					Status:             "True",
+					Reason:             "Succeeded",
+					ObservedGeneration: federatedCredential.Generation,
+					LastTransitionTime: metav1.Now(),
+				},
+			}
+			federatedCredential.Status.Audiences = appIdentity.Spec.AzureAudiences
+			Eventually(func(g Gomega) {
+				err := k8sClient.Status().Update(ctx, federatedCredential)
+				g.Expect(err).NotTo(HaveOccurred())
+			}, timeout, interval).Should(Succeed())
+			// Verify that the ApplicationIdentity status is updated
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(ctx, typeNamespacedName, appIdentity)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(appIdentity.Status.AzureAudiences).To(Equal(federatedCredential.Status.Audiences))
+			}, timeout, interval).Should(Succeed())
+			// Verify that the ServiceAccount is created
+			serviceAccount := &corev1.ServiceAccount{}
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(ctx, typeNamespacedName, serviceAccount)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(serviceAccount.Annotations).NotTo(BeEmpty())
+				g.Expect(serviceAccount.Annotations["serviceaccount.azure.com/azure-identity"]).To(Equal(*appIdentity.Status.ClientID))
+			}, timeout, interval).Should(Succeed())
 		})
 	})
 })

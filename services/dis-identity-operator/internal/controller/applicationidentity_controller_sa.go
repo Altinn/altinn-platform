@@ -68,21 +68,23 @@ func (r *ApplicationIdentityReconciler) createServiceAccount(ctx context.Context
 func (r *ApplicationIdentityReconciler) updateServiceAccount(ctx context.Context, applicationIdentity *v1alpha1.ApplicationIdentity, serviceAccount *corev1.ServiceAccount) error {
 	orig := serviceAccount.DeepCopy()
 	patch := client.MergeFrom(orig)
-
-	serviceAccount.Labels = applicationIdentity.Spec.Tags
-	serviceAccount.Annotations = map[string]string{
-		"serviceaccount.azure.com/azure-identity": *applicationIdentity.Status.ClientID,
-	}
-	if err := r.Patch(ctx, serviceAccount, patch); err != nil {
-		_ = r.patchReadyStatusCondition(ctx, applicationIdentity, metav1.Condition{
-			Type:               string(v1alpha1.ConditionReady),
-			Status:             "False",
-			ObservedGeneration: applicationIdentity.Generation,
-			LastTransitionTime: metav1.Now(),
-			Reason:             "Failed to update ServiceAccount",
-			Message:            "Unable to update ServiceAccount",
-		})
-		return fmt.Errorf("unable to update ServiceAccount: %w", err)
+	if applicationIdentity.OutdatedServiceAccount(serviceAccount) {
+		serviceAccount.Labels = applicationIdentity.Spec.Tags
+		serviceAccount.Annotations = map[string]string{
+			"serviceaccount.azure.com/azure-identity": *applicationIdentity.Status.ClientID,
+		}
+		if err := r.Patch(ctx, serviceAccount, patch); err != nil {
+			_ = r.patchReadyStatusCondition(ctx, applicationIdentity, metav1.Condition{
+				Type:               string(v1alpha1.ConditionReady),
+				Status:             "False",
+				ObservedGeneration: applicationIdentity.Generation,
+				LastTransitionTime: metav1.Now(),
+				Reason:             "Failed to update ServiceAccount",
+				Message:            "Unable to update ServiceAccount",
+			})
+			return fmt.Errorf("unable to update ServiceAccount: %w", err)
+		}
+		return nil
 	}
 	err := r.patchReadyStatusCondition(ctx, applicationIdentity, metav1.Condition{
 		Type:               string(v1alpha1.ConditionReady),

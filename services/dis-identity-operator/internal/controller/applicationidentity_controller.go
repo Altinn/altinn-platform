@@ -117,6 +117,7 @@ func (r *ApplicationIdentityReconciler) Reconcile(ctx context.Context, req ctrl.
 		}
 	}
 	if !uaIDReady {
+		r.setReadyFalse(ctx, applicationIdentity, "WaitingForUserAssignedIdentity", "Waiting for UserAssignedIdentity to be ready")
 		return ctrl.Result{}, nil
 	}
 
@@ -133,13 +134,14 @@ func (r *ApplicationIdentityReconciler) Reconcile(ctx context.Context, req ctrl.
 	} else if errors.IsNotFound(err) {
 		return ctrl.Result{}, r.createFederation(ctx, applicationIdentity)
 	} else {
-		fedCredsReady, err = r.updateFederatedCredentialsStatus(ctx, applicationIdentity, *fedCreds)
+		fedCredsReady, err = r.updateFederatedCredentialsStatus(ctx, applicationIdentity, fedCreds)
 		if err != nil {
 			logger.Error(err, "unable to update ApplicationIdentity status")
 			return ctrl.Result{}, err
 		}
 	}
 	if !fedCredsReady {
+		r.setReadyFalse(ctx, applicationIdentity, "WaitingForFederatedCredentials", "Waiting for FederatedIdentityCredential to be ready")
 		return ctrl.Result{}, nil
 	}
 
@@ -184,6 +186,8 @@ func (r *ApplicationIdentityReconciler) SetupWithManager(mgr ctrl.Manager) error
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&applicationv1alpha1.ApplicationIdentity{}).
 		Owns(&managedidentity.UserAssignedIdentity{}).
+		Owns(&managedidentity.FederatedIdentityCredential{}).
+		Owns(&corev1.ServiceAccount{}).
 		Named("applicationidentity").
 		Complete(r)
 }
@@ -199,5 +203,20 @@ func getReadyConditionFromStatus(status []conditions.Condition) conditions.Condi
 		Status:  "False",
 		Reason:  "NoStatus",
 		Message: "No status available from the underlying resource",
+	}
+}
+
+func (a *ApplicationIdentityReconciler) setReadyFalse(ctx context.Context, applicationIdentity *applicationv1alpha1.ApplicationIdentity, reason, message string) {
+	orig := applicationIdentity.DeepCopy()
+	patch := client.MergeFrom(orig)
+	applicationIdentity.ReplaceCondition(applicationv1alpha1.ConditionReady, metav1.Condition{
+		Type:               string(applicationv1alpha1.ConditionReady),
+		Status:             metav1.ConditionFalse,
+		LastTransitionTime: metav1.Now(),
+		Reason:             reason,
+		Message:            message,
+	})
+	if err := a.Status().Patch(ctx, applicationIdentity, patch); err != nil {
+		logf.Log.Error(err, "unable to update ApplicationIdentity status")
 	}
 }

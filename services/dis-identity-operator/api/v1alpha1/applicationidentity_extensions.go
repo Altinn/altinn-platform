@@ -2,9 +2,11 @@ package v1alpha1
 
 import (
 	"fmt"
+	"reflect"
 
 	managedidentity "github.com/Azure/azure-service-operator/v2/api/managedidentity/v1api20230131"
 	"github.com/Azure/azure-service-operator/v2/pkg/genruntime"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/Altinn/altinn-platform/services/dis-identity-operator/internal/utils"
@@ -30,12 +32,19 @@ func (a *ApplicationIdentity) GenerateUserAssignedIdentity(ownerARMID string) *m
 			Owner: &genruntime.KnownResourceReference{
 				ARMID: ownerARMID,
 			},
-			Tags: a.Spec.Tags,
+			Tags: a.GetUserAssignedIdentityTags(),
 		},
 	}
-	// Add the common tags to the identity
-	identity.Spec.Tags[managedByDisIdentityTag] = "true"
 	return identity
+}
+
+func (a *ApplicationIdentity) GetUserAssignedIdentityTags() map[string]string {
+	tags := a.Spec.Tags
+	if tags == nil {
+		tags = make(map[string]string)
+	}
+	tags[managedByDisIdentityTag] = "true"
+	return tags
 }
 
 // GenerateFederatedCredentials generates a managedidentity.FederatedIdentityCredential object based on the ApplicationIdentity instance.
@@ -69,4 +78,35 @@ func (a *ApplicationIdentity) ReplaceCondition(conditionType ConditionType, cond
 		}
 	}
 	a.Status.Conditions = append(a.Status.Conditions, condition)
+}
+
+func (a *ApplicationIdentity) OutdatedUserAssignedIdentity(identity *managedidentity.UserAssignedIdentity) bool {
+	if identity == nil {
+		return true
+	}
+	expectedTags := a.Spec.Tags
+	expectedTags[managedByDisIdentityTag] = "true"
+	return !reflect.DeepEqual(expectedTags, identity.Spec.Tags)
+}
+
+func (a *ApplicationIdentity) OutdatedFederatedCredentials(credential *managedidentity.FederatedIdentityCredential) bool {
+	if credential == nil {
+		return true
+	}
+	expectedAudiences := a.Spec.AzureAudiences
+	return !reflect.DeepEqual(expectedAudiences, credential.Spec.Audiences)
+}
+
+func (a *ApplicationIdentity) OutdatedServiceAccount(serviceAccount *corev1.ServiceAccount) bool {
+	if serviceAccount == nil {
+		return true
+	}
+	id, ok := serviceAccount.Annotations["serviceaccount.azure.com/azure-identity"]
+	if !ok && a.Status.ClientID != nil {
+		return true
+	}
+	if a.Status.ClientID != nil && *a.Status.ClientID != id {
+		return true
+	}
+	return false
 }

@@ -55,16 +55,21 @@ func (r *ApplicationIdentityReconciler) createNewUserAssignedIdentity(ctx contex
 func (r *ApplicationIdentityReconciler) updateUserAssignedIdentityStatus(ctx context.Context, applicationIdentity *applicationv1alpha1.ApplicationIdentity, uaID *managedidentity.UserAssignedIdentity) (bool, error) {
 	logger := logf.FromContext(ctx)
 	// Update the status of the ApplicationIdentity from the UserAssignedIdentity status
+	if applicationIdentity.OutdatedUserAssignedIdentity(uaID) {
+		origUaID := uaID.DeepCopy()
+		uaIDPatch := client.MergeFrom(origUaID)
+		uaID.Spec.Tags = applicationIdentity.GetUserAssignedIdentityTags()
+		if err := r.Patch(ctx, uaID, uaIDPatch); err != nil {
+			apiErr := err.(errors.APIStatus)
+			logger.Error(err, "unable to update UserAssignedIdentity", "error", apiErr.Status().Reason)
+			return false, err
+		}
+		return false, nil
+	}
 	readyCondition := getReadyConditionFromStatus(uaID.Status.Conditions)
 	ready := false
 	orig := applicationIdentity.DeepCopy()
 	patch := client.MergeFrom(orig)
-	uaID.Spec.Tags = applicationIdentity.Spec.Tags
-	if err := r.Patch(ctx, uaID, patch); err != nil {
-		apiErr := err.(errors.APIStatus)
-		logger.Error(err, "unable to update UserAssignedIdentity", "error", apiErr.Status().Reason)
-		return false, err
-	}
 	if readyCondition.Status == "True" {
 		applicationIdentity.Status.PrincipalID = uaID.Status.PrincipalId
 		applicationIdentity.Status.ClientID = uaID.Status.ClientId

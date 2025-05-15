@@ -29,19 +29,22 @@ func (r *ApplicationIdentityReconciler) createFederation(ctx context.Context, ap
 	return nil
 }
 
-func (r *ApplicationIdentityReconciler) updateFederatedCredentialsStatus(ctx context.Context, applicationIdentity *applicationv1alpha1.ApplicationIdentity, credential managedidentity.FederatedIdentityCredential) (bool, error) {
+func (r *ApplicationIdentityReconciler) updateFederatedCredentialsStatus(ctx context.Context, applicationIdentity *applicationv1alpha1.ApplicationIdentity, credential *managedidentity.FederatedIdentityCredential) (bool, error) {
 	logger := logf.FromContext(ctx)
 	// Update the status of the ApplicationIdentity from the UserAssignedIdentity status
 	ready := false
 	orig := applicationIdentity.DeepCopy()
 	patch := client.MergeFrom(orig)
-	credential.Spec.Issuer = &r.Config.IssuerURL
-	credential.Spec.Audiences = applicationIdentity.Spec.AzureAudiences
-	if err := r.Patch(ctx, &credential, patch); err != nil {
-		apiErr := err.(errors.APIStatus)
-		logger.Error(err, "unable to update FederatedIdentityCredential", "error", apiErr.Status().Reason)
-		return false, err
+	if applicationIdentity.OutdatedFederatedCredentials(credential) {
+		credential.Spec.Audiences = applicationIdentity.Spec.AzureAudiences
+		if err := r.Patch(ctx, credential, patch); err != nil {
+			apiErr := err.(errors.APIStatus)
+			logger.Error(err, "unable to update FederatedIdentityCredential", "error", apiErr.Status().Reason)
+			return false, err
+		}
+		return false, nil
 	}
+
 	// Check if the FederatedIdentityCredential is ready
 	readyCondition := getReadyConditionFromStatus(credential.Status.Conditions)
 	if readyCondition.Status == "True" {
