@@ -1,3 +1,5 @@
+data "azurerm_client_config" "current" {}
+
 module "aks" {
   source             = "../../modules/aks"
   prefix             = "auth"
@@ -34,7 +36,7 @@ module "aks" {
 }
 
 module "infra-resources" {
-  depends_on                    = [module.aks]
+  depends_on                    = [module.aks, module.observability]
   source                        = "../../modules/aks-resources"
   aks_node_resource_group       = module.aks.aks_node_resource_group
   azurerm_kubernetes_cluster_id = module.aks.azurerm_kubernetes_cluster_id
@@ -42,4 +44,7 @@ module "infra-resources" {
   pip4_ip_address               = module.aks.pip4_ip_address
   pip6_ip_address               = module.aks.pip6_ip_address
   subnet_address_prefixes       = var.subnet_address_prefixes
+  obs_kv_uri                    = module.observability.key_vault_uri
+  obs_client_id                 = module.observability.obs_client_id
+  obs_tenant_id                 = data.azurerm_client_config.current.tenant_id
 }
