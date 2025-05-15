@@ -14,3 +14,8 @@ output "key_vault_uri" {
   value     = azurerm_key_vault.obs_kv.vault_uri
   sensitive = true
 }
+
+output "obs_client_id" {
+  value     = azuread_application.app.client_id
+  sensitive = true
+}

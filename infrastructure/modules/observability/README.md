@@ -54,6 +54,8 @@ A lightweight Terraform module that bootstraps a **Log Analytics Workspace, Ap
 | <a name="output_app_insights_id"></a> [app_insights_id](#output_app_insights_id) | Resource ID of the Application Insights. |
 | <a name="output_monitor_workspace_id"></a> [monitor_workspace_id](#output_monitor_workspace_id) | Resource ID of the Azure Monitor Workspace. |
 | <a name="output_key_vault_uri"></a> [key_vault_uri](#output_key_vault_uri) | URI of the Key vault created for observability. |
+| <a name="output_obs_client_id"></a> [obs_client_id](#output_obs_client_id) | Client ID of the app created for observability. |
+
 
 ---
 
