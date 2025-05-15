@@ -4,59 +4,71 @@ A lightweight Terraform module that bootstraps a **Log Analytics Workspace, Ap
 
 ---
 
+<!-- BEGIN_TF_DOCS -->
 ## Requirements
 
 | Name | Version |
 |------|---------|
-| <a name="requirement_azurerm"></a> [azurerm](#requirement_azurerm) | >= 4.0.0 |
-| <a name="requirement_azuread"></a> [azuread](#requirement_azuread) | >= 3.1.0 |
+| <a name="requirement_azuread"></a> [azuread](#requirement\_azuread) | ~> 3.1.0 |
+| <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) | >= 4.0.0 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
-| <a name="provider_azurerm"></a> [azurerm](#provider_azurerm) | >= 4.0.0 |
-| <a name="provider_azuread"></a> [kubernetes](#provider_azuread) | >= 3.1.0 |
+| <a name="provider_azuread"></a> [azuread](#provider\_azuread) | ~> 3.1.0 |
+| <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | >= 4.0.0 |
+| <a name="provider_time"></a> [time](#provider\_time) | n/a |
+
+## Modules
+
+No modules.
 
 ## Resources
 
 | Name | Type |
 |------|------|
-| [azurerm_log_analytics_workspace.obs](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/log_analytics_workspace) | resource |
+| [azuread_application.app](https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/application) | resource |
+| [azuread_application_federated_identity_credential.obs_fed_identity](https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/application_federated_identity_credential) | resource |
+| [azuread_application_password.app](https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/application_password) | resource |
+| [azuread_service_principal.sp](https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/service_principal) | resource |
+| [azuread_service_principal_password.sp](https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/service_principal_password) | resource |
 | [azurerm_application_insights.obs](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/application_insights) | resource |
+| [azurerm_key_vault.obs_kv](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/key_vault) | resource |
+| [azurerm_key_vault_secret.conn_string](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/key_vault_secret) | resource |
+| [azurerm_log_analytics_workspace.obs](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/log_analytics_workspace) | resource |
 | [azurerm_monitor_workspace.obs](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/monitor_workspace) | resource |
 | [azurerm_resource_group.obs](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/resource_group) | resource |
-| [kubernetes_secret.app_insights_conn](https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs/resources/secret) | resource |
+| [azurerm_role_assignment.obs_kv_reader](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment) | resource |
+| [time_rotating.password](https://registry.terraform.io/providers/hashicorp/time/latest/docs/resources/rotating) | resource |
+| [azurerm_client_config.current](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/client_config) | data source |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_prefix"></a> [prefix](#input_prefix) | Prefix for generated resource names. | `string` | `""` | **yes** |
-| <a name="input_environment"></a> [environment](#input_environment) | Environment identifier (`dev`, `prod`, …). | `string` | `""` | **yes** |
-| <a name="input_oidc_issuer_url"></a> [oidc_issuer_url](#input_oidc_issuer_url) | oidc issuer url from AKS. | `string` | `""` | **yes** |
-| <a name="input_location"></a> [location](#input_location) | Azure region for all resources. | `string` | `"norwayeast"` | no |
-| <a name="input_azurerm_resource_group_obs_name"></a> [azurerm_resource_group_obs_name](#input_azurerm_resource_group_obs_name) | Explicit name of the observability resource‑group (leave empty to let the module create one). | `string` | `""` | no |
-| <a name="input_log_analytics_workspace_name"></a> [log_analytics_workspace_name](#input_log_analytics_workspace_name) | Custom name for the Log Analytics Workspace. | `string` | `""` | no |
-| <a name="input_log_analytics_retention_days"></a> [log_analytics_retention_days](#input_log_analytics_retention_days) | Retention (days) for Log Analytics. | `number` | `30` | no |
-| <a name="input_app_insights_name"></a> [app_insights_name](#input_app_insights_name) | Custom name for Application Insights. | `string` | `""` | no |
-| <a name="input_app_insights_app_type"></a> [app_insights_app_type](#input_app_insights_app_type) | Application Insights `application_type`. | `string` | `"web"` | no |
-| <a name="input_monitor_workspace_name"></a> [monitor_workspace_name](#input_monitor_workspace_name) | Custom name for Azure Monitor Workspace. | `string` | `""` | no |
-| <a name="input_kubeconfig_path"></a> [kubeconfig_path](#input_kubeconfig_path) | Path to kubeconfig that reaches the target cluster. | `string` | `"~/.kube/config"` | no |
-| <a name="input_kube_context"></a> [kube_context](#input_kube_context) | Kube‑context to select (defaults to current). | `string` | `""` | no |
-| <a name="input_tags"></a> [tags](#input_tags) | Map of tags applied to every Azure resource. | `map(string)` | `{}` | no |
+| <a name="input_app_insights_app_type"></a> [app\_insights\_app\_type](#input\_app\_insights\_app\_type) | n/a | `string` | `"web"` | no |
+| <a name="input_app_insights_name"></a> [app\_insights\_name](#input\_app\_insights\_name) | Name for the Application Insights instance. | `string` | `""` | no |
+| <a name="input_azurerm_resource_group_obs_name"></a> [azurerm\_resource\_group\_obs\_name](#input\_azurerm\_resource\_group\_obs\_name) | Optional explicit name of the observability resource group | `string` | `""` | no |
+| <a name="input_environment"></a> [environment](#input\_environment) | Environment for resources | `string` | n/a | yes |
+| <a name="input_location"></a> [location](#input\_location) | Default region for resources | `string` | `"norwayeast"` | no |
+| <a name="input_log_analytics_retention_days"></a> [log\_analytics\_retention\_days](#input\_log\_analytics\_retention\_days) | n/a | `number` | `30` | no |
+| <a name="input_log_analytics_workspace_name"></a> [log\_analytics\_workspace\_name](#input\_log\_analytics\_workspace\_name) | Name for the Log Analytics workspace. | `string` | `""` | no |
+| <a name="input_monitor_workspace_name"></a> [monitor\_workspace\_name](#input\_monitor\_workspace\_name) | Name for the Azure Monitor workspace. | `string` | `""` | no |
+| <a name="input_oidc_issuer_url"></a> [oidc\_issuer\_url](#input\_oidc\_issuer\_url) | Oidc issuer url needed for federation | `string` | n/a | yes |
+| <a name="input_prefix"></a> [prefix](#input\_prefix) | Prefix for resource names | `string` | n/a | yes |
+| <a name="input_tags"></a> [tags](#input\_tags) | n/a | `map(string)` | `{}` | no |
 
 ## Outputs
 
 | Name | Description |
 |------|-------------|
-| <a name="output_log_analytics_workspace_id"></a> [log_analytics_workspace_id](#output_log_analytics_workspace_id) | Resource ID of the Log Analytics Workspace. |
-| <a name="output_app_insights_id"></a> [app_insights_id](#output_app_insights_id) | Resource ID of the Application Insights. |
-| <a name="output_monitor_workspace_id"></a> [monitor_workspace_id](#output_monitor_workspace_id) | Resource ID of the Azure Monitor Workspace. |
-| <a name="output_key_vault_uri"></a> [key_vault_uri](#output_key_vault_uri) | URI of the Key vault created for observability. |
-| <a name="output_obs_client_id"></a> [obs_client_id](#output_obs_client_id) | Client ID of the app created for observability. |
-
-
+| <a name="output_application_insights_id"></a> [application\_insights\_id](#output\_application\_insights\_id) | n/a |
+| <a name="output_key_vault_uri"></a> [key\_vault\_uri](#output\_key\_vault\_uri) | n/a |
+| <a name="output_log_analytics_workspace_id"></a> [log\_analytics\_workspace\_id](#output\_log\_analytics\_workspace\_id) | n/a |
+| <a name="output_monitor_workspace_id"></a> [monitor\_workspace\_id](#output\_monitor\_workspace\_id) | n/a |
+| <a name="output_obs_client_id"></a> [obs\_client\_id](#output\_obs\_client\_id) | n/a |
+<!-- END_TF_DOCS -->
 ---
 
 ## Quick start
