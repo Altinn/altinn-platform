@@ -1,5 +1,10 @@
 data "azurerm_client_config" "current" {}
 
+locals {
+  # hide it from plan / apply since linters can complain
+  tenant_id = sensitive(data.azurerm_client_config.current.tenant_id)
+}
+
 module "aks" {
   source             = "../../modules/aks"
   prefix             = "auth"
@@ -46,5 +51,5 @@ module "infra-resources" {
   subnet_address_prefixes       = var.subnet_address_prefixes
   obs_kv_uri                    = module.observability.key_vault_uri
   obs_client_id                 = module.observability.obs_client_id
-  obs_tenant_id                 = data.azurerm_client_config.current.tenant_id
+  obs_tenant_id                 = local.tenant_id
 }
