@@ -55,17 +55,19 @@ function fetchToken(url, tokenOptions, type) {
 }
 
 function addEnvAndTtlToTokenOptions(tokenOptions, env) {
-    if (!('env' in tokenOptions)) {
-        tokenOptions.env = env;
+    let options = { ...tokenOptions };
+    if (!('env' in options)) {
+        options.env = env;
     }
-    if (!('ttl' in tokenOptions)) {
-        tokenOptions.ttl = tokenTtl;
+    if (!('ttl' in options)) {
+        options.ttl = tokenTtl;
     }
+    return options;
 }
 
 export function getEnterpriseToken(tokenOptions, iteration=0, env='yt01') {  
     const url = new URL(`https://altinn-testtools-token-generator.azurewebsites.net/api/GetEnterpriseToken`);
-    addEnvAndTtlToTokenOptions(tokenOptions, env);
+    let tokenOptions = addEnvAndTtlToTokenOptions(tokenOptions, env);
     for (const key in tokenOptions) {
         if (tokenOptions.hasOwnProperty(key)) {
             url.searchParams.append(key, tokenOptions[key]);
@@ -76,7 +78,7 @@ export function getEnterpriseToken(tokenOptions, iteration=0, env='yt01') {
 
 export function getPersonalToken(tokenOptions, env='yt01') {
     const url = new URL(`https://altinn-testtools-token-generator.azurewebsites.net/api/GetPersonalToken`);
-    addEnvAndTtlToTokenOptions(tokenOptions, env);
+    let tokenOptions = addEnvAndTtlToTokenOptions(tokenOptions, env);
     for (const key in tokenOptions) {
         if (tokenOptions.hasOwnProperty(key)) {
             url.searchParams.append(key, tokenOptions[key]);
