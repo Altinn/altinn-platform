@@ -9,3 +9,8 @@ output "monitor_workspace_id" {
 output "application_insights_id" {
   value = azurerm_application_insights.obs.id
 }
+
+output "key_vault_uri" {
+  value     = azurerm_key_vault.obs_kv.vault_uri
+  sensitive = true
+}

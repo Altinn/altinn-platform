@@ -53,6 +53,7 @@ A lightweight Terraform module that bootstraps a **Log Analytics Workspace, Ap
 | <a name="output_log_analytics_workspace_id"></a> [log_analytics_workspace_id](#output_log_analytics_workspace_id) | Resource ID of the Log Analytics Workspace. |
 | <a name="output_app_insights_id"></a> [app_insights_id](#output_app_insights_id) | Resource ID of the Application Insights. |
 | <a name="output_monitor_workspace_id"></a> [monitor_workspace_id](#output_monitor_workspace_id) | Resource ID of the Azure Monitor Workspace. |
+| <a name="output_key_vault_uri"></a> [key_vault_uri](#output_key_vault_uri) | URI of the Key vault created for observability. |
 
 ---
 
@@ -66,7 +67,7 @@ module "observability" {
   environment = "dev"
   location    = "westeurope"
 
-  oidc_issuer_url = "https://westeurope.oic.prod-aks.azure.com/00000000-0000-0000-0000-000000000000/11111111-1111-1111-1111-111111111111/"
+  oidc_issuer_url = "https://westeurope.oic.prod-aks.azure.com/00000000/11111111"
 
   tags = {
     project    = "billing-api"
