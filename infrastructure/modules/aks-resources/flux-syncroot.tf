@@ -1,13 +1,13 @@
 resource "azapi_resource" "flux_syncroot" {
   type      = "Microsoft.KubernetesConfiguration/fluxConfigurations@2024-11-01"
-  name      = "syncroot-${var.team_name}-${var.environment}"
+  name      = "syncroot-${var.syncroot_namespace}-${var.environment}"
   parent_id = var.azurerm_kubernetes_cluster_id
   body = {
     properties = {
       kustomizations = {
         syncroot = {
-          force = false
-          path  = "./${var.environment}"
+          force                  = false
+          path                   = "./${var.environment}"
           prune                  = false
           retryIntervalInSeconds = 300
           syncIntervalInSeconds  = 300
@@ -22,10 +22,10 @@ resource "azapi_resource" "flux_syncroot" {
         }
         syncIntervalInSeconds = 300
         timeoutInSeconds      = 300
-        url                   = "oci://altinncr.azurecr.io/${var.team_name}/syncroot"
+        url                   = "oci://altinncr.azurecr.io/${var.syncroot_namespace}/syncroot"
         useWorkloadIdentity   = true
       }
-      namespace                  = var.namespace != "" ? var.namespace : var.team_name
+      namespace                  = var.syncroot_namespace
       reconciliationWaitDuration = "PT5M"
       waitForReconciliation      = true
       sourceKind                 = "OCIRepository"

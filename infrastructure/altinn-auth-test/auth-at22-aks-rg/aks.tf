@@ -2,13 +2,15 @@ data "azurerm_client_config" "current" {}
 
 locals {
   # hide it from plan / apply since linters can complain
-  tenant_id = sensitive(data.azurerm_client_config.current.tenant_id)
+  tenant_id   = sensitive(data.azurerm_client_config.current.tenant_id)
+  team_name   = "auth"
+  environment = "at22"
 }
 
 module "aks" {
   source             = "../../modules/aks"
-  prefix             = "auth"
-  environment        = "at22"
+  prefix             = local.team_name
+  environment        = local.environment
   subscription_id    = var.subscription_id
   kubernetes_version = "1.30"
   vnet_address_space = [
@@ -52,4 +54,6 @@ module "infra-resources" {
   obs_kv_uri                    = module.observability.key_vault_uri
   obs_client_id                 = module.observability.obs_client_id
   obs_tenant_id                 = local.tenant_id
+  environment                   = local.environment
+  syncroot_namespace            = local.team_name
 }
