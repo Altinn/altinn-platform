@@ -12,9 +12,6 @@ resource "random_string" "obs_kv_postfix" {
 }
 
 resource "azurerm_key_vault" "obs_kv" {
-  lifecycle {
-    prevent_destroy = true
-  }
   name                = substr("obs-${var.prefix}-${var.environment}-${random_string.obs_kv_postfix.result}", 0, 24)
   location            = var.location
   resource_group_name = azurerm_resource_group.obs.name
