@@ -40,7 +40,7 @@ No modules.
 | <a name="input_pip4_ip_address"></a> [pip4\_ip\_address](#input\_pip4\_ip\_address) | AKS ipv4 public ip | `string` | n/a | yes |
 | <a name="input_pip6_ip_address"></a> [pip6\_ip\_address](#input\_pip6\_ip\_address) | AKS ipv6 public ip | `string` | n/a | yes |
 | <a name="input_subnet_address_prefixes"></a> [subnet\_address\_prefixes](#input\_subnet\_address\_prefixes) | list of subnets | <pre>object({<br/>    aks_syspool  = list(string)<br/>    aks_workpool = list(string)<br/>  })</pre> | n/a | yes |
-| <a name="input_syncroot_namespace"></a> [syncroot\_namespace](#input\_syncroot\_namespace) | The namespace to use for the syncroot. This is the containing 'folder' in altinncr repo and the namespace in the cluster. | `string` | `""` | no |
+| <a name="input_syncroot_namespace"></a> [syncroot\_namespace](#input\_syncroot\_namespace) | The namespace to use for the syncroot. This is the containing 'folder' in altinncr repo and the namespace in the cluster. | `string` | n/a | yes |
 
 ## Outputs
 
