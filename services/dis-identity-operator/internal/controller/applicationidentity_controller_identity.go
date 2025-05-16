@@ -78,8 +78,7 @@ func (r *ApplicationIdentityReconciler) updateUserAssignedIdentityStatus(ctx con
 	}
 	applicationIdentity.ReplaceCondition(applicationv1alpha1.ConditionUserAssignedIdentityType, getMetav1ConditionFromAzureCondition(applicationv1alpha1.ConditionUserAssignedIdentityType, readyCondition, applicationIdentity.Generation))
 	if err := r.Status().Patch(ctx, applicationIdentity, patch); err != nil {
-		apiErr := err.(errors.APIStatus)
-		logger.Error(err, "unable to update ApplicationIdentity status", "error", apiErr.Status().Reason)
+		logger.Error(err, "unable to update ApplicationIdentity status")
 		return false, err
 	}
 	return ready, nil

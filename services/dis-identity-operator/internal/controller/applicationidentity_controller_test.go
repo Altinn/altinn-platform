@@ -72,7 +72,7 @@ var _ = Describe("ApplicationIdentity Controller", func() {
 				g.Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 			}, timeout, interval).Should(Succeed())
 			Eventually(func(g Gomega) {
-				uaIdentity := &applicationv1alpha1.ApplicationIdentity{}
+				uaIdentity := &managedidentity.UserAssignedIdentity{}
 				g.Expect(errors.IsNotFound(k8sClient.Get(ctx, typeNamespacedName, resource))).To(BeTrue())
 				g.Expect(errors.IsNotFound(k8sClient.Get(ctx, typeNamespacedName, uaIdentity))).To(BeTrue())
 			}, timeout, interval).ShouldNot(Succeed())
@@ -204,6 +204,17 @@ var _ = Describe("ApplicationIdentity Controller", func() {
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(serviceAccount.Annotations).NotTo(BeEmpty())
 				g.Expect(serviceAccount.Annotations["serviceaccount.azure.com/azure-identity"]).To(Equal(*appIdentity.Status.ClientID))
+				err = k8sClient.Get(ctx, typeNamespacedName, appIdentity)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(appIdentity.Status.Conditions).NotTo(BeEmpty())
+				g.Expect(appIdentity.Status.Conditions).To(HaveLen(3))
+				for _, condition := range appIdentity.Status.Conditions {
+					if condition.Type == string(applicationv1alpha1.ConditionReady) {
+						g.Expect(condition.Status).To(Equal(metav1.ConditionTrue))
+						g.Expect(condition.Reason).To(Equal("Succeeded"))
+						g.Expect(condition.ObservedGeneration).To(Equal(appIdentity.Generation))
+					}
+				}
 			}, timeout, interval).Should(Succeed())
 		})
 	})

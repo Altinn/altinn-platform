@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	managedidentity "github.com/Azure/azure-service-operator/v2/api/managedidentity/v1api20230131"
@@ -74,6 +75,7 @@ func (r *ApplicationIdentityReconciler) Reconcile(ctx context.Context, req ctrl.
 			logger.Error(err, "unable to update ApplicationIdentity with finalizer")
 			return ctrl.Result{}, err
 		}
+		return ctrl.Result{}, nil
 	}
 	// Check if the UserAssignedIdentity already exists
 
@@ -158,16 +160,40 @@ func (r *ApplicationIdentityReconciler) Reconcile(ctx context.Context, req ctrl.
 		err = r.createServiceAccount(ctx, applicationIdentity)
 		if err != nil {
 			logger.Error(err, "unable to create ServiceAccount")
+			_ = r.patchReadyStatusCondition(ctx, applicationIdentity, metav1.Condition{
+				Type:               string(applicationv1alpha1.ConditionReady),
+				Status:             "False",
+				ObservedGeneration: applicationIdentity.Generation,
+				LastTransitionTime: metav1.Now(),
+				Reason:             "Failed to create ServiceAccount",
+				Message:            fmt.Sprintf("unable to create ServiceAccount: %v", err),
+			})
 			return ctrl.Result{}, err
 		}
 	} else {
 		err = r.updateServiceAccount(ctx, applicationIdentity, sa)
 		if err != nil {
 			logger.Error(err, "unable to update ServiceAccount")
+			_ = r.patchReadyStatusCondition(ctx, applicationIdentity, metav1.Condition{
+				Type:               string(applicationv1alpha1.ConditionReady),
+				Status:             "False",
+				ObservedGeneration: applicationIdentity.Generation,
+				LastTransitionTime: metav1.Now(),
+				Reason:             "Failed to update ServiceAccount",
+				Message:            fmt.Sprintf("unable to update ServiceAccount: %v", err),
+			})
 			return ctrl.Result{}, err
 		}
 	}
-	return ctrl.Result{}, nil
+	err = r.patchReadyStatusCondition(ctx, applicationIdentity, metav1.Condition{
+		Type:               string(applicationv1alpha1.ConditionReady),
+		Status:             "True",
+		ObservedGeneration: applicationIdentity.Generation,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "Succeeded",
+		Message:            "",
+	})
+	return ctrl.Result{}, err
 }
 
 func getMetav1ConditionFromAzureCondition(conditionType applicationv1alpha1.ConditionType, azureCondition conditions.Condition, generation int64) metav1.Condition {
@@ -219,4 +245,14 @@ func (a *ApplicationIdentityReconciler) setReadyFalse(ctx context.Context, appli
 	if err := a.Status().Patch(ctx, applicationIdentity, patch); err != nil {
 		logf.Log.Error(err, "unable to update ApplicationIdentity status")
 	}
+}
+
+func (r *ApplicationIdentityReconciler) patchReadyStatusCondition(ctx context.Context, applicationIdentity *applicationv1alpha1.ApplicationIdentity, condition metav1.Condition) error {
+	orig := applicationIdentity.DeepCopy()
+	patch := client.MergeFrom(orig)
+	applicationIdentity.ReplaceCondition(applicationv1alpha1.ConditionReady, condition)
+	if err := r.Status().Patch(ctx, applicationIdentity, patch); err != nil {
+		return fmt.Errorf("unable to update ApplicationIdentity status: %w", err)
+	}
+	return nil
 }

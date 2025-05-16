@@ -16,7 +16,7 @@ import (
 // DisIdentityConfig contains the configuration for the dis-identity operator.
 type DisIdentityConfig struct {
 	// IssuerURL the issuer URL for the cluster running the instance of the operator.
-	IssuerURL string `json:"issuerURL" koanf:"issuerURL" toml:"issuerURL"`
+	IssuerURL string `json:"issuerUrl" koanf:"issuerUrl" toml:"issuerUrl"`
 	// TargetResourceGroup the armID of the resource group where the managed identity will be created.
 	TargetResourceGroup string `json:"targetResourceGroup" koanf:"targetResourceGroup" toml:"targetResourceGroup"`
 }
@@ -68,6 +68,9 @@ func LoadConfigOrDie(configFile string, flagset *pflag.FlagSet) *DisIdentityConf
 func toCamelCase(snake string) string {
 	parts := strings.Split(snake, "_")
 	for i := 1; i < len(parts); i++ {
+		if parts[i] == "" {
+			continue // skip empty segments (e.g., “FOO__BAR” or trailing “_”)
+		}
 		parts[i] = strings.ToUpper(parts[i][:1]) + strings.ToLower(parts[i][1:])
 	}
 	return strings.Join(parts, "")

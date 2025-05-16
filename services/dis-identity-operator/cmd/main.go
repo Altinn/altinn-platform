@@ -18,6 +18,7 @@ package main
 
 import (
 	"crypto/tls"
+	"flag"
 	"os"
 	"path/filepath"
 
@@ -91,6 +92,8 @@ func main() {
 	opts := zap.Options{
 		Development: true,
 	}
+	opts.BindFlags(flag.CommandLine)
+	f.AddGoFlagSet(flag.CommandLine)
 	if err := f.Parse(os.Args[1:]); err != nil {
 		setupLog.Error(err, "failed to parse flags")
 		os.Exit(1)

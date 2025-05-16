@@ -18,10 +18,6 @@ const managedByDisIdentityTag = "managed-by:dis-identity-operator"
 func (a *ApplicationIdentity) GenerateUserAssignedIdentity(ownerARMID string) *managedidentity.UserAssignedIdentity {
 	// Create a new UserAssignedIdentity object
 	identity := &managedidentity.UserAssignedIdentity{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "UserAssignedIdentity",
-			APIVersion: "managedidentity.azure.com/v1api20181130",
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      a.Name,
 			Namespace: a.Namespace,
@@ -84,8 +80,7 @@ func (a *ApplicationIdentity) OutdatedUserAssignedIdentity(identity *managediden
 	if identity == nil {
 		return true
 	}
-	expectedTags := a.Spec.Tags
-	expectedTags[managedByDisIdentityTag] = "true"
+	expectedTags := a.GetUserAssignedIdentityTags()
 	return !reflect.DeepEqual(expectedTags, identity.Spec.Tags)
 }
 
