@@ -58,7 +58,6 @@ variable "environment" {
 
 variable "syncroot_namespace" {
   type        = string
-  default     = ""
   description = "The namespace to use for the syncroot. This is the containing 'folder' in altinncr repo and the namespace in the cluster."
   validation {
     condition     = length(var.syncroot_namespace) > 0
