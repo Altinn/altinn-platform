@@ -26,11 +26,15 @@ func (r *ApplicationIdentityReconciler) removeUserAssignedIdentity(ctx context.C
 		}
 		return false, err
 	}
-	if uaID != nil && uaID.GetDeletionTimestamp() == nil && utils.IsOwnedBy(uaID, applicationIdentity) {
-		if err := r.Delete(ctx, uaID); err != nil {
-			logger.Error(err, "unable to delete UserAssignedIdentity")
-			return false, err
+	if uaID != nil && uaID.GetDeletionTimestamp() == nil {
+		if utils.IsOwnedBy(uaID, applicationIdentity) {
+			if err := r.Delete(ctx, uaID); err != nil {
+				logger.Error(err, "unable to delete UserAssignedIdentity")
+				return false, err
+			}
 		}
+		// The UserAssignedIdentity is not owned by the ApplicationIdentity, so we don't delete it.
+		return true, nil
 	}
 	return false, nil
 }
@@ -60,8 +64,7 @@ func (r *ApplicationIdentityReconciler) updateUserAssignedIdentityStatus(ctx con
 		uaIDPatch := client.MergeFrom(origUaID)
 		uaID.Spec.Tags = applicationIdentity.GetUserAssignedIdentityTags()
 		if err := r.Patch(ctx, uaID, uaIDPatch); err != nil {
-			apiErr := err.(errors.APIStatus)
-			logger.Error(err, "unable to update UserAssignedIdentity", "error", apiErr.Status().Reason)
+			logger.Error(err, "unable to update UserAssignedIdentity")
 			return false, err
 		}
 		return false, nil

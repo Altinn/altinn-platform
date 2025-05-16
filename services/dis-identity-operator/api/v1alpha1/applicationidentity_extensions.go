@@ -35,12 +35,13 @@ func (a *ApplicationIdentity) GenerateUserAssignedIdentity(ownerARMID string) *m
 }
 
 func (a *ApplicationIdentity) GetUserAssignedIdentityTags() map[string]string {
-	tags := a.Spec.Tags
-	if tags == nil {
-		tags = make(map[string]string)
+	result := make(map[string]string)
+	for k, v := range a.Spec.Tags {
+		result[k] = v
 	}
-	tags[managedByDisIdentityTag] = "true"
-	return tags
+	// Add the managed-by tag to the tags map
+	result[managedByDisIdentityTag] = "true"
+	return result
 }
 
 // GenerateFederatedCredentials generates a managedidentity.FederatedIdentityCredential object based on the ApplicationIdentity instance.
