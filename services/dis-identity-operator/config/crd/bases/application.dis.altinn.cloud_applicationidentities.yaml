@@ -141,8 +141,6 @@ spec:
               principalId:
                 description: PrincipalID is the ID of the managed identity in Azure.
                 type: string
-            required:
-            - conditions
             type: object
         type: object
     served: true

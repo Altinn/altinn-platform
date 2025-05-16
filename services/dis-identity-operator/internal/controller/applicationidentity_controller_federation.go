@@ -36,10 +36,11 @@ func (r *ApplicationIdentityReconciler) updateFederatedCredentialsStatus(ctx con
 	orig := applicationIdentity.DeepCopy()
 	patch := client.MergeFrom(orig)
 	if applicationIdentity.OutdatedFederatedCredentials(credential) {
+		credOrig := applicationIdentity.DeepCopy()
+		credPatch := client.MergeFrom(credOrig)
 		credential.Spec.Audiences = applicationIdentity.Spec.AzureAudiences
-		if err := r.Patch(ctx, credential, patch); err != nil {
-			apiErr := err.(errors.APIStatus)
-			logger.Error(err, "unable to update FederatedIdentityCredential", "error", apiErr.Status().Reason)
+		if err := r.Patch(ctx, credential, credPatch); err != nil {
+			logger.Error(err, "unable to update FederatedIdentityCredential")
 			return false, err
 		}
 		return false, nil

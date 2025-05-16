@@ -41,7 +41,7 @@ type ApplicationIdentityStatus struct {
 	// +kubebuilder:validation:Optional
 	AzureAudiences []string `json:"azureAudiences,omitempty"`
 	// Conditions is a list of conditions that apply to the ApplicationIdentity.
-	Conditions []metav1.Condition `json:"conditions"`
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 	// PrincipalID is the ID of the managed identity in Azure.
 	// +kubebuilder:validation:Optional
 	PrincipalID *string `json:"principalId,omitempty"`
