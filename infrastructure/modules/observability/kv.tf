@@ -1,16 +1,26 @@
 data "azurerm_client_config" "current" {}
 
+locals {
+  # hide it from plan / apply since linters can complain
+  tenant_id = sensitive(data.azurerm_client_config.current.tenant_id)
+}
+
+# Create random postfix for key vault
+resource "random_string" "obs_kv_postfix" {
+  length  = 6
+  special = false
+}
+
 resource "azurerm_key_vault" "obs_kv" {
   lifecycle {
     prevent_destroy = true
   }
-  name                = "obs-${var.prefix}-${var.environment}-kv"
+  name                = substr("obs-${var.prefix}-${var.environment}-${random_string.obs_kv_postfix.result}", 0, 24)
   location            = var.location
   resource_group_name = azurerm_resource_group.obs.name
   sku_name            = "standard"
-  tenant_id           = data.azurerm_client_config.current.tenant_id
+  tenant_id           = local.tenant_id
   tags                = var.tags
-
 }
 
 ## role
