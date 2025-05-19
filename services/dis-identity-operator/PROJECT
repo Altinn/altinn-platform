@@ -7,4 +7,14 @@ layout:
 - go.kubebuilder.io/v4
 projectName: dis-identity-operator
 repo: github.com/Altinn/altinn-platform/services/dis-identity-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: dis.altinn.cloud
+  group: application
+  kind: ApplicationIdentity
+  path: github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"

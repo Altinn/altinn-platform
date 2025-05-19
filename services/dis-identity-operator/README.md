@@ -1,8 +1,8 @@
 # dis-identity-operator
-// TODO(user): Add simple overview of use/purpose
+Operator for managing identity in DIS container runtime
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+This project is a Kubernetes operator for managing identity and access management
 
 ## Getting Started
 
