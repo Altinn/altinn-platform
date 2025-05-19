@@ -41,8 +41,8 @@ resource "azapi_resource" "otel_collector" {
     properties = {
       kustomizations = {
         otel-collector = {
-          force                  = false
-          path                   = "./"
+          force = false
+          path  = "./"
           postBuild = {
             substitute = {
               KV_URI : "${var.obs_kv_uri}"
