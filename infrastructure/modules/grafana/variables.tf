@@ -7,15 +7,6 @@ variable "environment" {
   }
 }
 
-variable "grafana_admin_sp_object_id" {
-  type        = string
-  description = "Object id for service pricipal to give admin access to grafana"
-  validation {
-    condition     = length(var.prefix) > 0
-    error_message = "You must provide a value for grafana_admin_sp_object_id."
-  }
-}
-
 variable "grafana_major_version" {
   type        = number
   default     = 11
@@ -34,5 +25,14 @@ variable "prefix" {
   validation {
     condition     = length(var.prefix) > 0
     error_message = "You must provide a value for prefix for name generation."
+  }
+}
+
+variable "tenant_id" {
+  type        = string
+  description = "Tenant id for resources"
+  validation {
+    condition     = length(var.prefix) > 0
+    error_message = "You must provide a value for tenant_id."
   }
 }

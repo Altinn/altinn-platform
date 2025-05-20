@@ -15,6 +15,7 @@ on:
       - infrastructure/modules/aks/**
       - infrastructure/modules/aks-resources/**
       - infrastructure/modules/observability/**
+      - infrastructure/modules/grafana/**
       - infrastructure/altinn-auth-test/auth-at22-aks-rg/**
   pull_request:
     branches:
@@ -26,6 +27,7 @@ on:
       - infrastructure/modules/aks/**
       - infrastructure/modules/aks-resources/**
       - infrastructure/modules/observability/**
+      - infrastructure/modules/grafana/**
       - infrastructure/altinn-auth-test/auth-at22-aks-rg/**
   workflow_dispatch:
     inputs:

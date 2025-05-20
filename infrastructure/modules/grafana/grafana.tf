@@ -1,10 +1,10 @@
 resource "azurerm_resource_group" "grafana" {
-  name     = "grafana-${var.organization}-${var.environment}-rg"
+  name     = "grafana-${var.prefix}-${var.environment}-rg"
   location = var.location
 }
 
 resource "azurerm_dashboard_grafana" "grafana" {
-  name                              = "grafana-${var.organization}-${var.environment}"
+  name                              = "grafana-${var.prefix}-${var.environment}"
   resource_group_name               = azurerm_resource_group.grafana.name
   location                          = azurerm_resource_group.grafana.location
   api_key_enabled                   = true
@@ -19,7 +19,7 @@ resource "azurerm_dashboard_grafana" "grafana" {
 resource "azurerm_role_assignment" "grafana_admin" {
   scope                            = azurerm_dashboard_grafana.grafana.id
   role_definition_name             = "Grafana Admin"
-  principal_id                     = var.grafana_admin_sp_object_id
+  principal_id                     = azuread_service_principal.grafana.object_id
   skip_service_principal_aad_check = true
 }
 
