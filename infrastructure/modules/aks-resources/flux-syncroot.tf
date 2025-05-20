@@ -27,7 +27,7 @@ resource "azapi_resource" "flux_syncroot" {
       }
       namespace                  = var.syncroot_namespace
       reconciliationWaitDuration = "PT5M"
-      waitForReconciliation      = true
+      waitForReconciliation      = false
       sourceKind                 = "OCIRepository"
     }
   }
