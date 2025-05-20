@@ -13,6 +13,8 @@ on:
       - actions/terraform/apply/**
       - actions/terraform/plan/**
       - infrastructure/modules/aks/**
+      - infrastructure/modules/aks-resources/**
+      - infrastructure/modules/observability/**
       - infrastructure/altinn-auth-test/auth-at22-aks-rg/**
   pull_request:
     branches:
@@ -22,6 +24,8 @@ on:
       - actions/terraform/apply/**
       - actions/terraform/plan/**
       - infrastructure/modules/aks/**
+      - infrastructure/modules/aks-resources/**
+      - infrastructure/modules/observability/**
       - infrastructure/altinn-auth-test/auth-at22-aks-rg/**
   workflow_dispatch:
     inputs:

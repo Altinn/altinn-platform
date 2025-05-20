@@ -12,12 +12,15 @@ resource "random_string" "obs_kv_postfix" {
 }
 
 resource "azurerm_key_vault" "obs_kv" {
-  name                = substr("obs-${var.prefix}-${var.environment}-${random_string.obs_kv_postfix.result}", 0, 24)
-  location            = var.location
-  resource_group_name = azurerm_resource_group.obs.name
-  sku_name            = "standard"
-  tenant_id           = local.tenant_id
-  tags                = var.tags
+  name                       = substr("obs-${var.prefix}-${var.environment}-${random_string.obs_kv_postfix.result}", 0, 24)
+  location                   = var.location
+  resource_group_name        = azurerm_resource_group.obs.name
+  sku_name                   = "standard"
+  tenant_id                  = local.tenant_id
+  tags                       = var.tags
+  enable_rbac_authorization  = true
+  purge_protection_enabled   = true
+  soft_delete_retention_days = 7
 }
 
 ## role
