@@ -11,6 +11,13 @@ resource "azurerm_dashboard_grafana" "grafana" {
   deterministic_outbound_ip_enabled = true
   grafana_major_version             = var.grafana_major_version
 
+  dynamic "azure_monitor_workspace_integrations" {
+    for_each = var.workspace_integrations
+    content {
+      resource_id = azure_monitor_workspace_integrations.value
+    }
+  }
+
   identity {
     type = "SystemAssigned"
   }

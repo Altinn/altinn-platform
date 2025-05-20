@@ -45,3 +45,9 @@ variable "tenant_id" {
     error_message = "You must provide a value for tenant_id."
   }
 }
+
+variable "workspace_integrations" {
+  type        = list(string)
+  default     = []
+  description = "List of azure monitor workspaces to connect grafana."
+}
