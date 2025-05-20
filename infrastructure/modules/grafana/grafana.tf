@@ -1,5 +1,5 @@
 resource "azurerm_resource_group" "grafana" {
-  name     = "${var.prefix}-${var.environment}-grafana-rg"
+  name     = "grafana-${var.organization}-${var.environment}-rg"
   location = var.location
 }
 
