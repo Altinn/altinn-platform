@@ -1,6 +1,6 @@
 resource "azuread_application" "grafana" {
   display_name = "grafana-${var.prefix}-${var.environment}-admin-sp"
-  owners       = [data.azuread_client_config.current.object_id]
+  owners       = [var.client_config_current_object_id]
 }
 
 resource "azuread_service_principal" "grafana" {
