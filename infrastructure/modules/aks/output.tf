@@ -28,6 +28,11 @@ output "azurerm_kubernetes_cluster_id" {
   description = "Resource id of aks cluster"
 }
 
+output "azurerm_monitor_workspace_id" {
+  value       = azurerm_monitor_workspace.aks.id
+  description = "Resource id of monitor workspace."
+}
+
 output "kube_admin_config" {
   value       = azurerm_kubernetes_cluster.aks.kube_admin_config
   sensitive   = true
