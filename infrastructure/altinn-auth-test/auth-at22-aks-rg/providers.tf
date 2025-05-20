@@ -36,7 +36,7 @@ terraform {
 }
 
 provider "azapi" {
-  subscription_id  = var.subscription
+  subscription_id  = var.subscription_id
   use_oidc         = true
   enable_preflight = true
 }
