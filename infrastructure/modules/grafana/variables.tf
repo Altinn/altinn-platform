@@ -2,7 +2,7 @@ variable "client_config_current_object_id" {
   type        = string
   description = "Object id for pipeline runner id"
   validation {
-    condition     = length(var.environment) > 0
+    condition     = length(var.client_config_current_object_id) > 0
     error_message = "You must provide a value for client config current object id."
   }
 }
@@ -41,7 +41,7 @@ variable "tenant_id" {
   type        = string
   description = "Tenant id for resources"
   validation {
-    condition     = length(var.prefix) > 0
+    condition     = length(var.tenant_id) > 0
     error_message = "You must provide a value for tenant_id."
   }
 }
