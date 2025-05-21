@@ -23,7 +23,7 @@ resource "azurerm_dashboard_grafana" "grafana" {
   }
 }
 
-resource "azurerm_role_assignment" "grafana_admin" {
+resource "azurerm_role_assignment" "grafana_admin_sp" {
   scope                            = azurerm_dashboard_grafana.grafana.id
   role_definition_name             = "Grafana Admin"
   principal_id                     = azuread_service_principal.grafana.object_id
