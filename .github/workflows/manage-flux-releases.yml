@@ -18,7 +18,7 @@ permissions:
   pull-requests: write
 
 env:
-  ISSUE_TITLE_PREFIX: 'Flux OCI Release:'
+  ISSUE_TITLE_PREFIX: 'Flux OCI Promotion:'
   RELEASE_TAG_PREFIX: 'flux-oci-'
   RELEASE_FILE: 'flux/releasesconfig.json'
   LABEL: 'flux-release'
