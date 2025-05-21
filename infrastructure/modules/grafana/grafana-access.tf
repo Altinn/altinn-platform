@@ -1,7 +1,7 @@
 # Give Grafana access read monitoring in subscriptions
 resource "azurerm_role_assignment" "grafana_permission" {
   for_each = {
-    for value in var.grafana_monitor_reader_subscription_id : value => value if value != null && trim(value) != ""
+    for value in var.grafana_monitor_reader_subscription_id : value => value if value != null
   }
   scope                            = each.value
   role_definition_name             = "Monitoring Reader"
@@ -12,7 +12,7 @@ resource "azurerm_role_assignment" "grafana_permission" {
 # Give Grafana read access to Azure Monitor workspaces
 resource "azurerm_role_assignment" "amw_datareaderrole" {
   for_each = {
-    for value in var.monitor_workspace_id : value => value if value != null && trim(value) != ""
+    for value in var.monitor_workspace_id : value => value if value != null
   }
   scope              = each.value
   role_definition_id = "/subscriptions/${split("/", each.value)[2]}/providers/Microsoft.Authorization/roleDefinitions/b0d8363b-8ddd-447d-831f-62ca05bff136"
@@ -22,7 +22,7 @@ resource "azurerm_role_assignment" "amw_datareaderrole" {
 # Give users access to Grafana
 resource "azurerm_role_assignment" "grafana_admin" {
   for_each = {
-    for value in var.grafana_admin_access : value => value if value != null && trim(value) != ""
+    for value in var.grafana_admin_access : value => value if value != null
   }
   scope                            = azurerm_dashboard_grafana.grafana.id
   role_definition_name             = "Grafana Admin"
@@ -33,7 +33,7 @@ resource "azurerm_role_assignment" "grafana_admin" {
 
 resource "azurerm_role_assignment" "grafana_editor" {
   for_each = {
-    for value in var.grafana_editor_access : value => value if value != null && trim(value) != ""
+    for value in var.grafana_editor_access : value => value if value != null
   }
   scope                            = azurerm_dashboard_grafana.grafana.id
   role_definition_name             = "Grafana Editor"
