@@ -28,7 +28,3 @@ data "http" "api_key" {
   }
   request_body = "grant_type=client_credentials&client_id=${azuread_application.grafana.client_id}&client_secret=${azuread_service_principal_password.grafana.value}&resource=ce34e7e5-485f-4d76-964f-b3d2b16d1e4f"
 }
-
-output "grafana_bearer_token" {
-  value = jsondecode(data.http.api_key.response_body).access_token
-}

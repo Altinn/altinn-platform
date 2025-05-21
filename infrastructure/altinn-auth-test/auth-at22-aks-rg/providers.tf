@@ -21,13 +21,16 @@ terraform {
       version = "~> 1.0"
     }
     http = {
-      source = "hashicorp/http"
+      source  = "hashicorp/http"
+      version = "~> 3.0"
     }
     time = {
-      source = "hashicorp/time"
+      source  = "hashicorp/time"
+      version = "~> 0.9"
     }
     grafana = {
-      source = "grafana/grafana"
+      source  = "grafana/grafana"
+      version = "~> 3.0"
     }
   }
   backend "azurerm" {
