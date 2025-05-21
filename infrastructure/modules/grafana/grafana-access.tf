@@ -3,7 +3,7 @@ resource "azurerm_role_assignment" "grafana_permission" {
   for_each = {
     for value in var.grafana_monitor_reader_subscription_id : value => value if value != null
   }
-  scope                            = each.value
+  scope                            = "/subscriptions/${each.value}"
   role_definition_name             = "Monitoring Reader"
   principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
   skip_service_principal_aad_check = true
