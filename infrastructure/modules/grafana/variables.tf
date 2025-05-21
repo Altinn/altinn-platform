@@ -25,7 +25,7 @@ variable "grafana_admin_access" {
 variable "grafana_editor_access" {
   type        = list(string)
   default     = []
-  description = "List of user groups to grant admin access to grafana."
+  description = "List of user groups to grant editor access to grafana."
 }
 
 variable "grafana_major_version" {
