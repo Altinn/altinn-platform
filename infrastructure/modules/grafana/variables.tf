@@ -63,3 +63,9 @@ variable "grafana_editor_access" {
   default     = []
   description = "List of user groups to grant admin access to grafana."
 }
+
+variable "grafana_monitor_reader_subscription_id" {
+  type        = list(string)
+  default     = []
+  description = "List of subscription ids to grant reader access to grafana."
+}

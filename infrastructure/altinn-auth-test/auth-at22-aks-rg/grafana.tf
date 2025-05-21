@@ -7,6 +7,7 @@ module "grafana" {
   monitor_workspace_id = [
     module.observability.monitor_workspace_id
   ]
-  grafana_admin_access  = []
-  grafana_editor_access = []
+  grafana_admin_access                   = []
+  grafana_editor_access                  = []
+  grafana_monitor_reader_subscription_id = []
 }
