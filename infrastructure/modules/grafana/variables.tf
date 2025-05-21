@@ -16,16 +16,40 @@ variable "environment" {
   }
 }
 
+variable "grafana_admin_access" {
+  type        = list(string)
+  default     = []
+  description = "List of user groups to grant admin access to grafana."
+}
+
+variable "grafana_editor_access" {
+  type        = list(string)
+  default     = []
+  description = "List of user groups to grant admin access to grafana."
+}
+
 variable "grafana_major_version" {
   type        = number
   default     = 11
   description = "Managed Grafana major version."
 }
 
+variable "grafana_monitor_reader_subscription_id" {
+  type        = list(string)
+  default     = []
+  description = "List of subscription ids to grant reader access to grafana."
+}
+
 variable "location" {
   type        = string
   default     = "norwayeast"
   description = "Default region for resources"
+}
+
+variable "monitor_workspace_id" {
+  type        = list(string)
+  default     = []
+  description = "List of azure monitor workspaces to connect grafana."
 }
 
 variable "prefix" {
@@ -44,28 +68,4 @@ variable "tenant_id" {
     condition     = length(var.tenant_id) > 0
     error_message = "You must provide a value for tenant_id."
   }
-}
-
-variable "monitor_workspace_id" {
-  type        = list(string)
-  default     = []
-  description = "List of azure monitor workspaces to connect grafana."
-}
-
-variable "grafana_admin_access" {
-  type        = list(string)
-  default     = []
-  description = "List of user groups to grant admin access to grafana."
-}
-
-variable "grafana_editor_access" {
-  type        = list(string)
-  default     = []
-  description = "List of user groups to grant admin access to grafana."
-}
-
-variable "grafana_monitor_reader_subscription_id" {
-  type        = list(string)
-  default     = []
-  description = "List of subscription ids to grant reader access to grafana."
 }
