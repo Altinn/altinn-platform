@@ -12,7 +12,7 @@ resource "azurerm_dashboard_grafana" "grafana" {
   grafana_major_version             = var.grafana_major_version
 
   dynamic "azure_monitor_workspace_integrations" {
-    for_each = var.workspace_integrations
+    for_each = var.monitor_workspace_id
     content {
       resource_id = azure_monitor_workspace_integrations.value
     }

@@ -4,8 +4,9 @@ module "grafana" {
   environment                     = local.environment
   tenant_id                       = local.tenant_id
   client_config_current_object_id = data.azurerm_client_config.current.object_id
-  workspace_integrations = [
-    module.aks.azurerm_monitor_workspace_id,
+  monitor_workspace_id = [
     module.observability.monitor_workspace_id
   ]
+  grafana_admin_access  = []
+  grafana_editor_access = []
 }

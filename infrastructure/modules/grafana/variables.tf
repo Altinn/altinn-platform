@@ -46,8 +46,20 @@ variable "tenant_id" {
   }
 }
 
-variable "workspace_integrations" {
+variable "monitor_workspace_id" {
   type        = list(string)
   default     = []
   description = "List of azure monitor workspaces to connect grafana."
+}
+
+variable "grafana_admin_access" {
+  type        = list(string)
+  default     = []
+  description = "List of user groups to grant admin access to grafana."
+}
+
+variable "grafana_editor_access" {
+  type        = list(string)
+  default     = []
+  description = "List of user groups to grant admin access to grafana."
 }
