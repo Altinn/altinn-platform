@@ -1,0 +1,84 @@
+name: Build Flux Artifact
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - flux/*/**
+  release:
+    types: 
+      - created
+
+env:
+  RELEASE_TAG_PREFIX: 'flux-oci-'
+
+jobs:
+  build-main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Setup flux
+        uses: fluxcd/flux2/action@6150fe9942b822c926e76a43dce31c595313f324
+        with:
+          version: latest
+      - name: az login
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          subscription-id: ${{ secrets.AZURE_ALTINNACR_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZURE_ALTINNACR_APP_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+      - name: Build and push artifacts with commit sha tag
+        env:
+          REGISTRY: altinncr.azurecr.io
+        run: |
+          echo '### Check if there are any changes in ./flux/ folder'
+          FLUX_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD | grep 'flux/' || true)
+          if [ -z "${FLUX_FILES}" ]; then
+            echo "No artifacts to process."
+            exit 0
+          fi
+
+          # Extract unique folder names directly under ./manifests/infra/
+          ARTIFACTS=$(echo "${FLUX_FILES}" | awk -F'/' '{print $2}' | sort -u)
+          for artifact in $ARTIFACTS;do
+            flux push artifact oci://${REGISTRY}/manifests/infra/${artifact}:$(git rev-parse --short HEAD) \
+              --provider=azure \
+              --reproducible \
+              --path="./flux/${artifact}" \
+              --source="$(git config --get remote.origin.url)" \
+              --revision="$(git branch --show-current)/$(git rev-parse HEAD)" || { echo "Failed to push $artifact" >&2; exit 1; }
+          done
+  tag-release:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'created' && startsWith(github.event.release.tag_name, github.env.RELEASE_TAG_PREFIX)
+    steps:
+      - name: Extract release name and version
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        id: extract-release
+        with:
+          script: |
+            const releaseRegex = /${{ env.RELEASE_TAG_PREFIX }}(.*?)-v(\d+\.\d+\.\d+)/;
+            const match = context.payload.release.tag_name.match(releaseRegex);
+            if (match) {
+              const releaseName = match[1];
+              const releaseVersion = match[2];
+              core.setOutput('releaseName', releaseName);
+              core.setOutput('releaseVersion', releaseVersion);
+            } else {
+              core.setFailed(`Release tag name does not match expected format: ${context.payload.release.tag_name}`);
+              return;
+            }
+      - name: Add release tag to artifacts
+        uses: ./.github/workflows/reusable-oci-image-push.yml
+        with:
+          image_name: "manifests/infra/${{ steps.extract-release.outputs.releaseName }}"
+          from_tag: $(git rev-parse --short HEAD)
+          tag: ${{ steps.extract-release.outputs.releaseVersion }}
+          workdir: './flux/${{ steps.extract-release.outputs.releaseName }}'
+          azure_subscription_id: ${{ secrets.AZURE_ALTINNACR_SUBSCRIPTION_ID }}
+          azure_app_id: ${{ secrets.AZURE_ALTINNACR_APP_ID }}
+          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
