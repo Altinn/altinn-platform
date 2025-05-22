@@ -52,7 +52,7 @@ jobs:
             const { data: issues } = await github.rest.issues.listForRepo({
               ...context.repo,
               state: 'open',
-              labels: 'release'
+              labels: ${{ env.LABEL }},
             });
             const issueExists = issues.some(issue => issue.title === issueTitle);
             if (issueExists) {
