@@ -13,6 +13,7 @@ variable "subnet_address_prefixes" {
 
 variable "app_access_token" {
   type        = string
+  sensitive   = true
   description = "Azure App access token"
   validation {
     condition     = length(var.app_access_token) > 0
