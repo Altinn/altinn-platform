@@ -48,7 +48,6 @@ env:
   TF_STATE_NAME: auth-at22-aks-rg.tfstate
   TF_PROJECT: ./infrastructure/altinn-auth-test/auth-at22-aks-rg
   ARM_CLIENT_ID: ${{ secrets.TF_AZURE_CLIENT_ID }}
-  ARM_TENANT_ID: cd0026d8-283b-4a55-9bfa-d0ef4a8ba21c
   ARM_SUBSCRIPTION_ID: 37bac63a-b964-46b2-8de8-ba93c432ea1f
   TF_VERSION: latest
 
@@ -67,7 +66,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Set up Grafana Token
-        uses: Altinn/altinn-platform/actions/terraform/grafana-token
+        uses: ././actions/terraform/grafana-token
         with:
           client-id: ${{ secrets.TF_AZURE_CLIENT_ID }}
 
@@ -94,7 +93,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Set up Grafana Token
-        uses: Altinn/altinn-platform/actions/terraform/grafana-token
+        uses: ././actions/terraform/grafana-token
         with:
           client-id: ${{ secrets.TF_AZURE_CLIENT_ID }}
 
