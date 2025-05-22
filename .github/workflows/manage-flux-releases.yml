@@ -191,6 +191,9 @@ jobs:
               releaseVersion=$(echo $releasesConfig | jq -r ".\"$releaseName\".\"$envName\"")
               echo "Promoting release $releaseName to version $releaseVersion for environment $envName"
               echo "retagging ${{ env.RELEASE_TAG_PREFIX}}$releaseName-v$releaseVersion"
-              # Add your promotion logic here
+              flux tag artifact oci://${REGISTRY}/manifests/infra/${artifact}:${releaseVersion} \
+              --provider=azure \
+              --tag ${envName} \
+              --creds="${creds}" || { echo "Failed to tag $artifact with latest" >&2; exit 1; }
             done
           done
