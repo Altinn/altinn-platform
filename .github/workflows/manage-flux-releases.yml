@@ -52,7 +52,7 @@ jobs:
             const { data: issues } = await github.rest.issues.listForRepo({
               ...context.repo,
               state: 'open',
-              labels: ${{ env.LABEL }},
+              labels: '${{ env.LABEL }}',
             });
             const issueExists = issues.some(issue => issue.title === issueTitle);
             if (issueExists) {
@@ -64,7 +64,7 @@ jobs:
               ...context.repo,
               title: issueTitle,
               body: issueBody,
-              labels: [ ${{env.LABEL}} ]
+              labels: [ '${{env.LABEL}}' ]
             });
             console.log(`Issue created: ${response.data.html_url}`);
   create-release-pr:
@@ -180,20 +180,33 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Setup flux
+        uses: fluxcd/flux2/action@6150fe9942b822c926e76a43dce31c595313f324
+        with:
+          version: latest
+      - name: az login
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          subscription-id: ${{ secrets.AZURE_ALTINNACR_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZURE_ALTINNACR_APP_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
       - name: Promote release
+        env:
+          REGISTRY: altinncr.azurecr.io
         run: |
           echo "Promoting release..."
           # Read the releases config file and loop through the releases
           releasesConfigFile="${{ env.RELEASE_FILE }}"
           releasesConfig=$(cat $releasesConfigFile)
+          creds=$(az acr login --name altinncr --expose-token)
           for releaseName in $(echo $releasesConfig | jq -r 'keys[]'); do
             for envName in $(echo $releasesConfig | jq -r ".\"$releaseName\" | keys[]"); do
               releaseVersion=$(echo $releasesConfig | jq -r ".\"$releaseName\".\"$envName\"")
               echo "Promoting release $releaseName to version $releaseVersion for environment $envName"
-              echo "retagging ${{ env.RELEASE_TAG_PREFIX}}$releaseName-v$releaseVersion"
-              flux tag artifact oci://${REGISTRY}/manifests/infra/${artifact}:${releaseVersion} \
+              echo "retagging oci://${REGISTRY}/manifests/infra/${releaseName}:${releaseVersion} to ${envName}"
+              flux tag artifact oci://${REGISTRY}/manifests/infra/${releaseName}:${releaseVersion} \
               --provider=azure \
               --tag ${envName} \
-              --creds="${creds}" || { echo "Failed to tag $artifact with latest" >&2; exit 1; }
+              --creds="${creds}" || { echo "Failed to tag ${releaseName}:${releaseVersion} with ${envName}" >&2; exit 1; }
             done
           done
