@@ -63,7 +63,7 @@ provider "azurerm" {
 
 provider "grafana" {
   url  = module.grafana.grafana_endpoint
-  auth = var.grafana_access_token
+  auth = var.app_access_token
 }
 
 provider "random" {}
