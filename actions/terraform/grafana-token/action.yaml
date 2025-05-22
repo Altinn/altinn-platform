@@ -7,10 +7,7 @@ inputs:
   arm_tenant_id:
     description: Azure Tenant ID
     default: cd0026d8-283b-4a55-9bfa-d0ef4a8ba21c
-  resource-id:
-    description: Azure Resource ID for Grafana Enterprise app
-    required: true
-    default: ce34e7e5-485f-4d76-964f-b3d2b16d1e4f
+
 runs:
   using: "composite"
   steps:
@@ -24,7 +21,7 @@ runs:
     - name: Get Azure Grafana Access Token
       shell: bash
       run: |
-        token=$(az account get-access-token --resource ${{ inputs.resource-id }} --query accessToken -o tsv)
+        token=$(az account get-access-token --resource ce34e7e5-485f-4d76-964f-b3d2b16d1e4f --query accessToken -o tsv)
         if [ -z "$token" ]; then
           echo "Failed to retrieve Grafana Enterprise app access token" >&2
           exit 1
