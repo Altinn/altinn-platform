@@ -7,15 +7,15 @@ import { buildHeaderWithContentType } from "../../common/apiHelpers.js";
 import { uuidv4 } from "https://jslib.k6.io/k6-utils/1.4.0/index.js";
 import KJUR from "https://unpkg.com/jsrsasign@10.8.6/lib/jsrsasign.js";
 
-const mpKid = __ENV.MACHINEPORTEN_KID;
+const machineportenKid = __ENV.MACHINEPORTEN_KID;
 const encodedJwk = __ENV.ENCODED_JWK;
-const mpClientId = __ENV.MACHINEPORTEN_CLIENT_ID;
+const machineportenClientId = __ENV.MACHINEPORTEN_CLIENT_ID;
 
 /**
  * Generates an access token from Maskinporten using a JWT bearer grant.
  *
  * This function performs the following steps:
- * 1. Validates required environment variables (`encodedJwk`, `mpClientId`, `mpKid`).
+ * 1. Validates required environment variables (`__ENV.MACHINEPORTEN_KID`, `__ENV.ENCODED_JWK`, `__ENV.MACHINEPORTEN_CLIENT_ID`).
  * 2. Creates a signed JWT grant for the provided scopes.
  * 3. Sends a token request to Maskinporten.
  * 4. Validates the response and extracts the access token.
@@ -30,11 +30,11 @@ export function generateAccessToken(scopes) {
         stopIterationOnFail("Required environment variable Encoded JWK (encodedJWK) was not provided", false);
     }
 
-    if (!mpClientId) {
+    if (!machineportenClientId) {
         stopIterationOnFail("Required environment variable maskinporten client id (mpClientId) was not provided", false);
     }
 
-    if (!mpKid) {
+    if (!machineportenKid) {
         stopIterationOnFail("Required environment variable maskinporten kid (mpKid) was not provided", false);
     }
 
@@ -63,7 +63,7 @@ function createJwtGrant(scopes) {
     const header = {
         alg: "RS256",
         typ: "JWT",
-        kid: mpKid,
+        kid: machineportenKid,
     };
 
     const now = Math.floor(Date.now() / 1000);
@@ -71,7 +71,7 @@ function createJwtGrant(scopes) {
     const payload = {
         aud: config.maskinporten.audience,
         scope: scopes,
-        iss: mpClientId,
+        iss: machineportenClientId,
         iat: now,
         exp: now + 120,
         jti: uuidv4(),
