@@ -1,12 +1,37 @@
 # Maskinporten Integration Guide
 
-This module provides functionality to generate access tokens from Maskinporten using JWT bearer grants. It's designed to work with k6 load testing scenarios.
+This module provides functionality to generate access tokens from Maskinporten using JWT bearer grants. It's designed to work with k6 load testing scenarios and functional tests
 
 ## Prerequisites
 
 1. Access to Samarbeidsportalen (https://sjolvbetjening.test.samarbeid.digdir.no)
 2. A Maskinporten client ID
-3. The `altinn-jwks` tool installed
+3. The `altinn-jwks` tool installed (https://github.com/Altinn/altinn-authorization-utils/tree/main/src/Altinn.Cli)
+
+## Required Environment Variables
+
+Before running any tests, you need to set these environment variables 
+
+```bash
+# Set in your shell
+export MACHINEPORTEN_KID="your-key-id"
+export ENCODED_JWK="your-base64-encoded-jwk"
+export MACHINEPORTEN_CLIENT_ID="your-client-id"
+
+# Or pass directly to k6
+k6 run \
+  -e MACHINEPORTEN_KID="your-key-id" \
+  -e ENCODED_JWK="your-base64-encoded-jwk" \
+  -e MACHINEPORTEN_CLIENT_ID="your-client-id" \
+  your-test.js
+```
+
+These variables are used in the code as:
+```javascript
+const machineportenKid = __ENV.MACHINEPORTEN_KID;
+const encodedJwk = __ENV.ENCODED_JWK;
+const machineportenClientId = __ENV.MACHINEPORTEN_CLIENT_ID;
+```
 
 ## Setup Steps
 
@@ -26,14 +51,6 @@ This module provides functionality to generate access tokens from Maskinporten u
    ```
    Save the output as it will be needed for the `ENCODED_JWK` environment variable.
 
-## Required Environment Variables
-
-The following environment variables must be set when running tests:
-
-- `MACHINEPORTEN_KID`: The Key ID from your JWK
-- `ENCODED_JWK`: The base64-encoded JWK (generated in step 3)
-- `MACHINEPORTEN_CLIENT_ID`: Your Maskinporten client ID
-
 ## Usage Example
 
 ```javascript
@@ -44,8 +61,8 @@ const accessToken = generateAccessToken('scope1 scope2');
 
 // Use the access token in your API calls
 const headers = {
-  'Authorization': `Bearer ${accessToken}`,
-  // ... other headers
+    'Authorization': `Bearer ${accessToken}`,
+    // ... other headers
 };
 ```
 
