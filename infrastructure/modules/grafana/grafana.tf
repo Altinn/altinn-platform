@@ -1,5 +1,5 @@
 resource "azurerm_resource_group" "grafana" {
-  name     = "grafana-${var.prefix}-${var.environment}-rg"
+  name     = var.azurerm_resource_group_grafana_name != "" ? var.azurerm_resource_group_grafana_name : "grafana-${var.prefix}-${var.environment}-rg"
   location = var.location
 }
 

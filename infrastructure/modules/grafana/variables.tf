@@ -1,3 +1,9 @@
+variable "azurerm_resource_group_grafana_name" {
+  type        = string
+  default     = ""
+  description = "Optional explicit name of the grafana resource group"
+}
+
 variable "client_config_current_object_id" {
   type        = string
   description = "Object id for pipeline runner id"
