@@ -13,6 +13,10 @@ on:
 env:
   RELEASE_TAG_PREFIX: 'flux-oci-'
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   build-latest:
     runs-on: ubuntu-latest
