@@ -66,7 +66,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Set up Grafana Token
-        uses: Altinn/altinn-platform/actions/terraform/azure-app-token@abf77ce1689a88251f635c494e0e942d3557d215 # main
+        uses: Altinn/altinn-platform/actions/terraform/azure-app-token@2927e87df3e1f91b4d7d1ae0371098d0231f885e # main
         with:
           arm_client_id: ${{ env.ARM_CLIENT_ID }}
           app_resource_id: ce34e7e5-485f-4d76-964f-b3d2b16d1e4f
@@ -94,7 +94,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Set up Grafana Token
-        uses: Altinn/altinn-platform/actions/terraform/azure-app-token@abf77ce1689a88251f635c494e0e942d3557d215 # main
+        uses: Altinn/altinn-platform/actions/terraform/azure-app-token@2927e87df3e1f91b4d7d1ae0371098d0231f885e # main
         with:
           arm_client_id: ${{ env.ARM_CLIENT_ID }}
           app_resource_id: ce34e7e5-485f-4d76-964f-b3d2b16d1e4f
