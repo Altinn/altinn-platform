@@ -20,7 +20,7 @@ const machineportenClientId = __ENV.MACHINEPORTEN_CLIENT_ID;
  * 3. Sends a token request to Maskinporten.
  * 4. Validates the response and extracts the access token.
  *
- * @param {string} scopes - A space-separated string of OAuth scopes (e.g., "scope1 scope2").
+ * @param {string} scopes - A space-separated string of scopes (e.g., "scope1 scope2").
  * @returns {string} The access token returned from Maskinporten.
  *
  * @throws Will stop test iteration if any required environment variable is missing or if the token request fails.
