@@ -60,12 +60,3 @@ variable "prefix" {
     error_message = "You must provide a value for prefix for name generation."
   }
 }
-
-variable "tenant_id" {
-  type        = string
-  description = "Tenant id for resources"
-  validation {
-    condition     = length(var.tenant_id) > 0
-    error_message = "You must provide a value for tenant_id."
-  }
-}

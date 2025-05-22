@@ -10,3 +10,12 @@ variable "subnet_address_prefixes" {
   })
   description = "list of subnets"
 }
+
+variable "grafana_access_token" {
+  type        = string
+  description = "Azure Grafana access token"
+  validation {
+    condition     = length(var.grafana_access_token) > 0
+    error_message = "You must provide a value for grafana_access_token from pipeline run."
+  }
+}
