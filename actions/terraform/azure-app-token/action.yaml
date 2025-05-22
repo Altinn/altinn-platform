@@ -24,7 +24,7 @@ runs:
     - name: Get Azure Access Token
       shell: bash
       run: |
-        token=$(az account get-access-token --resource ${{ inputs.app_resource_id }} --query accessToken -o tsv)
+        token=$(az account get-access-token --resource "${{ inputs.app_resource_id }}" --query accessToken -o tsv)
         if [ -z "$token" ]; then
           echo "Failed to retrieve Enterprise app access token" >&2
           exit 1
