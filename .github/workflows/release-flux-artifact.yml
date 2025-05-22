@@ -53,8 +53,8 @@ jobs:
               --reproducible \
               --path="./flux/${artifact}" \
               --source="$(git config --get remote.origin.url)" \
-              --revision="$(git branch --show-current)/$(git rev-parse HEAD)" || { echo "Failed to push $artifact" >&2; exit 1; }
-              --creds="${creds}"
+              --revision="$(git branch --show-current)/$(git rev-parse HEAD)" \
+              --creds="${creds}" || { echo "Failed to push $artifact" >&2; exit 1; }
             flux tag artifact oci://${REGISTRY}/manifests/infra/${artifact}:$(git rev-parse --short HEAD) \
               --provider=azure \
               --tag latest \
