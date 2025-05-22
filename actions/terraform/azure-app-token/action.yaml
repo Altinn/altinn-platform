@@ -32,4 +32,8 @@ runs:
           exit 1
         fi
         echo "::add-mask::$token"
-        echo "TF_VAR_app_access_token=$token" >> $GITHUB_ENV
+        {
+          echo "TF_VAR_app_access_token<<EOF"
+          echo "$token"
+          echo "EOF"
+        } >> "$GITHUB_ENV"
