@@ -14,13 +14,11 @@ env:
   RELEASE_TAG_PREFIX: 'flux-oci-'
 
 jobs:
-  build-main:
+  build-latest:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Setup flux
         uses: fluxcd/flux2/action@6150fe9942b822c926e76a43dce31c595313f324
         with:
@@ -45,17 +43,25 @@ jobs:
           # Extract unique folder names directly under ./manifests/infra/
           ARTIFACTS=$(echo "${FLUX_FILES}" | awk -F'/' '{print $2}' | sort -u)
           for artifact in $ARTIFACTS;do
+            creds=$(az acr login --name altinncr --expose-token)
             flux push artifact oci://${REGISTRY}/manifests/infra/${artifact}:$(git rev-parse --short HEAD) \
               --provider=azure \
               --reproducible \
               --path="./flux/${artifact}" \
               --source="$(git config --get remote.origin.url)" \
               --revision="$(git branch --show-current)/$(git rev-parse HEAD)" || { echo "Failed to push $artifact" >&2; exit 1; }
+              --creds="${creds}"
+            flux tag artifact oci://${REGISTRY}/manifests/infra/${artifact}:$(git rev-parse --short HEAD) \
+              --provider=azure \
+              --tag latest \
+              --creds="${creds}" || { echo "Failed to tag $artifact with latest" >&2; exit 1; }
           done
   tag-release:
     runs-on: ubuntu-latest
     if: github.event_name == 'release' && github.event.action == 'created' && startsWith(github.event.release.tag_name, github.env.RELEASE_TAG_PREFIX)
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Extract release name and version
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         id: extract-release
@@ -68,6 +74,12 @@ jobs:
               const releaseVersion = match[2];
               core.setOutput('releaseName', releaseName);
               core.setOutput('releaseVersion', releaseVersion);
+              // Check if the release name corresponds to a folder in ./flux/
+              const releaseFolder = `./flux/${releaseName}`;
+              if (!fs.existsSync(releaseFolder)) {
+                core.setFailed(`Release folder does not exist: ${releaseFolder}`);
+                return;
+              }
             } else {
               core.setFailed(`Release tag name does not match expected format: ${context.payload.release.tag_name}`);
               return;
@@ -76,7 +88,6 @@ jobs:
         uses: ./.github/workflows/reusable-oci-image-push.yml
         with:
           image_name: "manifests/infra/${{ steps.extract-release.outputs.releaseName }}"
-          from_tag: $(git rev-parse --short HEAD)
           tag: ${{ steps.extract-release.outputs.releaseVersion }}
           workdir: './flux/${{ steps.extract-release.outputs.releaseName }}'
           azure_subscription_id: ${{ secrets.AZURE_ALTINNACR_SUBSCRIPTION_ID }}
