@@ -80,6 +80,7 @@ jobs:
               core.setOutput('releaseVersion', releaseVersion);
               // Check if the release name corresponds to a folder in ./flux/
               const releaseFolder = `./flux/${releaseName}`;
+              const fs = require('fs');
               if (!fs.existsSync(releaseFolder)) {
                 core.setFailed(`Release folder does not exist: ${releaseFolder}`);
                 return;
