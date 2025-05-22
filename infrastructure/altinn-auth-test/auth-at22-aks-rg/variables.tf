@@ -10,3 +10,13 @@ variable "subnet_address_prefixes" {
   })
   description = "list of subnets"
 }
+
+variable "app_access_token" {
+  type        = string
+  sensitive   = true
+  description = "Azure App access token"
+  validation {
+    condition     = length(var.app_access_token) > 0
+    error_message = "You must provide a value for app_access_token from pipeline run."
+  }
+}
