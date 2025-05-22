@@ -26,12 +26,23 @@ runs:
       env:
         APP_RESOURCE_ID: ${{ inputs.app_resource_id }}
       run: |
+        # Validate UUID format
+        if [[ ! "$APP_RESOURCE_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+          echo "Invalid app_resource_id format. Must be a UUID." >&2
+          exit 1
+        fi
+
+        # Get access token
         token=$(az account get-access-token --resource "$APP_RESOURCE_ID" --query accessToken -o tsv)
         if [ -z "$token" ]; then
           echo "Failed to retrieve Enterprise app access token" >&2
           exit 1
         fi
+
+        # Mask token
         echo "::add-mask::$token"
+
+        # Export to environment safely
         {
           echo "TF_VAR_app_access_token<<EOF"
           echo "$token"
