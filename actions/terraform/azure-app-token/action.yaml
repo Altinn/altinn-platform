@@ -1,5 +1,5 @@
-name: "Azure Grafana Token Setup"
-description: "Logs in to Azure and retrieves a Grafana access token."
+name: "Azure App Token Setup"
+description: "Logs in to Azure and retrieves a app access token."
 inputs:
   arm_client_id:
     required: true
@@ -7,6 +7,9 @@ inputs:
   arm_tenant_id:
     description: Azure Tenant ID
     default: cd0026d8-283b-4a55-9bfa-d0ef4a8ba21c
+  app_resource_id:
+    description: Azure App Resource ID
+    required: true
 
 runs:
   using: "composite"
@@ -18,13 +21,13 @@ runs:
         tenant-id: ${{ inputs.arm_tenant_id }}
         allow-no-subscriptions: true
 
-    - name: Get Azure Grafana Access Token
+    - name: Get Azure Access Token
       shell: bash
       run: |
-        token=$(az account get-access-token --resource ce34e7e5-485f-4d76-964f-b3d2b16d1e4f --query accessToken -o tsv)
+        token=$(az account get-access-token --resource ${{ inputs.app_resource_id }} --query accessToken -o tsv)
         if [ -z "$token" ]; then
-          echo "Failed to retrieve Grafana Enterprise app access token" >&2
+          echo "Failed to retrieve Enterprise app access token" >&2
           exit 1
         fi
         echo "::add-mask::$token"
-        echo "TF_VAR_grafana_access_token=$token" >> $GITHUB_ENV
+        echo "TF_VAR_app_access_token=$token" >> $GITHUB_ENV

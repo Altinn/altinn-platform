@@ -69,6 +69,7 @@ jobs:
         uses: Altinn/altinn-platform/actions/terraform/grafana-token@0ead881b472c9dab06e7091bbf9ae7a491529790
         with:
           arm_client_id: ${{ env.ARM_CLIENT_ID }}
+          app_resource_id: ce34e7e5-485f-4d76-964f-b3d2b16d1e4f
 
       - name: Terraform Plan
         uses: Altinn/altinn-platform/actions/terraform/plan@7b92cd191baa4569aa2e6d054455a70183962ab7 # main

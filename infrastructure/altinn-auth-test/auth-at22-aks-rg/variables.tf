@@ -11,11 +11,11 @@ variable "subnet_address_prefixes" {
   description = "list of subnets"
 }
 
-variable "grafana_access_token" {
+variable "app_access_token" {
   type        = string
-  description = "Azure Grafana access token"
+  description = "Azure App access token"
   validation {
-    condition     = length(var.grafana_access_token) > 0
-    error_message = "You must provide a value for grafana_access_token from pipeline run."
+    condition     = length(var.app_access_token) > 0
+    error_message = "You must provide a value for app_access_token from pipeline run."
   }
 }
