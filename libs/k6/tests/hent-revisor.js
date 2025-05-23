@@ -69,7 +69,6 @@ function hentTestdata() {
 export default function () {
   const json = searchTenor({ query: 'revisorer%3A*' }); // Already encoded
   const orgnummer = hentOrgnummerForRolle(json);
-  console.log('Funnet orgnummer:', orgnummer);
 
   //slå opp på orgnummeret
   //testdata.api.skatteetaten.no/api/testnorge/v2/soek/brreg-er-fr?kql=revisorer%3A*+and+organisasjonsnummer%3A312939053
@@ -78,6 +77,20 @@ export default function () {
     queryIsEncoded: false,
   });
 
-  var resp = hentFoedselsnummerForDagligLeder(orgSearch);
-  console.log(resp);
+  var foedselsnummer = hentFoedselsnummerForDagligLeder(orgSearch);
+  console.log('Orgnummer:', orgnummer);
+  console.log('Foedselsnummer:', foedselsnummer);
+  console.log(foedselsnummer, orgnummer);
+
+  //Søk på kunder
+  const query = `revisorer : * "${orgnummer}"`;
+
+  const getCustomers = searchTenor({
+    query,
+    queryIsEncoded: false,
+    antall: 10,
+    includeTenorMetadata: false,
+  });
+
+  console.log(JSON.stringify(getCustomers, null, 2));
 }
