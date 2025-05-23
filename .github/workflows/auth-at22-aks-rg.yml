@@ -93,12 +93,6 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Set up Grafana Token
-        uses: Altinn/altinn-platform/actions/terraform/azure-app-token@51c287c68ccb36575e383df649217fc2088106be # main
-        with:
-          arm_client_id: ${{ env.ARM_CLIENT_ID }}
-          app_resource_id: ce34e7e5-485f-4d76-964f-b3d2b16d1e4f
-
       - name: Terraform Apply
         uses: Altinn/altinn-platform/actions/terraform/apply@7b92cd191baa4569aa2e6d054455a70183962ab7 # main
         with:
