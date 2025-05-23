@@ -5,13 +5,13 @@ on:
     types:
       - edited
   release:
-    types: 
+    types:
       - created
   push:
     branches:
       - main
     paths:
-      - flux/releasesconfig.json
+      - flux/releaseconfig.json
 permissions:
   contents: write
   issues: write
@@ -22,10 +22,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ISSUE_TITLE_PREFIX: 'Flux OCI Promotion:'
-  RELEASE_TAG_PREFIX: 'flux-oci-'
-  RELEASE_FILE: 'flux/releasesconfig.json'
-  LABEL: 'flux-release'
+  ISSUE_TITLE_PREFIX: "Flux OCI Promotion:"
+  RELEASE_TAG_PREFIX: "flux-oci-"
+  RELEASE_FILE: "flux/releasesconfig.json"
+  LABEL: "flux-release"
 
 jobs:
   create-issue:
@@ -41,7 +41,7 @@ jobs:
             - Release Name: ${context.payload.release.name}
             - Release Tag: ${context.payload.release.tag_name}
             - Release URL: ${context.payload.release.html_url}
-            
+
             To create a pull request with updated release config file, please check the boxes below:
             <!-- start-env-list -->
             - [ ] Deploy to at_ring1
@@ -93,7 +93,7 @@ jobs:
             const releaseVersion = match[2];
             core.setOutput('release-name', releaseName);
             core.setOutput('release-version', releaseVersion);
-            
+
             const currentState = context.payload.issue.body;
             // find the checkboxes in the issue body starting with <!-- start-env-list --> and ending with <!-- stop-env-list -->
             const startEnvList = currentState.indexOf('<!-- start-env-list -->');
@@ -132,13 +132,13 @@ jobs:
         uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
         id: create-pr
         with:
-          title: 'Update releases config for ${{ steps.update-release.outputs.release-name }} to ${{ steps.update-release.outputs.release-version }}'
-          body: 'This pull request updates the releases config file with the new release version.'
+          title: "Update releases config for ${{ steps.update-release.outputs.release-name }} to ${{ steps.update-release.outputs.release-version }}"
+          body: "This pull request updates the releases config file with the new release version."
           base: main
-          commit-message: 'Update flux releases config for ${{ steps.update-release.outputs.release-name }} to ${{ steps.update-release.outputs.release-version }}'
+          commit-message: "Update flux releases config for ${{ steps.update-release.outputs.release-name }} to ${{ steps.update-release.outputs.release-version }}"
           branch: update-releases-config-${{ steps.update-release.outputs.release-name }}-${{ steps.update-release.outputs.release-version }}
           delete-branch: true
-          labels: '${{ env.LABEL }}'
+          labels: "${{ env.LABEL }}"
           sign-commits: true
       - name: Add comment to issue
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
