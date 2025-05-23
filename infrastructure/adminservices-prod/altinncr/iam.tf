@@ -26,7 +26,7 @@ resource "azurerm_role_assignment" "altinncr_reader" {
 }
 
 resource "azurerm_role_assignment" "altinncr_acrpush_altinn_platform" {
-  principal_id                     = azurerm_user_assigned_identity.github-pusher.principal_id
+  principal_id                     = azurerm_user_assigned_identity.github_pusher.principal_id
   role_definition_name             = "AcrPush"
   principal_type                   = "ServicePrincipal"
   scope                            = azurerm_container_registry.acr.id
