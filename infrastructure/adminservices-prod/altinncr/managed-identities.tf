@@ -8,7 +8,7 @@ resource "azurerm_federated_identity_credential" "altinn_platform_federation_mai
   name                = "github.altinn.altinn-platform.ref.main"
   parent_id           = azurerm_user_assigned_identity.github_pusher.id
   resource_group_name = azurerm_resource_group.acr.name
-  audience            = "api://AzureADTokenExchange"
+  audience            = ["api://AzureADTokenExchange"]
   issuer              = "https://token.actions.githubusercontent.com"
   subject             = "repo:Altinn/altinn-platform:ref:refs/heads/main"
 }
@@ -17,7 +17,7 @@ resource "azurerm_federated_identity_credential" "altinn_platform_federation_flu
   name                = "github.altinn.altinn-platform.environment.flux-release"
   parent_id           = azurerm_user_assigned_identity.github_pusher.id
   resource_group_name = azurerm_resource_group.acr.name
-  audience            = "api://AzureADTokenExchange"
+  audience            = ["api://AzureADTokenExchange"]
   issuer              = "https://token.actions.githubusercontent.com"
   subject             = "repo:Altinn/altinn-platform:environment:flux-release"
 }
