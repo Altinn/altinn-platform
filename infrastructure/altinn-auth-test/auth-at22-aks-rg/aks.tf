@@ -56,4 +56,6 @@ module "infra-resources" {
   obs_tenant_id                 = local.tenant_id
   environment                   = local.environment
   syncroot_namespace            = local.team_name
+  grafana_endpoint              = module.grafana.grafana_endpoint
+  token_grafana_operator        = module.grafana.token_grafana_operator
 }
