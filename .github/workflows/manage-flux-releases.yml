@@ -1,0 +1,216 @@
+name: Release and promote Flux oci releases
+
+on:
+  issues:
+    types:
+      - edited
+  release:
+    types: 
+      - created
+  push:
+    branches:
+      - main
+    paths:
+      - flux/releasesconfig.json
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{github.event.issue.number || github.ref}}
+  cancel-in-progress: true
+
+env:
+  ISSUE_TITLE_PREFIX: 'Flux OCI Promotion:'
+  RELEASE_TAG_PREFIX: 'flux-oci-'
+  RELEASE_FILE: 'flux/releasesconfig.json'
+  LABEL: 'flux-release'
+
+jobs:
+  create-issue:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'created' && startsWith(github.event.release.tag_name, 'flux-oci-')
+    steps:
+      - name: Create issue
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const issueTitle = `${{ env.ISSUE_TITLE_PREFIX }} ${context.payload.release.tag_name}`;
+            const issueBody = `A new release has been published. Check it out [here](${context.payload.release.html_url})
+            - Release Name: ${context.payload.release.name}
+            - Release Tag: ${context.payload.release.tag_name}
+            - Release URL: ${context.payload.release.html_url}
+            
+            To create a pull request with updated release config file, please check the boxes below:
+            <!-- start-env-list -->
+            - [ ] Deploy to at_ring1
+            - [ ] Deploy to at_ring2
+            - [ ] Deploy to tt_ring1
+            - [ ] Deploy to tt_ring2
+            - [ ] Deploy to prod_ring1
+            - [ ] Deploy to prod_ring2
+            <!-- stop-env-list -->
+            `;
+            // Check if the issue already exists
+            const { data: issues } = await github.rest.issues.listForRepo({
+              ...context.repo,
+              state: 'open',
+              labels: '${{ env.LABEL }}',
+            });
+            const issueExists = issues.some(issue => issue.title === issueTitle);
+            if (issueExists) {
+              console.log(`Issue already exists: ${issueTitle}`);
+              return;
+            }
+            // Create a new issue
+            const response = await github.rest.issues.create({
+              ...context.repo,
+              title: issueTitle,
+              body: issueBody,
+              labels: [ '${{env.LABEL}}' ]
+            });
+            console.log(`Issue created: ${response.data.html_url}`);
+  create-release-pr:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues' && github.event.action == 'edited' && startsWith(github.event.issue.title, 'Flux OCI Promotion:') && github.event.issue.draft == false && github.event.issue.state == 'open'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Promote release
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        id: update-release
+        with:
+          script: |
+            const issueTitle = context.payload.issue.title
+            const versionRegex = /${{ env.ISSUE_TITLE_PREFIX }} ${{ env.RELEASE_TAG_PREFIX }}(.*?)-v(\d+\.\d+\.\d+)/;
+            const match = issueTitle.match(versionRegex);
+            if (!match) {
+              console.log('No version found in release tag:', issueTitle);
+              return;
+            }
+            const releaseName = match[1];
+            const releaseVersion = match[2];
+            core.setOutput('release-name', releaseName);
+            core.setOutput('release-version', releaseVersion);
+            
+            const currentState = context.payload.issue.body;
+            // find the checkboxes in the issue body starting with <!-- start-env-list --> and ending with <!-- stop-env-list -->
+            const startEnvList = currentState.indexOf('<!-- start-env-list -->');
+            const stopEnvList = currentState.indexOf('<!-- stop-env-list -->');
+            const envList = currentState.substring(startEnvList + 23, stopEnvList);
+            const envListLines = envList.split('\n').map(line => line.trim());
+            const lineRegex = /- \[([ x])\] Deploy to (.+)$/;
+            const envListCheckboxes = envListLines.map(line => {
+              const match = line.match(lineRegex);
+              if (match) {
+                const checked = match[1] === 'x';
+                const env = match[2];
+                return { env, checkbox: checked };
+              }
+              return null;
+            }).filter(Boolean);
+            // Update releases config file and create new Pull Request
+            const releasesConfigFile = `${{ env.RELEASE_FILE }}`;
+            const releasesConfig = require(`./${releasesConfigFile}`);
+            // Update environments in releases config file
+            envListCheckboxes.forEach(env => {
+              if (env.checkbox) {
+                const envName = env.env.toLowerCase();
+                if (!releasesConfig[releaseName]) {
+                  releasesConfig[releaseName] = {};
+                }
+                releasesConfig[releaseName][envName] = releaseVersion;
+              }
+            });
+
+            // Write the updated config back to the file
+            const fs = require('fs');
+            fs.writeFileSync(releasesConfigFile, JSON.stringify(releasesConfig, null, 2));
+            console.log('Updated releases config:', releasesConfig);
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
+        id: create-pr
+        with:
+          title: 'Update releases config for ${{ steps.update-release.outputs.release-name }} to ${{ steps.update-release.outputs.release-version }}'
+          body: 'This pull request updates the releases config file with the new release version.'
+          base: main
+          commit-message: 'Update flux releases config for ${{ steps.update-release.outputs.release-name }} to ${{ steps.update-release.outputs.release-version }}'
+          branch: update-releases-config-${{ steps.update-release.outputs.release-name }}-${{ steps.update-release.outputs.release-version }}
+          delete-branch: true
+          labels: '${{ env.LABEL }}'
+          sign-commits: true
+      - name: Add comment to issue
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const issueNumber = context.payload.issue.number;
+            // Check if the comment already exists
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo,
+              issue_number: issueNumber
+            });
+            const commentPrefix = 'A pull request has been created to update the releases config file.';
+            // Update the comment if it already exists
+            const existingComment = comments.find(comment => comment.body.startsWith(commentPrefix));
+            if (existingComment) {
+              console.log('Updating existing comment:', existingComment.id);
+              if ('${{ steps.create-pr.outputs.pull-request-operation }}' == 'closed') {
+                await github.rest.issues.deleteComment({
+                  ...context.repo,
+                  comment_id: existingComment.id
+                });
+              } else {
+                await github.rest.issues.updateComment({
+                  ...context.repo,
+                  comment_id: existingComment.id,
+                  body: `${commentPrefix} Check it out ${{ steps.create-pr.outputs.pull-request-url }}`
+                });
+              }
+            } else {
+              if ('${{ steps.create-pr.outputs.pull-request-operation }}' == 'closed') {
+                console.log('Pull request was closed, not adding comment.');
+                return;
+              }
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: issueNumber,
+                body: `${commentPrefix} Check it out ${{ steps.create-pr.outputs.pull-request-url }}`
+              });
+            }
+  retag-release:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.event.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Setup flux
+        uses: fluxcd/flux2/action@8d5f40dca5aa5d3c0fc3414457dda15a0ac92fa4 # v2.5.1
+        with:
+          version: latest
+      - name: az login
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          subscription-id: ${{ secrets.AZURE_ALTINNACR_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZURE_ALTINNACR_APP_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+      - name: Promote release
+        env:
+          REGISTRY: altinncr.azurecr.io
+        run: |
+          echo "Promoting release..."
+          # Read the releases config file and loop through the releases
+          releasesConfigFile="${{ env.RELEASE_FILE }}"
+          releasesConfig=$(cat $releasesConfigFile)
+          creds=$(az acr login --name altinncr --expose-token)
+          for releaseName in $(echo $releasesConfig | jq -r 'keys[]'); do
+            for envName in $(echo $releasesConfig | jq -r ".\"$releaseName\" | keys[]"); do
+              releaseVersion=$(echo $releasesConfig | jq -r ".\"$releaseName\".\"$envName\"")
+              echo "Promoting release $releaseName to version $releaseVersion for environment $envName"
+              echo "retagging oci://${REGISTRY}/manifests/infra/${releaseName}:${releaseVersion} to ${envName}"
+              flux tag artifact oci://${REGISTRY}/manifests/infra/${releaseName}:${releaseVersion} \
+              --provider=azure \
+              --tag ${envName} \
+              --creds="${creds}" || { echo "Failed to tag ${releaseName}:${releaseVersion} with ${envName}" >&2; exit 1; }
+            done
+          done
