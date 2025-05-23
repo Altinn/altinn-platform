@@ -26,7 +26,7 @@ env:
 jobs:
   create-issue:
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' && github.event.action == 'created' && startsWith(github.event.release.tag_name, github.env.RELEASE_TAG_PREFIX)
+    if: github.event_name == 'release' && github.event.action == 'created' && startsWith(github.event.release.tag_name, 'flux-oci-')
     steps:
       - name: Create issue
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
@@ -69,7 +69,7 @@ jobs:
             console.log(`Issue created: ${response.data.html_url}`);
   create-release-pr:
     runs-on: ubuntu-latest
-    if: github.event_name == 'issues' && github.event.action == 'edited' && startsWith(github.event.issue.title, github.env.ISSUE_TITLE_PREFIX) && github.event.issue.draft == false && github.event.issue.state == 'open'
+    if: github.event_name == 'issues' && github.event.action == 'edited' && startsWith(github.event.issue.title, 'Flux OCI Promotion:') && github.event.issue.draft == false && github.event.issue.state == 'open'
     steps:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

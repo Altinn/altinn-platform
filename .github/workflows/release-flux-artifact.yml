@@ -64,7 +64,7 @@ jobs:
           done
   tag-release:
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' && github.event.action == 'created' && startsWith(github.event.release.tag_name, github.env.RELEASE_TAG_PREFIX)
+    if: github.event_name == 'release' && github.event.action == 'created' && startsWith(github.event.release.tag_name, 'flux-oci-')
     steps:
       - name: Checkout Code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
