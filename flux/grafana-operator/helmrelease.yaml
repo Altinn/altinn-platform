@@ -1,0 +1,51 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: grafana-operator
+  namespace: grafana
+spec:
+  chart:
+    spec:
+      chart: grafana-operator
+      reconcileStrategy: ChartVersion
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+        namespace: grafana
+      version: 5.18.0
+  interval: 1h
+  timeout: 5m
+
+  install:
+    crds: CreateReplace
+    remediation:
+      retries: 5
+  upgrade:
+    crds: CreateReplace
+    remediation:
+      retries: 5
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: ServiceMonitor
+            patch: |
+              - op: replace
+                path: /apiVersion
+                value: azmonitoring.coreos.com/v1
+              - op: add
+                path: /spec/labelLimit
+                value: 63
+              - op: add
+                path: /spec/labelNameLengthLimit
+                value: 511
+              - op: add
+                path: /spec/labelValueLengthLimit
+                value: 1023
+  values:
+    image:
+      repository: altinncr.azurecr.io/ghcr.io/grafana/grafana-operator
+    serviceMonitor:
+      enabled: true
+    dashboard:
+      enabled: true

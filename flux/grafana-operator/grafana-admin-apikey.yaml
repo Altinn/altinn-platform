@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-admin-apikey
+  namespace: grafana
+type: Opaque
+stringData:
+  GF_SECURITY_APIKEY: "${GRAFANA_ADMIN_APIKEY}"
