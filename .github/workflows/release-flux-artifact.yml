@@ -64,6 +64,7 @@ jobs:
           done
   tag-release:
     runs-on: ubuntu-latest
+    environment: flux-release
     if: github.event_name == 'release' && github.event.action == 'created' && startsWith(github.event.release.tag_name, 'flux-oci-')
     steps:
       - name: Checkout Code
