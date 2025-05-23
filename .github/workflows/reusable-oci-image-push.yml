@@ -109,7 +109,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup flux
-        uses: fluxcd/flux2/action@6150fe9942b822c926e76a43dce31c595313f324
+        uses: fluxcd/flux2/action@5ffca1b15753425074ecad38eace9060db28f9b2
         with:
           version: latest
       - name: az login

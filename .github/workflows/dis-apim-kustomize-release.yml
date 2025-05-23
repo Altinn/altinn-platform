@@ -61,7 +61,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Setup flux
-        uses: fluxcd/flux2/action@6150fe9942b822c926e76a43dce31c595313f324
+        uses: fluxcd/flux2/action@5ffca1b15753425074ecad38eace9060db28f9b2
         with:
           version: latest
       - name: Setup vars
