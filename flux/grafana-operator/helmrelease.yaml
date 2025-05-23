@@ -15,7 +15,6 @@ spec:
       version: 5.18.0
   interval: 1h
   timeout: 5m
-
   install:
     crds: CreateReplace
     remediation:
