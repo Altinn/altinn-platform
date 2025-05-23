@@ -2,16 +2,16 @@
  * Converts a JSON object into a query parameter string for an API endpoint.
  * Handles both single values and arrays as query values.
  *
- * @param {Object} queryparams - A JSON object representing query parameters, where the key is the parameter name, and the value is the parameter value. 
+ * @param {Object} queryparams - A JSON object representing query parameters, where the key is the parameter name, and the value is the parameter value.
  *                                If the value is an array, multiple key-value pairs are generated.
- * @example 
+ * @example
  * // Input
  * const queryparams = {
  *   key1: "value1",
  *   key2: "value2",
  *   key3: ["value3", "value4"]
  * };
- * 
+ *
  * // Output
  * // "?key1=value1&key2=value2&key3=value3&key3=value4"
  *
@@ -19,21 +19,21 @@
  *                   For array values, the key is repeated for each value in the array.
  */
 export function buildQueryParametersForEndpoint(queryparams) {
-    let query = "?";
+  let query = '?';
 
-    Object.keys(queryparams).forEach((key) => {
-        if (Array.isArray(queryparams[key])) {
-            queryparams[key].forEach((value) => {
-                query += `${key}=${value}&`;
-            });
-        } else {
-            query += `${key}=${queryparams[key]}&`;
-        }
-    });
+  Object.keys(queryparams).forEach((key) => {
+    if (Array.isArray(queryparams[key])) {
+      queryparams[key].forEach((value) => {
+        query += `${key}=${value}&`;
+      });
+    } else {
+      query += `${key}=${queryparams[key]}&`;
+    }
+  });
 
-    query = query.slice(0, -1);
+  query = query.slice(0, -1);
 
-    return query;
+  return query;
 }
 
 /**
@@ -42,11 +42,11 @@ export function buildQueryParametersForEndpoint(queryparams) {
  * @returns {Object} A header object with Authorization set to Bearer token
  */
 export function buildHeaderWithBearer(token) {
-    return {
-        headers: {
-            Authorization: `Bearer ${token}`
-        }
-    };
+  return {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  };
 }
 
 /**
@@ -55,11 +55,11 @@ export function buildHeaderWithBearer(token) {
  * @returns {Object} A header object with Authorization set to Basic token
  */
 export function buildHeaderWithBasic(token) {
-    return {
-        headers: {
-            Authorization: `Basic ${token}`
-        }
-    };
+  return {
+    headers: {
+      Authorization: `Basic ${token}`,
+    },
+  };
 }
 
 /**
@@ -68,12 +68,12 @@ export function buildHeaderWithBasic(token) {
  * @returns {Object} A header object with Authorization set to Bearer token and Content-Type set to application/json
  */
 export function buildHeaderWithBearerAndContentType(token) {
-    return {
-        headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json"
-        }
-    };
+  return {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  };
 }
 
 /**
@@ -82,9 +82,9 @@ export function buildHeaderWithBearerAndContentType(token) {
  * @returns {Object} A header object with Content-Type set to the specified value
  */
 export function buildHeaderWithContentType(contentType) {
-    return {
-        headers: {
-            "Content-Type": contentType
-        }
-    };
+  return {
+    headers: {
+      'Content-Type': contentType,
+    },
+  };
 }

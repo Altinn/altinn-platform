@@ -6,11 +6,11 @@ This module provides functionality to generate access tokens from Maskinporten u
 
 1. Access to Samarbeidsportalen (https://sjolvbetjening.test.samarbeid.digdir.no)
 2. A Maskinporten client ID
-3. The `altinn-jwks` tool installed (https://github.com/Altinn/altinn-authorization-utils/tree/main/src/Altinn.Cli)
+3. The `altinn-jwks` tool installed (https://github.com/Altinn/altinn-authorization-utils/tree/main/src/Altinn.Cli) (or your own code or any other tool that could generate keys for you)
 
 ## Required Environment Variables
 
-Before running any tests, you need to set these environment variables 
+Before running any tests, you need to set these environment variables
 
 ```bash
 # Set in your shell
@@ -27,6 +27,7 @@ k6 run \
 ```
 
 These variables are used in the code as:
+
 ```javascript
 const machineportenKid = __ENV.MACHINEPORTEN_KID;
 const encodedJwk = __ENV.ENCODED_JWK;
@@ -36,12 +37,15 @@ const machineportenClientId = __ENV.MACHINEPORTEN_CLIENT_ID;
 ## Setup Steps
 
 1. Generate a key pair using the altinn-jwks tool:
+
    ```bash
    altinn-jwks create br
    ```
+
    This will create a standard key pair for testing purposes.
 
 2. Upload the generated JWK to Samarbeidsportalen:
+
    - Go to https://sjolvbetjening.test.samarbeid.digdir.no
    - Upload the generated key file
 
@@ -61,20 +65,22 @@ const accessToken = generateAccessToken('scope1 scope2');
 
 // Use the access token in your API calls
 const headers = {
-    'Authorization': `Bearer ${accessToken}`,
-    // ... other headers
+  Authorization: `Bearer ${accessToken}`,
+  // ... other headers
 };
 ```
 
 ## Configuration
 
 The module uses the following default configuration:
+
 - Audience: https://test.maskinporten.no/
 - Token endpoint: https://test.maskinporten.no/token
 
 ## Error Handling
 
 The module includes built-in error handling that will:
+
 - Validate all required environment variables
 - Check for successful token generation
 - Stop the test iteration if any required step fails
