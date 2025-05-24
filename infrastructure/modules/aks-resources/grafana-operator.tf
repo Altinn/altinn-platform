@@ -6,7 +6,7 @@ resource "azapi_resource" "grafana-operator" {
   body = {
     properties = {
       kustomizations = {
-        traefik = {
+        grafana-operator = {
           force = false
           path  = "./"
           postBuild = {
