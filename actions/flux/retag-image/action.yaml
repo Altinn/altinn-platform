@@ -46,7 +46,6 @@ runs:
         azure_subscription_id: ${{ inputs.azure_subscription_id }}
         azure_tenant_id: ${{ inputs.azure_tenant_id }}
     - name: Tag release artifact
-      shell: bash
       env:
         ARTIFACT_NAME: ${{ inputs.image_name }}
         FROM_TAG: ${{ inputs.from_tag }}
