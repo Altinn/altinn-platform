@@ -21,7 +21,6 @@ inputs:
     default: 'altinncr'
     type: string
     pattern: '^[a-zA-Z0-9-]{5,50}$'
-secrets:
   azure_app_id:
     description: 'Azure application id used to authenticate to altinncr'
     required: true
