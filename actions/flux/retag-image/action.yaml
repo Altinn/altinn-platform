@@ -41,7 +41,6 @@ runs:
       uses: ./actions/flux/setup-flux-acr
       id: setup_flux_acr
       with:
-        acr_name: ${{ inputs.acr_name }}
         azure_app_id: ${{ inputs.azure_app_id }}
         azure_subscription_id: ${{ inputs.azure_subscription_id }}
         azure_tenant_id: ${{ inputs.azure_tenant_id }}
