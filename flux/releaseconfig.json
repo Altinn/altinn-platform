@@ -1,6 +1,7 @@
 {
   "grafana-operator": {
     "at_ring1": "0.1.3",
-    "at_ring2": "0.1.3"
+    "at_ring2": "0.1.3",
+    "tt_ring1": "0.1.3"
   }
 }
