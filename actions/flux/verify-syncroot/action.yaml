@@ -1,0 +1,27 @@
+name: Verify folder structure for flux syncroot
+description: Simple validation of the folder structure for a flux syncroot, checking that the kustomization.yaml file exists in each environment folder.
+
+inputs:
+  workdir:
+    description: 'Folder containing the OCI context'
+    required: true
+    type: string
+
+runs:
+  using: composite
+  defaults:
+    run:
+      working-directory: ${{ inputs.workdir }}
+  runs-on: ubuntu-latest
+  steps:
+    - name: Validate folder structure
+      run: |
+        # Loop over a list of environment names and check that the kustomization.yaml file exists in each environment folder
+        environments=("at22" "at23" "at24" "tt02" "yt01" "prod")
+        for env in "${environments[@]}"; do
+          if [ ! -f "./${env}/kustomization.yaml" ]; then
+            echo "Error: kustomization.yaml not found in ./${env}/"
+            exit 1
+          fi
+        done
+        echo "Validation successful: kustomization.yaml exists in all specified environment folders."
