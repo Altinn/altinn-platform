@@ -93,7 +93,7 @@ jobs:
               return;
             }
       - name: Add release tag to artifacts
-        uses: ./.github/workflows/reusable-oci-image-push.yml
+        uses: Altinn/altinn-platform/actions/flux/build-push-image@fc6c4e99e61a8ef6a9796ce44d380c72b2a12f1e # main
         with:
           image_name: "manifests/infra/${{ steps.extract-release.outputs.releaseName }}"
           tag: ${{ steps.extract-release.outputs.releaseVersion }}
