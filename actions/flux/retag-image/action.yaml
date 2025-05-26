@@ -1,40 +1,38 @@
 name: Add tag to existing flux OCI image
-description: 'Re-tag an existing OCI image in Azure Container Registry (ACR) using the FluxCLI'
+description: "Re-tag an existing OCI image in Azure Container Registry (ACR) using the FluxCLI"
 
 inputs:
   image_name:
-    description: 'Name of the OCI image to tag'
+    description: "Name of the OCI image to tag"
     required: true
     type: string
   from_tag:
-    description: 'The tag of the existing image to re-tag'
+    description: "The tag of the existing image to re-tag"
     required: true
     type: string
   tag:
-    description: 'The new tag to apply to the existing image'
+    description: "The new tag to apply to the existing image"
     required: true
     type: string
   workdir:
-    description: 'Folder containing the OCI resources'
+    description: "Folder containing the OCI resources"
     required: true
     type: string
   acr_name:
-    description: 'Name of the Azure Container Registry (ACR) to use'
+    description: "Name of the Azure Container Registry (ACR) to use"
     required: false
-    default: 'altinncr'
+    default: "altinncr"
     type: string
-    pattern: '^[a-zA-Z0-9-]{5,50}$
+    pattern: "^[a-zA-Z0-9-]{5,50}$"
   azure_app_id:
-    description: 'Azure application id used to authenticate to altinncr'
+    description: "Azure application id used to authenticate to altinncr"
     required: true
   azure_subscription_id:
-    description: 'Azure subscription id used to authenticate to altinncr'
+    description: "Azure subscription id used to authenticate to altinncr"
     required: true
   azure_tenant_id:
-    description: 'Azure tenant id used to authenticate to altinncr'
+    description: "Azure tenant id used to authenticate to altinncr"
     required: true
-
-
 
 runs:
   using: composite
@@ -47,16 +45,18 @@ runs:
       id: setup_flux_acr
       with:
         acr_name: ${{ inputs.acr_name }}
+        azure_app_id: ${{ inputs.azure_app_id }}
+        azure_subscription_id: ${{ inputs.azure_subscription_id }}
+        azure_tenant_id: ${{ inputs.azure_tenant_id }}
     - name: Tag release artifact
       env:
         ARTIFACT_NAME: ${{ inputs.image_name }}
         FROM_TAG: ${{ inputs.from_tag }}
         TO_TAG: ${{ inputs.tag }}
         ACR_NAME: ${{ inputs.acr_name }}
-        ACR_CREDS: ${{ steps.setup_flux_acr.outputs.acr_token }}
+      shell: bash
       run: |
         container_registry=${ACR_NAME}.azurecr.io
         flux tag artifact "oci://${container_registry}/${ARTIFACT_NAME}:${FROM_TAG}" \
             --provider=azure \
-            --tag "${TO_TAG}" \
-            --creds="${ACR_CREDS}"
+            --tag "${TO_TAG}"
