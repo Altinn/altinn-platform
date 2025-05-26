@@ -12,10 +12,12 @@ on:
       - main
     paths:
       - flux/releaseconfig.json
+      - .github/workflows/manage-flux-releases.yml
 permissions:
   contents: write
   issues: write
   pull-requests: write
+  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{github.event.issue.number || github.ref}}

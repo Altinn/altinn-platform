@@ -58,7 +58,7 @@ jobs:
               --revision="$(git branch --show-current)/$(git rev-parse HEAD)" \
             flux tag artifact oci://${REGISTRY}/manifests/infra/${artifact}:$(git rev-parse --short HEAD) \
               --provider=azure \
-              --tag latest \
+              --tag latest
           done
   tag-release:
     runs-on: ubuntu-latest
