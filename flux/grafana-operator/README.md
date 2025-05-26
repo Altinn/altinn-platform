@@ -2,7 +2,7 @@
 
 This directory contains the Flux configuration for deploying the Grafana Operator using Helm and configuring an external Grafana instance.
 
-## OCI Image
+## Deployment Image
 
 The deployment uses the following image:
 - **Repository**: `altinncr.azurecr.io/ghcr.io/grafana/grafana-operator`
