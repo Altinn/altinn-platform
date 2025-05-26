@@ -12,6 +12,7 @@ inputs:
     required: false
     default: 'altinncr'
     type: string
+    pattern: '^[a-zA-Z0-9-]{5,50}$
 secrets:
   azure_app_id:
     description: 'Azure application id used to authenticate to altinncr'
@@ -45,6 +46,8 @@ runs:
         tenant-id: ${{ secrets.azure_tenant_id }}
     - name: Fetch ACR credentials
       id: artifact_key
+      env:
+        ACR_NAME: ${{ inputs.acr_name }}
       run: |
-        creds=$(az acr login --name ${{ inputs.acr_name }} --expose-token)
+        creds=$(az acr login --name ${ACR_NAME} --expose-token)
         echo "key=${creds}" >> $GITHUB_OUTPUT

@@ -5,13 +5,15 @@ inputs:
   image_name:
     description: 'Name of the OCI image to tag'
     required: true
+    type: string
   from_tag:
     description: 'The tag of the existing image to re-tag'
     required: true
+    type: string
   tag:
     description: 'The new tag to apply to the existing image'
     required: true
-    type: string@
+    type: string
   workdir:
     description: 'Folder containing the OCI resources'
     required: true
@@ -21,6 +23,7 @@ inputs:
     required: false
     default: 'altinncr'
     type: string
+    pattern: '^[a-zA-Z0-9-]{5,50}$
 secrets:
   azure_app_id:
     description: 'Azure application id used to authenticate to altinncr'
@@ -50,10 +53,11 @@ runs:
         ARTIFACT_NAME: ${{ inputs.image_name }}
         FROM_TAG: ${{ inputs.from_tag }}
         TO_TAG: ${{ inputs.tag }}
+        ACR_NAME: ${{ inputs.acr_name }}
+        ACR_CREDS: ${{ steps.setup_flux_acr.outputs.acr_token }}
       run: |
-        creds=${{ steps.setup_flux_acr.outputs.acr_token }}
-        container_registry=${{ inputs.acr_name }}.azurecr.io
-        flux tag artifact "oci://${container_registry}/${ARTIFACT_NAME}:${FROM_TAG} \
+        container_registry=${ACR_NAME}.azurecr.io
+        flux tag artifact "oci://${container_registry}/${ARTIFACT_NAME}:${FROM_TAG}" \
             --provider=azure \
             --tag "${TO_TAG}" \
-            --creds="${creds}"
+            --creds="${ACR_CREDS}"
