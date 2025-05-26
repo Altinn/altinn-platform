@@ -26,7 +26,7 @@ resource "azurerm_role_assignment" "grafana_admin" {
   }
   scope                            = azurerm_dashboard_grafana.grafana.id
   role_definition_name             = "Grafana Admin"
-  principal_id                     = each.key
+  principal_id                     = each.value
   principal_type                   = "Group"
   skip_service_principal_aad_check = true
 }

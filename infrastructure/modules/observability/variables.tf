@@ -69,3 +69,9 @@ variable "oidc_issuer_url" {
     error_message = "You must provide a value for oidc_issuer_url."
   }
 }
+
+variable "azurerm_kubernetes_cluster_id" {
+  type        = string
+  default     = ""
+  description = "AKS cluster resource id"
+}
