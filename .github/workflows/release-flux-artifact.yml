@@ -20,6 +20,7 @@ permissions:
 jobs:
   build-latest:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout Code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -90,7 +91,7 @@ jobs:
               return;
             }
       - name: Add release tag to artifacts
-        uses: Altinn/altinn-platform/actions/flux/build-push-image@fc6c4e99e61a8ef6a9796ce44d380c72b2a12f1e # main
+        uses: ./actions/flux/build-push-image
         with:
           image_name: "manifests/infra/${{ steps.extract-release.outputs.releaseName }}"
           tag: ${{ steps.extract-release.outputs.releaseVersion }}

@@ -36,15 +36,11 @@ inputs:
 
 runs:
   using: composite
-  defaults:
-    run:
-      working-directory: ${{ inputs.workdir }}
   steps:
     - name: Prepare Job for Pushing Flux OCI Artifacts to Azure Container Registry
-      uses: Altinn/altinn-platform/actions/flux/setup-flux-acr@main
+      uses: ./actions/flux/setup-flux-acr
       id: setup_flux_acr
       with:
-        acr_name: ${{ inputs.acr_name }}
         azure_app_id: ${{ inputs.azure_app_id }}
         azure_subscription_id: ${{ inputs.azure_subscription_id }}
         azure_tenant_id: ${{ inputs.azure_tenant_id }}
