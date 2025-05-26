@@ -67,3 +67,34 @@ export function hentFoedselsnummerForDagligLeder(responseJson) {
   console.log('Fødselsnummer for DAGL ikke funnet');
   return null;
 }
+
+/**
+ * Extracts organisasjonsnummer og navn fra alle dokumenter i Tenor-responsen.
+ *
+ * @param {object} responseJson - Response from `searchTenor`
+ * @returns {Array<{ organisasjonsnummer: string, navn: string }>}
+ */
+export function hentVirksomheterFraKildedata(responseJson) {
+  const dokumenter = responseJson?.dokumentListe || [];
+  const resultater = [];
+
+  for (const dokument of dokumenter) {
+    try {
+      const kildedata = JSON.parse(dokument.tenorMetadata.kildedata);
+      const orgnr = kildedata.organisasjonsnummer;
+      const navn = kildedata.navn;
+
+      if (/^\d{9}$/.test(orgnr) && typeof navn === 'string') {
+        resultater.push({ organisasjonsnummer: orgnr, navn });
+      } else {
+        console.warn(
+          'Ugyldig eller manglende organisasjonsnummer/navn i ett dokument',
+        );
+      }
+    } catch (err) {
+      console.warn('Feil ved parsing av kildedata i ett dokument:', err);
+    }
+  }
+
+  return resultater;
+}

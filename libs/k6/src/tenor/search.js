@@ -9,7 +9,6 @@ const DEFAULT_SCOPE = 'skatteetaten:testnorge/testdata.read';
  *
  * @param {object} options
  * @param {string} options.query - Raw or encoded KQL query string
- * @param {boolean} [options.queryIsEncoded=true] - Whether the query is already URL-encoded
  * @param {string} [options.path='/api/testnorge/v2/soek/brreg-er-fr'] - Optional API path
  * @param {number} [options.antall=1] - Number of results to request
  * @param {boolean} [options.includeTenorMetadata=true] - Whether to include vis=tenorMetadata in query
@@ -17,7 +16,6 @@ const DEFAULT_SCOPE = 'skatteetaten:testnorge/testdata.read';
  */
 export function searchTenor({
   query,
-  queryIsEncoded = true,
   path = '/api/testnorge/v2/soek/brreg-er-fr',
   antall = 1,
   includeTenorMetadata = true,
@@ -26,10 +24,9 @@ export function searchTenor({
     throw new Error('searchTenor requires a non-empty query string');
   }
 
-  const encodedQuery = queryIsEncoded ? query : encodeURIComponent(query);
   const token = generateAccessToken(DEFAULT_SCOPE);
 
-  let url = `${BASE_URL}${path}?kql=${encodedQuery}`;
+  let url = `${BASE_URL}${path}?kql=${query}`;
   if (includeTenorMetadata) {
     url += '&vis=tenorMetadata';
   }

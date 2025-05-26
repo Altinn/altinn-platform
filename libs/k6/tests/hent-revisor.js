@@ -5,6 +5,7 @@ import { searchTenor } from '../src/tenor/search.js';
 import {
   hentOrgnummerForRolle,
   hentFoedselsnummerForDagligLeder,
+  hentVirksomheterFraKildedata,
 } from '../src/tenor/extract.js';
 
 //tenorMetadata = kildedata
@@ -66,31 +67,34 @@ function hentTestdata() {
   });
 }
 
-export default function () {
-  const json = searchTenor({ query: 'revisorer%3A*' }); // Already encoded
+function testCache() {
+  const json = searchTenor({ query: 'revisorer:*' });
   const orgnummer = hentOrgnummerForRolle(json);
 
   //slå opp på orgnummeret
-  //testdata.api.skatteetaten.no/api/testnorge/v2/soek/brreg-er-fr?kql=revisorer%3A*+and+organisasjonsnummer%3A312939053
   const orgSearch = searchTenor({
     query: `organisasjonsnummer:${orgnummer}`,
     queryIsEncoded: false,
   });
 
   var foedselsnummer = hentFoedselsnummerForDagligLeder(orgSearch);
-  console.log('Orgnummer:', orgnummer);
-  console.log('Foedselsnummer:', foedselsnummer);
   console.log(foedselsnummer, orgnummer);
 
   //Søk på kunder
-  const query = `revisorer : * "${orgnummer}"`;
-
+  const query = `revisorer:${orgnummer}`;
   const getCustomers = searchTenor({
     query,
-    queryIsEncoded: false,
     antall: 10,
-    includeTenorMetadata: false,
+    includeTenorMetadata: true,
   });
 
-  console.log(JSON.stringify(getCustomers, null, 2));
+  const virksomheter = hentVirksomheterFraKildedata(getCustomers);
+  for (const v of virksomheter) {
+    console.log(`${v.navn}, ${v.navn}, ${v.organisasjonsnummer}`);
+  }
+}
+
+export default function () {
+  // cacheToken();
+  testCache();
 }

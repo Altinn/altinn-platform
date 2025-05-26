@@ -25,56 +25,9 @@ const machineportenClientId = __ENV.MACHINEPORTEN_CLIENT_ID;
  *
  * @throws Will stop test iteration if any required environment variable is missing or if the token request fails.
  */
-export function generateAccessToken(scopes) {
-  if (!encodedJwk) {
-    stopIterationOnFail(
-      'Required environment variable Encoded JWK (encodedJWK) was not provided',
-      false,
-    );
-  }
 
-  if (!machineportenClientId) {
-    stopIterationOnFail(
-      'Required environment variable maskinporten client id (mpClientId) was not provided',
-      false,
-    );
-  }
-
-  if (!machineportenKid) {
-    stopIterationOnFail(
-      'Required environment variable maskinporten kid (mpKid) was not provided',
-      false,
-    );
-  }
-
-  const grant = createJwtGrant(scopes);
-
-  const body = {
-    alg: 'RS256',
-    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-    assertion: grant,
-  };
-
-  const res = http.post(
-    config.maskinporten.token,
-    body,
-    buildHeaderWithContentType('application/x-www-form-urlencoded'),
-  );
-
-  const success = check(res, {
-    '// Setup // Authentication towards Maskinporten Success': (r) =>
-      r.status === 200,
-  });
-
-  stopIterationOnFail(
-    '// Setup // Authentication towards Maskinporten Failed',
-    success,
-  );
-
-  const accessToken = JSON.parse(res.body)['access_token'];
-
-  return accessToken;
-}
+// eslint-disable-next-line no-undef
+const tokenCache = new Map(); // key: scopes, value: { token, expiresAt }
 
 function createJwtGrant(scopes) {
   const header = {
@@ -102,4 +55,13 @@ function createJwtGrant(scopes) {
   );
 
   return signedJWT;
+}
+
+function decodeJwtPayload(jwt) {
+  const base64 = jwt
+    .split('.')[1]
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+    .padEnd(4 * Math.ceil(jwt.split('.')[1].length / 4), '=');
+  return JSON.parse(encoding.b64decode(base64, 'std', 's'));
 }
