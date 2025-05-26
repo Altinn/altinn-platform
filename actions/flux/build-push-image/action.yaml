@@ -1,0 +1,75 @@
+name: Build kustomize oci artifact and push to azure container registry
+description: 'Build and push a kustomize OCI artifact to Azure Container Registry (ACR) using the FluxCLI'
+
+inputs:
+  image_name:
+    description: 'Name of the OCI image to push'
+    required: true
+    type: string
+  workdir:
+    description: 'Folder containing the OCI context'
+    required: true
+    type: string
+  tag:
+    description: 'Tag to push in addition to the short commit sha tag'
+    required: false
+    default: ''
+    type: string
+  acr_name:
+    description: 'Name of the Azure Container Registry (ACR) to use'
+    required: false
+    default: 'altinncr'
+    type: string
+secrets:
+  azure_app_id:
+    description: 'Azure application id used to authenticate to altinncr'
+    required: true
+  azure_subscription_id:
+    description: 'Azure subscription id used to authenticate to altinncr'
+    required: true
+  azure_tenant_id:
+    description: 'Azure tenant id used to authenticate to altinncr'
+    required: true
+
+runs:
+  using: composite
+  defaults:
+    run:
+      working-directory: ${{ inputs.workdir }}
+  runs-on: ubuntu-latest
+  steps:
+    - name: Prepare Job for Pushing Flux OCI Artifacts to Azure Container Registry
+      uses: Altinn/altinn-platform/actions/flux/setup-flux-acr@main
+      id: setup_flux_acr
+      with:
+        acr_name: ${{ inputs.acr_name }}
+    - name: Build and push artifact with commit sha tag
+      env:
+        ARTIFACT_NAME: ${{ inputs.image_name }}
+      run: |
+        creds=${{ steps.setup_flux_acr.outputs.acr_token }}
+        container_registry=${{ inputs.acr_name }}.azurecr.io
+        short_sha=$(git rev-parse --short HEAD)
+        repo_url=$(git config --get remote.origin.url)
+        branch_sha=$(git branch --show-current)/$(git rev-parse HEAD)
+        # Build and push the OCI artifact
+        flux push artifact "oci://${container_registry}/${ARTIFACT_NAME}:${short_sha}" \
+          --provider=azure \
+          --reproducible \
+          --path="." \
+          --source="${repo_url}" \
+          --revision="${branch_sha}" \
+          --creds="${creds}"
+    - name: Tag artifact with custom tag
+      if: inputs.tag != ''
+      env:
+        ARTIFACT_NAME: ${{ inputs.image_name }}
+        EXTRA_TAG: ${{ inputs.tag }}
+      run: |
+        creds=${{ steps.setup_flux_acr.outputs.acr_token }}
+        container_registry=${{ inputs.acr_name }}.azurecr.io
+        short_sha=$(git rev-parse --short HEAD)
+        flux tag artifact "oci://${container_registry}/${ARTIFACT_NAME}:${short_sha}" \
+          --provider=azure \
+          --tag "${EXTRA_TAG}" \
+          --creds="${creds}"
