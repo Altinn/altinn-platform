@@ -1,5 +1,7 @@
 # Grafana Operator
 
+## Description
+
 This directory contains the Flux configuration for deploying the Grafana Operator using Helm and configuring an external Grafana instance.
 
 ## Deployment Image
