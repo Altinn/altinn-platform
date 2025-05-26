@@ -1,0 +1,235 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: traefik-crds
+  namespace: traefik
+spec:
+  chart:
+    spec:
+      chart: traefik-crds
+      reconcileStrategy: ChartVersion
+      sourceRef:
+        kind: HelmRepository
+        name: traefik
+        namespace: traefik
+      version: 1.5.0
+  interval: 1h
+  timeout: 5m
+  install:
+    remediation:
+      retries: 5
+  upgrade:
+    remediation:
+      retries: 5
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: altinn-traefik
+  namespace: traefik
+spec:
+  chart:
+    spec:
+      chart: traefik
+      reconcileStrategy: ChartVersion
+      sourceRef:
+        kind: HelmRepository
+        name: traefik
+        namespace: traefik
+      version: 34.4.1
+  interval: 1h
+  timeout: 5m
+  dependsOn:
+    - name: traefik-crds
+      namespace: traefik
+  install:
+    crds: Skip
+    remediation:
+      retries: 5
+  upgrade:
+    crds: Skip
+    remediation:
+      retries: 5
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: ServiceMonitor
+            patch: |
+              - op: replace
+                path: /apiVersion
+                value: azmonitoring.coreos.com/v1
+              - op: add
+                path: /spec/labelLimit
+                value: 63
+              - op: add
+                path: /spec/labelNameLengthLimit
+                value: 511
+              - op: add
+                path: /spec/labelValueLengthLimit
+                value: 1023
+  values:
+    image:
+      registry: altinncr.azurecr.io
+    deployment:
+      replicas: 3
+      labels:
+        release: traefik
+      podAnnotations:
+        linkerd.io/inject: enabled
+        config.linkerd.io/skip-inbound-ports: 8000,8443
+        config.linkerd.io/proxy-cpu-request: 50m
+        config.linkerd.io/proxy-memory-limit: 250Mi
+        config.linkerd.io/proxy-memory-request: 20Mi
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1
+    ingressClass:
+      enabled: false
+    providers:
+      kubernetesIngress:
+        enabled: false
+    globalArguments:
+      - "--global.checknewversion=false"
+      - "--global.sendanonymoususage=false"
+    ports:
+      web: null
+      websecure: null
+      http:
+        port: 8000
+        expose:
+          default: true
+        exposedPort: 80
+        protocol: TCP
+        redirections:
+          entryPoint:
+            to: https
+            scheme: https
+            permanent: true
+        forwardedHeaders:
+          insecure: false
+          trustedIPs:
+            - "${AKS_SYSP00L_IP_PREFIX_0}"
+            - "${AKS_SYSP00L_IP_PREFIX_1}"
+            - "${AKS_WORKPOOL_IP_PREFIX_0}"
+            - "${AKS_WORKPOOL_IP_PREFIX_1}"
+      https:
+        port: 8443
+        expose:
+          default: true
+        exposedPort: 443
+        protocol: TCP
+        forwardedHeaders:
+          insecure: false
+          trustedIPs:
+            - "${AKS_SYSP00L_IP_PREFIX_0}"
+            - "${AKS_SYSP00L_IP_PREFIX_1}"
+            - "${AKS_WORKPOOL_IP_PREFIX_0}"
+            - "${AKS_WORKPOOL_IP_PREFIX_1}"
+        tls:
+          enabled: true
+          options: ""
+          certResolver: ""
+          domains: []
+    tlsOptions:
+      default:
+        minVersion: VersionTLS12
+        cipherSuites:
+          - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+          - TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256
+    tlsStore:
+      default:
+        defaultCertificate:
+          secretName: ssl-cert
+    service:
+      annotations:
+        service.beta.kubernetes.io/azure-load-balancer-resource-group: "${AKS_NODE_RG}"
+        service.beta.kubernetes.io/azure-load-balancer-ipv4: "${PUBLIC_IP_V4}"
+        service.beta.kubernetes.io/azure-load-balancer-ipv6: "${PUBLIC_IP_V6}"
+      spec:
+        externalTrafficPolicy: "${EXTERNAL_TRAFFIC_POLICY:=Local}"
+      ipFamilyPolicy: PreferDualStack
+      ipFamilies:
+        - IPv4
+        - IPv6
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "50Mi"
+    metrics:
+      prometheus:
+        service:
+          enabled: true
+        disableAPICheck: true
+        serviceMonitor:
+          enabled: true
+          metricRelabelings:
+            - sourceLabels: [__name__]
+              separator: ;
+              regex: ^fluentd_output_status_buffer_(oldest|newest)_.+
+              replacement: $1
+              action: drop
+          relabelings:
+            - sourceLabels: [__meta_kubernetes_pod_node_name]
+              separator: ;
+              regex: ^(.*)$
+              targetLabel: nodename
+              replacement: $1
+              action: replace
+          jobLabel: traefik
+          interval: 30s
+          honorLabels: true
+          namespaceSelector:
+            any: true
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/name
+                    operator: In
+                    values:
+                      - traefik
+              topologyKey: kubernetes.io/hostname
+    extraObjects:
+      - apiVersion: traefik.io/v1alpha1
+        kind: Middleware
+        metadata:
+          name: hsts-header
+          namespace: traefik
+        spec:
+          headers:
+            stsIncludeSubdomains: true
+            stsSeconds: 63072000
+            stsPreload: true
+      - apiVersion: traefik.io/v1alpha1
+        kind: Middleware
+        metadata:
+          name: hsts-header
+          namespace: default
+        spec:
+          headers:
+            stsIncludeSubdomains: true
+            stsSeconds: 63072000
+            stsPreload: true
+      - apiVersion: traefik.io/v1alpha1
+        kind: IngressRoute
+        metadata:
+          name: root-ingress-route
+          namespace: traefik
+        spec:
+          entryPoints:
+            - http
+            - https
+          routes:
+            - kind: Rule
+              match: PathPrefix(`/`)
+              middlewares:
+                - name: hsts-header
+                  namespace: traefik
+              services:
+                - kind: TraefikService
+                  name: noop@internal

@@ -1,0 +1,20 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: linkerd-root-ca
+  namespace: linkerd
+spec:
+  isCA: true
+  literalSubject: CN=root.linkerd.cluster.local
+  secretName: linkerd-trust-anchor
+  duration: 87600h
+  renewBefore: 1460h
+  usages: ["cert sign", "crl sign"]
+  privateKey:
+    rotationPolicy: Always
+    algorithm: ECDSA
+    size: 256
+  revisionHistoryLimit: 3
+  issuerRef:
+    name: linkerd-root-ca
+    kind: ClusterIssuer

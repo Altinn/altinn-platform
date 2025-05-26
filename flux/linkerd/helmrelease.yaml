@@ -1,0 +1,101 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: linkerd-crds
+  namespace: linkerd
+spec:
+  chart:
+    spec:
+      chart: linkerd-crds
+      reconcileStrategy: ChartVersion
+      sourceRef:
+        kind: HelmRepository
+        name: linkerd
+        namespace: linkerd
+      version: 2025.1.2
+  interval: 1h
+  timeout: 5m
+  install:
+    remediation:
+      retries: 5
+  upgrade:
+    remediation:
+      retries: 5
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: linkerd
+  namespace: linkerd
+spec:
+  chart:
+    spec:
+      chart: linkerd-control-plane
+      reconcileStrategy: ChartVersion
+      sourceRef:
+        kind: HelmRepository
+        name: linkerd
+        namespace: linkerd
+      version: 2025.1.2
+  interval: 1h
+  timeout: 10m
+  dependsOn:
+    - name: cert-manager
+      namespace: cert-manager
+    - name: linkerd-crds
+      namespace: linkerd
+  install:
+    crds: Skip
+    remediation:
+      retries: 5
+  upgrade:
+    crds: Skip
+    remediation:
+      retries: 5
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: PodMonitor
+            patch: |
+              - op: replace
+                path: /apiVersion
+                value: azmonitoring.coreos.com/v1
+              - op: add
+                path: /spec/labelLimit
+                value: 63
+              - op: add
+                path: /spec/labelNameLengthLimit
+                value: 511
+              - op: add
+                path: /spec/labelValueLengthLimit
+                value: 1023
+  valuesFrom:
+    - kind: Secret
+      name: linkerd-trust-anchor
+      valuesKey: ca.crt
+      targetPath: identityTrustAnchorsPEM
+    - kind: ConfigMap
+      name: linkerd-ha-values
+      valuesKey: values-ha.yaml
+  values:
+    identity:
+      issuer:
+        scheme: kubernetes.io/tls
+    disableHeartBeat: true
+    controllerImage: altinncr.azurecr.io/linkerd/controller
+    debugContainer:
+      image:
+        name: altinncr.azurecr.io/linkerd/debug
+    policyController:
+      image:
+        name: altinncr.azurecr.io/linkerd/policy-controller
+    proxy:
+      image:
+        name: altinncr.azurecr.io/linkerd/proxy
+    proxyInit:
+      image:
+        name: altinncr.azurecr.io/linkerd/proxy-init
+    podMonitor:
+      enabled: true
+    disableIPv6: "${DISABLE_IPV6}"
