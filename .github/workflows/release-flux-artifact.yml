@@ -7,11 +7,11 @@ on:
     paths:
       - flux/*/**
   release:
-    types: 
+    types:
       - created
 
 env:
-  RELEASE_TAG_PREFIX: 'flux-oci-'
+  RELEASE_TAG_PREFIX: "flux-oci-"
 
 permissions:
   id-token: write
@@ -49,18 +49,15 @@ jobs:
           # Extract unique folder names directly under ./manifests/infra/
           ARTIFACTS=$(echo "${FLUX_FILES}" | awk -F'/' '{print $2}' | sort -u)
           for artifact in $ARTIFACTS;do
-            creds=$(az acr login --name altinncr --expose-token)
             flux push artifact oci://${REGISTRY}/manifests/infra/${artifact}:$(git rev-parse --short HEAD) \
               --provider=azure \
               --reproducible \
               --path="./flux/${artifact}" \
               --source="$(git config --get remote.origin.url)" \
               --revision="$(git branch --show-current)/$(git rev-parse HEAD)" \
-              --creds="${creds}" || { echo "Failed to push $artifact" >&2; exit 1; }
             flux tag artifact oci://${REGISTRY}/manifests/infra/${artifact}:$(git rev-parse --short HEAD) \
               --provider=azure \
               --tag latest \
-              --creds="${creds}" || { echo "Failed to tag $artifact with latest" >&2; exit 1; }
           done
   tag-release:
     runs-on: ubuntu-latest
@@ -97,7 +94,7 @@ jobs:
         with:
           image_name: "manifests/infra/${{ steps.extract-release.outputs.releaseName }}"
           tag: ${{ steps.extract-release.outputs.releaseVersion }}
-          workdir: './flux/${{ steps.extract-release.outputs.releaseName }}'
+          workdir: "./flux/${{ steps.extract-release.outputs.releaseName }}"
           azure_subscription_id: ${{ secrets.AZURE_ALTINNACR_SUBSCRIPTION_ID }}
           azure_app_id: ${{ secrets.AZURE_ALTINNACR_APP_ID }}
           azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}

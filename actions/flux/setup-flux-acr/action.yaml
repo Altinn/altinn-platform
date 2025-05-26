@@ -3,35 +3,28 @@ description: Downloads flux cli and fetches credentials for the Azure Container 
 
 inputs:
   flux_version:
-    description: 'Version of flux to use'
+    description: "Version of flux to use"
     required: false
-    default: 'latest'
+    default: "latest"
     type: string
   acr_name:
-    description: 'Name of the Azure Container Registry (ACR) to use'
+    description: "Name of the Azure Container Registry (ACR) to use"
     required: false
-    default: 'altinncr'
+    default: "altinncr"
     type: string
-    pattern: '^[a-zA-Z0-9-]{5,50}$
+    pattern: "^[a-zA-Z0-9-]{5,50}$"
   azure_app_id:
-    description: 'Azure application id used to authenticate to altinncr'
+    description: "Azure application id used to authenticate to altinncr"
     required: true
   azure_subscription_id:
-    description: 'Azure subscription id used to authenticate to altinncr'
+    description: "Azure subscription id used to authenticate to altinncr"
     required: true
   azure_tenant_id:
-    description: 'Azure tenant id used to authenticate to altinncr'
+    description: "Azure tenant id used to authenticate to altinncr"
     required: true
-outputs:
-  acr_token:
-    description: 'Credentials for the Azure Container Registry to use with flux'
-    value: ${{ steps.artifact_key.outputs.key }}
-    secret: true
-
 
 runs:
   using: composite
-  runs-on: ubuntu-latest
   steps:
     - name: Setup flux
       uses: fluxcd/flux2/action@8d5f40dca5aa5d3c0fc3414457dda15a0ac92fa4 # v2.5.1
@@ -40,13 +33,6 @@ runs:
     - name: az login
       uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
       with:
-        client-id: ${{ secrets.azure_app_id }}
-        subscription-id: ${{ secrets.azure_subscription_id }}
-        tenant-id: ${{ secrets.azure_tenant_id }}
-    - name: Fetch ACR credentials
-      id: artifact_key
-      env:
-        ACR_NAME: ${{ inputs.acr_name }}
-      run: |
-        creds=$(az acr login --name ${ACR_NAME} --expose-token)
-        echo "key=${creds}" >> $GITHUB_OUTPUT
+        client-id: ${{ inputs.azure_app_id }}
+        subscription-id: ${{ inputs.azure_subscription_id }}
+        tenant-id: ${{ inputs.azure_tenant_id }}
