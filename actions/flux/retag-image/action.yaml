@@ -36,9 +36,6 @@ inputs:
 
 runs:
   using: composite
-  defaults:
-    run:
-      working-directory: ${{ inputs.workdir }}
   steps:
     - name: Prepare Job for Pushing Flux OCI Artifacts to Azure Container Registry
       uses: Altinn/altinn-platform/actions/flux/setup-flux-acr@main
@@ -49,6 +46,7 @@ runs:
         azure_subscription_id: ${{ inputs.azure_subscription_id }}
         azure_tenant_id: ${{ inputs.azure_tenant_id }}
     - name: Tag release artifact
+      shell: bash
       env:
         ARTIFACT_NAME: ${{ inputs.image_name }}
         FROM_TAG: ${{ inputs.from_tag }}

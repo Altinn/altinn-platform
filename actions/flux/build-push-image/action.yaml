@@ -35,9 +35,6 @@ inputs:
 
 runs:
   using: composite
-  defaults:
-    run:
-      working-directory: ${{ inputs.workdir }}
   steps:
     - name: Prepare Job for Pushing Flux OCI Artifacts to Azure Container Registry
       uses: Altinn/altinn-platform/actions/flux/setup-flux-acr@main
@@ -51,6 +48,7 @@ runs:
       env:
         ARTIFACT_NAME: ${{ inputs.image_name }}
         ACR_NAME: ${{ inputs.acr_name }}
+        WORKDIR: ${{ inputs.workdir }}
       shell: bash
       run: |
         container_registry=${ACR_NAME}.azurecr.io
@@ -61,11 +59,12 @@ runs:
         flux push artifact "oci://${container_registry}/${ARTIFACT_NAME}:${short_sha}" \
           --provider=azure \
           --reproducible \
-          --path="." \
+          --path="${WORKDIR}" \
           --source="${repo_url}" \
           --revision="${branch_sha}"
     - name: Tag artifact with custom tag
       if: inputs.tag != ''
+      shell: bash
       env:
         ARTIFACT_NAME: ${{ inputs.image_name }}
         EXTRA_TAG: ${{ inputs.tag }}

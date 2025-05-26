@@ -7,12 +7,6 @@ inputs:
     required: false
     default: "latest"
     type: string
-  acr_name:
-    description: "Name of the Azure Container Registry (ACR) to use"
-    required: false
-    default: "altinncr"
-    type: string
-    pattern: "^[a-zA-Z0-9-]{5,50}$"
   azure_app_id:
     description: "Azure application id used to authenticate to altinncr"
     required: true
