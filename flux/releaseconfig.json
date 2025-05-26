@@ -1,1 +1,5 @@
-{}
+{
+  "grafana-operator": {
+    "at_ring1": "0.1.0"
+  }
+}
