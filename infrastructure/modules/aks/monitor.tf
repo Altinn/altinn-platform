@@ -8,12 +8,6 @@ resource "azurerm_log_analytics_workspace" "aks" {
   }
 }
 
-resource "azurerm_monitor_workspace" "aks" {
-  name                = var.azurerm_monitor_workspace_aks_name != "" ? var.azurerm_monitor_workspace_aks_name : "${var.prefix}-${var.environment}-aks-amw"
-  resource_group_name = azurerm_resource_group.monitor.name
-  location            = azurerm_resource_group.monitor.location
-}
-
 resource "random_id" "aks_log" {
   byte_length = 3 # 3 gives 6 characters
 }

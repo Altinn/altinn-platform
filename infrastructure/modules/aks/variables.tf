@@ -19,6 +19,12 @@ variable "aks_sku_tier" {
   description = "Kubernetes SKU"
 }
 
+variable "aks_user_role_scopes" {
+  type        = list(string)
+  default     = []
+  description = "List of groups to get user role scopes for AKS"
+}
+
 variable "environment" {
   type        = string
   description = "Environment for resources"
