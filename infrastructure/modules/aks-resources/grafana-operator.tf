@@ -22,6 +22,9 @@ resource "azapi_resource" "grafana-operator" {
           wait                   = true
         },
         grafana-operator-post-deploy = {
+          dependsOn = [
+            "grafana-operator"
+          ]
           force                  = false
           path                   = "./post-deploy/"
           prune                  = false
