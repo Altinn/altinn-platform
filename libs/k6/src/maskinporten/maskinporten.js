@@ -29,6 +29,62 @@ const machineportenClientId = __ENV.MACHINEPORTEN_CLIENT_ID;
 // eslint-disable-next-line no-undef
 const tokenCache = new Map(); // key: scopes, value: { token, expiresAt }
 
+export function generateAccessToken(scopes) {
+  const now = Date.now();
+  const normalizedScopes = scopes.trim();
+  const clientId = machineportenClientId.trim();
+  const cacheKey = `${clientId}:${normalizedScopes}`;
+
+  const cached = tokenCache.get(cacheKey);
+  if (cached) {
+    const timeLeft = cached.expiresAt - now;
+    if (timeLeft > 0) {
+      return cached.token;
+    } else {
+      console.log(`[TokenCache EXPIRED] ${cacheKey}`);
+    }
+  }
+
+  const grant = createJwtGrant(normalizedScopes);
+
+  const body = {
+    alg: 'RS256',
+    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+    assertion: grant,
+  };
+
+  const res = http.post(
+    config.maskinporten.token,
+    body,
+    buildHeaderWithContentType('application/x-www-form-urlencoded'),
+  );
+
+  const success = check(res, {
+    'Maskinporten OK': (r) => r.status === 200,
+  });
+
+  stopIterationOnFail('Token request failed', success);
+
+  const token = JSON.parse(res.body)['access_token'];
+
+  let expMs;
+  try {
+    const payload = decodeJwtPayload(token);
+    expMs = payload.exp * 1000;
+  } catch (e) {
+    stopIterationOnFail('Failed to decode JWT payload for expiration', false);
+  }
+
+  if (!expMs || expMs <= now) {
+    stopIterationOnFail(
+      'Received token is already expired or invalid exp',
+      false,
+    );
+  }
+  tokenCache.set(cacheKey, { token, expiresAt: expMs });
+  return token;
+}
+
 function createJwtGrant(scopes) {
   const header = {
     alg: 'RS256',
@@ -47,12 +103,15 @@ function createJwtGrant(scopes) {
     jti: uuidv4(),
   };
 
+  const signStart = Date.now();
   const signedJWT = KJUR.jws.JWS.sign(
     'RS256',
     header,
     payload,
     JSON.parse(encoding.b64decode(encodedJwk, 'std', 's')),
   );
+  const signEnd = Date.now();
+  console.log(`JWT signing took ${signEnd - signStart} ms`);
 
   return signedJWT;
 }
