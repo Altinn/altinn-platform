@@ -1,32 +1,14 @@
-resource "azapi_resource" "grafana_operator" {
+resource "azapi_resource" "grafana_manifests" {
   depends_on = [azapi_resource.linkerd]
   type       = "Microsoft.KubernetesConfiguration/fluxConfigurations@2024-11-01"
-  name       = "grafana-operator"
+  name       = "grafana-manifests"
   parent_id  = var.azurerm_kubernetes_cluster_id
   body = {
     properties = {
       kustomizations = {
-        grafana-operator = {
-          force = false
-          path  = "./"
-          postBuild = {
-            substitute = {
-              EXTERNAL_GRAFANA_URL : "${var.grafana_endpoint}"
-              GRAFANA_ADMIN_APIKEY : "${var.token_grafana_operator}"
-            }
-          }
-          prune                  = false
-          retryIntervalInSeconds = 300
-          syncIntervalInSeconds  = 300
-          timeoutInSeconds       = 300
-          wait                   = true
-        },
-        grafana-operator-post-deploy = {
-          dependsOn = [
-            "grafana-operator"
-          ]
+        grafana-manifests = {
           force                  = false
-          path                   = "./post-deploy/"
+          path                   = "./dashboards/"
           prune                  = false
           retryIntervalInSeconds = 300
           syncIntervalInSeconds  = 300
@@ -42,7 +24,7 @@ resource "azapi_resource" "grafana_operator" {
         }
         syncIntervalInSeconds = 300
         timeoutInSeconds      = 300
-        url                   = "oci://altinncr.azurecr.io/manifests/infra/grafana-operator"
+        url                   = "oci://altinncr.azurecr.io/manifests/infra/grafana-manifests"
         useWorkloadIdentity   = true
       }
       reconciliationWaitDuration = "PT5M"
