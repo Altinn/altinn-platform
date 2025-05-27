@@ -20,6 +20,15 @@ resource "azapi_resource" "grafana-operator" {
           syncIntervalInSeconds  = 300
           timeoutInSeconds       = 300
           wait                   = true
+        },
+        grafana-operator-post-deploy = {
+          force                  = false
+          path                   = "./post-deploy/"
+          prune                  = false
+          retryIntervalInSeconds = 300
+          syncIntervalInSeconds  = 300
+          timeoutInSeconds       = 300
+          wait                   = true
         }
       }
       namespace = "flux-system"

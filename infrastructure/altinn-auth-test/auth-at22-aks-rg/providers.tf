@@ -35,9 +35,10 @@ terraform {
 }
 
 provider "azapi" {
-  subscription_id  = var.subscription_id
-  use_oidc         = true
-  enable_preflight = true
+  subscription_id        = var.subscription_id
+  use_oidc               = true
+  enable_preflight       = true
+  disable_default_output = true
 }
 
 provider "azuread" {
