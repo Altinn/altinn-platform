@@ -16,8 +16,3 @@ module "grafana" {
     var.subscription_id,
   ]
 }
-
-moved {
-  from = module.grafana.azapi_resource.grafana-operator
-  to   = module.grafana.azapi_resource.grafana_operator
-}
