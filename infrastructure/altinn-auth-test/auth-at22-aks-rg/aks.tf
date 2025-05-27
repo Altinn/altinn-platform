@@ -59,3 +59,9 @@ module "infra-resources" {
   grafana_endpoint              = module.grafana.grafana_endpoint
   token_grafana_operator        = module.grafana.token_grafana_operator
 }
+
+
+moved {
+  from = module.infra-resources.azapi_resource.grafana-operator
+  to   = module.infra-resources.azapi_resource.grafana_operator
+}
