@@ -1,0 +1,32 @@
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaFolder
+metadata:
+  name: external-grafana-altinn
+  namespace: grafana
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: "external-grafana"
+  title: Altinn
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaFolder
+metadata:
+  name: external-grafana-fluxcd
+  namespace: grafana
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: "external-grafana"
+  title: Fluxcd
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaFolder
+metadata:
+  name: external-grafana-linkerd
+  namespace: grafana
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: "external-grafana"
+  title: linkerd
