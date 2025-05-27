@@ -11,7 +11,6 @@ resource "azapi_resource" "grafana_operator" {
           path  = "./"
           postBuild = {
             substitute = {
-              EXTERNAL_GRAFANA_URL : "${var.grafana_endpoint}"
               GRAFANA_ADMIN_APIKEY : "${var.token_grafana_operator}"
             }
           }
@@ -25,8 +24,13 @@ resource "azapi_resource" "grafana_operator" {
           dependsOn = [
             "grafana-operator"
           ]
-          force                  = false
-          path                   = "./post-deploy/"
+          force = false
+          path  = "./post-deploy/"
+          postBuild = {
+            substitute = {
+              EXTERNAL_GRAFANA_URL : "${var.grafana_endpoint}"
+            }
+          }
           prune                  = false
           retryIntervalInSeconds = 300
           syncIntervalInSeconds  = 300
