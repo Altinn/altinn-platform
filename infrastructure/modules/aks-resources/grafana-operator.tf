@@ -1,4 +1,4 @@
-resource "azapi_resource" "grafana-operator" {
+resource "azapi_resource" "grafana_operator" {
   depends_on = [azapi_resource.linkerd]
   type       = "Microsoft.KubernetesConfiguration/fluxConfigurations@2024-11-01"
   name       = "grafana-operator"
