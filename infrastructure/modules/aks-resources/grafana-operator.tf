@@ -28,7 +28,7 @@ resource "azapi_resource" "grafana_operator" {
           path  = "./post-deploy/"
           postBuild = {
             substitute = {
-              GRAFANA_ADMIN_APIKEY : "${var.token_grafana_operator}"
+              EXTERNAL_GRAFANA_URL : "${var.grafana_endpoint}"
             }
           }
           prune                  = false
