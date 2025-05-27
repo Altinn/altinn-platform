@@ -5,4 +5,3 @@ resources:
   - grafana-admin-apikey.yaml
   - helmrepository.yaml
   - helmrelease.yaml
-  - external-grafana.yaml
