@@ -1,0 +1,61 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rollout-restart-sa
+  namespace: linkerd
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rollout-restart-role
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rollout-restart-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: rollout-restart-role
+subjects:
+  - kind: ServiceAccount
+    name: rollout-restart-sa
+    namespace: linkerd
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rollout-restart-job
+  namespace: linkerd
+spec:
+  ttlSecondsAfterFinished: 60
+  backoffLimit: 3
+  completions: 1
+  parallelism: 1
+  template:
+    spec:
+      serviceAccountName: rollout-restart-sa
+      containers:
+        - name: kubectl
+          image: altinncr.azurecr.io/docker.io/bitnami/kubectl:latest
+          command: ["sh", "-c"]
+          args:
+            - |
+              # Check if linkerd label is set in kube-system ns, if not set
+              if ! kubectl label ns kube-system --list=true | grep -q config.linkerd.io/admission-webhooks=disabled; then
+                kubectl label ns kube-system config.linkerd.io/admission-webhooks=disabled
+              fi
+              # Restart all pods that use linkerd in the namespaces
+              kubectl -n traefik rollout restart deployments,statefulsets,daemonsets ;
+              kubectl -n default rollout restart deployments,statefulsets,daemonsets ;
+              kubectl -n pdf rollout restart deployments,statefulsets,daemonsets ;
+              kubectl -n monitoring rollout restart deployments,statefulsets,daemonsets ;
+      restartPolicy: Never
