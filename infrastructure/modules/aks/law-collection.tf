@@ -85,7 +85,7 @@ resource "azurerm_monitor_data_collection_rule" "law" {
             },
             stderr = {
               enabled            = true
-              exclude_namespaces = ["kube-system", "monitoring", "linkerd-viz"]
+              exclude_namespaces = ["kube-system", "monitoring"]
             },
             env_var = {
               enabled = false
