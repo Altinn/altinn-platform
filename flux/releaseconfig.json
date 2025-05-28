@@ -5,8 +5,8 @@
     "tt_ring1": "0.1.3"
   },
   "grafana-manifests": {
-    "at_ring1": "0.2.0",
-    "at_ring2": "0.2.0"
+    "at_ring1": "0.3.0",
+    "at_ring2": "0.3.0"
   },
   "cert-manager": {
     "at_ring1": "1.0.0",
