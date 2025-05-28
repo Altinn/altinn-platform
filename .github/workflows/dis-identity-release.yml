@@ -1,7 +1,7 @@
 name: Scan/Release Dis Identity Operator Image and Build Kustomize OCI Artifact
 
 env:
-  FLUX_ARTIFACT_NAME: kustomize/dis-apim-operator
+  FLUX_ARTIFACT_NAME: kustomize/dis-identity-operator
   IMAGE_NAME: dis-identity-operator
 
 on:
@@ -86,7 +86,7 @@ jobs:
       - name: Setup vars
         id: vars
         run: |
-          tag=${GITHUB_REF/refs\/tags\/kustomize-identity-apim-/}
+          tag=${GITHUB_REF/refs\/tags\/kustomize-dis-identity-/}
           echo "reponame=${GITHUB_REPOSITORY,,}" >> ${GITHUB_OUTPUT}
           echo "tag=${tag}" >> $GITHUB_OUTPUT
       - name: Build release artifact
