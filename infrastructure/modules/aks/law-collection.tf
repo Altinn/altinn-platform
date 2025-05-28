@@ -77,6 +77,26 @@ resource "azurerm_monitor_data_collection_rule" "law" {
             "azure-arc"
           ],
           "enableContainerLogV2" : true
+
+          log_collection_settings = {
+            stdout = {
+              enabled            = false
+              exclude_namespaces = ["kube-system"]
+            },
+            stderr = {
+              enabled            = true
+              exclude_namespaces = ["kube-system", "monitoring", "linkerd-viz"]
+            },
+            env_var = {
+              enabled = false
+            },
+            enrich_container_logs = {
+              enabled = false
+            },
+            collect_all_kube_events = {
+              enabled = false
+            }
+          }
         }
       })
       name = "ContainerInsightsExtension"
