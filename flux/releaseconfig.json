@@ -36,5 +36,9 @@
   "otel-operator": {
     "at_ring1": "0.1.0",
     "at_ring2": "0.1.0"
+  },
+  "otel-collector": {
+    "at_ring1": "0.1.0",
+    "at_ring2": "0.1.0"
   }
 }
