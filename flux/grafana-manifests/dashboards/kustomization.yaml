@@ -9,7 +9,5 @@ resources:
   - fluxcd-flux-cluster-stats.yaml
   - fluxcd-flux-control-plane.yaml
   - fluxcd-gitops-flux-application-deployments-dashboard.yaml
-  - folders.yaml
-  - kustomization.yaml
   - linkerd-daemonset.yaml
   - linkerd-deployment.yaml
