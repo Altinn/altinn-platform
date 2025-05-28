@@ -38,6 +38,7 @@ jobs:
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         with:
           script: |
+            const releaseCreator = context.payload.release.author?.login;
             const issueTitle = `${{ env.ISSUE_TITLE_PREFIX }} ${context.payload.release.tag_name}`;
             const issueBody = `A new release has been published. Check it out [here](${context.payload.release.html_url})
             - Release Name: ${context.payload.release.name}
@@ -70,7 +71,8 @@ jobs:
               ...context.repo,
               title: issueTitle,
               body: issueBody,
-              labels: [ '${{env.LABEL}}' ]
+              labels: [ '${{env.LABEL}}' ],
+              assignees: releaseCreator ? [releaseCreator] : [],
             });
             console.log(`Issue created: ${response.data.html_url}`);
   create-release-pr:
