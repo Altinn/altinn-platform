@@ -2,4 +2,14 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - folders.yaml
+  - altinn-blackbox-exporter.yaml
+  - altinn-pod-console-error-logs.yaml
+  - altinn-publicip.yaml
   - altinn-traefik-official.yaml
+  - fluxcd-flux-cluster-stats.yaml
+  - fluxcd-flux-control-plane.yaml
+  - fluxcd-gitops-flux-application-deployments-dashboard.yaml
+  - folders.yaml
+  - kustomization.yaml
+  - linkerd-daemonset.yaml
+  - linkerd-deployment.yaml
