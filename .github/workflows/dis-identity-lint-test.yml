@@ -1,4 +1,4 @@
-name: Lint
+name: Dis Identity Lint and Test
 
 
 on:
@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   lint:
-    name: Run on Ubuntu
+    name: Run linter on Ubuntu
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -41,7 +41,7 @@ jobs:
           version: v2.1.6
           working-directory: services/dis-identity-operator
   test:
-    name: Run on Ubuntu
+    name: Run tests on Ubuntu
     runs-on: ubuntu-latest
     defaults:
       run:
