@@ -20,7 +20,8 @@
     "at_ring2": "1.0.0",
     "tt_ring1": "1.0.0",
     "tt_ring2": "1.0.0",
-    "prod_ring1": "1.0.0"
+    "prod_ring1": "1.0.0",
+    "prod_ring2": "1.0.0"
   },
   "linkerd": {
     "at_ring1": "1.0.0",
