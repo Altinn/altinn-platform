@@ -4,8 +4,7 @@ metadata:
   name: external-grafana-linkerd-deployment
   namespace: grafana
 spec:
-  folder: "Linkerd"
-  resyncPeriod: 30s
+  folderRef: external-grafana-linkerd
   instanceSelector:
     matchLabels:
       dashboards: "external-grafana"

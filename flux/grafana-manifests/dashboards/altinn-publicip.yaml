@@ -4,8 +4,7 @@ metadata:
   name: external-grafana-altinn-publicip
   namespace: grafana
 spec:
-  folder: "Altinn"
-  resyncPeriod: 30s
+  folderRef: external-grafana-altinn
   instanceSelector:
     matchLabels:
       dashboards: "external-grafana"
