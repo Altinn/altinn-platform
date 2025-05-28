@@ -29,7 +29,7 @@ metadata:
   name: read-everything-and-restart-binding
 subjects:
   - kind: Group
-    name: 12345678-1234-5678-90ab-1234567890ab # The objectId of the Entra ID group
+    name: "${AKS_READ_EVERYTHING_AND_RESTART_GROUP_ID}" # The objectId of the Entra ID group
     apiGroup: rbac.authorization.k8s.io
 roleRef:
   kind: ClusterRole
