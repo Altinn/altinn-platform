@@ -10,253 +10,253 @@ spec:
       dashboards: "external-grafana"
   json: >
     {
-  "annotations": {
+    "annotations": {
     "list": [
-      {
-        "builtIn": 1,
-        "datasource": {
-          "type": "grafana",
-          "uid": "-- Grafana --"
-        },
-        "enable": true,
-        "hide": true,
-        "iconColor": "rgba(0, 211, 255, 1)",
-        "name": "Annotations & Alerts",
-        "type": "dashboard"
-      }
-    ]
-  },
-  "description": "IP adresses for cluster that run your apps.",
-  "editable": true,
-  "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
-  "id": 145,
-  "links": [],
-  "panels": [
     {
-      "datasource": {},
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": true
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byFrameRefID",
-              "options": "A"
-            },
-            "properties": [
-              {
-                "id": "links"
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 10,
-        "x": 0,
-        "y": 0
-      },
-      "id": 2,
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": ["sum"],
-          "show": false
-        },
-        "showHeader": true
-      },
-      "pluginVersion": "10.4.7",
-      "targets": [
-        {
-          "azureResourceGraph": {
-            "query": "Resources\n| where type == \"microsoft.network/publicipaddresses\"\n| project Name=name, IPadress=properties.ipAddress"
-          },
-          "datasource": {
-            "type": "grafana-azure-monitor-datasource",
-            "uid": "${DS_AZURE_MONITOR}"
-          },
-          "queryType": "Azure Resource Graph",
-          "refId": "A",
-          "subscriptions": ["$subscription_id"]
-        }
-      ],
-      "title": "Inbound IP",
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "IPadress": false
-            },
-            "includeByName": {},
-            "indexByName": {},
-            "renameByName": {
-              "Name": "Azure Resource Name"
-            }
-          }
-        }
-      ],
-      "type": "table"
+    "builtIn": 1,
+    "datasource": {
+    "type": "grafana",
+    "uid": "-- Grafana --"
     },
-    {
-      "datasource": {
-        "type": "grafana-azure-monitor-datasource",
-        "uid": "azure-monitor-oob"
+    "enable": true,
+    "hide": true,
+    "iconColor": "rgba(0, 211, 255, 1)",
+    "name": "Annotations & Alerts",
+    "type": "dashboard"
+    }
+        ]
       },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": true
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
+      "description": "IP adresses for cluster that run your apps.",
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "id": 145,
+      "links": [],
+      "panels": [
+        {
+          "datasource": {},
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": true
               },
-              {
-                "color": "red",
-                "value": 80
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
               }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byFrameRefID",
-              "options": "A"
             },
-            "properties": [
+            "overrides": [
               {
-                "id": "links"
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "A"
+                },
+                "properties": [
+                  {
+                    "id": "links"
+                  }
+                ]
               }
             ]
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 10,
+            "x": 0,
+            "y": 0
+          },
+          "id": 2,
+          "options": {
+            "cellHeight": "sm",
+            "footer": {
+              "countRows": false,
+              "fields": "",
+              "reducer": ["sum"],
+              "show": false
+            },
+            "showHeader": true
+          },
+          "pluginVersion": "10.4.7",
+          "targets": [
+            {
+              "azureResourceGraph": {
+                "query": "Resources\n| where type == \"microsoft.network/publicipaddresses\"\n| project Name=name, IPadress=properties.ipAddress"
+              },
+              "datasource": {
+                "type": "grafana-azure-monitor-datasource",
+                "uid": "${DS_AZURE_MONITOR}"
+              },
+              "queryType": "Azure Resource Graph",
+              "refId": "A",
+              "subscriptions": ["$subscription_id"]
+            }
+          ],
+          "title": "Inbound IP",
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "IPadress": false
+                },
+                "includeByName": {},
+                "indexByName": {},
+                "renameByName": {
+                  "Name": "Azure Resource Name"
+                }
+              }
+            }
+          ],
+          "type": "table"
+        },
+        {
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "A"
+                },
+                "properties": [
+                  {
+                    "id": "links"
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 10,
+            "x": 0,
+            "y": 5
+          },
+          "id": 1,
+          "options": {
+            "cellHeight": "sm",
+            "footer": {
+              "countRows": false,
+              "fields": "",
+              "reducer": ["sum"],
+              "show": false
+            },
+            "showHeader": true
+          },
+          "pluginVersion": "10.4.7",
+          "targets": [
+            {
+              "azureResourceGraph": {
+                "query": "Resources\n| where type == \"microsoft.network/publicipprefixes\"\n| project Name=name, IPrange=properties.ipPrefix"
+              },
+              "datasource": {
+                "type": "grafana-azure-monitor-datasource",
+                "uid": "${DS_AZURE_MONITOR}"
+              },
+              "queryType": "Azure Resource Graph",
+              "refId": "A",
+              "subscriptions": ["$subscription_id"]
+            }
+          ],
+          "title": "Outbound IP",
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {},
+                "includeByName": {},
+                "indexByName": {},
+                "renameByName": {
+                  "Name": "Azure Resource Name"
+                }
+              }
+            }
+          ],
+          "type": "table"
+        }
+      ],
+      "refresh": "",
+      "schemaVersion": 39,
+      "tags": [],
+      "templating": {
+        "list": [
+          {
+            "current": {
+              "selected": false,
+              "text": "Flux GitOps",
+              "value": "Flux GitOps"
+            },
+            "hide": 2,
+            "includeAll": false,
+            "multi": false,
+            "name": "subscription_id",
+            "options": [],
+            "query": {
+              "azureLogAnalytics": {
+                "query": "",
+                "resources": []
+              },
+              "queryType": "Azure Subscriptions",
+              "refId": "A"
+            },
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 0,
+            "type": "query"
           }
         ]
       },
-      "gridPos": {
-        "h": 5,
-        "w": 10,
-        "x": 0,
-        "y": 5
+      "time": {
+        "from": "now-1h",
+        "to": "now"
       },
-      "id": 1,
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": ["sum"],
-          "show": false
-        },
-        "showHeader": true
+      "timepicker": {
+        "refresh_intervals": ["1h"]
       },
-      "pluginVersion": "10.4.7",
-      "targets": [
-        {
-          "azureResourceGraph": {
-            "query": "Resources\n| where type == \"microsoft.network/publicipprefixes\"\n| project Name=name, IPrange=properties.ipPrefix"
-          },
-          "datasource": {
-            "type": "grafana-azure-monitor-datasource",
-            "uid": "${DS_AZURE_MONITOR}"
-          },
-          "queryType": "Azure Resource Graph",
-          "refId": "A",
-          "subscriptions": ["$subscription_id"]
-        }
-      ],
-      "title": "Outbound IP",
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {},
-            "includeByName": {},
-            "indexByName": {},
-            "renameByName": {
-              "Name": "Azure Resource Name"
-            }
-          }
-        }
-      ],
-      "type": "table"
+      "timezone": "browser",
+      "title": "Public IPs",
+      "uid": "de1a1z1zluwaod",
+      "version": 2,
+      "weekStart": ""
     }
-  ],
-  "refresh": "",
-  "schemaVersion": 39,
-  "tags": [],
-  "templating": {
-    "list": [
-      {
-        "datasource": {
-          "type": "grafana-azure-monitor-datasource",
-          "uid": "azure-monitor-oob"
-        },
-        "definition": "",
-        "hide": 2,
-        "includeAll": false,
-        "multi": false,
-        "name": "subscription_id",
-        "options": [],
-        "query": {
-          "azureLogAnalytics": {
-            "query": "",
-            "resources": []
-          },
-          "queryType": "Azure Subscriptions",
-          "refId": "A"
-        },
-        "refresh": 1,
-        "regex": "",
-        "skipUrlSync": false,
-        "sort": 0,
-        "type": "query"
-      }
-    ]
-  },
-  "time": {
-    "from": "now-1h",
-    "to": "now"
-  },
-  "timepicker": {
-    "refresh_intervals": ["1h"]
-  },
-  "timezone": "browser",
-  "title": "Public IPs",
-  "uid": "de1a1z1zluwaod",
-  "version": 2,
-  "weekStart": ""
-}
