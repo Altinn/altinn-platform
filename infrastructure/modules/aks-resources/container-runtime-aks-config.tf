@@ -5,7 +5,7 @@ resource "azapi_resource" "container_runtime_aks_config" {
   body = {
     properties = {
       kustomizations = {
-        container-runtime-aks-config-ama = {
+        aks-config-ama = {
           force                  = false
           path                   = "./ama/"
           prune                  = false
@@ -14,7 +14,7 @@ resource "azapi_resource" "container_runtime_aks_config" {
           timeoutInSeconds       = 300
           wait                   = true
         },
-        container-runtime-aks-config-metrics-server = {
+        aks-config-metrics-server = {
           force                  = false
           path                   = "./metrics-server/"
           prune                  = false
