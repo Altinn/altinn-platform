@@ -65,7 +65,7 @@ jobs:
             --reproducible \
             --path="." \
             --source="$(git config --get remote.origin.url)" \
-            --revision="$(git branch --show-current)/$(git rev-parse HEAD)"
+            --revision="$(git branch --show-current)@sha1:$(git rev-parse HEAD)"
           flux tag artifact oci://${container_registry}/${artifact_name}:$(git rev-parse --short HEAD) \
             --provider=generic \
             --tag latest
@@ -99,7 +99,7 @@ jobs:
               --reproducible \
               --path="." \
               --source="$(git config --get remote.origin.url)" \
-              --revision="$(git branch --show-current)/$(git rev-parse HEAD)"
+              --revision="${{ steps.vars.outputs.tag }}@sha1:$(git rev-parse HEAD)"
           flux tag artifact oci://${container_registry}/${artifact_name}:$(git rev-parse --short HEAD) \
               --provider=generic \
               --tag ${{ steps.vars.outputs.tag }}
