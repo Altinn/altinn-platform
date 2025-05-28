@@ -1,0 +1,37 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: read-everything-and-restart
+rules:
+  - apiGroups: [""] # core resources
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"] # apps group (deployments, etc.)
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"] # for jobs, cronjobs
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["extensions"] # legacy deployments (if any)
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "update"] # update needed for rollout restart
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "delete"] # delete pods
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: read-everything-and-restart-binding
+subjects:
+  - kind: Group
+    name: "${AKS_READ_EVERYTHING_AND_RESTART_GROUP_ID}" # The objectId of the Entra ID group
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: read-everything-and-restart
+  apiGroup: rbac.authorization.k8s.io
