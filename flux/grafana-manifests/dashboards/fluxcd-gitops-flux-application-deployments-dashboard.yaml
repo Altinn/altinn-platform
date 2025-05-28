@@ -4,8 +4,7 @@ metadata:
   name: external-grafana-fluxcd-gitops-flux-application-deployments-dashboard
   namespace: grafana
 spec:
-  folder: "Fluxcd"
-  resyncPeriod: 30s
+  folderRef: external-grafana-fluxcd
   instanceSelector:
     matchLabels:
       dashboards: "external-grafana"
