@@ -8,4 +8,4 @@ spec:
   instanceSelector:
     matchLabels:
       dashboards: "external-grafana"
-  url: "https://raw.githubusercontent.com/Altinn/altinn-dashboards-grafana/refs/heads/main/dashboards/linkerd/linkerd-daemonset.json"
+  url: "https://raw.githubusercontent.com/Altinn/altinn-dashboards-grafana/main/dashboards/linkerd/linkerd-daemonset.json"
