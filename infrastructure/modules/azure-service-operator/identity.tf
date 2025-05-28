@@ -16,7 +16,7 @@ resource "azurerm_federated_identity_credential" "aso_fic" {
   resource_group_name = azurerm_resource_group.aso_rg.name
   audience            = ["api://AzureADTokenExchange"]
   issuer              = var.azurerm_kubernetes_cluster_oidc_issuer_url
-  subject             = "system:serviceaccount:azure-service-operator:azure-service-operator"
+  subject             = "system:serviceaccount:${var.aso_namespace}:${var.aso_service_account_name}"
   parent_id           = azurerm_user_assigned_identity.aso_identity.id
 }
   
