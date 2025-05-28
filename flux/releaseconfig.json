@@ -15,5 +15,8 @@
   },
   "traefik": {
     "at_ring1": "1.0.0"
+  },
+  "linkerd": {
+    "at_ring1": "1.0.0"
   }
 }
