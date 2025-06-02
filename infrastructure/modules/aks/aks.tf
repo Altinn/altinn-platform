@@ -118,4 +118,9 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
   enabled_log {
     category = "kube-audit-admin"
   }
+
+  metric {
+    category = "AllMetrics"
+    enabled  = false
+  }
 }
