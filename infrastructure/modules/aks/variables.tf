@@ -59,8 +59,8 @@ variable "pool_configs" {
   }))
   description = "Variables for node pools"
   validation {
-    condition     = length(var.pool_configs) > 0
-    error_message = "You must provide pool config for syspool and workpool."
+    condition     = can(var.pool_configs["syspool"]) && can(var.pool_configs["workpool"])
+    error_message = "Both 'syspool' and 'workpool' must be defined in pool_configs."
   }
 }
 
