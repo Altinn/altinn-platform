@@ -72,5 +72,6 @@ COPY infrastructure/images/k6-action/jsonnet /actions/generate-k6-manifests/json
 
 # err:Error loading shared library libstdc++.so.6: No such file or directory (needed by /usr/local/bin/jsonnet)
 RUN apk add --no-cache libstdc++
+WORKDIR /workspace
 
 CMD ["/bin/sh"]

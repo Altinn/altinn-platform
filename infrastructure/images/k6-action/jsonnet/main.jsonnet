@@ -2,6 +2,7 @@ local k = import 'github.com/jsonnet-libs/k8s-libsonnet/1.32/main.libsonnet';
 local k6ClusterYamlConf = std.parseYaml(std.extVar('k6clusterconfig'));
 // Global
 local unique_name = std.extVar('unique_name');
+local dir_name = std.extVar('dir_name');
 local manifest_generation_timestamp = std.extVar('manifest_generation_timestamp');
 local namespace = std.extVar('namespace');
 local deploy_env = std.extVar('deploy_env');
@@ -65,7 +66,7 @@ local testrun = {
       parallelism: parallelism,
       script: {
         configMap: {
-          name: unique_name,
+          name: dir_name,
           file: 'archive.tar',
         },
       },

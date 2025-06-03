@@ -24,9 +24,9 @@ type Generator interface {
 	Generate()
 	HandleConfigFile(defaultConfigFile string, testType string) map[string]interface{}
 	HandleConfigFileOverride(base map[string]interface{}, overrideConfigFile string) map[string]interface{}
-	CallK6Archive(uniqName string, testConfigFileToUse string, testFile string)
-	CallKubectl(uniqName string, namespace string)
-	CallJsonnet(uniqName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte)
+	CallK6Archive(dirName string, testConfigFileToUse string, testFile string)
+	CallKubectl(dirName string, uniqName string, namespace string)
+	CallJsonnet(dirName string, uniqName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte)
 }
 
 type K8sManifestGenerator struct {
@@ -72,6 +72,17 @@ func (r K8sManifestGenerator) Initialize(filePath string) *ConfigFile {
 		log.Fatal("Config file is not valid.")
 	}
 	cf.SetDefaults()
+
+	requiredDirs := []string{".conf", ".build", ".dist"}
+
+	for _, d := range requiredDirs {
+		if _, err := os.Stat(d); os.IsNotExist(err) {
+			err := os.Mkdir(d, 0775)
+			if err != nil {
+				log.Fatalf("unable to create the %s directory, ensure it exists and try again: %v", d, err)
+			}
+		}
+	}
 	return &cf
 }
 
@@ -183,8 +194,10 @@ func (r K8sManifestGenerator) Generate() {
 				if err != nil {
 					log.Fatal(err)
 				}
-
-				newpath := filepath.Join(r.ConfigDirectory, uniqName)
+				// TODO: I'm still not sure what the best way to do this is. But I guess this approach is a bit less noisy than the previous.
+				// Will keep revisiting as we start adding more tests over time.
+				dirName := fmt.Sprintf("%s-%s", c.Environment, *c.TestRun.Name)
+				newpath := filepath.Join(r.ConfigDirectory, dirName)
 				err = os.MkdirAll(newpath, os.ModePerm)
 				if err != nil {
 					log.Fatal(err)
@@ -197,13 +210,13 @@ func (r K8sManifestGenerator) Generate() {
 				}
 				fmt.Printf("Wrote k6 test config file into: %s\n", testConfigFileToUse)
 
-				r.CallK6Archive(uniqName, testConfigFileToUse, fmt.Sprintf("%s/%s", r.RepoRootDirectory, td.TestFile))
+				r.CallK6Archive(dirName, testConfigFileToUse, fmt.Sprintf("%s/%s", r.RepoRootDirectory, td.TestFile))
 
 				if utf8.RuneCountInString(uniqName) > 51 {
 					log.Fatalf("Automatic generated name is too big: %s. Provide a default name such that the generated name does not go over 51 characters", uniqName)
 				}
 
-				r.CallKubectl(uniqName, cf.Namespace)
+				r.CallKubectl(dirName, uniqName, cf.Namespace)
 				// merge env file with overrides.
 				githubRepositoryEnvName := "GITHUB_REPOSITORY"
 				githubServerUrlEnvName := "GITHUB_SERVER_URL"
@@ -245,10 +258,14 @@ func (r K8sManifestGenerator) Generate() {
 				if err != nil {
 					log.Fatalf("error: %v", err)
 				}
-				r.CallJsonnet(uniqName, strconv.FormatInt(manifestGenerationTimestamp, 10), cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, mergedEnvsMarshalled, resources)
+				r.CallJsonnet(dirName, uniqName, strconv.FormatInt(manifestGenerationTimestamp, 10), cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, mergedEnvsMarshalled, resources)
+
+				fmt.Printf("\nTo run the test '%s' in '%s' run\n\tkubectl --context k6tests-cluster apply -f %s", *c.TestRun.Name, c.Environment, filepath.Join(r.DistDirectory, dirName))
+				fmt.Printf("\nTo check the logs run\n\tkubectl --context k6tests-cluster -n %s logs -f -l \"k6-test=%s\" -l \"runner=true\"\n\n", cf.Namespace, uniqName)
 			}
 		}
 	}
+	fmt.Printf("\nTo run all tests run:\n\tkubectl --context k6tests-cluster apply -f .dist/ -R\n")
 }
 
 func (r K8sManifestGenerator) HandleConfigFileOverride(base map[string]interface{}, overrideConfigFile string) map[string]interface{} {
@@ -300,8 +317,8 @@ func (r K8sManifestGenerator) HandleConfigFile(defaultConfigFile string, testTyp
 	return mergedOut
 }
 
-func (r K8sManifestGenerator) CallK6Archive(uniqName string, testConfigFileToUse string, testFile string) {
-	newpath := filepath.Join(r.BuildDirectory, uniqName)
+func (r K8sManifestGenerator) CallK6Archive(dirName string, testConfigFileToUse string, testFile string) {
+	newpath := filepath.Join(r.BuildDirectory, dirName)
 	err := os.MkdirAll(newpath, os.ModePerm)
 	if err != nil {
 		log.Fatal(err)
@@ -334,12 +351,12 @@ func (r K8sManifestGenerator) CallK6Archive(uniqName string, testConfigFileToUse
 	fmt.Printf("Wrote archive.tar into: %s/archive.tar\n", newpath)
 }
 
-func (r K8sManifestGenerator) CallKubectl(uniqName string, namespace string) {
+func (r K8sManifestGenerator) CallKubectl(dirName string, uniqName string, namespace string) {
 	cmd := exec.Command("kubectl",
 		"create",
 		"configmap",
-		uniqName,
-		fmt.Sprintf("--from-file=archive.tar=%s/%s/archive.tar", r.BuildDirectory, uniqName),
+		dirName,
+		fmt.Sprintf("--from-file=archive.tar=%s/%s/archive.tar", r.BuildDirectory, dirName),
 		"-o", "json",
 		"-n", namespace,
 		"--dry-run=client",
@@ -349,7 +366,7 @@ func (r K8sManifestGenerator) CallKubectl(uniqName string, namespace string) {
 	cmd.Stderr = &errb
 	err := cmd.Run()
 	if err != nil {
-		fmt.Printf("Failed to call kubectl create configmap %s --from-file=archive.tar=%s/%s/archive.tar -o json -n %s --dry-run=client\n err: %s", uniqName, r.BuildDirectory, uniqName, namespace, errb.String())
+		fmt.Printf("Failed to call kubectl create configmap %s --from-file=archive.tar=%s/%s/archive.tar -o json -n %s --dry-run=client\n err: %s", dirName, r.BuildDirectory, dirName, namespace, errb.String())
 		os.Exit(1)
 	}
 
@@ -370,7 +387,7 @@ func (r K8sManifestGenerator) CallKubectl(uniqName string, namespace string) {
 		log.Fatal(err)
 	}
 
-	newpath := filepath.Join(r.DistDirectory, uniqName)
+	newpath := filepath.Join(r.DistDirectory, dirName)
 	err = os.MkdirAll(newpath, os.ModePerm)
 	if err != nil {
 		log.Fatal(err)
@@ -383,13 +400,13 @@ func (r K8sManifestGenerator) CallKubectl(uniqName string, namespace string) {
 	}
 }
 
-func (r K8sManifestGenerator) CallJsonnet(uniqName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte) {
+func (r K8sManifestGenerator) CallJsonnet(dirName string, uniqName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte) {
 	var errb strings.Builder
 	k6ClusterConfigFile, err := os.ReadFile("/actions/generate-k6-manifests/infra/k6_cluster_conf.yaml")
 	if err != nil {
 		log.Fatal(err)
 	}
-	newpath := filepath.Join(r.DistDirectory, uniqName)
+	newpath := filepath.Join(r.DistDirectory, dirName)
 	err = os.MkdirAll(newpath, os.ModePerm)
 	if err != nil {
 		log.Fatal(err)
@@ -397,6 +414,7 @@ func (r K8sManifestGenerator) CallJsonnet(uniqName string, manifestGenerationTim
 	cmd := exec.Command("jsonnet",
 		"--jpath", "/jsonnet/vendor",
 		"--ext-str", fmt.Sprintf("unique_name=%s", uniqName),
+		"--ext-str", fmt.Sprintf("dir_name=%s", dirName),
 		"--ext-str", fmt.Sprintf("manifest_generation_timestamp=%s", manifestGenerationTimestamp),
 		"--ext-str", fmt.Sprintf("namespace=%s", namespace),
 		"--ext-str", fmt.Sprintf("deploy_env=%s", environment),

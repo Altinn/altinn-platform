@@ -13,6 +13,7 @@ import (
 	"text/template"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 func initGenerator(userConfigFile, confDir, distDir, buildDir string) *K8sManifestGenerator {
@@ -47,13 +48,19 @@ func validateConfigFolder(confDir string, testVersion string, t *testing.T) {
 	})
 }
 
-func validateTestRun(path, testVersion, deployEnv, dirName string, t *testing.T) {
-	manifestGenerationTimestamp := strings.Split(dirName, "-")[len(strings.Split(dirName, "-"))-1]
+func validateTestRun(path, dirName, testVersion, deployEnv string, t *testing.T) {
+	uniqName, err := extractUniqueIdFromGeneratedTestRun(path)
+	manifestGenerationTimestamp := strings.Split(uniqName, "-")[len(strings.Split(uniqName, "-"))-1]
+
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
 	generatedFile, knownExpectedFile, equalContents := readFileAndCompareWithTemplatedFile(
 		path,
 		fmt.Sprintf("./expected_generated_files/%s/%s/testrun.json.tmpl", testVersion, deployEnv),
 		map[string]string{
-			"UniqueName":                  dirName,
+			"UniqueName":                  uniqName,
+			"DirName":                     dirName,
 			"DeployEnv":                   deployEnv,
 			"ManifestGenerationTimestamp": manifestGenerationTimestamp,
 		},
@@ -63,37 +70,43 @@ func validateTestRun(path, testVersion, deployEnv, dirName string, t *testing.T)
 	}
 }
 
-func validateConfigMap(path, testVersion, deployEnv, dirName string, t *testing.T) {
-	generatedFile, knownExpectedFile, _ := readFileAndCompareWithTemplatedFile(
-		path,
-		fmt.Sprintf("./expected_generated_files/%s/%s/configmap.json.tmpl", testVersion, deployEnv),
-		map[string]string{
-			"UniqueName": dirName,
-		},
-	)
-	var knownExpectedConfigMap corev1.ConfigMap
-	var generatedConfigMap corev1.ConfigMap
-
-	err := json.Unmarshal([]byte(knownExpectedFile), &knownExpectedConfigMap)
+func extractUniqueIdFromGeneratedTestRun(filepath string) (string, error) {
+	generatedFile, err := os.ReadFile(filepath)
 	if err != nil {
-		t.Fatalf("error: %v", err)
+		log.Fatal(err)
 	}
+
+	var generatedTestRun unstructured.Unstructured
+	err = json.Unmarshal([]byte(generatedFile), &generatedTestRun)
+	if err != nil {
+		return "", err
+	}
+	return generatedTestRun.GetName(), nil
+}
+
+func validateConfigMap(path, testVersion, dirName string, t *testing.T) {
+	generatedFile, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read file %s: %v", path, err)
+	}
+
+	var generatedConfigMap corev1.ConfigMap
 	err = json.Unmarshal([]byte(generatedFile), &generatedConfigMap)
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
 
-	if knownExpectedConfigMap.Name != generatedConfigMap.Name {
-		t.Errorf("generate %s: expected \n%s, actual \n%s", testVersion, knownExpectedConfigMap.Name, generatedConfigMap.Name)
+	if !strings.Contains(generatedConfigMap.Name, dirName) {
+		t.Errorf("generate %s: expected \n%s to contain \n%s", testVersion, generatedConfigMap.Name, dirName)
 	}
-	if knownExpectedConfigMap.Labels["testid"] != generatedConfigMap.Labels["testid"] {
-		t.Errorf("generate %s: expected \n%s, actual \n%s", testVersion, knownExpectedConfigMap.Labels["testid"], generatedConfigMap.Labels["testid"])
+	if !strings.Contains(generatedConfigMap.Labels["testid"], dirName) {
+		t.Errorf("generate %s: expected \n%s, to contain \n%s", testVersion, generatedConfigMap.Labels["testid"], dirName)
 	}
-	if knownExpectedConfigMap.Labels["k6-test-configmap"] != generatedConfigMap.Labels["k6-test-configmap"] {
-		t.Errorf("generate %s: expected \n%s, actual \n%s", testVersion, knownExpectedConfigMap.Labels["k6-test-configmap"], generatedConfigMap.Labels["k6-test-configmap"])
+	if generatedConfigMap.Labels["k6-test-configmap"] != "true" {
+		t.Errorf("generate %s: expected \n%s, to equal \n%s", testVersion, generatedConfigMap.Labels["k6-test-configmap"], "true")
 	}
-	if knownExpectedConfigMap.Labels["k6-test"] != generatedConfigMap.Labels["k6-test"] {
-		t.Errorf("generate %s: expected \n%s, actual \n%s", testVersion, knownExpectedConfigMap.Labels["k6-test"], generatedConfigMap.Labels["k6-test"])
+	if !strings.Contains(generatedConfigMap.Labels["k6-test"], dirName) {
+		t.Errorf("generate %s: expected \n%s, to contain \n%s", testVersion, generatedConfigMap.Labels["k6-test"], dirName)
 	}
 	if !(len(generatedConfigMap.Data["archive.tar"]) > 0) {
 		t.Errorf("generate %s: expected length of data in key archive.tar to be over 0 , actual %d", testVersion, len(generatedConfigMap.Data["archive.tar"]))
@@ -143,9 +156,9 @@ func TestGenerate(t *testing.T) {
 				fmt.Printf("Validating %s\n", path)
 				dirName, _, _, deployEnv := getInfoFromFilePath(path)
 				if info.Name() == "testrun.json" {
-					validateTestRun(path, testVersion, deployEnv, dirName, t)
+					validateTestRun(path, dirName, testVersion, deployEnv, t)
 				} else if info.Name() == "configmap.json" {
-					validateConfigMap(path, testVersion, deployEnv, dirName, t)
+					validateConfigMap(path, testVersion, dirName, t)
 				} else if info.Name() == "slo.json" {
 					// TODO
 				}
@@ -211,10 +224,10 @@ func readFileAndCompareWithTemplatedFile(filePath1 string, filePath2 string, tem
 }
 
 func getTestScriptFileNameFromSplitString(split []string) (string, error) {
-	if len(split) < 4 {
-		return "", fmt.Errorf("expected split string to have at least 4 elements but got: %d", len(split))
+	if len(split) < 2 {
+		return "", fmt.Errorf("expected split string to have at least 2 elements but got: %d", len(split))
 	}
-	tempString := split[1 : len(split)-2]
+	tempString := split[1:len(split)]
 	return strings.Join(tempString, "-"), nil
 }
 
@@ -223,7 +236,7 @@ var splitStrings = []struct {
 	expected    string   // expected result
 }{
 	{
-		[]string{"at22", "k8s", "wrapper", "deployments", "0", "1741180011935"},
+		[]string{"at22", "k8s", "wrapper", "deployments"},
 		"k8s-wrapper-deployments",
 	},
 }
@@ -264,8 +277,8 @@ var splitPaths = []struct {
 	expectedDeployEnv      string
 }{
 	{
-		path:                   "/tmp/.conf1604560518/at22-k8s-wrapper-deployments-0-1742212333161/tweaked-testconfig.json",
-		expectedDirName:        "at22-k8s-wrapper-deployments-0-1742212333161",
+		path:                   "/tmp/.conf1604560518/at22-k8s-wrapper-deployments/tweaked-testconfig.json",
+		expectedDirName:        "at22-k8s-wrapper-deployments",
 		expectedFileName:       "tweaked-testconfig.json",
 		expectedTestScriptName: "k8s-wrapper-deployments", // NB: This does not necessarily represent the actual filename
 		expectedDeployEnv:      "at22",

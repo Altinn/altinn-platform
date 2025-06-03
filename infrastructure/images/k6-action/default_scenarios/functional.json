@@ -1,0 +1,8 @@
+{
+    "stages": [
+        {
+            "vus": 1,
+            "iterations": 1
+        }
+    ]
+}

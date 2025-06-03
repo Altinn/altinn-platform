@@ -92,8 +92,8 @@ test_definitions:
 	if *configFile.TestDefinitions[0].Contexts[0].NodeType != "spot" {
 		t.Errorf("setDefaults: expected %s, actual %s", "spot", *configFile.TestDefinitions[0].Contexts[0].NodeType)
 	}
-	if *configFile.TestDefinitions[0].Contexts[0].TestTypeDefinition.Type != "smoke" {
-		t.Errorf("setDefaults: expected %s, actual %s", "smoke", *configFile.TestDefinitions[0].Contexts[0].TestTypeDefinition.Type)
+	if *configFile.TestDefinitions[0].Contexts[0].TestTypeDefinition.Type != "functional" {
+		t.Errorf("setDefaults: expected %s, actual %s", "functional", *configFile.TestDefinitions[0].Contexts[0].TestTypeDefinition.Type)
 	}
 	if configFile.TestDefinitions[0].Contexts[0].TestTypeDefinition.Enabled != true {
 		t.Errorf("setDefaults: expected %t, actual %t", true, configFile.TestDefinitions[0].Contexts[0].TestTypeDefinition.Enabled)
@@ -164,8 +164,8 @@ test_definitions:
 	if *configFile.TestDefinitions[0].Contexts[0].NodeType != "spot" {
 		t.Errorf("setDefaults: expected %s, actual %s", "spot", *configFile.TestDefinitions[0].Contexts[0].NodeType)
 	}
-	if *configFile.TestDefinitions[0].Contexts[0].TestTypeDefinition.Type != "smoke" {
-		t.Errorf("setDefaults: expected %s, actual %s", "smoke", *configFile.TestDefinitions[0].Contexts[0].TestTypeDefinition.Type)
+	if *configFile.TestDefinitions[0].Contexts[0].TestTypeDefinition.Type != "functional" {
+		t.Errorf("setDefaults: expected %s, actual %s", "functional", *configFile.TestDefinitions[0].Contexts[0].TestTypeDefinition.Type)
 	}
 	if configFile.TestDefinitions[0].Contexts[0].TestTypeDefinition.Enabled != true {
 		t.Errorf("setDefaults: expected %t, actual %t", true, configFile.TestDefinitions[0].Contexts[0].TestTypeDefinition.Enabled)

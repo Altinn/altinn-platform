@@ -7,7 +7,7 @@ test_definitions:
         - environment: at22
           node_type: spot
           test_type:
-            type: smoke
+            type: functional
             enabled: true
             config_file: ""
           test_run:
@@ -22,7 +22,7 @@ test_definitions:
         - environment: yt01
           node_type: spot
           test_type:
-            type: smoke
+            type: functional
             enabled: true
             config_file: ""
           test_run:
