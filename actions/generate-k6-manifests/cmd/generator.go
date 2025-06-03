@@ -83,6 +83,7 @@ func (r K8sManifestGenerator) Initialize(filePath string) *ConfigFile {
 			}
 		}
 	}
+
 	return &cf
 }
 
@@ -262,6 +263,20 @@ func (r K8sManifestGenerator) Generate() {
 
 				fmt.Printf("\nTo run the test '%s' in '%s' run\n\tkubectl --context k6tests-cluster apply -f %s", *c.TestRun.Name, c.Environment, filepath.Join(r.DistDirectory, dirName))
 				fmt.Printf("\nTo check the logs run\n\tkubectl --context k6tests-cluster -n %s logs -f -l \"k6-test=%s\" -l \"runner=true\"\n\n", cf.Namespace, uniqName)
+
+				if githubOutputFilePath, ok := os.LookupEnv("GITHUB_OUTPUT"); ok {
+					f, err := os.OpenFile(githubOutputFilePath, os.O_APPEND|os.O_WRONLY, 0644)
+					if err != nil {
+						log.Fatal(err)
+					}
+					if _, err := f.Write([]byte(fmt.Sprintf("%s-%s=%s\n", c.Environment, *c.TestRun.Name, uniqName))); err != nil {
+						log.Fatal(err)
+					}
+					fmt.Printf("You can interact with k8s resources using the unique id, e.g.\n\tkubectl get pods -l \"k6-test=${{ steps.<step_id>.outputs.%s-%s }}\" -o name\n", c.Environment, *c.TestRun.Name)
+					if err := f.Close(); err != nil {
+						log.Fatal(err)
+					}
+				}
 			}
 		}
 	}
