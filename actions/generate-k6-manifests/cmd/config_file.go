@@ -114,9 +114,9 @@ func (cFile *ConfigFile) SetDefaults() {
 			}
 			// If no test types are configured, add a smoke test definition by default.
 			if c.TestTypeDefinition == nil {
-				smoke := "smoke"
+				functional := "functional"
 				c.TestTypeDefinition = &TestTypeDefinition{
-					Type:    &smoke,
+					Type:    &functional,
 					Enabled: true,
 				}
 			}
