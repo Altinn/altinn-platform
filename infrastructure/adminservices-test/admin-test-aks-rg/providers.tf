@@ -45,6 +45,6 @@ provider "kubectl" {
 provider "azapi" {
   subscription_id        = var.subscription_id
   use_oidc               = true
-  enable_preflight       = true
+  enable_preflight       = var.arm_enable_preflight
   disable_default_output = true
 }

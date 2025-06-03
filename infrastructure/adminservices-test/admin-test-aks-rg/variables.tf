@@ -64,3 +64,8 @@ variable "token_grafana_operator" {
 variable "vnet_address_space" {
   type = list(string)
 }
+
+variable "arm_enable_preflight" {
+  type    = bool
+  default = true
+}
