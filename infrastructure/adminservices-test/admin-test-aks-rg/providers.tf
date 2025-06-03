@@ -33,20 +33,13 @@ provider "azurerm" {
   ]
 }
 
-provider "azurerm" {
-  alias                           = "adminservices-prod"
-  resource_provider_registrations = "none"
-  subscription_id                 = var.admin_services_prod_subscription_id
-  use_oidc                        = true
-  features {}
-}
-
 provider "kubectl" {
-  load_config_file       = false
-  client_certificate     = base64decode(azurerm_kubernetes_cluster.aks.kube_config.0.client_certificate)
-  client_key             = base64decode(azurerm_kubernetes_cluster.aks.kube_config.0.client_key)
-  host                   = azurerm_kubernetes_cluster.aks.kube_config.0.host
-  cluster_ca_certificate = base64decode(azurerm_kubernetes_cluster.aks.kube_config.0.cluster_ca_certificate)
+  load_config_file = false
+  # Use kube_config instead of kube_admin_config when Azure RBAC is enabled
+  client_certificate     = base64decode(module.aks.kube_config.0.client_certificate)
+  client_key             = base64decode(module.aks.kube_config.0.client_key)
+  host                   = module.aks.kube_config.0.host
+  cluster_ca_certificate = base64decode(module.aks.kube_config.0.cluster_ca_certificate)
 }
 
 provider "azapi" {

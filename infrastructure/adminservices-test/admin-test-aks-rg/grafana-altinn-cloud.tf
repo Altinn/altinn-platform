@@ -1,5 +1,5 @@
 resource "kubectl_manifest" "grafana_altinn_cloud_middleware" {
-  depends_on = [azapi_resource.traefik]
+  depends_on = [module.aks]
   yaml_body  = <<YAML
 apiVersion: traefik.io/v1alpha1
 kind: Middleware

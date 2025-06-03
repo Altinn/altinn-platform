@@ -1,6 +1,8 @@
 resource "kubectl_manifest" "flux_dis_apim_ocirepo" {
-  depends_on = [azurerm_kubernetes_cluster_extension.flux_ext]
-  yaml_body  = <<YAML
+  depends_on = [
+    module.infra_resources,
+  ]
+  yaml_body = <<YAML
 apiVersion: source.toolkit.fluxcd.io/v1beta2
 kind: OCIRepository
 metadata:
@@ -18,7 +20,6 @@ YAML
 resource "kubectl_manifest" "flux_dis_apim_dev_kustomization" {
   depends_on = [
     kubectl_manifest.flux_dis_apim_ocirepo,
-    kubectl_manifest.flux_cert_manager_helm_release
   ]
   yaml_body = <<YAML
 apiVersion: kustomize.toolkit.fluxcd.io/v1
@@ -64,6 +65,6 @@ spec:
               value: "altinn-apim-test-apim"
         - op: add
           path: /spec/template/metadata/labels/azure.workload.identity~1use
-          value: "true"    
+          value: "true"
 YAML
 }
