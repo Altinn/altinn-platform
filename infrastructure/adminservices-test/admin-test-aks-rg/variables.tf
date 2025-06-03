@@ -13,6 +13,11 @@ variable "aks_acrpull_scopes" {
   description = "List of AKS ACR pull scopes"
 }
 
+variable "arm_enable_preflight" {
+  type    = bool
+  default = true
+}
+
 variable "flux_release_tag" {
   type = string
 }
@@ -41,8 +46,8 @@ variable "pool_configs" {
   }))
   description = "Variables for node pools"
   validation {
-    condition     = length(var.pool_configs) > 0
-    error_message = "You must provide pool config for syspool and workpool."
+    condition     = can(var.pool_configs["syspool"]) && can(var.pool_configs["workpool"])
+    error_message = "Both 'syspool' and 'workpool' must be defined in pool_configs."
   }
 }
 
@@ -63,9 +68,4 @@ variable "token_grafana_operator" {
 
 variable "vnet_address_space" {
   type = list(string)
-}
-
-variable "arm_enable_preflight" {
-  type    = bool
-  default = true
 }
