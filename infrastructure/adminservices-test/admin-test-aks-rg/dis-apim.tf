@@ -1,8 +1,6 @@
 resource "kubectl_manifest" "flux_dis_apim_ocirepo" {
-  depends_on = [
-    module.infra_resources,
-  ]
-  yaml_body = <<YAML
+  depends_on = [module.aks_resources]
+  yaml_body  = <<YAML
 apiVersion: source.toolkit.fluxcd.io/v1beta2
 kind: OCIRepository
 metadata:

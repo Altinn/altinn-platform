@@ -33,3 +33,4 @@ aks_acrpull_scopes = [
 admin_group_object_ids = [
   "09599a84-645b-4217-853f-01700a17cd4a"
 ]
+grafana_endpoint = "https://altinn-grafana-test-b2b8dpdkcvfuhfd3.eno.grafana.azure.com"

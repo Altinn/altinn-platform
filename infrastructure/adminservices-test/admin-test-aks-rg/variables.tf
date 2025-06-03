@@ -17,6 +17,12 @@ variable "flux_release_tag" {
   type = string
 }
 
+variable "grafana_endpoint" {
+  type        = string
+  description = "URL endpoint for Grafana dashboard access"
+  default     = ""
+}
+
 variable "kubernetes_version" {
   type = string
 }
@@ -46,6 +52,13 @@ variable "subnet_address_prefixes" {
 
 variable "subscription_id" {
   type = string
+}
+
+variable "token_grafana_operator" {
+  type        = string
+  sensitive   = true
+  description = "Authentication token for Grafana operator to manage Grafana resources"
+  default     = ""
 }
 
 variable "vnet_address_space" {

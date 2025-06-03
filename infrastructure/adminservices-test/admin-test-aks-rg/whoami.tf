@@ -1,5 +1,5 @@
 resource "azapi_resource" "whoami" {
-  depends_on = [module.infra_resources]
+  depends_on = [module.aks_resources]
   type       = "Microsoft.KubernetesConfiguration/fluxConfigurations@2024-11-01"
   name       = "whoami"
   parent_id  = module.aks.azurerm_kubernetes_cluster_id

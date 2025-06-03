@@ -32,7 +32,7 @@ module "aks" {
   ]
 }
 
-module "infra_resources" {
+module "aks_resources" {
   depends_on                    = [module.aks, module.observability]
   source                        = "../../modules/aks-resources"
   aks_node_resource_group       = module.aks.aks_node_resource_group
@@ -46,6 +46,6 @@ module "infra_resources" {
   obs_tenant_id                 = local.tenant_id
   environment                   = local.environment
   syncroot_namespace            = local.team_name
-  # grafana_endpoint       = module.grafana.grafana_endpoint
-  # token_grafana_operator = module.grafana.token_grafana_operator
+  grafana_endpoint              = var.grafana_endpoint
+  token_grafana_operator        = var.token_grafana_operator
 }

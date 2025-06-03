@@ -1,6 +1,6 @@
 moved {
   from = azapi_resource.traefik
-  to   = module.infra_resources.azapi_resource.traefik
+  to   = module.aks_resources.azapi_resource.traefik
 }
 moved {
   from = azurerm_kubernetes_cluster.aks
