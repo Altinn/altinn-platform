@@ -1,13 +1,9 @@
 {
-  "stages": [
-    {
-      "iterations": 1,
-      "vus": 1
-    }
-  ],
+  "iterations": 1,
   "thresholds": {
     "http_req_duration": [
       "avg\u003c123"
     ]
-  }
+  },
+  "vus": 1
 }
