@@ -262,7 +262,7 @@ func (r K8sManifestGenerator) Generate() {
 				r.CallJsonnet(dirName, uniqName, strconv.FormatInt(manifestGenerationTimestamp, 10), cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, mergedEnvsMarshalled, resources)
 
 				fmt.Printf("\nTo run the test '%s' in '%s' run\n\tkubectl --context k6tests-cluster apply -f %s", *c.TestRun.Name, c.Environment, filepath.Join(r.DistDirectory, dirName))
-				fmt.Printf("\nTo check the logs run\n\tkubectl --context k6tests-cluster -n %s logs -f -l \"k6-test=%s\" -l \"runner=true\"\n\n", cf.Namespace, uniqName)
+				fmt.Printf("\nTo check the logs run\n\tkubectl --context k6tests-cluster -n %s logs -f --tail=-1 -l \"k6-test=%s,runner=true\"\n\n", cf.Namespace, uniqName)
 
 				if githubOutputFilePath, ok := os.LookupEnv("GITHUB_OUTPUT"); ok {
 					f, err := os.OpenFile(githubOutputFilePath, os.O_APPEND|os.O_WRONLY, 0644)
