@@ -1,8 +1,4 @@
 {
-  "stages": [
-    {
-      "iterations": 1,
-      "vus": 1
-    }
-  ]
+  "iterations": 1,
+  "vus": 1
 }
