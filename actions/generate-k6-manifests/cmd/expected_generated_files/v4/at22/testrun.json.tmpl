@@ -2,6 +2,9 @@
    "apiVersion": "k6.io/v1alpha1",
    "kind": "TestRun",
    "metadata": {
+      "labels": {
+         "generated-by": "k6-action-image"
+      },
       "name": "{{ .UniqueName }}",
       "namespace": "platform"
    },
