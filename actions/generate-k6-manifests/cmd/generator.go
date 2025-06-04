@@ -395,6 +395,7 @@ func (r K8sManifestGenerator) CallKubectl(dirName string, uniqName string, names
 		"testid":            uniqName,
 		"k6-test":           uniqName,
 		"k6-test-configmap": "true",
+		"generated-by":      "k6-action-image",
 	})
 
 	tempMarshalled, err := json.MarshalIndent(temp, "", "  ")

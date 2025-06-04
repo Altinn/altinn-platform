@@ -28,6 +28,7 @@ local slo = {
         'pyrra.dev/team': team,
         'pyrra.dev/application': application,
         release: 'kube-prometheus-stack',  // Important, otherwise the Prometheus instance won't pick it up
+        'generated-by': 'k6-action-image'
       },
     },
     spec: {
@@ -56,6 +57,9 @@ local testrun = {
     metadata: {
       name: unique_name,
       namespace: namespace,
+      labels: {
+        'generated-by': 'k6-action-image'
+      }
     },
     spec: {
       cleanup: 'post',
