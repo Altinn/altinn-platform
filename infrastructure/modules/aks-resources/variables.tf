@@ -26,10 +26,7 @@ variable "flux_release_tag" {
 variable "grafana_endpoint" {
   type        = string
   description = "URL endpoint for Grafana dashboard access"
-  validation {
-    condition     = length(var.grafana_endpoint) > 0
-    error_message = "You must provide a value for grafana_endpoint."
-  }
+  default     = ""
 }
 
 variable "obs_client_id" {
@@ -78,8 +75,5 @@ variable "token_grafana_operator" {
   type        = string
   sensitive   = true
   description = "Authentication token for Grafana operator to manage Grafana resources"
-  validation {
-    condition     = length(var.token_grafana_operator) > 0
-    error_message = "You must provide a value for token_grafana_operator."
-  }
+  default     = ""
 }

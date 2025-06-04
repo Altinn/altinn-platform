@@ -41,6 +41,7 @@ env:
   TF_PROJECT: ./infrastructure/adminservices-test/admin-test-aks-rg
   ARM_CLIENT_ID: ${{ secrets.TF_AZURE_CLIENT_ID }}
   ARM_SUBSCRIPTION_ID: 1ce8e9af-c2d6-44e7-9c5e-099a308056fe
+  TF_VAR_token_grafana_operator: ${{ secrets.GRAFANA_ALTINN_CLOUD_ADMIN_TOKEN }}
 
 permissions:
   id-token: write
@@ -52,6 +53,8 @@ jobs:
     name: Plan
     environment: reader
     runs-on: ubuntu-latest
+    env:
+      TF_VAR_arm_enable_preflight: false
     steps:
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

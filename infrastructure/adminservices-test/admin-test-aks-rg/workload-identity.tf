@@ -12,6 +12,6 @@ resource "azuread_application_federated_identity_credential" "dis_apim_app_fed_i
   display_name   = "dis-apim-fed-identity-${var.name_prefix}-aks"
   description    = "The federated identity used to federate K8s with Azure AD with the app service running in ${var.name_prefix} aks"
   audiences      = ["api://AzureADTokenExchange"]
-  issuer         = azurerm_kubernetes_cluster.aks.oidc_issuer_url
+  issuer         = module.aks.aks_oidc_issuer_url
   subject        = "system:serviceaccount:dis-apim-operator-system:dis-apim-operator-controller-manager"
 }

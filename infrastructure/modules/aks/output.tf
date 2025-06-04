@@ -34,6 +34,12 @@ output "kube_admin_config" {
   description = "Base64 encoded cert/key/user/pass used by clients to authenticate to the Kubernetes cluster"
 }
 
+output "kube_config" {
+  value       = azurerm_kubernetes_cluster.aks.kube_config
+  sensitive   = true
+  description = "Base64 encoded Kubernetes configuration for accessing the cluster"
+}
+
 output "pip4_ip_address" {
   value       = azurerm_public_ip.pip4.ip_address
   description = "The IPv4 address value that was allocated"
