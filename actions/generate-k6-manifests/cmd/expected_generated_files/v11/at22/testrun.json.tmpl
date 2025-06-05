@@ -16,15 +16,15 @@
          "env": [
             {
                "name": "GITHUB_REPOSITORY",
-               "value": "octocat/Hello-World"
+               "value": ""
             },
             {
                "name": "GITHUB_RUN_ID",
-               "value": "14965885066"
+               "value": ""
             },
             {
                "name": "GITHUB_SERVER_URL",
-               "value": "https://github.com"
+               "value": ""
             },
             {
                "name": "K6_NO_USAGE_REPORT",
@@ -36,7 +36,7 @@
             },
             {
                "name": "K6_PROMETHEUS_RW_TREND_STATS",
-               "value": "avg,min,med,max,count,p(95),p(99),p(99.5),p(99.9)"
+               "value": "avg,count,min,med,max,p(75),p(95)"
             },
             {
                "name": "MANIFEST_GENERATION_TIMESTAMP",
@@ -54,15 +54,16 @@
          "envFrom": [
             {
                "configMapRef": {
-                  "name": "deploy-environments-tt02"
+                  "name": "deploy-environments-at22"
                }
             },
             {
                "secretRef": {
-                  "name": "slack-prod"
+                  "name": "slack-test"
                }
             }
          ],
+         "image": "grafana/k6:master-with-browser",
          "metadata": {
             "labels": {
                "k6-test": "{{ .UniqueName }}"

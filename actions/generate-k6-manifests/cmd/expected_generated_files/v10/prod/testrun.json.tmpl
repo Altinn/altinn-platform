@@ -15,6 +15,18 @@
       "runner": {
          "env": [
             {
+               "name": "GITHUB_REPOSITORY",
+               "value": "octocat/Hello-World"
+            },
+            {
+               "name": "GITHUB_RUN_ID",
+               "value": "14965885066"
+            },
+            {
+               "name": "GITHUB_SERVER_URL",
+               "value": "https://github.com"
+            },
+            {
                "name": "K6_NO_USAGE_REPORT",
                "value": "true"
             },
@@ -27,28 +39,16 @@
                "value": "avg,min,med,max,count,p(95),p(99),p(99.5),p(99.9)"
             },
             {
+               "name": "MANIFEST_GENERATION_TIMESTAMP",
+               "value": "{{ .ManifestGenerationTimestamp }}"
+            },
+            {
                "name": "NAMESPACE",
                "value": "platform"
             },
             {
                "name": "TESTID",
                "value": "{{ .UniqueName }}"
-            },
-            {
-               "name": "MANIFEST_GENERATION_TIMESTAMP",
-               "value": "{{ .ManifestGenerationTimestamp }}"
-            },
-            {
-               "name": "GITHUB_REPOSITORY",
-               "value": "octocat/Hello-World"
-            },
-            {
-               "name": "GITHUB_SERVER_URL",
-               "value": "https://github.com"
-            },
-            {
-               "name": "GITHUB_RUN_ID",
-               "value": "14965885066"
             }
          ],
          "envFrom": [
