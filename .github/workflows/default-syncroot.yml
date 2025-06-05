@@ -26,11 +26,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Validate syncroot image
-        uses: Altinn/altinn-platform/actions/flux/verify-syncroot@9a64da1d1659a549be100c6ac39db0ed26ecfbbe # main
+        uses: Altinn/altinn-platform/actions/flux/verify-syncroot@f4299c05836846c8a7441ca57d39d5c38aa5c17e # main
         with:
           workdir: ./infrastructure/images/default-syncroot
       - name: Build and push latest artifact
-        uses: Altinn/altinn-platform/actions/flux/build-push-image@9a64da1d1659a549be100c6ac39db0ed26ecfbbe # main
+        uses: Altinn/altinn-platform/actions/flux/build-push-image@f4299c05836846c8a7441ca57d39d5c38aa5c17e # main
         with:
           image_name: ${{ env.ARTIFACT_NAME }}
           tag: latest
@@ -51,7 +51,7 @@ jobs:
           echo "tag=${GITHUB_REF/refs\/tags\/default-syncroot-/}" >> $GITHUB_OUTPUT
           echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
       - name: Re-tag existing image
-        uses: Altinn/altinn-platform/actions/flux/retag-image@9a64da1d1659a549be100c6ac39db0ed26ecfbbe # main
+        uses: Altinn/altinn-platform/actions/flux/retag-image@f4299c05836846c8a7441ca57d39d5c38aa5c17e # main
         with:
           image_name: ${{ env.ARTIFACT_NAME }}
           from_tag: ${{ steps.get_tags.outputs.short_sha }}
