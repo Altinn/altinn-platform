@@ -138,7 +138,7 @@ func postTest(version string) {
 	}
 }
 
-var generateExamplesVersion = []string{"v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10"}
+var generateExamplesVersion = []string{"v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11"}
 
 func TestGenerate(t *testing.T) {
 	for _, version := range generateExamplesVersion {

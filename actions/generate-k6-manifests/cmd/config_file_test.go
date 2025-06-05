@@ -65,6 +65,7 @@ test_definitions:
 			"soak",
 			"spike",
 			"breakpoint",
+			"browser",
 			"custom",
 		},
 	}
@@ -137,6 +138,7 @@ test_definitions:
 			"soak",
 			"spike",
 			"breakpoint",
+			"browser",
 			"custom",
 		},
 	}
