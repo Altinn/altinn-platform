@@ -202,6 +202,9 @@ jobs:
       - name: Promote release
         env:
           REGISTRY: altinncr.azurecr.io
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_ALTINNACR_APP_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_ALTINNACR_SUBSCRIPTION_ID }}
         run: |
           echo "Promoting release..."
           # Read the releases config file and loop through the releases
