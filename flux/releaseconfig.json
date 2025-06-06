@@ -9,7 +9,11 @@
   },
   "grafana-manifests": {
     "at_ring1": "0.5.1",
-    "at_ring2": "0.5.1"
+    "at_ring2": "0.5.1",
+    "tt_ring1": "0.5.1",
+    "tt_ring2": "0.5.1",
+    "prod_ring1": "0.5.1",
+    "prod_ring2": "0.5.1"
   },
   "cert-manager": {
     "at_ring1": "1.0.0",
