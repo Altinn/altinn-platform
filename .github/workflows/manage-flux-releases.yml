@@ -200,6 +200,8 @@ jobs:
           REGISTRY: altinncr.azurecr.io
         run: |
           echo "Promoting release..."
+          # Login to ACR to establish authentication context
+          az acr login --name $(echo ${REGISTRY} | cut -d'.' -f1)
           # Read the releases config file and loop through the releases
           releasesConfigFile="${{ env.RELEASE_FILE }}"
           releasesConfig=$(cat $releasesConfigFile)
@@ -209,7 +211,6 @@ jobs:
               echo "Promoting release $releaseName to version $releaseVersion for environment $envName"
               echo "retagging oci://${REGISTRY}/manifests/infra/${releaseName}:${releaseVersion} to ${envName}"
               flux tag artifact oci://${REGISTRY}/manifests/infra/${releaseName}:${releaseVersion} \
-              --provider=azure \
               --tag ${envName}
             done
           done
