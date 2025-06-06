@@ -207,7 +207,6 @@ jobs:
           # Read the releases config file and loop through the releases
           releasesConfigFile="${{ env.RELEASE_FILE }}"
           releasesConfig=$(cat $releasesConfigFile)
-          creds=$(az acr login --name altinncr --expose-token)
           for releaseName in $(echo $releasesConfig | jq -r 'keys[]'); do
             for envName in $(echo $releasesConfig | jq -r ".\"$releaseName\" | keys[]"); do
               releaseVersion=$(echo $releasesConfig | jq -r ".\"$releaseName\".\"$envName\"")
@@ -215,7 +214,6 @@ jobs:
               echo "retagging oci://${REGISTRY}/manifests/infra/${releaseName}:${releaseVersion} to ${envName}"
               flux tag artifact oci://${REGISTRY}/manifests/infra/${releaseName}:${releaseVersion} \
               --provider=azure \
-              --tag ${envName} \
-              --creds="${creds}" || { echo "Failed to tag ${releaseName}:${releaseVersion} with ${envName}" >&2; exit 1; }
+              --tag ${envName}
             done
           done
