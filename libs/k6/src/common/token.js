@@ -19,6 +19,12 @@ const tokenRequestOptions = {
 let cachedTokens = {};
 let cachedTokensIssuedAt = {};
 
+/**
+ * Function to generate a cache key based on the token type and options.
+ * @param {*} tokenType 
+ * @param {*} tokenOptions 
+ * @returns 
+ */
 function getCacheKey(tokenType, tokenOptions) {
     var cacheKey = `${tokenType}`;
     for (const key in tokenOptions) {
@@ -29,6 +35,20 @@ function getCacheKey(tokenType, tokenOptions) {
     return cacheKey;
 }
 
+/**
+ * Fetches a token from the token generator API, caching it to avoid unnecessary requests.
+ * @param {string} url - The URL of the token generator API.
+ * @param {Object} tokenOptions - The options for the token, including user and app details.
+ * Example:
+ * {    
+ *   scope: 'altinn:serviceowner altinn:enduser',
+ *   env: 'yt01',
+ *   pid: '12345678901',
+ *   ssn: '12345678901',
+ * }
+ * @param {string} type - The type of token being fetched (e.g., 'enterprise', 'personal').
+ * @returns {string} - The fetched token.
+ **/
 function fetchToken(url, tokenOptions, type) {
   const currentTime = Math.floor(Date.now() / 1000);  
   const cacheKey = getCacheKey(type, tokenOptions);
@@ -54,6 +74,12 @@ function fetchToken(url, tokenOptions, type) {
   return cachedTokens[cacheKey];
 }
 
+/**
+ * Adds environment and TTL to the token options if they are not already present.
+ * @param {Object} tokenOptions - The options for the token.
+ * @param {string} env - The environment for which the token is being generated.
+ * @returns {Object} - The updated token options with environment and TTL.
+ **/
 function addEnvAndTtlToTokenOptions(tokenOptions, env) {
     let options = { ...tokenOptions };
     if (!('env' in options)) {
@@ -65,6 +91,22 @@ function addEnvAndTtlToTokenOptions(tokenOptions, env) {
     return options;
 }
 
+/**
+ * Fetches an enterprise token from the token generator API.
+ *
+ * @param {Object} tokenOptions - The options for the token, including user and app details.
+ * Example:
+ * {
+ *    scope: 'altinn:serviceowner altinn:enduser','
+ *    env: 'yt01',
+ *    pid: '12345678901',
+ *    ssn: '12345678901',
+ *    appOwner: '12345678901'
+ * }
+ * @param {number} [iteration=0] - The iteration number for the token generation process.
+ * @param {string} [env='yt01'] - The environment for which the token is being generated.
+ * @returns {Promise} - A promise that resolves to the fetched token.
+ */
 export function getEnterpriseToken(tokenOptions, iteration=0, env='yt01') {  
     const url = new URL(`https://altinn-testtools-token-generator.azurewebsites.net/api/GetEnterpriseToken`);
     let extendedOptions = addEnvAndTtlToTokenOptions(tokenOptions, env);
