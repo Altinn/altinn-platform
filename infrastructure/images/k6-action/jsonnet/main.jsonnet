@@ -140,7 +140,12 @@ local testrun = {
     },
   },
   withExtraEnv(): {
-    local newEnv = std.sort(std.setUnion([{ name: v.name, value: std.toString(v.value) } for v in extra_env_vars], default_env, keyF=function(x) x.name), keyF=function(x) x.name),
+    local extraEnvVarsSet = std.set([{ name: v.name, value: std.toString(v.value) } for v in extra_env_vars], keyF=function(x) x.name),
+    local defaultEnvSet = std.set(default_env, keyF=function(x) x.name),
+    local newEnv =
+      std.setUnion(
+        extraEnvVarsSet, defaultEnvSet, keyF=function(x) x.name
+      ),
     spec+: {
       runner+: {
         env: newEnv,
@@ -150,7 +155,7 @@ local testrun = {
   withBrowserImage(): {
     spec+: {
       runner+: {
-        image+: 'grafana/k6:master-with-browser',
+        image: 'grafana/k6:master-with-browser',
       },
     },
   },

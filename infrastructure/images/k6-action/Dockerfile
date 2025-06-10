@@ -74,4 +74,4 @@ COPY infrastructure/images/k6-action/jsonnet /actions/generate-k6-manifests/json
 RUN apk add --no-cache libstdc++
 WORKDIR /workspace
 
-CMD ["/bin/sh"]
+CMD ["generate-k6-manifests"]

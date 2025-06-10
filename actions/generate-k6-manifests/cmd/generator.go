@@ -224,23 +224,28 @@ func (r K8sManifestGenerator) Generate() {
 				githubServerUrlEnvName := "GITHUB_SERVER_URL"
 				githubRunIdEnvName := "GITHUB_RUN_ID"
 
-				githubRepositoryEnvValue := os.Getenv(githubRepositoryEnvName)
-				githubServerUrlEnvValue := os.Getenv(githubServerUrlEnvName)
-				githubRunIdEnvValue := os.Getenv(githubRunIdEnvName)
+				var githubRelatedEnvVars []*Env
 
-				githubRelatedEnvVars := []*Env{
-					&Env{
+				githubRepositoryEnvValue, ok := os.LookupEnv(githubRepositoryEnvName)
+				if ok {
+					githubRelatedEnvVars = append(githubRelatedEnvVars, &Env{
 						Name:  &githubRepositoryEnvName,
 						Value: &githubRepositoryEnvValue,
-					},
-					&Env{
+					})
+				}
+				githubServerUrlEnvValue, ok := os.LookupEnv(githubServerUrlEnvName)
+				if ok {
+					githubRelatedEnvVars = append(githubRelatedEnvVars, &Env{
 						Name:  &githubServerUrlEnvName,
 						Value: &githubServerUrlEnvValue,
-					},
-					&Env{
+					})
+				}
+				githubRunIdEnvValue, ok := os.LookupEnv(githubRunIdEnvName)
+				if ok {
+					githubRelatedEnvVars = append(githubRelatedEnvVars, &Env{
 						Name:  &githubRunIdEnvName,
 						Value: &githubRunIdEnvValue,
-					},
+					})
 				}
 
 				testRunEnvWithGithubContext := handleExtraEnvVars(c.TestRun.Env, githubRelatedEnvVars)
