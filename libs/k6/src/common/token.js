@@ -1,4 +1,5 @@
 import http from "k6/http";
+import { URL } from 'https://jslib.k6.io/url/1.0.0/index.js';
 import encoding from "k6/encoding";
 
 const tokenUsername = __ENV.TOKEN_GENERATOR_USERNAME;
