@@ -53,6 +53,8 @@ runs:
       shell: bash
       run: |
         container_registry=${ACR_NAME}.azurecr.io
+        credentials=$(az acr login --name ${ACR_NAME} --expose-token)
         flux tag artifact "oci://${container_registry}/${ARTIFACT_NAME}:${FROM_TAG}" \
             --provider=azure \
-            --tag "${TO_TAG}"
+            --tag "${TO_TAG}" \
+            --creds="${credentials}"
