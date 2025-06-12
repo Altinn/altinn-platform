@@ -41,6 +41,8 @@ resource "azurerm_key_vault_secret" "conn_string" {
   lifecycle {
     ignore_changes = [expiration_date] # stop perpetual updates
   }
+
+  depends_on = [azurerm_role_assignment.ci_kv_secrets_role]
 }
 
 resource "azurerm_role_assignment" "ci_kv_secrets_role" {
