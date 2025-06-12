@@ -11,7 +11,7 @@ resource "azapi_resource" "dis_identity_operator" {
             "azure-service-operator-aso"
           ]
           force                  = false
-          path                   = "./"
+          path                   = "./default"
           postBuild = {
             substitute = {
               DISID_ISSUER_URL = "${var.azurerm_kubernetes_cluster_oidc_issuer_url}"
