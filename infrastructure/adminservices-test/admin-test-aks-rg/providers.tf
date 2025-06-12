@@ -31,6 +31,7 @@ provider "azurerm" {
     "Microsoft.Dashboard",
     "Microsoft.KubernetesConfiguration"
   ]
+  storage_use_azuread = true
 }
 
 provider "kubectl" {
