@@ -1,7 +1,0 @@
-- op: add
-  path: /spec/template/spec/containers/0/env
-  value:
-    - name: DISID_ISSUER_URL
-      value: "${DISID_ISSUER_URL}"
-    - name: DISID_TARGET_RESOURCE_GROUP
-      value: "${DISID_TARGET_RESOURCE_GROUP}"
