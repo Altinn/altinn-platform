@@ -1,5 +1,5 @@
 resource "kubectl_manifest" "grafana_altinn_cloud_middleware" {
-  depends_on = [azapi_resource.traefik]
+  depends_on = [module.aks_resources]
   yaml_body  = <<YAML
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
@@ -10,7 +10,7 @@ spec:
   redirectRegex:
     permanent: true
     regex: ^http(|s)://(.*)grafana.(.*)altinn.(no|cloud)(.*)
-    replacement: https://altinn-grafana-test-b2b8dpdkcvfuhfd3.eno.grafana.azure.com$${5}
+    replacement: ${var.grafana_endpoint}$${5}
 YAML
 }
 
