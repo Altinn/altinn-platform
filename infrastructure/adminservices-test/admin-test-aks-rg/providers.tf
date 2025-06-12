@@ -48,3 +48,6 @@ provider "azapi" {
   enable_preflight       = var.arm_enable_preflight
   disable_default_output = true
 }
+
+provider "azuread" {
+}
