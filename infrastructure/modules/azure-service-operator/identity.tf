@@ -19,4 +19,9 @@ resource "azurerm_federated_identity_credential" "aso_fic" {
   subject             = "system:serviceaccount:${var.aso_namespace}:${var.aso_service_account_name}"
   parent_id           = azurerm_user_assigned_identity.aso_identity.id
 }
-  
+
+resource "azurerm_role_assignment" "aso_contrib_role_assignment" {
+  scope                = var.dis_resource_group_id
+  role_definition_name = "Contributor"
+  principal_id         = azurerm_user_assigned_identity.aso_identity.id
+}
