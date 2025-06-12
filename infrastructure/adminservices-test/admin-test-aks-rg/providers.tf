@@ -34,12 +34,20 @@ provider "azurerm" {
 }
 
 provider "kubectl" {
-  load_config_file = false
-  # Use kube_config instead of kube_admin_config when Azure RBAC is enabled
-  client_certificate     = base64decode(module.aks.kube_config.0.client_certificate)
-  client_key             = base64decode(module.aks.kube_config.0.client_key)
+  load_config_file       = false
   host                   = module.aks.kube_config.0.host
   cluster_ca_certificate = base64decode(module.aks.kube_config.0.cluster_ca_certificate)
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "az"
+    args = [
+      "aks",
+      "get-credentials",
+      "--resource-group", "admin-test-monitor-rg",
+      "--name", "your-aks-cluster-name",
+      "--overwrite-existing"
+    ]
+  }
 }
 
 provider "azapi" {
