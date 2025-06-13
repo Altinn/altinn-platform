@@ -190,6 +190,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Prepare Job for Pushing Flux OCI Artifacts to Azure Container Registry
+        id: setup_flux_acr
         uses: ./actions/flux/setup-flux-acr
         with:
           azure_app_id: ${{ secrets.AZURE_ALTINNACR_APP_ID }}
@@ -198,10 +199,9 @@ jobs:
       - name: Promote release
         env:
           REGISTRY: altinncr.azurecr.io
+          CREDS: ${{ steps.setup_flux_acr.outputs.credentials }}
         run: |
           echo "Promoting release..."
-          # Login to ACR to establish authentication context
-          creds=$(az acr login --name $(echo ${REGISTRY} | cut -d'.' -f1) --expose-token)
           # Read the releases config file and loop through the releases
           releasesConfigFile="${{ env.RELEASE_FILE }}"
           releasesConfig=$(cat $releasesConfigFile)
@@ -212,7 +212,7 @@ jobs:
               echo "retagging oci://${REGISTRY}/manifests/infra/${releaseName}:${releaseVersion} to ${envName}"
               flux tag artifact oci://${REGISTRY}/manifests/infra/${releaseName}:${releaseVersion} \
               --tag ${envName} \
-              --creds="${creds}" \
-              --provider=azure
+              --provider=azure \
+              --creds="${CREDS}"
             done
           done
