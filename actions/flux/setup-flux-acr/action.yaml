@@ -23,7 +23,7 @@ inputs:
     type: string
     pattern: "^[a-zA-Z0-9-]{5,50}$"
 outputs:
-  credentials:
+  credentialsfile:
     description: "Filepath to the ACR credentials in JSON format"
     value: ${{ steps.get_acr_creds.outputs.credentialsfile }}
 
