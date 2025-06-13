@@ -43,9 +43,23 @@ spec:
   template:
     spec:
       serviceAccountName: rollout-restart-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
       containers:
         - name: kubectl
           image: altinncr.azurecr.io/docker.io/bitnami/kubectl:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            capabilities:
+              drop:
+                - ALL
           command: ["sh", "-c"]
           args:
             - |
@@ -58,4 +72,5 @@ spec:
               kubectl -n default rollout restart deployments,statefulsets,daemonsets ;
               kubectl -n pdf rollout restart deployments,statefulsets,daemonsets ;
               kubectl -n monitoring rollout restart deployments,statefulsets,daemonsets ;
+              kubectl -n grafana rollout restart deployments,statefulsets,daemonsets ;
       restartPolicy: Never
