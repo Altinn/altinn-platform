@@ -6,3 +6,4 @@ metadata:
 spec:
   interval: 1h
   url: https://raw.githubusercontent.com/Azure/azure-service-operator/main/v2/charts
+  

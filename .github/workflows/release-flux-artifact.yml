@@ -37,7 +37,7 @@ jobs:
       - name: Build and push artifacts with commit sha tag
         env:
           REGISTRY: altinncr.azurecr.io
-          CREDS: ${{ steps.setup_flux_acr.outputs.credentials }}
+          AZURE_FEDERATED_TOKEN_FILE: ${{ steps.setup_flux_acr.outputs.credentialsfile }}
         run: |
           echo '### Check if there are any changes in ./flux/ folder'
           FLUX_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD | grep 'flux/' || true)
@@ -47,7 +47,7 @@ jobs:
           fi
 
           # Extract unique folder names directly under ./manifests/infra/
-          credentials=$(echo "${CREDS}" | base64 --decode)
+          credentials=$(cat "${AZURE_FEDERATED_TOKEN_FILE}")
           ARTIFACTS=$(echo "${FLUX_FILES}" | awk -F'/' '{print $2}' | sort -u)
           for artifact in $ARTIFACTS;do
             flux push artifact "oci://${REGISTRY}/manifests/infra/${artifact}:$(git rev-parse --short HEAD)" \

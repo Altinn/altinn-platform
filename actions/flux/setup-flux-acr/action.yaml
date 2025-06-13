@@ -24,8 +24,8 @@ inputs:
     pattern: "^[a-zA-Z0-9-]{5,50}$"
 outputs:
   credentials:
-    description: "Credentials for the Azure Container Registry (ACR) to use with flux"
-    value: ${{ steps.get_acr_creds.outputs.credentials }}
+    description: "Filepath to the ACR credentials in JSON format"
+    value: ${{ steps.get_acr_creds.outputs.credentialsfile }}
 
 runs:
   using: composite
@@ -47,5 +47,14 @@ runs:
         ACR_NAME: ${{ inputs.acr_name }}
       run: |
         credentials=$(az acr login --name ${ACR_NAME} --expose-token)
-        echo "credentials=${credentials}" >> ${GITHUB_OUTPUT}
-        echo "Credentials for ACR ${ACR_NAME} retrieved successfully."
+        # Add log mask for accessToken and refreshToken to avoid leaking sensitive information using jq
+        accessToken=$(echo "${credentials}" | jq -r '.accessToken')
+        echo "::add-mask::${accessToken}"
+        refreshToken=$(echo "${credentials}" | jq -r '.refreshToken')
+        echo "::add-mask::${refreshToken}"
+        # Create a temporary file to store the credentials
+        tmpfile=$(mktemp /tmp/flux-acr-creds.XXXXXX.json)
+        # Write the content of the credentials to the temporary file
+        echo "${credentials}" > "${tmpfile}"
+        # Output the path to the temporary file
+        echo "credentialsfile=${tmpfile}" >> $GITHUB_OUTPUT
