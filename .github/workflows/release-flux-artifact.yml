@@ -47,6 +47,7 @@ jobs:
           fi
 
           # Extract unique folder names directly under ./manifests/infra/
+          credentials=$(echo "${CREDS}" | base64 --decode)
           ARTIFACTS=$(echo "${FLUX_FILES}" | awk -F'/' '{print $2}' | sort -u)
           for artifact in $ARTIFACTS;do
             flux push artifact "oci://${REGISTRY}/manifests/infra/${artifact}:$(git rev-parse --short HEAD)" \
@@ -59,7 +60,7 @@ jobs:
             flux tag artifact "oci://${REGISTRY}/manifests/infra/${artifact}:$(git rev-parse --short HEAD)" \
               --provider=azure \
               --tag latest \
-              --creds="${CREDS}"
+              --creds="${credentials}"
           done
   tag-release:
     runs-on: ubuntu-latest
