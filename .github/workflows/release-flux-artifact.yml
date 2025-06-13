@@ -48,6 +48,7 @@ jobs:
           fi
 
           # Extract unique folder names directly under ./manifests/infra/
+          creds=$(az acr login --name altinncr --expose-token)
           ARTIFACTS=$(echo "${FLUX_FILES}" | awk -F'/' '{print $2}' | sort -u)
           for artifact in $ARTIFACTS;do
             flux push artifact "oci://${REGISTRY}/manifests/infra/${artifact}:$(git rev-parse --short HEAD)" \
@@ -55,10 +56,12 @@ jobs:
               --reproducible \
               --path="./flux/${artifact}" \
               --source="$(git config --get remote.origin.url)" \
-              --revision="$(git branch --show-current)/$(git rev-parse HEAD)"
+              --revision="$(git branch --show-current)/$(git rev-parse HEAD)" \
+              --creds="${creds}"
             flux tag artifact "oci://${REGISTRY}/manifests/infra/${artifact}:$(git rev-parse --short HEAD)" \
               --provider=azure \
-              --tag latest
+              --tag latest \
+              --creds="${creds}"
           done
   tag-release:
     runs-on: ubuntu-latest

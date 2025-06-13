@@ -49,6 +49,7 @@ runs:
         ACR_NAME: ${{ inputs.acr_name }}
         WORKDIR: ${{ inputs.workdir }}
       shell: bash
+      needs: setup_flux_acr
       run: |
         container_registry=${ACR_NAME}.azurecr.io
         short_sha=$(git rev-parse --short HEAD)
@@ -60,9 +61,11 @@ runs:
           --reproducible \
           --path="${WORKDIR}" \
           --source="${repo_url}" \
-          --revision="${branch_sha}"
+          --revision="${branch_sha}" \
+          --creds="${{steps.setup_flux_acr.outputs.credentials}}"
     - name: Tag artifact with custom tag
       if: inputs.tag != ''
+      needs: setup_flux_acr
       env:
         ARTIFACT_NAME: ${{ inputs.image_name }}
         EXTRA_TAG: ${{ inputs.tag }}
@@ -71,6 +74,8 @@ runs:
       run: |
         container_registry=${ACR_NAME}.azurecr.io
         short_sha=$(git rev-parse --short HEAD)
+        creds=$(az acr login --name ${ACR_NAME} --expose-token)
         flux tag artifact "oci://${container_registry}/${ARTIFACT_NAME}:${short_sha}" \
           --provider=azure \
-          --tag "${EXTRA_TAG}"
+          --tag "${EXTRA_TAG}" \
+          --creds="${{steps.setup_flux_acr.outputs.credentials}}"
