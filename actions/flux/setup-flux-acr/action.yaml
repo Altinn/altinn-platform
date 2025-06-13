@@ -16,6 +16,12 @@ inputs:
   azure_tenant_id:
     description: "Azure tenant id used to authenticate to altinncr"
     required: true
+  acr_name:
+    description: "Name of the Azure Container Registry (ACR) to use"
+    required: false
+    default: "altinncr"
+    type: string
+    pattern: "^[a-zA-Z0-9-]{5,50}$"
 outputs:
   credentials:
     description: "Credentials for the Azure Container Registry (ACR) to use with flux"
@@ -36,8 +42,11 @@ runs:
         tenant-id: ${{ inputs.azure_tenant_id }}
     - name: Get ACR credentials
       id: get_acr_creds
+      shell: bash
+      env:
+        ACR_NAME: ${{ inputs.acr_name }}
       run: |
-        credentials=$(az acr login --name altinncr --expose-token)
+        credentials=$(az acr login --name ${ACR_NAME} --expose-token)
         # Add log mask for accessToken and refreshToken to avoid leaking sensitive information using jq
         accessToken=$(echo "${credentials}" | jq -r '.accessToken')
         refreshToken=$(echo "${credentials}" | jq -r '.refreshToken')

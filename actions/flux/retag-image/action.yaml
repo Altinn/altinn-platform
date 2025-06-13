@@ -50,6 +50,7 @@ runs:
         FROM_TAG: ${{ inputs.from_tag }}
         TO_TAG: ${{ inputs.tag }}
         ACR_NAME: ${{ inputs.acr_name }}
+        CREDS: ${{ steps.setup_flux_acr.outputs.credentials }}
       shell: bash
       needs: setup_flux_acr
       run: |
@@ -57,4 +58,4 @@ runs:
         flux tag artifact "oci://${container_registry}/${ARTIFACT_NAME}:${FROM_TAG}" \
             --provider=azure \
             --tag "${TO_TAG}" \
-            --creds="${{ steps.setup_flux_acr.outputs.credentials }}"
+            --creds="${CREDS}"
