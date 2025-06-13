@@ -82,7 +82,7 @@ variable "enable_dis_identity_operator" {
   type        = bool
   default     = false
   description = "Enable the dis-identity-operator to manage User Assigned Managed Identities in the cluster."
-  
+
 }
 
 variable "azurerm_kubernetes_cluster_oidc_issuer_url" {

@@ -28,13 +28,13 @@ resource "azurerm_role_definition" "user_assigned_identity_role" {
   permissions {
     actions = [
       "Microsoft.ManagedIdentity/userAssignedIdentities/read",
-			"Microsoft.ManagedIdentity/userAssignedIdentities/write",
-			"Microsoft.ManagedIdentity/userAssignedIdentities/delete",
-			"Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials/read",
-			"Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials/write",
-			"Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials/delete",
-			"Microsoft.ManagedIdentity/userAssignedIdentities/revokeTokens/action",
-			"Microsoft.Authorization/*/read",
+      "Microsoft.ManagedIdentity/userAssignedIdentities/write",
+      "Microsoft.ManagedIdentity/userAssignedIdentities/delete",
+      "Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials/read",
+      "Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials/write",
+      "Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials/delete",
+      "Microsoft.ManagedIdentity/userAssignedIdentities/revokeTokens/action",
+      "Microsoft.Authorization/*/read",
     ]
     not_actions = []
   }
@@ -42,7 +42,7 @@ resource "azurerm_role_definition" "user_assigned_identity_role" {
   assignable_scopes = [
     var.dis_resource_group_id
   ]
-  
+
 }
 
 resource "azurerm_role_assignment" "aso_contrib_role_assignment" {

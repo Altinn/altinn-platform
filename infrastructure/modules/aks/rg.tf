@@ -8,6 +8,6 @@ resource "azurerm_resource_group" "monitor" {
 }
 
 resource "azurerm_resource_group" "dis" {
-  name = var.azurerm_resource_group_dis_name != "" ? var.azurerm_resource_group_dis_name : "${var.prefix}-${var.environment}-dis-main-rg"
+  name     = var.azurerm_resource_group_dis_name != "" ? var.azurerm_resource_group_dis_name : "${var.prefix}-${var.environment}-dis-main-rg"
   location = var.location
 }

@@ -1,5 +1,5 @@
 resource "azapi_resource" "dis_identity_operator" {
-  count = var.enable_dis_identity_operator ? 1 : 0
+  count     = var.enable_dis_identity_operator ? 1 : 0
   type      = "Microsoft.KubernetesConfiguration/fluxConfigurations@2024-11-01"
   name      = "dis-identity-operator"
   parent_id = var.azurerm_kubernetes_cluster_id
@@ -10,11 +10,11 @@ resource "azapi_resource" "dis_identity_operator" {
           dependsOn = [
             "azure-service-operator-aso"
           ]
-          force                  = false
-          path                   = "./default"
+          force = false
+          path  = "./default"
           postBuild = {
             substitute = {
-              DISID_ISSUER_URL = "${var.azurerm_kubernetes_cluster_oidc_issuer_url}"
+              DISID_ISSUER_URL            = "${var.azurerm_kubernetes_cluster_oidc_issuer_url}"
               DISID_TARGET_RESOURCE_GROUP = "${var.azurerm_dis_identity_resource_group_id}"
             }
           }
