@@ -19,4 +19,34 @@ resource "azurerm_federated_identity_credential" "aso_fic" {
   subject             = "system:serviceaccount:${var.aso_namespace}:${var.aso_service_account_name}"
   parent_id           = azurerm_user_assigned_identity.aso_identity.id
 }
-  
+
+resource "azurerm_role_definition" "user_assigned_identity_role" {
+  name        = "dis-identity-admin-${var.prefix}-${var.environment}"
+  scope       = var.dis_resource_group_id
+  description = "Role for Dis deployed Azure Service Operator to manage resources in the specified resource group."
+
+  permissions {
+    actions = [
+      "Microsoft.ManagedIdentity/userAssignedIdentities/read",
+      "Microsoft.ManagedIdentity/userAssignedIdentities/write",
+      "Microsoft.ManagedIdentity/userAssignedIdentities/delete",
+      "Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials/read",
+      "Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials/write",
+      "Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials/delete",
+      "Microsoft.ManagedIdentity/userAssignedIdentities/revokeTokens/action",
+      "Microsoft.Authorization/*/read",
+    ]
+    not_actions = []
+  }
+
+  assignable_scopes = [
+    var.dis_resource_group_id
+  ]
+
+}
+
+resource "azurerm_role_assignment" "aso_contrib_role_assignment" {
+  scope              = var.dis_resource_group_id
+  role_definition_id = azurerm_role_definition.user_assigned_identity_role.id
+  principal_id       = azurerm_user_assigned_identity.aso_identity.id
+}

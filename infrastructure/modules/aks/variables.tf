@@ -188,3 +188,9 @@ variable "azurerm_virtual_public_ip_pip6_name" {
   default     = ""
   description = "Optional explicit name of the public ipv6"
 }
+
+variable "azurerm_resource_group_dis_name" {
+  type        = string
+  default     = ""
+  description = "Optional explicit name of the DIS resource group"
+}

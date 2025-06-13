@@ -71,3 +71,13 @@ variable "flux_release_tag" {
   type        = string
   default     = "latest"
 }
+
+variable "dis_resource_group_id" {
+  description = "The resource group ID where the Azure Service Operator resources will be created."
+  type        = string
+  default     = ""
+  validation {
+    condition     = length(var.dis_resource_group_id) > 0
+    error_message = "You must provide a value for dis_resource_group_id."
+  }
+}

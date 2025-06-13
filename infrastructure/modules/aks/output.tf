@@ -13,6 +13,11 @@ output "aks_name" {
   description = "The name of the managed Kubernetes Cluster"
 }
 
+output "dis_resource_group_id" {
+  value       = azurerm_resource_group.dis.id
+  description = "ID of the resource group where the DIS operator creates its resources"
+}
+
 output "aks_node_resource_group" {
   value       = azurerm_kubernetes_cluster.aks.node_resource_group
   description = "The name of the Resource Group in which the managed Kubernetes Cluster exists"
