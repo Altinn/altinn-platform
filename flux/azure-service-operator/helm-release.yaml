@@ -18,7 +18,8 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: aso2
-        namespace: external-secrets
+        namespace: azureserviceoperator-system
+        
   values:
     crdPattern: ${CRD_PATTERN}
     createAzureOperatorSecret: true
