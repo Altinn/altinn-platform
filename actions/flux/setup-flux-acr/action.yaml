@@ -47,7 +47,9 @@ runs:
         ACR_NAME: ${{ inputs.acr_name }}
       run: |
         credentials=$(az acr login --name ${ACR_NAME} --expose-token)
-        echo "credentials=${credentials}" >> $GITHUB_OUTPUT
+        encodedCredentials=$(echo "${credentials}" | base64)
+        echo "credentials=${encodedCredentials}" >> ${GITHUB_OUTPUT}
+        echo "Credentials for ACR ${ACR_NAME} retrieved successfully."
         # Add log mask for accessToken and refreshToken to avoid leaking sensitive information using jq
         accessToken=$(echo "${credentials}" | jq -r '.accessToken')
         refreshToken=$(echo "${credentials}" | jq -r '.refreshToken')
