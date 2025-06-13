@@ -15,7 +15,7 @@ output "aks_name" {
 
 output "dis_resource_group_id" {
   value       = azurerm_resource_group.dis.id
-  description = "The resource group ID where the dis operators creates their resources"
+  description = "ID of the resource group where the DIS operator creates its resources"
 }
 
 output "aks_node_resource_group" {

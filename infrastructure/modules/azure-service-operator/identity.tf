@@ -21,7 +21,7 @@ resource "azurerm_federated_identity_credential" "aso_fic" {
 }
 
 resource "azurerm_role_definition" "user_assigned_identity_role" {
-  name        = "DIS User Assigned Identity Admin Role"
+  name        = "dis-identity-admin-${var.prefix}-${var.environment}"
   scope       = var.dis_resource_group_id
   description = "Role for Dis deployed Azure Service Operator to manage resources in the specified resource group."
 
@@ -46,7 +46,7 @@ resource "azurerm_role_definition" "user_assigned_identity_role" {
 }
 
 resource "azurerm_role_assignment" "aso_contrib_role_assignment" {
-  scope                = var.dis_resource_group_id
-  role_definition_name = azurerm_role_definition.user_assigned_identity_role.name
-  principal_id         = azurerm_user_assigned_identity.aso_identity.id
+  scope              = var.dis_resource_group_id
+  role_definition_id = azurerm_role_definition.user_assigned_identity_role.id
+  principal_id       = azurerm_user_assigned_identity.aso_identity.id
 }
