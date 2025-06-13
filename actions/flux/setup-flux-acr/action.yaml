@@ -24,7 +24,7 @@ inputs:
     pattern: "^[a-zA-Z0-9-]{5,50}$"
 outputs:
   credentials:
-    description: "Base64 encoded credentials for the Azure Container Registry (ACR) to use with flux"
+    description: "Credentials for the Azure Container Registry (ACR) to use with flux"
     value: ${{ steps.get_acr_creds.outputs.credentials }}
 
 runs:
@@ -47,11 +47,9 @@ runs:
         ACR_NAME: ${{ inputs.acr_name }}
       run: |
         credentials=$(az acr login --name ${ACR_NAME} --expose-token)
+        echo "credentials=${credentials}" >> $GITHUB_OUTPUT
         # Add log mask for accessToken and refreshToken to avoid leaking sensitive information using jq
         accessToken=$(echo "${credentials}" | jq -r '.accessToken')
         refreshToken=$(echo "${credentials}" | jq -r '.refreshToken')
         echo "::add-mask::${accessToken}"
         echo "::add-mask::${refreshToken}"
-        # Encode the credentials in base64
-        creds=$(echo "${credentials}" | base64)
-        echo "credentials=${creds}" >> $GITHUB_OUTPUT
