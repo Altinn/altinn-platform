@@ -12,7 +12,7 @@ spec:
         kind: HelmRepository
         name: traefik
         namespace: traefik
-      version: 1.5.0
+      version: 1.8.1
   interval: 1h
   timeout: 5m
   install:
@@ -36,7 +36,7 @@ spec:
         kind: HelmRepository
         name: traefik
         namespace: traefik
-      version: 34.4.1
+      version: 36.1.0
   interval: 1h
   timeout: 5m
   dependsOn:
@@ -88,11 +88,15 @@ spec:
     ingressClass:
       enabled: false
     providers:
+      kubernetesCRD:
+        enabled: true
       kubernetesIngress:
         enabled: false
-    globalArguments:
-      - "--global.checknewversion=false"
-      - "--global.sendanonymoususage=false"
+      kubernetesGateway:
+        enabled: false
+    global:
+      checkNewVersion: false
+      sendAnonymousUsage: false
     ports:
       web: null
       websecure: null
@@ -137,6 +141,7 @@ spec:
         minVersion: VersionTLS12
         cipherSuites:
           - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+          - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
           - TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256
     tlsStore:
       default:
