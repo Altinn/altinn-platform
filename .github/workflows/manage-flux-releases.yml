@@ -199,7 +199,6 @@ jobs:
       - name: Promote release
         env:
           REGISTRY: altinncr.azurecr.io
-          CREDS: ${{ steps.setup_flux_acr.outputs.credentials }}
         run: |
           echo "Promoting release..."
           # Read the releases config file and loop through the releases
@@ -212,7 +211,6 @@ jobs:
               echo "retagging oci://${REGISTRY}/manifests/infra/${releaseName}:${releaseVersion} to ${envName}"
               flux tag artifact oci://${REGISTRY}/manifests/infra/${releaseName}:${releaseVersion} \
               --tag ${envName} \
-              --provider=azure \
-              --creds="${CREDS}"
+              --provider=azure
             done
           done

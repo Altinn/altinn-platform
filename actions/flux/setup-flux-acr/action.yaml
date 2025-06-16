@@ -22,10 +22,6 @@ inputs:
     default: "altinncr"
     type: string
     pattern: "^[a-zA-Z0-9-]{5,50}$"
-outputs:
-  credentials:
-    description: "Credentials for the Azure Container Registry (ACR) to use with flux"
-    value: ${{ steps.get_acr_creds.outputs.credentials }}
 
 runs:
   using: composite
@@ -40,16 +36,3 @@ runs:
         client-id: ${{ inputs.azure_app_id }}
         subscription-id: ${{ inputs.azure_subscription_id }}
         tenant-id: ${{ inputs.azure_tenant_id }}
-    - name: Get ACR credentials
-      id: get_acr_creds
-      shell: bash
-      env:
-        ACR_NAME: ${{ inputs.acr_name }}
-      run: |
-        credentials=$(az acr login --name ${ACR_NAME} --expose-token)
-        # Add log mask for accessToken and refreshToken to avoid leaking sensitive information using jq
-        accessToken=$(echo "${credentials}" | jq -r '.accessToken')
-        refreshToken=$(echo "${credentials}" | jq -r '.refreshToken')
-        echo "::add-mask::${accessToken}"
-        echo "::add-mask::${refreshToken}"
-        echo "credentials=${credentials}" >> $GITHUB_OUTPUT
