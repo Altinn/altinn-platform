@@ -7,9 +7,6 @@ resource "azapi_resource" "dis_identity_operator" {
     properties = {
       kustomizations = {
         dis-identity-operator = {
-          dependsOn = [
-            "azure-service-operator-aso"
-          ]
           force = false
           path  = "./default"
           postBuild = {
