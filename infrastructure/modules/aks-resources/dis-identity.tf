@@ -29,7 +29,7 @@ resource "azapi_resource" "dis_identity_operator" {
         }
         syncIntervalInSeconds = 300
         timeoutInSeconds      = 300
-        url                   = "oci://altinncr.azurecr.io/manifests/infra/dis-identity-operator"
+        url                   = "oci://altinncr.azurecr.io/manifests/infra/dis-identity"
         useWorkloadIdentity   = true
       }
       namespace                  = "flux-system"
