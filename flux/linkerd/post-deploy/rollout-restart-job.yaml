@@ -43,9 +43,25 @@ spec:
   template:
     spec:
       serviceAccountName: rollout-restart-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
       containers:
         - name: kubectl
           image: altinncr.azurecr.io/docker.io/bitnami/kubectl:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
           command: ["sh", "-c"]
           args:
             - |
@@ -53,9 +69,23 @@ spec:
               if ! kubectl label ns kube-system --list=true | grep -q config.linkerd.io/admission-webhooks=disabled; then
                 kubectl label ns kube-system config.linkerd.io/admission-webhooks=disabled
               fi
-              # Restart all pods that use linkerd in the namespaces
-              kubectl -n traefik rollout restart deployments,statefulsets,daemonsets ;
-              kubectl -n default rollout restart deployments,statefulsets,daemonsets ;
-              kubectl -n pdf rollout restart deployments,statefulsets,daemonsets ;
-              kubectl -n monitoring rollout restart deployments,statefulsets,daemonsets ;
+              # Define excluded namespaces
+              EXCLUDED_NAMESPACES="cert-manager flux-system kube-node-lease kube-public kube-system linkerd"
+              # Get all namespaces and filter out excluded ones
+              ALL_NAMESPACES=$(kubectl get namespaces -o jsonpath='{.items[*].metadata.name}')
+              # Restart workloads in all namespaces except excluded ones
+              for ns in $ALL_NAMESPACES; do
+                skip=false
+                for excluded in $EXCLUDED_NAMESPACES; do
+                  if [ "$ns" = "$excluded" ]; then
+                    echo "Skipping excluded namespace: $ns"
+                    skip=true
+                    break
+                  fi
+                done
+                if [ "$skip" = false ]; then
+                  echo "Restarting workloads in namespace: $ns"
+                  kubectl -n "$ns" rollout restart deployments,statefulsets,daemonsets 2>/dev/null || echo "No workloads to restart in namespace: $ns"
+                fi
+              done
       restartPolicy: Never
