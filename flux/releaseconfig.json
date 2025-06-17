@@ -66,5 +66,9 @@
     "tt_ring2": "0.1.0",
     "prod_ring1": "0.1.0",
     "prod_ring2": "0.1.0"
+  },
+  "dis-identity": {
+    "at_ring1": "0.0.1",
+    "at_ring2": "0.0.1"
   }
 }
