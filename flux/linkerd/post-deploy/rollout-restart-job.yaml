@@ -12,7 +12,7 @@ metadata:
 rules:
   - apiGroups: ["apps"]
     resources: ["deployments", "statefulsets", "daemonsets"]
-    verbs: ["get", "list", "patch", "update"]
+    verbs: ["patch"]
   - apiGroups: [""]
     resources: ["namespaces"]
     verbs: ["get", "list", "patch"]
