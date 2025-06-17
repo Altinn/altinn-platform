@@ -48,6 +48,12 @@ type ApplicationIdentityReconciler struct {
 // +kubebuilder:rbac:groups=application.dis.altinn.cloud,resources=applicationidentities,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=application.dis.altinn.cloud,resources=applicationidentities/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=application.dis.altinn.cloud,resources=applicationidentities/finalizers,verbs=update
+// +kubebuilder:rbac:groups=managedidentity.azure.com,resources=userassignedidentities,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=managedidentity.azure.com,resources=userassignedidentities/status,verbs=get
+// +kubebuilder:rbac:groups=managedidentity.azure.com,resources=federatedidentitycredentials,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=managedidentity.azure.com,resources=federatedidentitycredentials/status,verbs=get
+// +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=serviceaccounts/status,verbs=get
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
