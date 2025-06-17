@@ -182,10 +182,31 @@ jobs:
                 body: `${commentPrefix} Check it out ${{ steps.create-pr.outputs.pull-request-url }}`
               });
             }
-  retag-release:
+  generate-matrix:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.event.ref == 'refs/heads/main'
+    outputs:
+      matrix: ${{ steps.generate-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Generate matrix
+        id: generate-matrix
+        run: |
+          # Read the releases config file and generate matrix
+          releasesConfigFile="${{ env.RELEASE_FILE }}"
+          matrix=$(jq -c '[to_entries[] | .key as $release | .value | to_entries[] | {release: $release, environment: .key, version: .value}]' $releasesConfigFile)
+          echo "matrix={\"include\":$matrix}" >> $GITHUB_OUTPUT
+          echo "Generated matrix: $matrix"
+
+  retag-release:
+    runs-on: ubuntu-latest
+    needs: generate-matrix
+    if: github.event_name == 'push' && github.event.ref == 'refs/heads/main'
     environment: flux-release
+    strategy:
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+      fail-fast: false
     steps:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -200,17 +221,8 @@ jobs:
         env:
           REGISTRY: altinncr.azurecr.io
         run: |
-          echo "Promoting release..."
-          # Read the releases config file and loop through the releases
-          releasesConfigFile="${{ env.RELEASE_FILE }}"
-          releasesConfig=$(cat $releasesConfigFile)
-          for releaseName in $(echo $releasesConfig | jq -r 'keys[]'); do
-            for envName in $(echo $releasesConfig | jq -r ".\"$releaseName\" | keys[]"); do
-              releaseVersion=$(echo $releasesConfig | jq -r ".\"$releaseName\".\"$envName\"")
-              echo "Promoting release $releaseName to version $releaseVersion for environment $envName"
-              echo "retagging oci://${REGISTRY}/manifests/infra/${releaseName}:${releaseVersion} to ${envName}"
-              flux tag artifact oci://${REGISTRY}/manifests/infra/${releaseName}:${releaseVersion} \
-              --tag ${envName} \
-              --provider=azure
-            done
-          done
+          echo "Promoting release ${{ matrix.release }} to version ${{ matrix.version }} for environment ${{ matrix.environment }}"
+          echo "retagging oci://${REGISTRY}/manifests/infra/${{ matrix.release }}:${{ matrix.version }} to ${{ matrix.environment }}"
+          flux tag artifact oci://${REGISTRY}/manifests/infra/${{ matrix.release }}:${{ matrix.version }} \
+          --tag ${{ matrix.environment }} \
+          --provider=azure
