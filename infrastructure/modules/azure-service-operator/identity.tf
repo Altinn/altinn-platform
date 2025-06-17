@@ -48,5 +48,5 @@ resource "azurerm_role_definition" "user_assigned_identity_role" {
 resource "azurerm_role_assignment" "aso_contrib_role_assignment" {
   scope              = var.dis_resource_group_id
   role_definition_id = azurerm_role_definition.user_assigned_identity_role.id
-  principal_id       = azurerm_user_assigned_identity.aso_identity.id
+  principal_id       = azurerm_user_assigned_identity.aso_identity.principal_id
 }
