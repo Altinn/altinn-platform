@@ -12,10 +12,10 @@ metadata:
 rules:
   - apiGroups: ["apps"]
     resources: ["deployments", "statefulsets", "daemonsets"]
-    verbs: ["get", "list", "patch", "update"]
+    verbs: ["patch"]
   - apiGroups: [""]
     resources: ["namespaces"]
-    verbs: ["get", "patch"]
+    verbs: ["get", "list", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
