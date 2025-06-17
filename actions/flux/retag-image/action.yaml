@@ -51,7 +51,6 @@ runs:
         TO_TAG: ${{ inputs.tag }}
         ACR_NAME: ${{ inputs.acr_name }}
       shell: bash
-      needs: setup_flux_acr
       run: |
         container_registry=${ACR_NAME}.azurecr.io
         flux tag artifact "oci://${container_registry}/${ARTIFACT_NAME}:${FROM_TAG}" \
