@@ -9,4 +9,4 @@ spec:
   ref:
     tag: v0.0.1
   timeout: 5m0s
-  url: oci://altinncr.azurecr.io/ghcr.io/altinn/altinn-platform/kustomize/infra/dis-identity-operator
+  url: oci://altinncr.azurecr.io/dis/kustomize/dis-identity-operator

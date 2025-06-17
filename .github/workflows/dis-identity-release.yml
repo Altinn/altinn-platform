@@ -1,7 +1,7 @@
 name: Scan/Release Dis Identity Operator Image and Build Kustomize OCI Artifact
 
 env:
-  FLUX_ARTIFACT_NAME: kustomize/dis-identity-operator
+  FLUX_ARTIFACT_NAME: dis/kustomize/dis-identity-operator
 
 on:
   pull_request:
