@@ -19,7 +19,7 @@ spec:
       newTag: vv0.0.1
   sourceRef:
     kind: OCIRepository
-    name: dis-identity
+    name: dis-identity-operator
     namespace: flux-system
   targetNamespace: dis-identity-operator-system
   timeout: 5m0s
