@@ -14,6 +14,7 @@ on:
       - actions/terraform/plan/**
       - infrastructure/modules/aks/**
       - infrastructure/modules/aks-resources/**
+      - infrastructure/modules/azure-service-operator/**
       - infrastructure/modules/observability/**
       - infrastructure/modules/grafana/**
       - infrastructure/altinn-auth-test/auth-at22-aks-rg/**
@@ -26,6 +27,7 @@ on:
       - actions/terraform/plan/**
       - infrastructure/modules/aks/**
       - infrastructure/modules/aks-resources/**
+      - infrastructure/modules/azure-service-operator/**
       - infrastructure/modules/observability/**
       - infrastructure/modules/grafana/**
       - infrastructure/altinn-auth-test/auth-at22-aks-rg/**
