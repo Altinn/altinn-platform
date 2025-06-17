@@ -36,10 +36,9 @@ jobs:
       - name: Build and push artifacts with commit sha tag
         env:
           REGISTRY: altinncr.azurecr.io
-          CREDS: ${{ steps.setup_flux_acr.outputs.credentials }}
         run: |
           echo '### Check if there are any changes in ./flux/ folder'
-          FLUX_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD | grep 'flux/' || true)
+          FLUX_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD | grep '^flux/' || true)
           if [ -z "${FLUX_FILES}" ]; then
             echo "No artifacts to process."
             exit 0
@@ -48,17 +47,16 @@ jobs:
           # Extract unique folder names directly under ./manifests/infra/
           ARTIFACTS=$(echo "${FLUX_FILES}" | awk -F'/' '{print $2}' | sort -u)
           for artifact in $ARTIFACTS;do
+            echo "Processing artifact: ${artifact}"
             flux push artifact "oci://${REGISTRY}/manifests/infra/${artifact}:$(git rev-parse --short HEAD)" \
               --provider=azure \
               --reproducible \
               --path="./flux/${artifact}" \
               --source="$(git config --get remote.origin.url)" \
-              --revision="$(git branch --show-current)/$(git rev-parse HEAD)" \
-              --creds="${CREDS}"
+              --revision="$(git branch --show-current)/$(git rev-parse HEAD)"
             flux tag artifact "oci://${REGISTRY}/manifests/infra/${artifact}:$(git rev-parse --short HEAD)" \
               --provider=azure \
-              --tag latest \
-              --creds="${CREDS}"
+              --tag latest
           done
   tag-release:
     runs-on: ubuntu-latest
