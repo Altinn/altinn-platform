@@ -5,6 +5,24 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts/status
+  verbs:
+  - get
+- apiGroups:
   - application.dis.altinn.cloud
   resources:
   - applicationidentities
@@ -30,3 +48,23 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - managedidentity.azure.com
+  resources:
+  - federatedidentitycredentials
+  - userassignedidentities
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - managedidentity.azure.com
+  resources:
+  - federatedidentitycredentials/status
+  - userassignedidentities/status
+  verbs:
+  - get
