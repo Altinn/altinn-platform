@@ -34,7 +34,7 @@ jobs:
     with:
       release_latest: true
       image_name: dis-identity-operator
-      tag_prefix: dis-identity-
+      tag_prefix: dis-identity-v
       platforms: "linux/amd64"
       workdir: ./services/dis-identity-operator
   build-release-flux-oci-latest:
@@ -70,6 +70,7 @@ jobs:
       - name: Setup vars
         id: vars
         run: |
+          tag=${GITHUB_REF/refs\/tags\/kustomize-dis-identity-/}
           echo "tag=${tag}" >> ${GITHUB_OUTPUT}
       - name: Push latest flux oci image from main
         uses: ./actions/flux/build-push-image
