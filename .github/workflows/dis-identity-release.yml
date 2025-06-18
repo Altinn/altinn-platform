@@ -70,6 +70,7 @@ jobs:
       - name: Setup vars
         id: vars
         run: |
+          tag=${GITHUB_REF/refs\/tags\/kustomize-dis-identity-/}
           echo "tag=${tag}" >> ${GITHUB_OUTPUT}
       - name: Push latest flux oci image from main
         uses: ./actions/flux/build-push-image
