@@ -34,7 +34,7 @@ jobs:
     with:
       release_latest: true
       image_name: dis-identity-operator
-      tag_prefix: dis-identity-
+      tag_prefix: dis-identity-v
       platforms: "linux/amd64"
       workdir: ./services/dis-identity-operator
   build-release-flux-oci-latest:
