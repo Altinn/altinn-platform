@@ -59,6 +59,7 @@ jobs:
   build-release-flux-oci-release:
     name: Build release from tag
     if: startsWith(github.ref, 'refs/tags/kustomize-dis-identity-')
+    environment: flux-release
     defaults:
       run:
         working-directory: ./services/dis-identity-operator/config
