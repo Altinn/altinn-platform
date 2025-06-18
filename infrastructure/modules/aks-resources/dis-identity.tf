@@ -8,7 +8,7 @@ resource "azapi_resource" "dis_identity_operator" {
       kustomizations = {
         dis-identity = {
           force = false
-          path  = "./default"
+          path  = "./"
           postBuild = {
             substitute = {
               DISID_ISSUER_URL            = "${var.azurerm_kubernetes_cluster_oidc_issuer_url}"
