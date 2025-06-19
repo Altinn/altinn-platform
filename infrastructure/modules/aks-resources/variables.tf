@@ -23,16 +23,16 @@ variable "flux_release_tag" {
   description = "OCI image that Flux should watch and reconcile"
 }
 
-variable "grafana_endpoint" {
-  type        = string
-  description = "URL endpoint for Grafana dashboard access"
-  default     = ""
-}
-
 variable "grafana_dashboard_release_branch" {
   type        = string
   default     = ""
   description = "Grafana dashboard release branch"
+}
+
+variable "grafana_endpoint" {
+  type        = string
+  description = "URL endpoint for Grafana dashboard access"
+  default     = ""
 }
 
 variable "obs_client_id" {
