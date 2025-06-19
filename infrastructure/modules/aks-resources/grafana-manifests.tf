@@ -15,6 +15,11 @@ resource "azapi_resource" "grafana_manifests" {
           syncIntervalInSeconds  = 300
           timeoutInSeconds       = 300
           wait                   = true
+          postBuild = {
+            substitute = var.grafana_dashboard_release_branch != "" ? {
+              RELEASE_BRANCH = var.grafana_dashboard_release_branch
+            } : {}
+          }
         }
       }
       namespace = "flux-system"

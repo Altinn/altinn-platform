@@ -29,6 +29,12 @@ variable "grafana_endpoint" {
   default     = ""
 }
 
+variable "grafana_dashboard_release_branch" {
+  type        = string
+  default     = ""
+  description = "Grafana dashboard release branch"
+}
+
 variable "obs_client_id" {
   type        = string
   description = "Client id for the obs app"
