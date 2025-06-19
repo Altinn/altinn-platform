@@ -37,7 +37,7 @@ data:
           request: 20m
         memory:
           limit: 250Mi
-          request: 20Mi
+          request: 50Mi
 
     # controller configuration
     controllerReplicas: 3
@@ -55,7 +55,7 @@ data:
       cpu: *controller_resources_cpu
       memory:
         limit: 250Mi
-        request: 10Mi
+        request: 25Mi
 
     # heartbeat configuration
     heartbeatResources: *controller_resources
