@@ -27,6 +27,10 @@ variable "grafana_dashboard_release_branch" {
   type        = string
   default     = ""
   description = "Grafana dashboard release branch"
+  validation {
+    condition     = var.grafana_dashboard_release_branch == "" || can(regex("^[-A-Za-z0-9_/\\.]+$", var.grafana_dashboard_release_branch))
+    error_message = "grafana_dashboard_release_branch must be empty or a valid Git branch (alphanumeric, '-', '_', '/', or '.')."
+  }
 }
 
 variable "grafana_endpoint" {
