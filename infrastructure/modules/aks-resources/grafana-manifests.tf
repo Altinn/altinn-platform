@@ -16,9 +16,9 @@ resource "azapi_resource" "grafana_manifests" {
           timeoutInSeconds       = 300
           wait                   = true
           postBuild = {
-            substitute = var.grafana_dashboard_release_branch != "" ? {
+            substitute = {
               RELEASE_BRANCH = var.grafana_dashboard_release_branch
-            } : {}
+            }
           }
         }
       }
