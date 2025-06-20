@@ -195,7 +195,7 @@ jobs:
         run: |
           # Read the releases config file and generate matrix
           releasesConfigFile="${{ env.RELEASE_FILE }}"
-          matrix=$(jq -c '[to_entries[] | .key as $release | .value | to_entries[] | {release: $release, environment: .key, version: .value}]' $releasesConfigFile)
+          matrix=$(jq -c '[to_entries[] | {release: .key, environments: .value}]' $releasesConfigFile)
           echo "matrix={\"include\":$matrix}" >> $GITHUB_OUTPUT
           echo "Generated matrix: $matrix"
 
@@ -221,8 +221,10 @@ jobs:
         env:
           REGISTRY: altinncr.azurecr.io
         run: |
-          echo "Promoting release ${{ matrix.release }} to version ${{ matrix.version }} for environment ${{ matrix.environment }}"
-          echo "retagging oci://${REGISTRY}/manifests/infra/${{ matrix.release }}:${{ matrix.version }} to ${{ matrix.environment }}"
-          flux tag artifact oci://${REGISTRY}/manifests/infra/${{ matrix.release }}:${{ matrix.version }} \
-          --tag ${{ matrix.environment }} \
-          --provider=azure
+          echo "Promoting release ${{ matrix.release }} for all environments"
+          echo '${{ toJson(matrix.environments) }}' | jq -r 'to_entries[] | "\(.key) \(.value)"' | while read environment version; do
+            echo "retagging oci://${REGISTRY}/manifests/infra/${{ matrix.release }}:${version} to ${environment}"
+            flux tag artifact oci://${REGISTRY}/manifests/infra/${{ matrix.release }}:${version} \
+            --tag ${environment} \
+            --provider=azure
+          done
