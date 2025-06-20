@@ -80,7 +80,7 @@ spec:
         config.linkerd.io/skip-inbound-ports: 8000,8443
         config.linkerd.io/proxy-cpu-request: 50m
         config.linkerd.io/proxy-memory-limit: 250Mi
-        config.linkerd.io/proxy-memory-request: 20Mi
+        config.linkerd.io/proxy-memory-request: 40Mi
         cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
     podDisruptionBudget:
       enabled: true
@@ -161,7 +161,7 @@ spec:
     resources:
       requests:
         cpu: "100m"
-        memory: "50Mi"
+        memory: "100Mi"
     metrics:
       prometheus:
         service:
