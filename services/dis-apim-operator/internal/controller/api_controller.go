@@ -149,6 +149,8 @@ func (r *ApiReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *ApiReconciler) handleDeletion(ctx context.Context, api *apimv1alpha1.Api) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+	origApi := api.DeepCopy()
+	patch := client.MergeFrom(origApi)
 	azApiVS, err := r.apimClient.GetApiVersionSet(ctx, api.GetApiAzureFullName(), nil)
 	if err != nil {
 		if azure.IsNotFoundError(err) {
@@ -178,7 +180,7 @@ func (r *ApiReconciler) handleDeletion(ctx context.Context, api *apimv1alpha1.Ap
 	if err := r.handleDeleteVersions(ctx, api); err != nil {
 		return ctrl.Result{}, err
 	}
-	return ctrl.Result{}, r.Status().Update(ctx, api)
+	return ctrl.Result{}, r.Status().Patch(ctx, api, patch)
 }
 
 func (r *ApiReconciler) handleDeleteVersions(ctx context.Context, api *apimv1alpha1.Api) error {
@@ -214,6 +216,8 @@ func (r *ApiReconciler) isAllVersionsDeleted(ctx context.Context, api *apimv1alp
 }
 
 func (r *ApiReconciler) handleCreateUpdate(ctx context.Context, api *apimv1alpha1.Api) (ctrl.Result, error) {
+	orig := api.DeepCopy()
+	patch := client.MergeFrom(orig)
 	azApi, err := r.apimClient.CreateUpdateApiVersionSet(ctx, api.GetApiAzureFullName(), api.ToAzureApiVersionSet(), nil)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -223,13 +227,16 @@ func (r *ApiReconciler) handleCreateUpdate(ctx context.Context, api *apimv1alpha
 	}
 	api.Status.ApiVersionSetID = *azApi.ID
 	api.Status.ProvisioningState = apimv1alpha1.ProvisioningStateUpdating
-	return ctrl.Result{RequeueAfter: 10 * time.Second}, r.Status().Update(ctx, api)
+	err = r.Status().Patch(ctx, api, patch)
+	return ctrl.Result{RequeueAfter: 10 * time.Second}, err
 }
 
 func (r *ApiReconciler) reconcileVersions(ctx context.Context, api *apimv1alpha1.Api) (bool, error) {
 	logger := log.FromContext(ctx)
 	wantedVersions := api.ToApiVersions()
 	inSync := true
+	origApi := api.DeepCopy()
+	patch := client.MergeFrom(origApi)
 	if api.Status.VersionStates == nil && len(wantedVersions) > 0 {
 		api.Status.VersionStates = make(map[string]apimv1alpha1.ApiVersionStatus)
 	}
@@ -252,8 +259,10 @@ func (r *ApiReconciler) reconcileVersions(ctx context.Context, api *apimv1alpha1
 			continue
 		} else {
 			if !wantedVersion.Matches(existingVersion) {
+				origVersion := existingVersion.DeepCopy()
+				patch := client.MergeFrom(origVersion)
 				existingVersion.Spec = wantedVersion.Spec
-				if err := r.Update(ctx, &existingVersion); err != nil {
+				if err := r.Patch(ctx, &existingVersion, patch); err != nil {
 					logger.Error(err, "Failed to update ApiVersion")
 					return false, err
 				}
@@ -272,10 +281,12 @@ func (r *ApiReconciler) reconcileVersions(ctx context.Context, api *apimv1alpha1
 	} else {
 		api.Status.ProvisioningState = apimv1alpha1.ProvisioningStateSucceeded
 	}
-	return inSync, r.Status().Update(ctx, api)
+	return inSync, r.Status().Patch(ctx, api, patch)
 }
 
 func (r *ApiReconciler) deleteRemovedVersions(ctx context.Context, api *apimv1alpha1.Api) error {
+	origApi := api.DeepCopy()
+	patch := client.MergeFrom(origApi)
 	var apiVersionList apimv1alpha1.ApiVersionList
 	err := r.List(ctx, &apiVersionList, client.InNamespace(api.Namespace), client.MatchingFields{jobOwnerKey: api.Name})
 	if err != nil {
@@ -294,7 +305,7 @@ func (r *ApiReconciler) deleteRemovedVersions(ctx context.Context, api *apimv1al
 			delete(api.Status.VersionStates, *version.Spec.Name)
 		}
 	}
-	return r.Status().Update(ctx, api)
+	return r.Status().Patch(ctx, api, patch)
 }
 
 func versionInList(version apimv1alpha1.ApiVersion, apiName string, versions []apimv1alpha1.ApiVersionSubSpec) bool {

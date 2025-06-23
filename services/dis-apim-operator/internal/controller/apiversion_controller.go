@@ -241,6 +241,8 @@ func (r *ApiVersionReconciler) createUpdateApimApi(ctx context.Context, apiVersi
 func (r *ApiVersionReconciler) createUpdatePolicy(ctx context.Context, apiVersion apimv1alpha1.ApiVersion) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Creating or updating policy")
+	orig := apiVersion.DeepCopy()
+	patch := client.MergeFrom(orig)
 	policy := apiVersion.Spec.Policies
 	if policy.PolicyContent == nil {
 		return fmt.Errorf("policy content is nil")
@@ -263,7 +265,7 @@ func (r *ApiVersionReconciler) createUpdatePolicy(ctx context.Context, apiVersio
 	if err != nil {
 		logger.Error(err, "Failed to create/update policy")
 		apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateFailed
-		_ = r.Status().Update(ctx, &apiVersion)
+		_ = r.Status().Patch(ctx, &apiVersion, patch)
 		return err
 	}
 	apiVersion.Status.LastAppliedPolicySha, err = utils.Sha256FromContent(ctx, apiVersion.Spec.Policies.PolicyContent)
@@ -272,7 +274,7 @@ func (r *ApiVersionReconciler) createUpdatePolicy(ctx context.Context, apiVersio
 		return err
 	}
 	apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateSucceeded
-	err = r.Status().Update(ctx, &apiVersion)
+	err = r.Status().Patch(ctx, &apiVersion, patch)
 	if err != nil {
 		logger.Error(err, "Failed to update status")
 		return err
@@ -282,6 +284,8 @@ func (r *ApiVersionReconciler) createUpdatePolicy(ctx context.Context, apiVersio
 
 func (r *ApiVersionReconciler) createUpdateDiagnostics(ctx context.Context, apiVersion apimv1alpha1.ApiVersion) error {
 	logger := log.FromContext(ctx)
+	orig := apiVersion.DeepCopy()
+	patch := client.MergeFrom(orig)
 	diagnostics := apiVersion.Spec.Diagnostics
 	loggerId := r.ApimClientConfig.DefaultLoggerId
 	azuremonitorLoggerId := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ApiManagement/service/%s/loggers/azuremonitor", r.ApimClientConfig.SubscriptionId, r.ApimClientConfig.ResourceGroup, r.ApimClientConfig.ApimServiceName)
@@ -305,7 +309,7 @@ func (r *ApiVersionReconciler) createUpdateDiagnostics(ctx context.Context, apiV
 	if err != nil {
 		logger.Error(err, "Failed to create/update appinsights diagnostics")
 		apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateFailed
-		_ = r.Status().Update(ctx, &apiVersion)
+		_ = r.Status().Patch(ctx, &apiVersion, patch)
 		return err
 	}
 	_, err = r.apimClient.CreateUpdateApiDiagnosticSettings(
@@ -318,11 +322,11 @@ func (r *ApiVersionReconciler) createUpdateDiagnostics(ctx context.Context, apiV
 	if err != nil {
 		logger.Error(err, "Failed to create/update azuremonitor diagnostics")
 		apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateFailed
-		_ = r.Status().Update(ctx, &apiVersion)
+		_ = r.Status().Patch(ctx, &apiVersion, patch)
 		return err
 	}
 	apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateSucceeded
-	err = r.Status().Update(ctx, &apiVersion)
+	err = r.Status().Patch(ctx, &apiVersion, patch)
 	if err != nil {
 		logger.Error(err, "Failed to update status")
 		return err
