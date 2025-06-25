@@ -19,7 +19,7 @@ provider "azurerm" {
 }
 
 provider "helm" {
-  kubernetes {
+  kubernetes = {
     config_path    = "~/.kube/config"
     config_context = "k6tests-cluster"
   }

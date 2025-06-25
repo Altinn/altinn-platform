@@ -6,8 +6,10 @@ resource "helm_release" "pyrra" {
   repository       = "https://rlex.github.io/helm-charts"
   chart            = "pyrra"
   version          = "0.14.2"
-  set {
-    name  = "genericRules.enabled"
-    value = "true"
-  }
+  set = [
+    {
+      name  = "genericRules.enabled"
+      value = "true"
+    }
+  ]
 }
