@@ -64,7 +64,7 @@ jobs:
 
       - name: Terraform Init
         id: terraform_init
-        uses: Altinn/altinn-platform/actions/terraform/init@d2ffc18ea99c0fef0e5800c181936a9ab21ad1c9 # main
+        uses: Altinn/altinn-platform/actions/terraform/init@40f196d4b15bb742d596563d6cee94e78ccdf206 # main
         with:
           working_directory: ${{ env.TF_PROJECT }}
           oidc_type: environment
@@ -115,7 +115,7 @@ jobs:
           fi
 
       - name: Terraform Plan Foundational Module
-        uses: Altinn/altinn-platform/actions/terraform/plan-only@d2ffc18ea99c0fef0e5800c181936a9ab21ad1c9 # main
+        uses: Altinn/altinn-platform/actions/terraform/plan-only@40f196d4b15bb742d596563d6cee94e78ccdf206 # main
         if: contains(github.event.pull_request.labels.*.name, 'partial-plan-apply')
         with:
           working_directory: ${{ env.TF_PROJECT }}
@@ -125,7 +125,7 @@ jobs:
 
       - name: Terraform Plan
         id: terraform_plan
-        uses: Altinn/altinn-platform/actions/terraform/plan-only@d2ffc18ea99c0fef0e5800c181936a9ab21ad1c9 # main
+        uses: Altinn/altinn-platform/actions/terraform/plan-only@40f196d4b15bb742d596563d6cee94e78ccdf206 # main
         if: ${{ ! contains(github.event.pull_request.labels.*.name, 'partial-plan-apply') }}
         with:
           working_directory: ${{ env.TF_PROJECT }}
@@ -133,7 +133,7 @@ jobs:
           arm_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
 
       - name: Write Terraform Summary
-        uses: Altinn/altinn-platform/actions/terraform/write-terraform-summary@d2ffc18ea99c0fef0e5800c181936a9ab21ad1c9 # main
+        uses: Altinn/altinn-platform/actions/terraform/write-terraform-summary@40f196d4b15bb742d596563d6cee94e78ccdf206 # main
         with:
           working_directory: ${{ env.TF_PROJECT }}
           oidc_type: environment
