@@ -1,8 +1,6 @@
 module github.com/Altinn/altinn-platform/actions/generate-k6-manifests
 
-go 1.23.0
-
-toolchain go1.23.6
+go 1.24
 
 require (
 	github.com/elliotchance/orderedmap/v3 v3.1.0
