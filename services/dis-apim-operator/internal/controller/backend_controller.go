@@ -113,10 +113,12 @@ func (r *BackendReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 	}
 	logger.Info("Backend matches actual state")
+	orig := backend.DeepCopy()
+	patch := client.MergeFrom(orig)
 	if backend.Status.ProvisioningState != apimv1alpha1.BackendProvisioningStateSucceeded || backend.Status.BackendID != *azBackend.ID {
 		backend.Status.ProvisioningState = apimv1alpha1.BackendProvisioningStateSucceeded
 		backend.Status.BackendID = *azBackend.ID
-		if err := r.Status().Update(ctx, &backend); err != nil {
+		if err := r.Status().Patch(ctx, &backend, patch); err != nil {
 			logger.Error(err, "Failed to update status")
 			return ctrl.Result{}, err
 		}
@@ -134,17 +136,19 @@ func (r *BackendReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *BackendReconciler) handleCreateUpdate(ctx context.Context, backend *apimv1alpha1.Backend) error {
 	res, err := r.apimClient.CreateUpdateBackend(ctx, backend.GetAzureResourceName(), backend.ToAzureBackend(), nil)
+	orig := backend.DeepCopy()
+	patch := client.MergeFrom(orig)
 	if err != nil {
 		backend.Status.ProvisioningState = apimv1alpha1.BackendProvisioningStateFailed
 		backend.Status.LastProvisioningError = fmt.Sprintf("err when creating backend: %v", err)
-		if errUpdate := r.Status().Update(ctx, backend); errUpdate != nil {
+		if errUpdate := r.Status().Patch(ctx, backend, patch); errUpdate != nil {
 			return fmt.Errorf("failed to update status to failed: %v", errUpdate)
 		}
 		return err
 	}
 	backend.Status.BackendID = *res.ID
 	backend.Status.ProvisioningState = apimv1alpha1.BackendProvisioningStateSucceeded
-	if errUpdate := r.Status().Update(ctx, backend); errUpdate != nil {
+	if errUpdate := r.Status().Patch(ctx, backend, patch); errUpdate != nil {
 		return fmt.Errorf("failed to update status to succeeded: %v", errUpdate)
 	}
 	return nil
