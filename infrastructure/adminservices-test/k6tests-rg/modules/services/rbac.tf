@@ -6,7 +6,7 @@ resource "kubernetes_cluster_role_v1" "dev_access" {
   rule {
     api_groups = [""]
     resources  = ["configmaps"]
-    verbs      = ["get", "list", "watch", "delete"]
+    verbs      = ["get", "list", "watch", "delete", "patch"]
   }
   rule {
     api_groups = [""]
@@ -18,11 +18,13 @@ resource "kubernetes_cluster_role_v1" "dev_access" {
     resources  = ["testruns"]
     verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
   }
+  /*
   rule {
     api_groups = [""]
     resources  = ["secrets"]
     verbs      = ["list", "watch"]
   }
+  */
   rule {
     api_groups = ["bitnami.com"]
     resources  = ["sealedsecrets"]
@@ -38,7 +40,7 @@ resource "kubernetes_cluster_role_v1" "sp_access" {
   rule {
     api_groups = [""]
     resources  = ["configmaps"]
-    verbs      = ["create", "update", "delete", "get"]
+    verbs      = ["create", "update", "delete", "get", "patch"]
   }
   rule {
     api_groups = ["bitnami.com"]
@@ -48,7 +50,7 @@ resource "kubernetes_cluster_role_v1" "sp_access" {
   rule {
     api_groups = ["k6.io"]
     resources  = ["testruns"]
-    verbs      = ["create", "update", "get", "list", "watch", "delete"]
+    verbs      = ["create", "update", "get", "list", "watch", "delete", "patch"]
   }
   rule {
     api_groups = [""]
