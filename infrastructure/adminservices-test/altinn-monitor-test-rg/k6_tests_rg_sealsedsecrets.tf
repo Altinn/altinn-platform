@@ -5,5 +5,5 @@ resource "helm_release" "sealed_secrets" {
   create_namespace = true
   repository       = "https://bitnami-labs.github.io/sealed-secrets"
   chart            = "sealed-secrets"
-  version          = "2.17.1"
+  version          = "2.17.3"
 }
