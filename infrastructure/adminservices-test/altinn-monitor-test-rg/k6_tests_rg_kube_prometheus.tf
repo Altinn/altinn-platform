@@ -25,7 +25,7 @@ resource "helm_release" "kube_prometheus_stack" {
   repository       = "https://prometheus-community.github.io/helm-charts"
   chart            = "kube-prometheus-stack"
   skip_crds        = true
-  version          = "70.0.2"
+  version          = "75.4.0"
 
   values = [
     "${templatefile(
