@@ -2,6 +2,3 @@ installCRDs: true
 
 namespace:
   create: false
-
-prometheus:
-  enabled: true
