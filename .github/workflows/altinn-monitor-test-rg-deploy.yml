@@ -85,7 +85,7 @@ jobs:
           fi
 
       - name: Terraform Plan
-        uses: Altinn/altinn-platform/actions/terraform/plan@e2a0da317383409dc280579aadaaa939a39834c5 # main
+        uses: Altinn/altinn-platform/actions/terraform/plan@d9c2f3cd948fa894e0300f614cdb71cfba9502d3 # main
         with:
           working_directory: ${{ env.TF_PROJECT }}
           oidc_type: environment
@@ -134,7 +134,7 @@ jobs:
           fi
 
       - name: Terraform Apply
-        uses: Altinn/altinn-platform/actions/terraform/apply@e2a0da317383409dc280579aadaaa939a39834c5 # main
+        uses: Altinn/altinn-platform/actions/terraform/apply@d9c2f3cd948fa894e0300f614cdb71cfba9502d3 # main
         with:
           working_directory: ${{ env.TF_PROJECT }}
           oidc_type: environment
