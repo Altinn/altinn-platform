@@ -33,6 +33,17 @@ var _ = Describe("DefaultPredicate", func() {
 			Expect(pred.Create(createEvent)).To(BeTrue())
 		})
 
+		It("should return true for exact suffix match", func() {
+			createEvent := event.CreateEvent{
+				Object: &apimv1alpha1.Backend{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "test",
+					},
+				},
+			}
+			Expect(pred.Create(createEvent)).To(BeTrue())
+		})
+
 		It("should return false for non-matching suffix", func() {
 			createEvent := event.CreateEvent{
 				Object: &apimv1alpha1.Backend{
@@ -43,7 +54,7 @@ var _ = Describe("DefaultPredicate", func() {
 			}
 			Expect(pred.Create(createEvent)).To(BeFalse())
 		})
-		It("should return false for non-matching suffix", func() {
+		It("should return false when suffix appears at beginning", func() {
 			createEvent := event.CreateEvent{
 				Object: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
@@ -67,6 +78,17 @@ var _ = Describe("DefaultPredicate", func() {
 			Expect(pred.Delete(deleteEvent)).To(BeTrue())
 		})
 
+		It("should return true for exact suffix match", func() {
+			deleteEvent := event.DeleteEvent{
+				Object: &apimv1alpha1.Backend{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "test",
+					},
+				},
+			}
+			Expect(pred.Delete(deleteEvent)).To(BeTrue())
+		})
+
 		It("should return false for non-matching suffix", func() {
 			deleteEvent := event.DeleteEvent{
 				Object: &apimv1alpha1.Backend{
@@ -77,7 +99,7 @@ var _ = Describe("DefaultPredicate", func() {
 			}
 			Expect(pred.Delete(deleteEvent)).To(BeFalse())
 		})
-		It("should return false for non-matching suffix", func() {
+		It("should return false when suffix appears at beginning", func() {
 			deleteEvent := event.DeleteEvent{
 				Object: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
@@ -92,6 +114,11 @@ var _ = Describe("DefaultPredicate", func() {
 	Context("UpdateFunc", func() {
 		It("should return true for matching suffix", func() {
 			updateEvent := event.UpdateEvent{
+				ObjectOld: &apimv1alpha1.Backend{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "resource-test",
+					},
+				},
 				ObjectNew: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "resource-test",
@@ -101,8 +128,29 @@ var _ = Describe("DefaultPredicate", func() {
 			Expect(pred.Update(updateEvent)).To(BeTrue())
 		})
 
+		It("should return true for exact suffix match", func() {
+			updateEvent := event.UpdateEvent{
+				ObjectOld: &apimv1alpha1.Backend{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "test",
+					},
+				},
+				ObjectNew: &apimv1alpha1.Backend{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "test",
+					},
+				},
+			}
+			Expect(pred.Update(updateEvent)).To(BeTrue())
+		})
+
 		It("should return false for non-matching suffix", func() {
 			updateEvent := event.UpdateEvent{
+				ObjectOld: &apimv1alpha1.Backend{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "resource-test",
+					},
+				},
 				ObjectNew: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "resource-prod",
@@ -112,8 +160,13 @@ var _ = Describe("DefaultPredicate", func() {
 			Expect(pred.Update(updateEvent)).To(BeFalse())
 		})
 
-		It("should return false for non-matching suffix", func() {
+		It("should return false when suffix appears at beginning", func() {
 			updateEvent := event.UpdateEvent{
+				ObjectOld: &apimv1alpha1.Backend{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "resource-test",
+					},
+				},
 				ObjectNew: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "test-prod",
@@ -136,6 +189,17 @@ var _ = Describe("DefaultPredicate", func() {
 			Expect(pred.Generic(genericEvent)).To(BeTrue())
 		})
 
+		It("should return true for exact suffix match", func() {
+			genericEvent := event.GenericEvent{
+				Object: &apimv1alpha1.Backend{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "test",
+					},
+				},
+			}
+			Expect(pred.Generic(genericEvent)).To(BeTrue())
+		})
+
 		It("should return false for non-matching suffix", func() {
 			genericEvent := event.GenericEvent{
 				Object: &apimv1alpha1.Backend{
@@ -147,7 +211,7 @@ var _ = Describe("DefaultPredicate", func() {
 			Expect(pred.Generic(genericEvent)).To(BeFalse())
 		})
 
-		It("should return false for non-matching suffix", func() {
+		It("should return false when suffix appears at beginning", func() {
 			genericEvent := event.GenericEvent{
 				Object: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
