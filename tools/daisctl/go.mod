@@ -3,7 +3,7 @@ module github.com/altinn/altinn-platform/daisctl
 go 1.22.0
 
 require (
-	github.com/charmbracelet/bubbles v0.20.0
+	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/google/go-cmp v0.7.0
 	github.com/spf13/cobra v1.9.1
