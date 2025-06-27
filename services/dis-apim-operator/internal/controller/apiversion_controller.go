@@ -23,7 +23,7 @@ import (
 
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/azure"
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
-	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2"
+	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v3"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -111,23 +111,84 @@ func (r *ApiVersionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *ApiVersionReconciler) deleteApiVersion(ctx context.Context, apiVersion apimv1alpha1.ApiVersion) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("Deleting APIVersion")
-	_, err := r.apimClient.DeleteApi(ctx, apiVersion.GetApiVersionAzureFullName(), "*", nil)
-	if azure.IgnoreNotFound(err) != nil {
-		logger.Error(err, "Failed to delete APIVersion")
-		return ctrl.Result{}, err
-	}
-	if apiVersion.Spec.Policies != nil {
-		_, err = r.apimClient.DeleteApiPolicy(ctx, apiVersion.GetApiVersionAzureFullName(), "*", nil)
-		if azure.IgnoreNotFound(err) != nil {
-			logger.Error(err, "Failed to delete policy")
+	if apiVersion.Status.ProvisioningState == apimv1alpha1.ProvisioningStateDeleted {
+		if apiVersion.Spec.Policies != nil {
+			_, err := r.apimClient.DeleteApiPolicy(ctx, apiVersion.GetApiVersionAzureFullName(), "*", nil)
+			if azure.IgnoreNotFound(err) != nil {
+				logger.Error(err, "Failed to delete policy")
+				return ctrl.Result{}, err
+			}
+		}
+		controllerutil.RemoveFinalizer(&apiVersion, API_VERSION_FINALIZER)
+		err := r.Update(ctx, &apiVersion)
+		if err != nil {
+			logger.Error(err, "Failed to remove finalizer")
 			return ctrl.Result{}, err
 		}
+		return ctrl.Result{}, nil
 	}
-	controllerutil.RemoveFinalizer(&apiVersion, API_VERSION_FINALIZER)
-	err = r.Update(ctx, &apiVersion)
+	resumeToken := apiVersion.Status.ResumeToken
+	options := &apim.APIClientBeginDeleteOptions{ResumeToken: resumeToken}
+	poller, err := r.apimClient.DeleteApi(ctx, apiVersion.GetApiVersionAzureFullName(), "*", options)
 	if err != nil {
-		logger.Error(err, "Failed to remove finalizer")
+		orig := apiVersion.DeepCopy()
+		patch := client.MergeFrom(orig)
+		if azure.IgnoreNotFound(err) != nil {
+			logger.Error(err, "Failed to delete APIVersion")
+			return ctrl.Result{}, err
+		}
+		logger.Info("APIVersion deleted successfully")
+		apiVersion.Status.ResumeToken = ""
+		apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateDeleted
+		apiVersion.Status.LastAppliedSpecSha = ""
+		apiVersion.Status.LastAppliedPolicyBase64 = ""
+		err = r.Status().Patch(ctx, &apiVersion, patch)
+		if err != nil {
+			logger.Error(err, "Failed to update status after deletion")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	}
+	logger.Info(fmt.Sprintf("Watching LR operation for deletion, resume-token: %s", resumeToken))
+	status, _, token, err := azure.StartResumeOperation[apim.APIClientDeleteResponse](ctx, poller)
+	if err != nil {
+		logger.Error(err, "Failed to watch LR operation for deletion")
 		return ctrl.Result{}, err
+	}
+	orig := apiVersion.DeepCopy()
+	patch := client.MergeFrom(orig)
+	switch status {
+	case azure.OperationStatusFailed:
+		logger.Error(err, "Failed to delete APIVersion")
+		apiVersion.Status.ResumeToken = ""
+		apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateFailed
+		err = r.Status().Patch(ctx, &apiVersion, patch)
+		if err != nil {
+			logger.Error(err, "Failed to update status")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, fmt.Errorf("failed to delete APIVersion: %w", err)
+	case azure.OperationStatusSucceeded:
+		logger.Info("APIVersion deleted successfully")
+		apiVersion.Status.ResumeToken = ""
+		apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateDeleted
+		apiVersion.Status.LastAppliedSpecSha = ""
+		apiVersion.Status.LastAppliedPolicyBase64 = ""
+		err = r.Status().Patch(ctx, &apiVersion, patch)
+		if err != nil {
+			logger.Error(err, "Failed to update status after deletion")
+			return ctrl.Result{}, err
+		}
+	case azure.OperationStatusInProgress:
+		logger.Info("Deletion in progress, updating status")
+		apiVersion.Status.ResumeToken = token
+		apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateDeleting
+		err = r.Status().Patch(ctx, &apiVersion, patch)
+		if err != nil {
+			logger.Error(err, "Failed to update status during deletion")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: WAITING_FOR_LRO_REQUE_TIME}, nil
 	}
 	return ctrl.Result{}, nil
 }

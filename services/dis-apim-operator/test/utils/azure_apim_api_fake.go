@@ -7,8 +7,8 @@ import (
 
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	azfake "github.com/Azure/azure-sdk-for-go/sdk/azcore/fake"
-	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2"
-	apimfake "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2/fake"
+	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v3"
+	apimfake "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v3/fake"
 )
 
 type AzureApimFake struct {
@@ -191,19 +191,15 @@ func (a *AzureApimFake) GetFakeApiServer() apimfake.APIServer {
 			}
 			return responder, errResponder
 		},
-		Delete: func(ctx context.Context, resourceGroupName string, serviceName string, apiID string, ifMatch string, options *apim.APIClientDeleteOptions) (azfake.Responder[apim.APIClientDeleteResponse], azfake.ErrorResponder) {
-			responder := azfake.Responder[apim.APIClientDeleteResponse]{}
+		BeginDelete: func(ctx context.Context, resourceGroupName string, serviceName string, apiID string, ifMatch string, options *apim.APIClientBeginDeleteOptions) (azfake.PollerResponder[apim.APIClientDeleteResponse], azfake.ErrorResponder) {
+			responder := azfake.PollerResponder[apim.APIClientDeleteResponse]{}
 			errResponder := azfake.ErrorResponder{}
 			if a.deleteServerError {
 				errResponder.SetResponseError(http.StatusInternalServerError, "Some fake internal server error occurred")
 			} else {
 				response := apim.APIClientDeleteResponse{}
-				if _, ok := a.APIMVersions[apiID]; ok {
-					delete(a.APIMVersions, apiID)
-					responder.SetResponse(http.StatusOK, response, nil)
-				} else {
-					errResponder.SetResponseError(http.StatusNotFound, "Backend not found")
-				}
+				delete(a.APIMVersions, apiID)
+				responder.SetTerminalResponse(http.StatusAccepted, response, nil)
 			}
 			return responder, errResponder
 		},
@@ -219,7 +215,7 @@ func (a *AzureApimFake) GetFakeApiServer() apimfake.APIServer {
 					response.ETag = utils.ToPointer("fake-etag")
 					responder.SetResponse(http.StatusOK, response, nil)
 				} else {
-					errResponder.SetResponseError(http.StatusNotFound, "Backend not found")
+					errResponder.SetResponseError(http.StatusNotFound, "API not found")
 				}
 			}
 			return responder, errResponder
@@ -264,7 +260,7 @@ func (a *AzureApimFake) GetFakeApiVersionServer() apimfake.APIVersionSetServer {
 					delete(a.APIMVersionSets, apiVersionSetID)
 					responder.SetResponse(http.StatusOK, response, nil)
 				} else {
-					errResponder.SetResponseError(http.StatusNotFound, "Backend not found")
+					errResponder.SetResponseError(http.StatusNotFound, "APIVersionSet not found")
 				}
 			}
 			return responder, errResponder
@@ -281,7 +277,7 @@ func (a *AzureApimFake) GetFakeApiVersionServer() apimfake.APIVersionSetServer {
 					response.ETag = utils.ToPointer("fake-etag")
 					responder.SetResponse(http.StatusOK, response, nil)
 				} else {
-					errResponder.SetResponseError(http.StatusNotFound, "Backend not found")
+					errResponder.SetResponseError(http.StatusNotFound, "APIVersionSet not found")
 				}
 			}
 			return responder, errResponder
