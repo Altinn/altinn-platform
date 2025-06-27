@@ -257,27 +257,27 @@ func (a *ApiVersion) Matches(new ApiVersion) bool {
 		a.Spec.ApiVersionScheme == new.Spec.ApiVersionScheme &&
 		pointerValueEqual(a.Spec.ApiType, new.Spec.ApiType) &&
 		pointerValueEqual(a.Spec.Contact, new.Spec.Contact) &&
-		pointerValueEqual(a.Spec.ApiVersionSubSpec.Name, new.Spec.ApiVersionSubSpec.Name) &&
-		a.Spec.ApiVersionSubSpec.DisplayName == new.Spec.ApiVersionSubSpec.DisplayName &&
-		a.Spec.ApiVersionSubSpec.Description == new.Spec.ApiVersionSubSpec.Description &&
-		pointerValueEqual(a.Spec.ApiVersionSubSpec.ServiceUrl, new.Spec.ApiVersionSubSpec.ServiceUrl) &&
-		reflect.DeepEqual(a.Spec.ApiVersionSubSpec.Products, new.Spec.ApiVersionSubSpec.Products) &&
-		pointerValueEqual(a.Spec.ApiVersionSubSpec.ContentFormat, new.Spec.ApiVersionSubSpec.ContentFormat) &&
-		pointerValueEqual(a.Spec.ApiVersionSubSpec.Content, new.Spec.ApiVersionSubSpec.Content) &&
-		pointerValueEqual(a.Spec.ApiVersionSubSpec.SubscriptionRequired, new.Spec.ApiVersionSubSpec.SubscriptionRequired) &&
-		reflect.DeepEqual(a.Spec.ApiVersionSubSpec.Protocols, new.Spec.ApiVersionSubSpec.Protocols) &&
-		pointerValueEqual(a.Spec.ApiVersionSubSpec.IsCurrent, new.Spec.ApiVersionSubSpec.IsCurrent) &&
-		((a.Spec.ApiVersionSubSpec.Policies == nil && new.Spec.ApiVersionSubSpec.Policies == nil) ||
-			(a.Spec.ApiVersionSubSpec.Policies != nil && new.Spec.ApiVersionSubSpec.Policies != nil &&
-				pointerValueEqual(a.Spec.ApiVersionSubSpec.Policies.PolicyContent, new.Spec.ApiVersionSubSpec.Policies.PolicyContent) &&
-				pointerValueEqual(a.Spec.ApiVersionSubSpec.Policies.PolicyFormat, new.Spec.ApiVersionSubSpec.Policies.PolicyFormat))) &&
-		((a.Spec.ApiVersionSubSpec.Diagnostics == nil && new.Spec.ApiVersionSubSpec.Diagnostics == nil) ||
-			(a.Spec.ApiVersionSubSpec.Diagnostics != nil && new.Spec.ApiVersionSubSpec.Diagnostics != nil &&
-				pointerValueEqual(a.Spec.ApiVersionSubSpec.Diagnostics.LoggerName, new.Spec.ApiVersionSubSpec.Diagnostics.LoggerName) &&
-				pointerValueEqual(a.Spec.ApiVersionSubSpec.Diagnostics.SamplingPercentage, new.Spec.ApiVersionSubSpec.Diagnostics.SamplingPercentage) &&
-				pointerValueEqual(a.Spec.ApiVersionSubSpec.Diagnostics.EnableMetrics, new.Spec.ApiVersionSubSpec.Diagnostics.EnableMetrics) &&
-				reflect.DeepEqual(a.Spec.ApiVersionSubSpec.Diagnostics.Frontend, new.Spec.ApiVersionSubSpec.Diagnostics.Frontend) &&
-				reflect.DeepEqual(a.Spec.ApiVersionSubSpec.Diagnostics.Backend, new.Spec.ApiVersionSubSpec.Diagnostics.Backend)))
+		pointerValueEqual(a.Spec.Name, new.Spec.Name) &&
+		a.Spec.DisplayName == new.Spec.DisplayName &&
+		a.Spec.Description == new.Spec.Description &&
+		pointerValueEqual(a.Spec.ServiceUrl, new.Spec.ServiceUrl) &&
+		reflect.DeepEqual(a.Spec.Products, new.Spec.Products) &&
+		pointerValueEqual(a.Spec.ContentFormat, new.Spec.ContentFormat) &&
+		pointerValueEqual(a.Spec.Content, new.Spec.Content) &&
+		pointerValueEqual(a.Spec.SubscriptionRequired, new.Spec.SubscriptionRequired) &&
+		reflect.DeepEqual(a.Spec.Protocols, new.Spec.Protocols) &&
+		pointerValueEqual(a.Spec.IsCurrent, new.Spec.IsCurrent) &&
+		((a.Spec.Policies == nil && new.Spec.Policies == nil) ||
+			(a.Spec.Policies != nil && new.Spec.Policies != nil &&
+				pointerValueEqual(a.Spec.Policies.PolicyContent, new.Spec.Policies.PolicyContent) &&
+				pointerValueEqual(a.Spec.Policies.PolicyFormat, new.Spec.Policies.PolicyFormat))) &&
+		((a.Spec.Diagnostics == nil && new.Spec.Diagnostics == nil) ||
+			(a.Spec.Diagnostics != nil && new.Spec.Diagnostics != nil &&
+				pointerValueEqual(a.Spec.Diagnostics.LoggerName, new.Spec.Diagnostics.LoggerName) &&
+				pointerValueEqual(a.Spec.Diagnostics.SamplingPercentage, new.Spec.Diagnostics.SamplingPercentage) &&
+				pointerValueEqual(a.Spec.Diagnostics.EnableMetrics, new.Spec.Diagnostics.EnableMetrics) &&
+				reflect.DeepEqual(a.Spec.Diagnostics.Frontend, new.Spec.Diagnostics.Frontend) &&
+				reflect.DeepEqual(a.Spec.Diagnostics.Backend, new.Spec.Diagnostics.Backend)))
 }
 
 func (a *ApiVersion) ToAzureCreateOrUpdateParameter() apim.APICreateOrUpdateParameter {

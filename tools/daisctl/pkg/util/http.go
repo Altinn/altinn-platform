@@ -12,7 +12,7 @@ func RequestObject[T any](url string) (T, error) {
 		var zeroValue T
 		return zeroValue, err
 	}
-	defer res.Body.Close()
+	defer res.Body.Close() //nolint:errcheck,revive
 
 	var respInfo T
 	err = json.NewDecoder(res.Body).Decode(&respInfo)
@@ -30,7 +30,7 @@ func RequestArray[T any](url string) ([]T, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer res.Body.Close()
+	defer res.Body.Close() //nolint:errcheck,revive
 
 	var respInfo []T
 	err = json.NewDecoder(res.Body).Decode(&respInfo)

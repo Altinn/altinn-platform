@@ -223,7 +223,7 @@ func (r *ApiReconciler) handleCreateUpdate(ctx context.Context, api *apimv1alpha
 		return ctrl.Result{}, err
 	}
 	if azApi.ID == nil {
-		return ctrl.Result{}, fmt.Errorf("No ID returned for API version set %s", api.GetApiAzureFullName())
+		return ctrl.Result{}, fmt.Errorf("no ID returned for API version set %s", api.GetApiAzureFullName())
 	}
 	api.Status.ApiVersionSetID = *azApi.ID
 	api.Status.ProvisioningState = apimv1alpha1.ProvisioningStateUpdating
