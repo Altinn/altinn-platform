@@ -22,6 +22,7 @@ var _ = Describe("LoadConfig", func() {
 
 	BeforeEach(func() {
 		configContent := `
+namespaceSuffix = "test"
 subscriptionId = "test-subscription-id"
 resourceGroup = "test-resource-group"
 apimServiceName = "test-apim-service"
@@ -41,57 +42,58 @@ apimServiceName = "test-apim-service"
 		flagset := pflag.NewFlagSet("test", pflag.ContinueOnError)
 		cfg, err := LoadConfig(configFile.Name(), flagset)
 		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.NamespaceSuffix).To(Equal("test"))
 		Expect(cfg.SubscriptionId).To(Equal("test-subscription-id"))
 		Expect(cfg.ResourceGroup).To(Equal("test-resource-group"))
 		Expect(cfg.ApimServiceName).To(Equal("test-apim-service"))
 	})
 
 	It("should load config from environment variables", func() {
+		Expect(os.Setenv("DISAPIM_NAMESPACE_SUFFIX", "env")).To(Succeed())
 		Expect(os.Setenv("DISAPIM_SUBSCRIPTION_ID", "env-subscription-id")).To(Succeed())
 		Expect(os.Setenv("DISAPIM_RESOURCE_GROUP", "env-resource-group")).To(Succeed())
 		Expect(os.Setenv("DISAPIM_APIM_SERVICE_NAME", "env-apim-service")).To(Succeed())
 		defer func() {
+			_ = os.Unsetenv("DISAPIM_NAMESPACE_SUFFIX")
 			_ = os.Unsetenv("DISAPIM_SUBSCRIPTION_ID")
-		}()
-		defer func() {
 			_ = os.Unsetenv("DISAPIM_RESOURCE_GROUP")
-		}()
-		defer func() {
 			_ = os.Unsetenv("DISAPIM_APIM_SERVICE_NAME")
 		}()
 
 		flagset := pflag.NewFlagSet("test", pflag.ContinueOnError)
 		cfg, err := LoadConfig(configFile.Name(), flagset)
 		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.NamespaceSuffix).To(Equal("env"))
 		Expect(cfg.SubscriptionId).To(Equal("env-subscription-id"))
 		Expect(cfg.ResourceGroup).To(Equal("env-resource-group"))
 		Expect(cfg.ApimServiceName).To(Equal("env-apim-service"))
 	})
 
 	It("should load config from flags", func() {
+		Expect(os.Setenv("DISAPIM_NAMESPACE_SUFFIX", "env")).To(Succeed())
 		Expect(os.Setenv("DISAPIM_SUBSCRIPTION_ID", "env-subscription-id")).To(Succeed())
 		Expect(os.Setenv("DISAPIM_RESOURCE_GROUP", "env-resource-group")).To(Succeed())
 		Expect(os.Setenv("DISAPIM_APIM_SERVICE_NAME", "env-apim-service")).To(Succeed())
 		defer func() {
+			_ = os.Unsetenv("DISAPIM_NAMESPACE_SUFFIX")
 			_ = os.Unsetenv("DISAPIM_SUBSCRIPTION_ID")
-		}()
-		defer func() {
 			_ = os.Unsetenv("DISAPIM_RESOURCE_GROUP")
-		}()
-		defer func() {
 			_ = os.Unsetenv("DISAPIM_APIM_SERVICE_NAME")
 		}()
 		flagset := pflag.NewFlagSet(configFile.Name(), pflag.ContinueOnError)
+		flagset.String("namespaceSuffix", "flag-namespace-suffix", "namespace suffix")
 		flagset.String("subscriptionId", "flag-subscription-id", "subscription id")
 		flagset.String("resourceGroup", "flag-resource-group", "resource group")
 		flagset.String("apimServiceName", "flag-apim-service", "apim service name")
 		_ = flagset.Parse([]string{
+			"--namespaceSuffix=flag",
 			"--subscriptionId=flag-subscription-id",
 			"--resourceGroup=flag-resource-group",
 			"--apimServiceName=flag-apim-service",
 		})
 
 		cfg := LoadConfigOrDie("", flagset)
+		Expect(cfg.NamespaceSuffix).To(Equal("flag"))
 		Expect(cfg.SubscriptionId).To(Equal("flag-subscription-id"))
 		Expect(cfg.ResourceGroup).To(Equal("flag-resource-group"))
 		Expect(cfg.ApimServiceName).To(Equal("flag-apim-service"))

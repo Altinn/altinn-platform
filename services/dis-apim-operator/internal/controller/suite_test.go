@@ -31,6 +31,8 @@ import (
 	apimfake "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2/fake"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -114,6 +116,7 @@ var _ = BeforeSuite(func() {
 			SubscriptionId:  "fake-subscription-id",
 			ResourceGroup:   "fake-resource-group",
 			ApimServiceName: "fake-apim-service",
+			NamespaceSuffix: "test",
 		},
 		FactoryOptions: &arm.ClientOptions{
 			ClientOptions: azcore.ClientOptions{
@@ -144,6 +147,13 @@ var _ = BeforeSuite(func() {
 		ApimClientConfig: apimClientConfig,
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
+
+	err = k8sClient.Create(ctx, &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "default-test",
+		},
+	})
+	Expect(err).NotTo(HaveOccurred(), "failed to create default namespace for tests")
 
 	go func() {
 		defer GinkgoRecover()

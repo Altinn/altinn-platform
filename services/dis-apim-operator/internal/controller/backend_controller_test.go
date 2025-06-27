@@ -32,19 +32,20 @@ import (
 var _ = Describe("Backend Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
+		const defaultNamespace = "default-test"
 
 		ctx := context.Background()
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: defaultNamespace,
 		}
 
 		It("should set success status when azure resource created", func() {
 			resource := &apimv1alpha1.Backend{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
-					Namespace: "default",
+					Namespace: defaultNamespace,
 				},
 				Spec: apimv1alpha1.BackendSpec{
 					Title:       "test-backend",
