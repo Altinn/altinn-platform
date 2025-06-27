@@ -12,7 +12,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2"
+	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v3"
 )
 
 // APIMClient is a client for interacting with the Azure API Management service
@@ -78,9 +78,9 @@ func (c *APIMClient) CreateUpdateApi(ctx context.Context, apiId string, paramete
 	return client.BeginCreateOrUpdate(ctx, c.ApimClientConfig.ResourceGroup, c.ApimClientConfig.ApimServiceName, apiId, parameters, options)
 }
 
-func (c *APIMClient) DeleteApi(ctx context.Context, apiId string, etag string, options *apim.APIClientDeleteOptions) (apim.APIClientDeleteResponse, error) {
+func (c *APIMClient) DeleteApi(ctx context.Context, apiId string, etag string, options *apim.APIClientBeginDeleteOptions) (*runtime.Poller[apim.APIClientDeleteResponse], error) {
 	client := c.apimClientFactory.NewAPIClient()
-	return client.Delete(ctx, c.ApimClientConfig.ResourceGroup, c.ApimClientConfig.ApimServiceName, apiId, etag, options)
+	return client.BeginDelete(ctx, c.ApimClientConfig.ResourceGroup, c.ApimClientConfig.ApimServiceName, apiId, etag, options)
 }
 
 func (c *APIMClient) GetApiPolicy(ctx context.Context, apiId string, options *apim.APIPolicyClientGetOptions) (apim.APIPolicyClientGetResponse, error) {

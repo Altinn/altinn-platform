@@ -2,7 +2,7 @@ package v1alpha1
 
 import (
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
-	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2"
+	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v3"
 )
 
 // INSERT ADDITIONAL TYPES
@@ -154,4 +154,5 @@ const (
 	ProvisioningStateFailed    ProvisioningState = "Failed"
 	ProvisioningStateUpdating  ProvisioningState = "Updating"
 	ProvisioningStateDeleting  ProvisioningState = "Deleting"
+	ProvisioningStateDeleted   ProvisioningState = "Deleted"
 )
