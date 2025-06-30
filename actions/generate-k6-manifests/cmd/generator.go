@@ -349,28 +349,38 @@ func (r K8sManifestGenerator) CallK6Archive(dirName string, testConfigFileToUse 
 		log.Fatal(err)
 	}
 
+	// https://grafana.com/docs/k6/latest/using-k6/environment-variables/#-the--e-flag-does-not-configure-options
+	// https://grafana.com/docs/k6/latest/reference/archive/#how-to-create-and-run-an-archive
+	// https://grafana.com/docs/k6/latest/using-k6/test-lifecycle/#the-init-stage
 	var cmd *exec.Cmd
-	if testConfigFileToUse != "" {
-		cmd = exec.Command("k6",
-			"archive",
-			"--config",
-			testConfigFileToUse,
-			testFile,
-			"-O",
-			fmt.Sprintf("%s/archive.tar", newpath),
-		)
-	} else {
-		cmd = exec.Command("k6",
-			"archive",
-			testFile,
-			"-O",
-			fmt.Sprintf("%s/archive.tar", newpath),
-		)
-	}
+	var out, errb strings.Builder
+	k6Args := []string{"archive"}
+	extraEnvForArchiveCommand, ok := os.LookupEnv("INPUT_INIT_STAGE_ENV_VARS")
 
+	if ok {
+		splitInput := strings.Split(extraEnvForArchiveCommand, " ")
+		if len(splitInput) > 1 {
+			for _, aux := range splitInput {
+				fmt.Println("\t\t\t\t\t", aux)
+				if strings.Contains(aux, "=") {
+					k6Args = append(k6Args, "-e", aux)
+				}
+			}
+		} else {
+			k6Args = append(k6Args, "-e", extraEnvForArchiveCommand)
+		}
+	}
+	if testConfigFileToUse != "" {
+		k6Args = append(k6Args, "--config", testConfigFileToUse)
+	}
+	k6Args = append(k6Args, testFile, "-O", fmt.Sprintf("%s/archive.tar", newpath))
+
+	cmd = exec.Command("k6", k6Args...)
+	cmd.Stdout = &out
+	cmd.Stderr = &errb
 	err = cmd.Run()
 	if err != nil {
-		fmt.Printf("Failed to call k6 archive --config %s %s\n err: %s", testConfigFileToUse, testFile, err)
+		fmt.Printf("Failed to call %s\nerr: %s", cmd.String(), errb.String())
 		os.Exit(1)
 	}
 	fmt.Printf("Wrote archive.tar into: %s/archive.tar\n", newpath)

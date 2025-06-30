@@ -6,7 +6,12 @@ inputs:
     required: true
 
   command_line_args:
-    description: "Command line arguments to pass to the k6 command"
+    description: "Command line arguments to pass to the k6 run command"
+    required: false
+    default: ""
+
+  init_stage_env_vars:
+    description: "Extra environmental veriables that might be needed in the init stage. e.g.: BROWSER_VUS=3 DURATION=10s"
     required: false
     default: ""
 runs:
