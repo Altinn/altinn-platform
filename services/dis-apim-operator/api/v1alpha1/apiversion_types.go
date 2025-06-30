@@ -280,6 +280,33 @@ func (a *ApiVersion) Matches(new ApiVersion) bool {
 				reflect.DeepEqual(a.Spec.Diagnostics.Backend, new.Spec.Diagnostics.Backend)))
 }
 
+func (a *ApiVersion) MatchesAzureResource(current apim.APIClientGetResponse) bool {
+	if current.Properties == nil {
+		return false
+	}
+	if !pointerValueEqual(a.Spec.ContentFormat, utils.ToPointer(ContentFormatGraphqlLink)) {
+		if current.Properties.Contact == nil ||
+			!pointerValueEqual(a.Spec.Contact.Name, current.Properties.Contact.Name) ||
+			!pointerValueEqual(a.Spec.Contact.Email, current.Properties.Contact.Email) ||
+			!pointerValueEqual(a.Spec.Contact.URL, current.Properties.Contact.URL) {
+			return false
+		}
+	}
+	if a.Spec.Path != *current.Properties.Path ||
+		!pointerValueEqual(a.Spec.ApiType.AzureApiType(), current.Properties.APIType) ||
+		!pointerValueEqual(a.Spec.Name, current.Properties.APIVersion) ||
+		a.Spec.DisplayName != *current.Properties.DisplayName ||
+		a.Spec.Description != *current.Properties.Description ||
+		!pointerValueEqual(a.Spec.ServiceUrl, current.Properties.ServiceURL) ||
+		!pointerValueEqual(a.Spec.SubscriptionRequired, current.Properties.SubscriptionRequired) ||
+		!reflect.DeepEqual(ToApimProtocolSlice(a.Spec.Protocols), current.Properties.Protocols) ||
+		!pointerValueEqual(a.Spec.IsCurrent, current.Properties.IsCurrent) {
+		return false
+	}
+
+	return true
+}
+
 func (a *ApiVersion) ToAzureCreateOrUpdateParameter() apim.APICreateOrUpdateParameter {
 	apiCreateOrUpdateParams := apim.APICreateOrUpdateParameter{
 		Properties: &apim.APICreateOrUpdateProperties{

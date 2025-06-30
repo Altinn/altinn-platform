@@ -91,12 +91,12 @@ func (r *ApiVersionReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if !apiVersion.DeletionTimestamp.IsZero() {
 		return r.deleteApiVersion(ctx, apiVersion)
 	}
-	_, err := r.apimClient.GetApi(ctx, apiVersion.GetApiVersionAzureFullName(), nil)
+	apimApi, err := r.apimClient.GetApi(ctx, apiVersion.GetApiVersionAzureFullName(), nil)
 	if azure.IgnoreNotFound(err) != nil {
 		logger.Error(err, "Failed to get API")
 		return ctrl.Result{}, err
 	} else {
-		return r.handleApiVersionUpdate(ctx, apiVersion)
+		return r.handleApiVersionUpdate(ctx, apiVersion, apimApi)
 	}
 }
 
@@ -194,12 +194,17 @@ func (r *ApiVersionReconciler) deleteApiVersion(ctx context.Context, apiVersion 
 	return ctrl.Result{}, nil
 }
 
-func (r *ApiVersionReconciler) handleApiVersionUpdate(ctx context.Context, apiVersion apimv1alpha1.ApiVersion) (ctrl.Result, error) {
-	latestSha, err := utils.Sha256FromContent(ctx, apiVersion.Spec.Content)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to get api spec sha: %w", err)
+func (r *ApiVersionReconciler) handleApiVersionUpdate(ctx context.Context, apiVersion apimv1alpha1.ApiVersion, apimApi apim.APIClientGetResponse) (ctrl.Result, error) {
+	var err error
+	latestSha := ""
+	if !pointerValueEqual(apiVersion.Spec.ContentFormat, utils.ToPointer(apimv1alpha1.ContentFormatGraphqlLink)) {
+		latestSha, err = utils.Sha256FromContent(ctx, apiVersion.Spec.Content)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to get api spec sha: %w", err)
+		}
 	}
-	if apiVersion.Status.LastAppliedSpecSha != latestSha {
+
+	if (apiVersion.Status.LastAppliedSpecSha != latestSha) || !apiVersion.MatchesAzureResource(apimApi) {
 		return r.createUpdateApimApi(ctx, apiVersion)
 	}
 	if apiVersion.Spec.Policies != nil {
@@ -463,4 +468,14 @@ func (r *ApiVersionReconciler) runPolicyTemplating(ctx context.Context, values [
 		}
 	}
 	return utils.GeneratePolicyFromTemplate(policyContent, data)
+}
+
+func pointerValueEqual[T comparable](a *T, b *T) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
 }
