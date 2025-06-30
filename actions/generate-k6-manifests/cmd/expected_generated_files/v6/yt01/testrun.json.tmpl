@@ -9,7 +9,7 @@
       "namespace": "platform"
    },
    "spec": {
-      "arguments": "--tag testid={{ .UniqueName }} --tag namespace=platform --tag deploy_env=yt01 --out experimental-prometheus-rw",
+      "arguments": "--tag testid={{ .UniqueName }} --tag namespace=platform --tag deploy_env=yt01 --tag test_name=k8s-wrapper-ds --out experimental-prometheus-rw",
       "cleanup": "post",
       "parallelism": 1,
       "runner": {

@@ -3,6 +3,7 @@ local k6ClusterYamlConf = std.parseYaml(std.extVar('k6clusterconfig'));
 // Global
 local unique_name = std.extVar('unique_name');
 local dir_name = std.extVar('dir_name');
+local test_name = std.extVar('test_name');
 local manifest_generation_timestamp = std.extVar('manifest_generation_timestamp');
 local namespace = std.extVar('namespace');
 local deploy_env = std.extVar('deploy_env');
@@ -91,8 +92,8 @@ local testrun = {
     spec: {
       cleanup: 'post',
       arguments: std.stripChars(
-        std.format('--tag testid=%s --tag namespace=%s --tag deploy_env=%s --out experimental-prometheus-rw %s',
-                   [unique_name, namespace, deploy_env, extra_cli_args]), ' '
+        std.format('--tag testid=%s --tag namespace=%s --tag deploy_env=%s --tag test_name=%s --out experimental-prometheus-rw %s',
+                   [unique_name, namespace, deploy_env, test_name, extra_cli_args]), ' '
       ),
       parallelism: parallelism,
       script: {
