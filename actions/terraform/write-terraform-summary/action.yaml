@@ -121,6 +121,7 @@ runs:
       if: steps.issue_number.outputs.result != 'null' && env.PLAN_STEP_EXITCODE == 2
       env:
         ISSUE_NUMBER: ${{ steps.issue_number.outputs.result }}
+        VALIDATE_OUTPUT: ${{ env.VALIDATE_STEP_OUTPUT }}
       with:
         github-token: ${{ inputs.gh_token }}
         script: |
@@ -142,7 +143,7 @@ runs:
           <details><summary>Validation Output</summary>
 
           \`\`\`\n
-          ${{ env.VALIDATE_STEP_OUTPUT }}
+          ${process.env.VALIDATE_OUTPUT}
           \`\`\`
 
           </details>
