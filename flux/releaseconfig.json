@@ -86,5 +86,8 @@
     "tt_ring2": "0.0.2",
     "prod_ring1": "0.0.2",
     "prod_ring2": "0.0.2"
+  },
+  "azure-service-operator": {
+    "at_ring1": "1.0.0"
   }
 }
