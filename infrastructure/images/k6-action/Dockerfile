@@ -63,7 +63,7 @@ RUN go build . && \
     mv generate-k6-manifests /usr/local/bin
 
 # Final image with the needed binaries and helper files
-FROM alpine:3.21.3@sha256:a8560b36e8b8210634f77d9f7f9efd7ffa463e380b75e2e74aff4511df3ef88c
+FROM alpine:3.22.0@sha256:8a1f59ffb675680d47db6337b49d22281a139e9d709335b492be023728e11715
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /jsonnet/vendor /jsonnet/vendor
 COPY infrastructure/images/k6-action/default_scenarios /actions/generate-k6-manifests/default_scenarios/
