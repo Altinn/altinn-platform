@@ -31,7 +31,7 @@ var _ = Describe("ApiVersion Controller", func() {
 
 	Context("When reconciling an ApiVersion resource", func() {
 		const resourceName = "test-apiversion"
-		const resourceNamespace = "default"
+		const resourceNamespace = "default-test"
 
 		ctx := context.Background()
 

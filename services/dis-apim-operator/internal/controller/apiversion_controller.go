@@ -104,6 +104,7 @@ func (r *ApiVersionReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 func (r *ApiVersionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&apimv1alpha1.ApiVersion{}).
+		WithEventFilter(defaultPredicate(r.ApimClientConfig.NamespaceSuffix)).
 		Named("apiversion").
 		Complete(r)
 }

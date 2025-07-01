@@ -14,6 +14,7 @@ import (
 )
 
 type AzureConfig struct {
+	NamespaceSuffix string `json:"namespaceSuffix,omitempty" koanf:"namespaceSuffix" toml:"namespaceSuffix"`
 	SubscriptionId  string `json:"subscriptionId,omitempty" koanf:"subscriptionId" toml:"subscriptionId"`
 	ResourceGroup   string `json:"resourceGroup,omitempty" koanf:"resourceGroup" toml:"resourceGroup"`
 	ApimServiceName string `json:"apimServiceName,omitempty" koanf:"apimServiceName" toml:"apimServiceName"`
