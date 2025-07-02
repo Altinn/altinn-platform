@@ -2,7 +2,7 @@ package utils
 
 import (
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/azure"
-	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2"
+	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v3"
 )
 
 // NewAPIMClient creates a new APIMClient

@@ -21,7 +21,7 @@ import (
 	"reflect"
 
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
-	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v2"
+	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
