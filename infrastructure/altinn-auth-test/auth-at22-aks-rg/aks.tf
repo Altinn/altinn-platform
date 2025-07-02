@@ -2,9 +2,10 @@ data "azurerm_client_config" "current" {}
 
 locals {
   # hide it from plan / apply since linters can complain
-  tenant_id   = sensitive(data.azurerm_client_config.current.tenant_id)
-  team_name   = "auth"
-  environment = "at22"
+  tenant_id        = sensitive(data.azurerm_client_config.current.tenant_id)
+  team_name        = "auth"
+  environment      = "at22"
+  flux_release_tag = "at_ring2"
 }
 
 module "aks" {
@@ -47,7 +48,7 @@ module "infra-resources" {
   source                                     = "../../modules/aks-resources"
   aks_node_resource_group                    = module.aks.aks_node_resource_group
   azurerm_kubernetes_cluster_id              = module.aks.azurerm_kubernetes_cluster_id
-  flux_release_tag                           = "at_ring2"
+  flux_release_tag                           = local.flux_release_tag
   pip4_ip_address                            = module.aks.pip4_ip_address
   pip6_ip_address                            = module.aks.pip6_ip_address
   subnet_address_prefixes                    = var.subnet_address_prefixes
