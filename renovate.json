@@ -3,6 +3,10 @@
   "extends": [
     "local>Altinn/renovate-config"
   ],
+  "schedule": [
+    "0 5-7 * * 1-4"
+  ],
+  "timezone": "Europe/Oslo",
   "postUpdateOptions": [
     "gomodTidy"
   ],
