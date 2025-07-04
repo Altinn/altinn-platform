@@ -197,7 +197,7 @@ func (r *ApiVersionReconciler) deleteApiVersion(ctx context.Context, apiVersion 
 func (r *ApiVersionReconciler) handleApiVersionUpdate(ctx context.Context, apiVersion apimv1alpha1.ApiVersion, apimApi apim.APIClientGetResponse) (ctrl.Result, error) {
 	var err error
 	latestSha := ""
-	if !pointerValueEqual(apiVersion.Spec.ContentFormat, utils.ToPointer(apimv1alpha1.ContentFormatGraphqlLink)) {
+	if !utils.PointerValueEqual(apiVersion.Spec.ContentFormat, utils.ToPointer(apimv1alpha1.ContentFormatGraphqlLink)) {
 		latestSha, err = utils.Sha256FromContent(ctx, apiVersion.Spec.Content)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to get api spec sha: %w", err)
@@ -468,14 +468,4 @@ func (r *ApiVersionReconciler) runPolicyTemplating(ctx context.Context, values [
 		}
 	}
 	return utils.GeneratePolicyFromTemplate(policyContent, data)
-}
-
-func pointerValueEqual[T comparable](a *T, b *T) bool {
-	if a == nil && b == nil {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return *a == *b
 }

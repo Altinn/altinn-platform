@@ -255,27 +255,27 @@ func (a *ApiVersion) RequireUpdate(new ApiVersion) bool {
 func (a *ApiVersion) Matches(new ApiVersion) bool {
 	return a.Spec.Path == new.Spec.Path &&
 		a.Spec.ApiVersionScheme == new.Spec.ApiVersionScheme &&
-		pointerValueEqual(a.Spec.ApiType, new.Spec.ApiType) &&
-		pointerValueEqual(a.Spec.Contact, new.Spec.Contact) &&
-		pointerValueEqual(a.Spec.Name, new.Spec.Name) &&
+		utils.PointerValueEqual(a.Spec.ApiType, new.Spec.ApiType) &&
+		utils.PointerValueEqual(a.Spec.Contact, new.Spec.Contact) &&
+		utils.PointerValueEqual(a.Spec.Name, new.Spec.Name) &&
 		a.Spec.DisplayName == new.Spec.DisplayName &&
 		a.Spec.Description == new.Spec.Description &&
-		pointerValueEqual(a.Spec.ServiceUrl, new.Spec.ServiceUrl) &&
+		utils.PointerValueEqual(a.Spec.ServiceUrl, new.Spec.ServiceUrl) &&
 		reflect.DeepEqual(a.Spec.Products, new.Spec.Products) &&
-		pointerValueEqual(a.Spec.ContentFormat, new.Spec.ContentFormat) &&
-		pointerValueEqual(a.Spec.Content, new.Spec.Content) &&
-		pointerValueEqual(a.Spec.SubscriptionRequired, new.Spec.SubscriptionRequired) &&
+		utils.PointerValueEqual(a.Spec.ContentFormat, new.Spec.ContentFormat) &&
+		utils.PointerValueEqual(a.Spec.Content, new.Spec.Content) &&
+		utils.PointerValueEqual(a.Spec.SubscriptionRequired, new.Spec.SubscriptionRequired) &&
 		reflect.DeepEqual(a.Spec.Protocols, new.Spec.Protocols) &&
-		pointerValueEqual(a.Spec.IsCurrent, new.Spec.IsCurrent) &&
+		utils.PointerValueEqual(a.Spec.IsCurrent, new.Spec.IsCurrent) &&
 		((a.Spec.Policies == nil && new.Spec.Policies == nil) ||
 			(a.Spec.Policies != nil && new.Spec.Policies != nil &&
-				pointerValueEqual(a.Spec.Policies.PolicyContent, new.Spec.Policies.PolicyContent) &&
-				pointerValueEqual(a.Spec.Policies.PolicyFormat, new.Spec.Policies.PolicyFormat))) &&
+				utils.PointerValueEqual(a.Spec.Policies.PolicyContent, new.Spec.Policies.PolicyContent) &&
+				utils.PointerValueEqual(a.Spec.Policies.PolicyFormat, new.Spec.Policies.PolicyFormat))) &&
 		((a.Spec.Diagnostics == nil && new.Spec.Diagnostics == nil) ||
 			(a.Spec.Diagnostics != nil && new.Spec.Diagnostics != nil &&
-				pointerValueEqual(a.Spec.Diagnostics.LoggerName, new.Spec.Diagnostics.LoggerName) &&
-				pointerValueEqual(a.Spec.Diagnostics.SamplingPercentage, new.Spec.Diagnostics.SamplingPercentage) &&
-				pointerValueEqual(a.Spec.Diagnostics.EnableMetrics, new.Spec.Diagnostics.EnableMetrics) &&
+				utils.PointerValueEqual(a.Spec.Diagnostics.LoggerName, new.Spec.Diagnostics.LoggerName) &&
+				utils.PointerValueEqual(a.Spec.Diagnostics.SamplingPercentage, new.Spec.Diagnostics.SamplingPercentage) &&
+				utils.PointerValueEqual(a.Spec.Diagnostics.EnableMetrics, new.Spec.Diagnostics.EnableMetrics) &&
 				reflect.DeepEqual(a.Spec.Diagnostics.Frontend, new.Spec.Diagnostics.Frontend) &&
 				reflect.DeepEqual(a.Spec.Diagnostics.Backend, new.Spec.Diagnostics.Backend)))
 }
@@ -284,23 +284,24 @@ func (a *ApiVersion) MatchesAzureResource(current apim.APIClientGetResponse) boo
 	if current.Properties == nil {
 		return false
 	}
-	if !pointerValueEqual(a.Spec.ContentFormat, utils.ToPointer(ContentFormatGraphqlLink)) {
-		if current.Properties.Contact == nil ||
-			!pointerValueEqual(a.Spec.Contact.Name, current.Properties.Contact.Name) ||
-			!pointerValueEqual(a.Spec.Contact.Email, current.Properties.Contact.Email) ||
-			!pointerValueEqual(a.Spec.Contact.URL, current.Properties.Contact.URL) {
+	if !utils.PointerValueEqual(a.Spec.ContentFormat, utils.ToPointer(ContentFormatGraphqlLink)) {
+		if (current.Properties.Contact == nil) != (a.Spec.Contact == nil) ||
+			(a.Spec.Contact != nil && current.Properties.Contact != nil &&
+				(!utils.PointerValueEqual(a.Spec.Contact.Name, current.Properties.Contact.Name) ||
+					!utils.PointerValueEqual(a.Spec.Contact.Email, current.Properties.Contact.Email) ||
+					!utils.PointerValueEqual(a.Spec.Contact.URL, current.Properties.Contact.URL))) {
 			return false
 		}
 	}
 	if a.Spec.Path != *current.Properties.Path ||
-		!pointerValueEqual(a.Spec.ApiType.AzureApiType(), current.Properties.APIType) ||
-		!pointerValueEqual(a.Spec.Name, current.Properties.APIVersion) ||
+		!utils.PointerValueEqual(a.Spec.ApiType.AzureApiType(), current.Properties.APIType) ||
+		!utils.PointerValueEqual(a.Spec.Name, current.Properties.APIVersion) ||
 		a.Spec.DisplayName != *current.Properties.DisplayName ||
 		a.Spec.Description != *current.Properties.Description ||
-		!pointerValueEqual(a.Spec.ServiceUrl, current.Properties.ServiceURL) ||
-		!pointerValueEqual(a.Spec.SubscriptionRequired, current.Properties.SubscriptionRequired) ||
+		!utils.PointerValueEqual(a.Spec.ServiceUrl, current.Properties.ServiceURL) ||
+		!utils.PointerValueEqual(a.Spec.SubscriptionRequired, current.Properties.SubscriptionRequired) ||
 		!reflect.DeepEqual(ToApimProtocolSlice(a.Spec.Protocols), current.Properties.Protocols) ||
-		!pointerValueEqual(a.Spec.IsCurrent, current.Properties.IsCurrent) {
+		!utils.PointerValueEqual(a.Spec.IsCurrent, current.Properties.IsCurrent) {
 		return false
 	}
 
@@ -439,14 +440,4 @@ func overrideDefaults(defaults apim.DiagnosticContract, overrides *ApiDiagnostic
 	}
 
 	return defaults
-}
-
-func pointerValueEqual[T comparable](a *T, b *T) bool {
-	if a == nil && b == nil {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return *a == *b
 }
