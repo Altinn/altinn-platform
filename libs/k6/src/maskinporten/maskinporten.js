@@ -85,7 +85,7 @@ class MaskinportenAccessTokenGenerator {
             if (cache.has(key) && (cache.get(key).expiresAt - Date.now()) > 0) {
                 return cache.get(key).token;
             } else {
-                let result = f.apply(this);
+                let result = f.apply(this, [scopes]);
                 let expirationTimestamp;
                 try {
                     const base64 = result
@@ -105,7 +105,7 @@ class MaskinportenAccessTokenGenerator {
                 }
                 cache.set(key,
                     {
-                        result,
+                        token: result,
                         expiresAt: expirationTimestamp
                     }
                 );
