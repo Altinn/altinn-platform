@@ -63,7 +63,7 @@ class MaskinportenAccessTokenGenerator {
             scope: scopes,
             iss: this.#machineportenClientId,
             iat: now,
-            exp: now + 600, // TODO allow config, by default it looks to be around 500s; 600 would mean 10 minute token. Double check this is actually true tho.
+            exp: now + 86400, // TODO allow config, by default it looks to be around 500s; 600 would mean 10 minute token. Double check this is actually true tho.
             jti: uuidv4(),
         };
 
