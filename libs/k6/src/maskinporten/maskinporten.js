@@ -56,14 +56,14 @@ class MaskinportenAccessTokenGenerator {
             kid: this.#machineportenKid,
         };
 
-        const now = Math.floor(Date.now() / 1000);
+        const now = Math.floor(Date.now() / 1000); // in seconds
 
         const payload = {
             aud: config.audienceUrl,
             scope: scopes,
             iss: this.#machineportenClientId,
             iat: now,
-            exp: now + 0, // TODO allow config, by default it looks to be around 500s
+            exp: now + 600, // TODO allow config, by default it looks to be around 500s; 600 would mean 10 minute token. Double check this is actually true tho.
             jti: uuidv4(),
         };
 
