@@ -9,6 +9,7 @@ class MaskinportenAccessTokenGenerator {
     #machineportenClientId
     #encodedJwk
     constructor(
+        tokenGeneratorOptions,
         machineportenKid = __ENV.MACHINEPORTEN_KID,
         machineportenClientId = __ENV.MACHINEPORTEN_CLIENT_ID,
         encodedJwk = __ENV.ENCODED_JWK
@@ -20,6 +21,8 @@ class MaskinportenAccessTokenGenerator {
         this.#machineportenKid = machineportenKid
         this.#machineportenClientId = machineportenClientId
         this.#encodedJwk = encodedJwk
+
+        this.tokenGeneratorOptions = new MaskinportenTokenGeneratorOptions(tokenGeneratorOptions)
     }
 
     #generateAccessToken(scopes) {
@@ -79,7 +82,8 @@ class MaskinportenAccessTokenGenerator {
 
     #memoize(f) {
         const cache = new Map();
-        return function (scopes) {
+        return function () {
+            const scopes = this.tokenGeneratorOptions.get("scopes");
             const key = `${this.#machineportenClientId}:${scopes}`;
             // If key exists and has not expired
             if (cache.has(key) && (cache.get(key).expiresAt - Date.now()) > 0) {
@@ -114,7 +118,24 @@ class MaskinportenAccessTokenGenerator {
         }
     }
 
-    generateAccessToken = this.#memoize(this.#generateAccessToken)
+    getToken = this.#memoize(this.#generateAccessToken)
+}
+
+class MaskinportenTokenGeneratorOptions extends Map {
+    constructor(options) {
+        if (options) {
+            for (let [k, v] of options) {
+                if (!MaskinportenTokenGeneratorOptions.isValidConfigOption(k)) {
+                    throw Error(`TokenGeneratorOptions: "${k}" is not a valid option`)
+                }
+            }
+            super(options)
+        }
+    }
+
+    static isValidConfigOption(key) {
+        return key == 'scopes'
+    }
 }
 
 export { MaskinportenAccessTokenGenerator }
