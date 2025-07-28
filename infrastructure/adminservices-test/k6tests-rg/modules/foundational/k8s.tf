@@ -26,13 +26,13 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
   automatic_upgrade_channel = "stable"
 
   default_node_pool {
-    name                 = "default"
-    auto_scaling_enabled = true
-    min_count            = 1
-    max_count            = 3
-    vm_size              = "Standard_D3_v2"
+    name                        = "default"
+    auto_scaling_enabled        = true
+    min_count                   = 1
+    max_count                   = 3
+    vm_size                     = "Standard_D3_v2"
     temporary_name_for_rotation = "tmpdefault"
-    max_pods = 200
+    max_pods                    = 200
 
     upgrade_settings { # Adding these to keep plans clean
       drain_timeout_in_minutes      = 0
@@ -71,5 +71,13 @@ resource "azurerm_kubernetes_cluster_node_pool" "prometheus" {
   node_labels = {
     workload : "prometheus"
   }
-  node_taints = ["workload=prometheus:NoSchedule"]
+  node_taints = [
+    "workload=prometheus:NoSchedule"
+  ]
+
+  upgrade_settings {
+    drain_timeout_in_minutes      = 0
+    max_surge                     = "10%"
+    node_soak_duration_in_minutes = 0
+  }
 }
