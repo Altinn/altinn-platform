@@ -24,7 +24,7 @@ loki:
      volume_enabled: true
      retention_period: 672h # 28 days retention
    compactor:
-     retention_enabled: true 
+     retention_enabled: true
      delete_request_store: azure
    ruler:
     enable_api: true
@@ -59,6 +59,7 @@ deploymentMode: Distributed
 
 ingester:
  replicas: 3
+ maxUnavailable: 1
  zoneAwareReplication:
   enabled: false
 
@@ -92,7 +93,7 @@ ruler:
 gateway:
  service:
    type: LoadBalancer
- basicAuth: 
+ basicAuth:
      enabled: true
      existingSecret: loki-basic-auth
 
