@@ -10,7 +10,11 @@ loki:
          index:
            prefix: loki_index_
            period: 24h
-   storage_config:
+   storageConfig:
+     tsdb_shipper:
+      active_index_directory: /var/loki/index
+      cache_location: /var/loki/cache
+      cache_ttl: 168h
      azure:
       account_name: "${account_name}"
       container_name: "${chunks_container_name}"
