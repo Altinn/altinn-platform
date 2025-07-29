@@ -1,4 +1,5 @@
 resource "helm_release" "sealed_secrets" {
+  lint             = true
   name             = "sealedsecrets"
   namespace        = "sealedsecrets-system"
   create_namespace = true

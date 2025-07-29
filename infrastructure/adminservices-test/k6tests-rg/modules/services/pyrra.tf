@@ -1,4 +1,5 @@
 resource "helm_release" "pyrra" {
+  lint             = true
   name             = "pyrra"
   namespace        = "pyrra-system"
   create_namespace = true

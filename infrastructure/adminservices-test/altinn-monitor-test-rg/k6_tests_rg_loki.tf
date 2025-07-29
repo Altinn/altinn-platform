@@ -47,6 +47,7 @@ resource "helm_release" "loki" {
     helm_release.kube_prometheus_stack,
     azuread_application.loki,
   ]
+  lint             = true
   name             = "loki"
   namespace        = "monitoring"
   create_namespace = false

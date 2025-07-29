@@ -1,5 +1,6 @@
 resource "helm_release" "pyrra" {
   depends_on       = [azurerm_kubernetes_cluster.k6tests]
+  lint             = true
   name             = "pyrra"
   namespace        = "pyrra-system"
   create_namespace = true
