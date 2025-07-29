@@ -2,6 +2,7 @@ resource "helm_release" "grafana_k8s_monitoring" {
   depends_on = [
     helm_release.loki,
   ]
+  lint             = true
   name             = "k8s-monitoring"
   namespace        = "monitoring"
   create_namespace = false

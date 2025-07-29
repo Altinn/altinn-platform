@@ -2,6 +2,7 @@ resource "helm_release" "prometheus_operator_crds" {
   depends_on = [
     azurerm_kubernetes_cluster.k6tests
   ]
+  lint       = true
   name       = "prometheus-operator-crds"
   repository = "https://prometheus-community.github.io/helm-charts"
   chart      = "prometheus-operator-crds"
@@ -19,6 +20,7 @@ resource "helm_release" "kube_prometheus_stack" {
     azuread_application.prometheus,
     azurerm_monitor_workspace.k6tests_amw
   ]
+  lint             = true
   name             = "kube-prometheus-stack"
   namespace        = "monitoring"
   create_namespace = true
