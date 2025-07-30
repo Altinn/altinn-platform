@@ -68,7 +68,7 @@ jobs:
         env:
           SOURCE_DATE_EPOCH: ${{ steps.git-info.outputs.timestamp }}
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@76071ef0d7ec797419534a183b498b4d6366cf37 # 0.31.0
+        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
         with:
           image-ref: ${{ inputs.image_name }}:scan
           format: "table"
