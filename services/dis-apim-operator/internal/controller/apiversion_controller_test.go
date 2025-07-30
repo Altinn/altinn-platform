@@ -53,6 +53,11 @@ var _ = Describe("ApiVersion Controller", func() {
 						Content:     utils.ToPointer(`{"openapi": "3.0.0","info": {"title": "Minimal API v1","version": "1.0.0"},"paths": {}}`),
 						DisplayName: "the default version",
 					},
+					Contact: &apimv1alpha1.APIContactInformation{
+						Name:  utils.ToPointer("Test Contact"),
+						Email: utils.ToPointer("test@example.com"),
+						URL:   utils.ToPointer("https://example.com/contact"),
+					},
 				},
 			}
 			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
