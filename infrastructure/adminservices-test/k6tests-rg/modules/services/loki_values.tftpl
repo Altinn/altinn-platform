@@ -1,48 +1,27 @@
 loki:
-   podLabels:
-    "azure.workload.identity/use": "true"
-   schemaConfig:
-     configs:
-       - from: "2024-04-01"
-         store: tsdb
-         object_store: azure
-         schema: v13
-         index:
-           prefix: loki_index_
-           period: 24h
-   storageConfig:
-     tsdb_shipper:
-      active_index_directory: /var/loki/index
-      cache_location: /var/loki/cache
-      cache_ttl: 168h
-     azure:
-      account_name: "${account_name}"
-      container_name: "${chunks_container_name}"
-      use_federated_token: true
-   ingester:
-       chunk_encoding: snappy
-   pattern_ingester:
-       enabled: true
-   limits_config:
-     allow_structured_metadata: true
-     volume_enabled: true
-     retention_period: 672h # 28 days retention
-   compactor:
-     retention_enabled: true
-     delete_request_store: azure
-   ruler:
-    enable_api: true
-    storage:
-      type: azure
-      azure:
-        account_name: "${account_name}"
-        container_name: "${ruler_container_name}"
-        use_federated_token: true
-
-   querier:
+  structuredConfig:
+    limits_config:
+      allow_structured_metadata: true
+      volume_enabled: true
+      retention_period: 672h # 28 days retention
+    ingester:
+      chunk_encoding: snappy
+    pattern_ingester:
+      enabled: true
+    compactor:
+      retention_enabled: true
+      delete_request_store: azure
+    ruler:
+      enable_api: true
+      storage:
+        type: azure
+        azure:
+          account_name: "${account_name}"
+          container_name: "${ruler_container_name}"
+          use_federated_token: true
+    querier:
       max_concurrent: 4
-
-   storage:
+    storage:
       type: azure
       bucketNames:
         chunks: "${chunks_container_name}"
@@ -50,6 +29,26 @@ loki:
       azure:
         accountName: "${account_name}"
         useFederatedToken: true
+  podLabels:
+    "azure.workload.identity/use": "true"
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: azure
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+  storageConfig:
+    tsdb_shipper:
+      active_index_directory: /var/loki/index
+      cache_location: /var/loki/cache
+      cache_ttl: 168h
+    azure:
+      account_name: "${account_name}"
+      container_name: "${chunks_container_name}"
+      use_federated_token: true
 
 # Define the Azure workload identity
 serviceAccount:
@@ -62,44 +61,43 @@ serviceAccount:
 deploymentMode: Distributed
 
 ingester:
- replicas: 3
- maxUnavailable: 1
- zoneAwareReplication:
-  enabled: false
+  replicas: 3
+  maxUnavailable: 1
+  zoneAwareReplication:
+    enabled: false
 
 querier:
- replicas: 3
- maxUnavailable: 2
+  replicas: 3
+  maxUnavailable: 2
 
 queryFrontend:
- replicas: 2
- maxUnavailable: 1
+  replicas: 2
+  maxUnavailable: 1
 
 queryScheduler:
- replicas: 2
+  replicas: 2
 
 distributor:
- replicas: 3
- maxUnavailable: 2
+  replicas: 3
+  maxUnavailable: 2
 compactor:
- replicas: 1
+  replicas: 1
 
 indexGateway:
- replicas: 2
- maxUnavailable: 1
+  replicas: 2
+  maxUnavailable: 1
 
 ruler:
- replicas: 1
- maxUnavailable: 1
-
+  replicas: 1
+  maxUnavailable: 1
 
 # This exposes the Loki gateway so it can be written to and queried externaly
 gateway:
- service:
-   type: LoadBalancer
- basicAuth:
-     enabled: true
-     existingSecret: loki-basic-auth
+  service:
+    type: LoadBalancer
+  basicAuth:
+    enabled: true
+    existingSecret: loki-basic-auth
 
 # Since we are using basic auth, we need to pass the username and password to the canary
 lokiCanary:
@@ -120,14 +118,14 @@ lokiCanary:
 
 # Enable minio for storage
 minio:
- enabled: false
+  enabled: false
 
 backend:
- replicas: 0
+  replicas: 0
 read:
- replicas: 0
+  replicas: 0
 write:
- replicas: 0
+  replicas: 0
 
 singleBinary:
- replicas: 0
+  replicas: 0
