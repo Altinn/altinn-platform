@@ -2,13 +2,13 @@ module github.com/Altinn/altinn-platform/actions/generate-k6-manifests
 
 go 1.24.0
 
-toolchain go1.24.4
+toolchain go1.24.5
 
 require (
 	github.com/elliotchance/orderedmap/v3 v3.1.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.33.2
-	k8s.io/apimachinery v0.33.2
+	k8s.io/api v0.33.3
+	k8s.io/apimachinery v0.33.3
 )
 
 require (
