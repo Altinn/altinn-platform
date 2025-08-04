@@ -6,6 +6,6 @@ resource "helm_release" "k6_operator" {
   create_namespace = true
   repository       = "https://grafana.github.io/helm-charts"
   chart            = "k6-operator"
-  version          = "3.14.2"
+  version          = "3.14.3"
   values           = ["${file("${path.module}/k6_tests_rg_k6_operator_values.yaml")}"]
 }
