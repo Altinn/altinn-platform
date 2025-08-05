@@ -1,0 +1,28 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: dis-apim-operator
+  namespace: flux-system
+spec:
+  force: false
+  interval: 5m0s
+  path: ./default
+  postBuild:
+    substitute:
+      DISAPIM_SUBSCRIPTION_ID: ${DISAPIM_SUBSCRIPTION_ID}
+      DISAPIM_RESOURCE_GROUP: ${DISAPIM_RESOURCE_GROUP}
+      DISAPIM_APIM_SERVICE_NAME: ${DISAPIM_APIM_SERVICE_NAME}
+      DISAPIM_WORKLOAD_IDENTITY_CLIENT_ID: ${DISAPIM_WORKLOAD_IDENTITY_CLIENT_ID}
+  prune: false
+  retryInterval: 5m0s
+  images:
+    - name: controller
+      newName: altinncr.azurecr.io/ghcr.io/altinn/altinn-platform/dis-apim-operator
+      newTag: latest
+  sourceRef:
+    kind: OCIRepository
+    name: dis-identity-operator
+    namespace: flux-system
+  targetNamespace: ${DISAPIM_TARGET_NAMESPACE:=dis-apim-operator-system}
+  timeout: 5m0s
+  wait: true

@@ -1,0 +1,12 @@
+- op: add
+  path: /spec/template/spec/containers/0/env
+  value:
+    - name: DISAPIM_SUBSCRIPTION_ID
+      value: "${DISAPIM_SUBSCRIPTION_ID}"
+    - name: DISAPIM_RESOURCE_GROUP
+      value: "${DISAPIM_RESOURCE_GROUP}"
+    - name: DISAPIM_APIM_SERVICE_NAME
+      value: "${DISAPIM_APIM_SERVICE_NAME}"
+- op: add
+  path: /spec/template/metadata/labels/azure.workload.identity~1use
+  value: "true"
