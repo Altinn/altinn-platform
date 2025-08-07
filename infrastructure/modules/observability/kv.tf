@@ -27,7 +27,7 @@ resource "azurerm_key_vault" "obs_kv" {
 resource "azurerm_role_assignment" "obs_kv_reader" {
   scope                            = azurerm_key_vault.obs_kv.id
   role_definition_name             = "Key Vault Secrets User"
-  principal_id                     = var.pipeline_sp_object_id
+  principal_id                     = azuread_service_principal.sp.object_id 
   skip_service_principal_aad_check = true
 }
 
@@ -46,6 +46,6 @@ resource "azurerm_key_vault_secret" "conn_string" {
 resource "azurerm_role_assignment" "ci_kv_secrets_role" {
   scope                            = azurerm_key_vault.obs_kv.id
   role_definition_name             = "Key Vault Secrets Officer" # read + write secrets only
-  principal_id                     = data.azurerm_client_config.current.object_id
+  principal_id                     = var.pipeline_sp_object_id
   skip_service_principal_aad_check = true
 }
