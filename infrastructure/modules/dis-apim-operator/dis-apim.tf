@@ -1,7 +1,7 @@
 resource "azapi_resource" "dis_apim_operator" {
   type      = "Microsoft.KubernetesConfiguration/fluxConfigurations@2024-11-01"
-  name      = "dis-apim-${var.dis_apim_service_name}"
-  parent_id = var.azurerm_kubernetes_cluster_id
+  name      = "dis-apim-${var.apim_service_name}"
+  parent_id = var.kubernetes_cluster_id
   body = {
     properties = {
       kustomizations = {
@@ -10,10 +10,10 @@ resource "azapi_resource" "dis_apim_operator" {
           path  = "./"
           postBuild = {
             substitute = {
-              DISAPIM_SUBSCRIPTION_ID             = "${var.dis_apim_subscription_id}"
-              DISAPIM_RESOURCE_GROUP              = "${var.dis_apim_resource_group_name}"
-              DISAPIM_APIM_SERVICE_NAME           = "${var.dis_apim_service_name}"
-              DISAPIM_TARGET_NAMESPACE            = "${var.dis_apim_target_namespace}"
+              DISAPIM_SUBSCRIPTION_ID             = "${var.apim_subscription_id}"
+              DISAPIM_RESOURCE_GROUP              = "${var.apim_resource_group_name}"
+              DISAPIM_APIM_SERVICE_NAME           = "${var.apim_service_name}"
+              DISAPIM_TARGET_NAMESPACE            = "${var.target_namespace}"
               DISAPIM_WORKLOAD_IDENTITY_CLIENT_ID = "${azurerm_user_assigned_identity.disapim_identity.client_id}"
             }
           }
