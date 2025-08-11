@@ -30,6 +30,11 @@ variable "azurerm_kubernetes_cluster_id" {
   description = "AKS cluster resource id"
 }
 
+variable "azurerm_apim_id" {
+  type        = string
+  description = "APIM resource id"
+}
+
 variable "dis_apim_subscription_id" {
   type        = string
   description = "Subscription id where the APIM service is located"
@@ -53,4 +58,5 @@ variable "dis_apim_target_namespace" {
 variable "flux_release_tag" {
   type        = string
   description = "Flux release tag"
+  default = "latest"
 }
