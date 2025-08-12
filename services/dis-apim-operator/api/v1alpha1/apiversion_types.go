@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -235,7 +235,7 @@ func init() {
 func (avss *ApiVersionSubSpec) GetApiVersionSpecifier() string {
 	versionSpecifier := avss.Name
 	if versionSpecifier == nil || *versionSpecifier == "" {
-		versionSpecifier = utils.ToPointer("default")
+		versionSpecifier = ptr.To("default")
 	}
 	return *versionSpecifier
 }
@@ -255,27 +255,27 @@ func (a *ApiVersion) RequireUpdate(new ApiVersion) bool {
 func (a *ApiVersion) Matches(new ApiVersion) bool {
 	return a.Spec.Path == new.Spec.Path &&
 		a.Spec.ApiVersionScheme == new.Spec.ApiVersionScheme &&
-		utils.PointerValueEqual(a.Spec.ApiType, new.Spec.ApiType) &&
-		utils.PointerValueEqual(a.Spec.Contact, new.Spec.Contact) &&
-		utils.PointerValueEqual(a.Spec.Name, new.Spec.Name) &&
+		ptr.Equal(a.Spec.ApiType, new.Spec.ApiType) &&
+		ptr.Equal(a.Spec.Contact, new.Spec.Contact) &&
+		ptr.Equal(a.Spec.Name, new.Spec.Name) &&
 		a.Spec.DisplayName == new.Spec.DisplayName &&
 		a.Spec.Description == new.Spec.Description &&
-		utils.PointerValueEqual(a.Spec.ServiceUrl, new.Spec.ServiceUrl) &&
+		ptr.Equal(a.Spec.ServiceUrl, new.Spec.ServiceUrl) &&
 		reflect.DeepEqual(a.Spec.Products, new.Spec.Products) &&
-		utils.PointerValueEqual(a.Spec.ContentFormat, new.Spec.ContentFormat) &&
-		utils.PointerValueEqual(a.Spec.Content, new.Spec.Content) &&
-		utils.PointerValueEqual(a.Spec.SubscriptionRequired, new.Spec.SubscriptionRequired) &&
+		ptr.Equal(a.Spec.ContentFormat, new.Spec.ContentFormat) &&
+		ptr.Equal(a.Spec.Content, new.Spec.Content) &&
+		ptr.Equal(a.Spec.SubscriptionRequired, new.Spec.SubscriptionRequired) &&
 		reflect.DeepEqual(a.Spec.Protocols, new.Spec.Protocols) &&
-		utils.PointerValueEqual(a.Spec.IsCurrent, new.Spec.IsCurrent) &&
+		ptr.Equal(a.Spec.IsCurrent, new.Spec.IsCurrent) &&
 		((a.Spec.Policies == nil && new.Spec.Policies == nil) ||
 			(a.Spec.Policies != nil && new.Spec.Policies != nil &&
-				utils.PointerValueEqual(a.Spec.Policies.PolicyContent, new.Spec.Policies.PolicyContent) &&
-				utils.PointerValueEqual(a.Spec.Policies.PolicyFormat, new.Spec.Policies.PolicyFormat))) &&
+				ptr.Equal(a.Spec.Policies.PolicyContent, new.Spec.Policies.PolicyContent) &&
+				ptr.Equal(a.Spec.Policies.PolicyFormat, new.Spec.Policies.PolicyFormat))) &&
 		((a.Spec.Diagnostics == nil && new.Spec.Diagnostics == nil) ||
 			(a.Spec.Diagnostics != nil && new.Spec.Diagnostics != nil &&
-				utils.PointerValueEqual(a.Spec.Diagnostics.LoggerName, new.Spec.Diagnostics.LoggerName) &&
-				utils.PointerValueEqual(a.Spec.Diagnostics.SamplingPercentage, new.Spec.Diagnostics.SamplingPercentage) &&
-				utils.PointerValueEqual(a.Spec.Diagnostics.EnableMetrics, new.Spec.Diagnostics.EnableMetrics) &&
+				ptr.Equal(a.Spec.Diagnostics.LoggerName, new.Spec.Diagnostics.LoggerName) &&
+				ptr.Equal(a.Spec.Diagnostics.SamplingPercentage, new.Spec.Diagnostics.SamplingPercentage) &&
+				ptr.Equal(a.Spec.Diagnostics.EnableMetrics, new.Spec.Diagnostics.EnableMetrics) &&
 				reflect.DeepEqual(a.Spec.Diagnostics.Frontend, new.Spec.Diagnostics.Frontend) &&
 				reflect.DeepEqual(a.Spec.Diagnostics.Backend, new.Spec.Diagnostics.Backend)))
 }
@@ -284,24 +284,24 @@ func (a *ApiVersion) MatchesAzureResource(current apim.APIClientGetResponse) boo
 	if current.Properties == nil {
 		return false
 	}
-	if !utils.PointerValueEqual(a.Spec.ContentFormat, utils.ToPointer(ContentFormatGraphqlLink)) {
+	if !ptr.Equal(a.Spec.ContentFormat, ptr.To(ContentFormatGraphqlLink)) {
 		if (current.Properties.Contact == nil) != (a.Spec.Contact == nil) ||
 			(a.Spec.Contact != nil && current.Properties.Contact != nil &&
-				(!utils.PointerValueEqual(a.Spec.Contact.Name, current.Properties.Contact.Name) ||
-					!utils.PointerValueEqual(a.Spec.Contact.Email, current.Properties.Contact.Email) ||
-					!utils.PointerValueEqual(a.Spec.Contact.URL, current.Properties.Contact.URL))) {
+				(!ptr.Equal(a.Spec.Contact.Name, current.Properties.Contact.Name) ||
+					!ptr.Equal(a.Spec.Contact.Email, current.Properties.Contact.Email) ||
+					!ptr.Equal(a.Spec.Contact.URL, current.Properties.Contact.URL))) {
 			return false
 		}
 	}
 	if a.Spec.Path != *current.Properties.Path ||
-		!utils.PointerValueEqual(a.Spec.ApiType.AzureApiType(), current.Properties.APIType) ||
-		!utils.PointerValueEqual(a.Spec.Name, current.Properties.APIVersion) ||
+		!ptr.Equal(a.Spec.ApiType.AzureApiType(), current.Properties.APIType) ||
+		!ptr.Equal(a.Spec.Name, current.Properties.APIVersion) ||
 		a.Spec.DisplayName != *current.Properties.DisplayName ||
 		a.Spec.Description != *current.Properties.Description ||
-		!utils.PointerValueEqual(a.Spec.ServiceUrl, current.Properties.ServiceURL) ||
-		!utils.PointerValueEqual(a.Spec.SubscriptionRequired, current.Properties.SubscriptionRequired) ||
+		!ptr.Equal(a.Spec.ServiceUrl, current.Properties.ServiceURL) ||
+		!ptr.Equal(a.Spec.SubscriptionRequired, current.Properties.SubscriptionRequired) ||
 		!reflect.DeepEqual(ToApimProtocolSlice(a.Spec.Protocols), current.Properties.Protocols) ||
-		!utils.PointerValueEqual(a.Spec.IsCurrent, current.Properties.IsCurrent) {
+		!ptr.Equal(a.Spec.IsCurrent, current.Properties.IsCurrent) {
 		return false
 	}
 
@@ -321,7 +321,7 @@ func (a *ApiVersion) ToAzureCreateOrUpdateParameter() apim.APICreateOrUpdatePara
 			ServiceURL:           a.Spec.ServiceUrl,
 			SubscriptionRequired: a.Spec.SubscriptionRequired,
 			Value:                a.Spec.Content,
-			APIVersionSetID:      utils.ToPointer(a.Spec.ApiVersionSetId),
+			APIVersionSetID:      ptr.To(a.Spec.ApiVersionSetId),
 			APIVersion:           a.Spec.Name,
 		},
 	}
@@ -351,25 +351,25 @@ func (a *ApiVersion) GetAzureAPIAzureMonitorDiagnosticSettings(loggerId string) 
 
 func getDefaultDiagnosticSettings(loggerId string, azureMonitor bool) apim.DiagnosticContract {
 	var defaultHeaders = []*string{
-		utils.ToPointer("Ocp-Apim-Subscription-Key"),
-		utils.ToPointer("Content-Type"),
-		utils.ToPointer("X-Forwarded-For"),
+		ptr.To("Ocp-Apim-Subscription-Key"),
+		ptr.To("Content-Type"),
+		ptr.To("X-Forwarded-For"),
 	}
 	defaultSettings := apim.DiagnosticContract{
 		Properties: &apim.DiagnosticContractProperties{
 			LoggerID:  &loggerId,
-			AlwaysLog: utils.ToPointer(apim.AlwaysLogAllErrors),
+			AlwaysLog: ptr.To(apim.AlwaysLogAllErrors),
 			Backend: &apim.PipelineDiagnosticSettings{
 				Request: &apim.HTTPMessageDiagnostic{
 					Body: &apim.BodyDiagnosticSettings{
-						Bytes: utils.ToPointer(int32(0)),
+						Bytes: ptr.To(int32(0)),
 					},
 					DataMasking: nil,
 					Headers:     defaultHeaders,
 				},
 				Response: &apim.HTTPMessageDiagnostic{
 					Body: &apim.BodyDiagnosticSettings{
-						Bytes: utils.ToPointer(int32(0)),
+						Bytes: ptr.To(int32(0)),
 					},
 					DataMasking: nil,
 					Headers:     defaultHeaders,
@@ -378,37 +378,37 @@ func getDefaultDiagnosticSettings(loggerId string, azureMonitor bool) apim.Diagn
 			Frontend: &apim.PipelineDiagnosticSettings{
 				Request: &apim.HTTPMessageDiagnostic{
 					Body: &apim.BodyDiagnosticSettings{
-						Bytes: utils.ToPointer(int32(0)),
+						Bytes: ptr.To(int32(0)),
 					},
 					DataMasking: nil,
 					Headers:     defaultHeaders,
 				},
 				Response: &apim.HTTPMessageDiagnostic{
 					Body: &apim.BodyDiagnosticSettings{
-						Bytes: utils.ToPointer(int32(0)),
+						Bytes: ptr.To(int32(0)),
 					},
 					DataMasking: nil,
 					Headers:     defaultHeaders,
 				},
 			},
-			Metrics: utils.ToPointer(true),
+			Metrics: ptr.To(true),
 			Sampling: &apim.SamplingSettings{
-				Percentage:   utils.ToPointer(50.0),
-				SamplingType: utils.ToPointer(apim.SamplingTypeFixed),
+				Percentage:   ptr.To(50.0),
+				SamplingType: ptr.To(apim.SamplingTypeFixed),
 			},
-			LogClientIP: utils.ToPointer(true),
-			Verbosity:   utils.ToPointer(apim.VerbosityError),
+			LogClientIP: ptr.To(true),
+			Verbosity:   ptr.To(apim.VerbosityError),
 		},
 	}
 	if !azureMonitor {
-		defaultSettings.Properties.HTTPCorrelationProtocol = utils.ToPointer(apim.HTTPCorrelationProtocolW3C)
+		defaultSettings.Properties.HTTPCorrelationProtocol = ptr.To(apim.HTTPCorrelationProtocolW3C)
 	}
 	return defaultSettings
 }
 
 func overrideDefaults(defaults apim.DiagnosticContract, overrides *ApiDiagnosticSpec) apim.DiagnosticContract {
 	if overrides.SamplingPercentage != nil {
-		defaults.Properties.Sampling.Percentage = utils.ToPointer(float64(*overrides.SamplingPercentage))
+		defaults.Properties.Sampling.Percentage = ptr.To(float64(*overrides.SamplingPercentage))
 	}
 
 	if overrides.EnableMetrics != nil {

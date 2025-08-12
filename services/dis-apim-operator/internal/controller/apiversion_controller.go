@@ -25,6 +25,7 @@ import (
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v3"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -197,7 +198,7 @@ func (r *ApiVersionReconciler) deleteApiVersion(ctx context.Context, apiVersion 
 func (r *ApiVersionReconciler) handleApiVersionUpdate(ctx context.Context, apiVersion apimv1alpha1.ApiVersion, apimApi apim.APIClientGetResponse) (ctrl.Result, error) {
 	var err error
 	latestSha := ""
-	if !utils.PointerValueEqual(apiVersion.Spec.ContentFormat, utils.ToPointer(apimv1alpha1.ContentFormatGraphqlLink)) {
+	if !ptr.Equal(apiVersion.Spec.ContentFormat, ptr.To(apimv1alpha1.ContentFormatGraphqlLink)) {
 		latestSha, err = utils.Sha256FromContent(ctx, apiVersion.Spec.Content)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to get api spec sha: %w", err)

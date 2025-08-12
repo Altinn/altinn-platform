@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"regexp"
 
-	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	azfake "github.com/Azure/azure-sdk-for-go/sdk/azcore/fake"
 	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v3"
 	apimfake "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v3/fake"
+	"k8s.io/utils/ptr"
 )
 
 type AzureApimFake struct {
@@ -83,9 +83,9 @@ func (a *AzureApimFake) GetFakeBackendServer() apimfake.BackendServer {
 			} else {
 				response := apim.BackendClientCreateOrUpdateResponse{
 					BackendContract: apim.BackendContract{
-						ID:         utils.ToPointer("/subscriptions/fake-subscription/resourceGroups/fake-resource-group/providers/APIM/Backend/" + backendID),
-						Name:       utils.ToPointer(backendID),
-						Type:       utils.ToPointer("Microsoft.ApiManagement/service/backends"),
+						ID:         ptr.To("/subscriptions/fake-subscription/resourceGroups/fake-resource-group/providers/APIM/Backend/" + backendID),
+						Name:       ptr.To(backendID),
+						Type:       ptr.To("Microsoft.ApiManagement/service/backends"),
 						Properties: parameters.Properties,
 					},
 				}
@@ -132,7 +132,7 @@ func (a *AzureApimFake) GetFakeBackendServer() apimfake.BackendServer {
 				response := apim.BackendClientGetResponse{}
 				if _, ok := a.Backends[backendID]; ok {
 					response.BackendContract = a.Backends[backendID]
-					response.ETag = utils.ToPointer("fake-etag")
+					response.ETag = ptr.To("fake-etag")
 					responder.SetResponse(http.StatusOK, response, nil)
 				} else {
 					errResponder.SetResponseError(http.StatusNotFound, "Backend not found")
@@ -158,9 +158,9 @@ func (a *AzureApimFake) GetFakeApiServer() apimfake.APIServer {
 			} else {
 				response := apim.APIClientCreateOrUpdateResponse{
 					APIContract: apim.APIContract{
-						ID:   utils.ToPointer("/subscriptions/fake-subscription/resourceGroups/fake-resource-group/providers/APIM/Api/" + apiID),
-						Name: utils.ToPointer(apiID),
-						Type: utils.ToPointer("Microsoft.ApiManagement/service/apis"),
+						ID:   ptr.To("/subscriptions/fake-subscription/resourceGroups/fake-resource-group/providers/APIM/Api/" + apiID),
+						Name: ptr.To(apiID),
+						Type: ptr.To("Microsoft.ApiManagement/service/apis"),
 						Properties: &apim.APIContractProperties{
 							Path:                          parameters.Properties.Path,
 							APIRevision:                   parameters.Properties.APIRevision,
@@ -212,7 +212,7 @@ func (a *AzureApimFake) GetFakeApiServer() apimfake.APIServer {
 				response := apim.APIClientGetResponse{}
 				if _, ok := a.APIMVersions[apiID]; ok {
 					response.APIContract = a.APIMVersions[apiID]
-					response.ETag = utils.ToPointer("fake-etag")
+					response.ETag = ptr.To("fake-etag")
 					responder.SetResponse(http.StatusOK, response, nil)
 				} else {
 					errResponder.SetResponseError(http.StatusNotFound, "API not found")
@@ -238,9 +238,9 @@ func (a *AzureApimFake) GetFakeApiVersionServer() apimfake.APIVersionSetServer {
 			} else {
 				response := apim.APIVersionSetClientCreateOrUpdateResponse{
 					APIVersionSetContract: apim.APIVersionSetContract{
-						ID:         utils.ToPointer("/subscriptions/fake-subscription/resourceGroups/fake-resource-group/providers/APIM/ApiVersionSet/" + apiVersionSetID),
-						Name:       utils.ToPointer(apiVersionSetID),
-						Type:       utils.ToPointer("Microsoft.ApiManagement/service/apiVersionSets"),
+						ID:         ptr.To("/subscriptions/fake-subscription/resourceGroups/fake-resource-group/providers/APIM/ApiVersionSet/" + apiVersionSetID),
+						Name:       ptr.To(apiVersionSetID),
+						Type:       ptr.To("Microsoft.ApiManagement/service/apiVersionSets"),
 						Properties: parameters.Properties,
 					},
 				}
@@ -274,7 +274,7 @@ func (a *AzureApimFake) GetFakeApiVersionServer() apimfake.APIVersionSetServer {
 				response := apim.APIVersionSetClientGetResponse{}
 				if _, ok := a.APIMVersionSets[apiVersionSetID]; ok {
 					response.APIVersionSetContract = a.APIMVersionSets[apiVersionSetID]
-					response.ETag = utils.ToPointer("fake-etag")
+					response.ETag = ptr.To("fake-etag")
 					responder.SetResponse(http.StatusOK, response, nil)
 				} else {
 					errResponder.SetResponseError(http.StatusNotFound, "APIVersionSet not found")
@@ -299,9 +299,9 @@ func (a *AzureApimFake) GetFakeAPIPolicyServer() apimfake.APIPolicyServer {
 			} else {
 				response := apim.APIPolicyClientCreateOrUpdateResponse{
 					PolicyContract: apim.PolicyContract{
-						ID:         utils.ToPointer("/subscriptions/fake-subscription/resourceGroups/fake-resource-group/providers/APIM/Api/" + apiID + "/policies/" + string(policyID)),
-						Name:       utils.ToPointer(string(policyID)),
-						Type:       utils.ToPointer("Microsoft.ApiManagement/service/apis/policies"),
+						ID:         ptr.To("/subscriptions/fake-subscription/resourceGroups/fake-resource-group/providers/APIM/Api/" + apiID + "/policies/" + string(policyID)),
+						Name:       ptr.To(string(policyID)),
+						Type:       ptr.To("Microsoft.ApiManagement/service/apis/policies"),
 						Properties: parameters.Properties,
 					},
 				}
@@ -335,7 +335,7 @@ func (a *AzureApimFake) GetFakeAPIPolicyServer() apimfake.APIPolicyServer {
 				response := apim.APIPolicyClientGetResponse{}
 				if _, ok := a.Policies[string(policyID)]; ok {
 					response.PolicyContract = a.Policies[string(policyID)]
-					response.ETag = utils.ToPointer("fake-etag")
+					response.ETag = ptr.To("fake-etag")
 					responder.SetResponse(http.StatusOK, response, nil)
 				} else {
 					errResponder.SetResponseError(http.StatusNotFound, "Policy not found")
@@ -359,9 +359,9 @@ func (a *AzureApimFake) GetFakeApiDiagnosticServer() apimfake.APIDiagnosticServe
 			} else {
 				response := apim.APIDiagnosticClientCreateOrUpdateResponse{
 					DiagnosticContract: apim.DiagnosticContract{
-						ID:         utils.ToPointer("/subscriptions/fake-subscription/resourceGroups/fake-resource-group/providers/APIM/Api/" + apiID + "/diagnostics/" + diagnosticID),
-						Name:       utils.ToPointer(diagnosticID),
-						Type:       utils.ToPointer("Microsoft.ApiManagement/service/apis/diagnostics"),
+						ID:         ptr.To("/subscriptions/fake-subscription/resourceGroups/fake-resource-group/providers/APIM/Api/" + apiID + "/diagnostics/" + diagnosticID),
+						Name:       ptr.To(diagnosticID),
+						Type:       ptr.To("Microsoft.ApiManagement/service/apis/diagnostics"),
 						Properties: parameters.Properties,
 					},
 				}
@@ -395,7 +395,7 @@ func (a *AzureApimFake) GetFakeApiDiagnosticServer() apimfake.APIDiagnosticServe
 				response := apim.APIDiagnosticClientGetResponse{}
 				if _, ok := a.ApiDiagnostics[diagnosticID]; ok {
 					response.DiagnosticContract = a.ApiDiagnostics[diagnosticID]
-					response.ETag = utils.ToPointer("fake-etag")
+					response.ETag = ptr.To("fake-etag")
 					responder.SetResponse(http.StatusOK, response, nil)
 				} else {
 					errResponder.SetResponseError(http.StatusNotFound, "Diagnostic not found")
@@ -425,7 +425,7 @@ func (a *AzureApimFake) GetFakeLoggerServer() apimfake.LoggerServer {
 				if len(matches) > 1 {
 					response.Value = []*apim.LoggerContract{
 						{
-							ID:   utils.ToPointer("subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/apim-fake/providers/Microsoft.ApiManagement/service/apim-fake/loggers/fake-logger"),
+							ID:   ptr.To("subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/apim-fake/providers/Microsoft.ApiManagement/service/apim-fake/loggers/fake-logger"),
 							Name: &matches[1],
 							Type: nil,
 						},

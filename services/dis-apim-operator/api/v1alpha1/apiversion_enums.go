@@ -1,8 +1,8 @@
 package v1alpha1
 
 import (
-	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v3"
+	"k8s.io/utils/ptr"
 )
 
 // INSERT ADDITIONAL TYPES
@@ -106,7 +106,7 @@ func (p *Protocol) AzureProtocol() *apim.Protocol {
 func ToApimProtocolSlice(protocols []Protocol) []*apim.Protocol {
 	apimProtocols := make([]*apim.Protocol, len(protocols))
 	for i, protocol := range protocols {
-		apimProtocols[i] = utils.ToPointer(apim.Protocol(protocol))
+		apimProtocols[i] = ptr.To(apim.Protocol(protocol))
 	}
 	return apimProtocols
 }

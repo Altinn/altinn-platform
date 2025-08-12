@@ -19,9 +19,9 @@ package v1alpha1
 import (
 	"fmt"
 
-	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -120,7 +120,7 @@ func (a *Api) ToAzureApiVersionSet() apim.APIVersionSetContract {
 			VersioningScheme: a.Spec.VersioningScheme.AzureAPIVersionScheme(),
 			Description:      a.Spec.Description,
 		},
-		Name: utils.ToPointer(a.GetApiAzureFullName()),
+		Name: ptr.To(a.GetApiAzureFullName()),
 	}
 }
 
