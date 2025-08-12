@@ -256,7 +256,7 @@ func (a *ApiVersion) Matches(new ApiVersion) bool {
 	return a.Spec.Path == new.Spec.Path &&
 		a.Spec.ApiVersionScheme == new.Spec.ApiVersionScheme &&
 		ptr.Equal(a.Spec.ApiType, new.Spec.ApiType) &&
-		ptr.Equal(a.Spec.Contact, new.Spec.Contact) &&
+		reflect.DeepEqual(a.Spec.Contact, new.Spec.Contact) &&
 		ptr.Equal(a.Spec.Name, new.Spec.Name) &&
 		a.Spec.DisplayName == new.Spec.DisplayName &&
 		a.Spec.Description == new.Spec.Description &&
@@ -293,14 +293,14 @@ func (a *ApiVersion) MatchesAzureResource(current apim.APIClientGetResponse) boo
 			return false
 		}
 	}
-	if a.Spec.Path != *current.Properties.Path ||
+	if a.Spec.Path != ptr.Deref(current.Properties.Path, "") ||
 		!ptr.Equal(a.Spec.ApiType.AzureApiType(), current.Properties.APIType) ||
 		!ptr.Equal(a.Spec.Name, current.Properties.APIVersion) ||
-		a.Spec.DisplayName != *current.Properties.DisplayName ||
-		a.Spec.Description != *current.Properties.Description ||
+		a.Spec.DisplayName != ptr.Deref(current.Properties.DisplayName, "") ||
+		a.Spec.Description != ptr.Deref(current.Properties.Description, "") ||
 		!ptr.Equal(a.Spec.ServiceUrl, current.Properties.ServiceURL) ||
 		!ptr.Equal(a.Spec.SubscriptionRequired, current.Properties.SubscriptionRequired) ||
-		!reflect.DeepEqual(ToApimProtocolSlice(a.Spec.Protocols), current.Properties.Protocols) ||
+		!protocolsEqual(ToApimProtocolSlice(a.Spec.Protocols), current.Properties.Protocols) ||
 		!ptr.Equal(a.Spec.IsCurrent, current.Properties.IsCurrent) {
 		return false
 	}
@@ -440,4 +440,41 @@ func overrideDefaults(defaults apim.DiagnosticContract, overrides *ApiDiagnostic
 	}
 
 	return defaults
+}
+
+func protocolsEqual(a, b []*apim.Protocol) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	counts := make(map[apim.Protocol]int)
+	nilCount := 0
+
+	for _, p := range a {
+		if p == nil {
+			nilCount++
+		} else {
+			counts[*p]++
+		}
+	}
+
+	for _, p := range b {
+		if p == nil {
+			nilCount--
+		} else {
+			counts[*p]--
+		}
+	}
+
+	if nilCount != 0 {
+		return false
+	}
+
+	for _, count := range counts {
+		if count != 0 {
+			return false
+		}
+	}
+
+	return true
 }

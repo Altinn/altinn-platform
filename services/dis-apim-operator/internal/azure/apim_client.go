@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/config"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -131,7 +132,8 @@ func (c *APIMClient) DeleteApiDiagnosticSettings(ctx context.Context, apiId stri
 func (c *APIMClient) GetLoggerByName(ctx context.Context, loggerName string) (*string, error) {
 	client := c.apimClientFactory.NewLoggerClient()
 	pager := client.NewListByServicePager(c.ApimClientConfig.ResourceGroup, c.ApimClientConfig.ApimServiceName, &apim.LoggerClientListByServiceOptions{
-		Filter: ptr.To(fmt.Sprintf("name eq '%s'", loggerName)),
+		// Remove all ' in loggerName input as this isn't a valid char in the name and can lead to query escape
+		Filter: ptr.To(fmt.Sprintf("name eq '%s'", strings.ReplaceAll(loggerName, "'", ""))),
 	})
 	if pager.More() {
 		page, err := pager.NextPage(ctx)
