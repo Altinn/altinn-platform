@@ -1,5 +1,10 @@
 data "azurerm_client_config" "current" {}
 
+# we need to object if for assigning roles
+data "azuread_service_principal" "pipeline_sp" {
+  client_id = var.pipeline_sp_client_id
+}
+
 locals {
   # hide it from plan / apply since linters can complain
   tenant_id = sensitive(data.azurerm_client_config.current.tenant_id)
@@ -46,6 +51,6 @@ resource "azurerm_key_vault_secret" "conn_string" {
 resource "azurerm_role_assignment" "ci_kv_secrets_role" {
   scope                            = azurerm_key_vault.obs_kv.id
   role_definition_name             = "Key Vault Secrets Officer" # read + write secrets only
-  principal_id                     = var.pipeline_sp_object_id
+  principal_id                     = data.azuread_service_principal.pipeline_sp.object_id
   skip_service_principal_aad_check = true
 }
