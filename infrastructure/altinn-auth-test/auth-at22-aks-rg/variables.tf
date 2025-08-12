@@ -20,3 +20,8 @@ variable "app_access_token" {
     error_message = "You must provide a value for app_access_token from pipeline run."
   }
 }
+
+variable "pipeline_sp_client_id" {
+  type        = string
+  description = "Client ID (appId) of the service principal used for pipeline auth"
+}
