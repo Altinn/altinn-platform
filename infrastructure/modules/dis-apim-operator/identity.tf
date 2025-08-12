@@ -15,7 +15,7 @@ resource "azurerm_federated_identity_credential" "disapim_fic" {
 }
 
 resource "azurerm_role_assignment" "disapim_service_operator_role_assignment" {
-    scope = var.apim_id
-    role_definition_id = "312a565d-c81f-4fd8-895a-4e21e48d571c" # API Management Service Contributor https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/integration#api-management-service-contributor
-    principal_id = azurerm_user_assigned_identity.disapim_identity.principal_id
+  scope              = var.apim_id
+  role_definition_id = "312a565d-c81f-4fd8-895a-4e21e48d571c" # API Management Service Contributor https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/integration#api-management-service-contributor
+  principal_id       = azurerm_user_assigned_identity.disapim_identity.principal_id
 }

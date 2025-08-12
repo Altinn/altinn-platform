@@ -3,8 +3,8 @@ variable "kubernetes_node_resource_group" {
   description = "AKS node resource group name"
 
   validation {
-    condition     = length(trim(var.apim_resource_group_name)) > 0
-    error_message = "apim_resource_group_name cannot be empty."
+    condition     = length(trim(var.kubernetes_node_resource_group)) > 0
+    error_message = "kubernetes_node_resource_group cannot be empty."
   }
 }
 
@@ -15,7 +15,7 @@ variable "kubernetes_node_location" {
   validation {
     condition     = length(trim(var.kubernetes_node_location)) > 0
     error_message = "kubernetes_node_location cannot be empty."
-  }  
+  }
 }
 
 variable "kubernetes_cluster_oidc_issuer_url" {
@@ -25,7 +25,7 @@ variable "kubernetes_cluster_oidc_issuer_url" {
   validation {
     condition     = length(trim(var.kubernetes_cluster_oidc_issuer_url)) > 0
     error_message = "kubernetes_cluster_oidc_issuer_url cannot be empty."
-  }  
+  }
 }
 
 variable "tags" {
@@ -47,7 +47,7 @@ variable "kubernetes_cluster_id" {
   validation {
     condition     = length(trim(var.kubernetes_cluster_id)) > 0
     error_message = "kubernetes_cluster_id cannot be empty."
-  }  
+  }
 }
 
 variable "apim_id" {
@@ -93,7 +93,7 @@ variable "apim_service_name" {
 variable "target_namespace" {
   type        = string
   description = "Namespace where the operator deployment will be created"
-  
+
   validation {
     condition     = can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", var.target_namespace))
     error_message = "target_namespace must be a valid Kubernetes namespace (DNS-1123 label)."
@@ -103,5 +103,5 @@ variable "target_namespace" {
 variable "flux_release_tag" {
   type        = string
   description = "Flux release tag"
-  default = "latest"
+  default     = "latest"
 }
