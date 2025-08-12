@@ -1,5 +1,5 @@
 resource "azapi_resource" "dis_apim_operator" {
-  type      = "Microsoft.KubernetesConfiguration/fluxConfigurations@2024-11-01"
+  type      = "Microsoft.KubernetesConfiguration/fluxConfigurations@2025-04-01"
   name      = "dis-apim-${var.apim_service_name}"
   parent_id = var.kubernetes_cluster_id
   body = {
