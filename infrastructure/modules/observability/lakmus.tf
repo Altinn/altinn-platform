@@ -1,7 +1,3 @@
-resource "time_rotating" "password" {
-  rotation_days = 365
-}
-
 resource "azuread_application" "lakmus_app" {
   display_name     = "${var.prefix}-${var.environment}-lakmus"
   sign_in_audience = "AzureADMyOrg"
