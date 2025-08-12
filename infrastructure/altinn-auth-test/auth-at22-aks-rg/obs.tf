@@ -5,5 +5,4 @@ module "observability" {
   environment                   = "at22"
   azurerm_kubernetes_cluster_id = module.aks.azurerm_kubernetes_cluster_id
   oidc_issuer_url               = module.aks.aks_oidc_issuer_url
-  pipeline_sp_client_id         = var.pipeline_sp_client_id
 }
