@@ -92,6 +92,10 @@ module "observability" {
 
   oidc_issuer_url = "https://westeurope.oic.prod-aks.azure.com/00000000/11111111"
 
+  # Object ID of the service principal that needs read/write access to secrets
+  # NOTE: This is the AAD objectId, not the appId/clientId.
+  pipeline_sp_object_id = "00000000-0000-0000-0000-000000000000"
+
   tags = {
     project    = "billing-api"
     costcenter = "42"
