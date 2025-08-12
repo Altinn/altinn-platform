@@ -1,6 +1,6 @@
 data "azurerm_client_config" "current" {}
 
-# we need to object if for assigning roles
+# we need the object id for assigning roles
 data "azuread_service_principal" "pipeline_sp" {
   client_id = var.pipeline_sp_client_id
 }
