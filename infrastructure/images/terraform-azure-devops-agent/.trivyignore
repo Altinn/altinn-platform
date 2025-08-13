@@ -1,3 +1,4 @@
 # Checkd against kubectl with govulncheck and kubectl is not affected (false positiv)
 CVE-2024-45338
 CVE-2025-22869
+CVE-2025-47907
