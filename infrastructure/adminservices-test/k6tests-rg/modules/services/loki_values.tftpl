@@ -95,6 +95,8 @@ ruler:
 # This exposes the Loki gateway so it can be written to and queried externaly
 gateway:
   ingress:
+    annotations:
+      cert-manager.io/issuer: "letsencrypt-staging" # TODO: change to prod after testing
     enabled: true
     ingressClassName: nginx
     hosts:
@@ -102,10 +104,10 @@ gateway:
         paths:
           - path: /
             pathType: Prefix
-    #tls: # TODO: update values based on certmanager config
-    #- hosts:
-    #    - k6.dis.altinn.cloud
-    #  secretName: testsecret-tls
+    tls:
+      - hosts:
+          - k6.dis.altinn.cloud
+        secretName: k6-dis-altinn-cloud-tls
   basicAuth:
     enabled: true
     existingSecret: loki-basic-auth
