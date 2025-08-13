@@ -3,7 +3,7 @@ variable "kubernetes_node_resource_group" {
   description = "AKS node resource group name"
 
   validation {
-    condition     = length(trim(var.kubernetes_node_resource_group)) > 0
+    condition     = length(trimspace(var.kubernetes_node_resource_group)) > 0
     error_message = "kubernetes_node_resource_group cannot be empty."
   }
 }
@@ -13,7 +13,7 @@ variable "kubernetes_node_location" {
   description = "AKS node location"
 
   validation {
-    condition     = length(trim(var.kubernetes_node_location)) > 0
+    condition     = length(trimspace(var.kubernetes_node_location)) > 0
     error_message = "kubernetes_node_location cannot be empty."
   }
 }
@@ -23,7 +23,7 @@ variable "kubernetes_cluster_oidc_issuer_url" {
   description = "The OIDC issuer URL of the AKS cluster."
 
   validation {
-    condition     = length(trim(var.kubernetes_cluster_oidc_issuer_url)) > 0
+    condition     = length(trimspace(var.kubernetes_cluster_oidc_issuer_url)) > 0
     error_message = "kubernetes_cluster_oidc_issuer_url cannot be empty."
   }
 }
@@ -45,7 +45,7 @@ variable "kubernetes_cluster_id" {
   description = "AKS cluster resource id"
 
   validation {
-    condition     = length(trim(var.kubernetes_cluster_id)) > 0
+    condition     = length(trimspace(var.kubernetes_cluster_id)) > 0
     error_message = "kubernetes_cluster_id cannot be empty."
   }
 }
@@ -55,7 +55,7 @@ variable "apim_id" {
   description = "APIM resource id"
 
   validation {
-    condition     = length(trim(var.apim_id)) > 0
+    condition     = length(trimspace(var.apim_id)) > 0
     error_message = "apim_id cannot be empty."
   }
 }
@@ -75,7 +75,7 @@ variable "apim_resource_group_name" {
   description = "Resource group where the APIM service is located"
 
   validation {
-    condition     = length(trim(var.apim_resource_group_name)) > 0
+    condition     = length(trimspace(var.apim_resource_group_name)) > 0
     error_message = "apim_resource_group_name cannot be empty."
   }
 }
@@ -85,7 +85,7 @@ variable "apim_service_name" {
   description = "APIM service name"
 
   validation {
-    condition     = length(trim(var.apim_service_name)) > 0
+    condition     = length(trimspace(var.apim_service_name)) > 0
     error_message = "apim_service_name cannot be empty."
   }
 }
