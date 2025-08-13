@@ -1,7 +1,7 @@
 apiVersion: source.toolkit.fluxcd.io/v1beta2
 kind: OCIRepository
 metadata:
-  name: dis-identity-operator
+  name: dis-apim-operator
   namespace: flux-system
 spec:
   interval: 5m0s
