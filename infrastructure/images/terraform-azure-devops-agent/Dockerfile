@@ -1,3 +1,3 @@
-FROM ghcr.io/altinn/altinn-platform/azure-devops-agent:v1.2.1@sha256:c2289bbe40d25a74388f85b800e63ed55b81a8558da3fb69b9511e45324b5448
+FROM ghcr.io/altinn/altinn-platform/azure-devops-agent:v1.2.2@sha256:f2624bcd581dd9dadda61f7fca53ae0b67abd239e5bd405917a128555c334de7
 COPY scripts/install.sh .
 RUN ./install.sh
