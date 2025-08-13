@@ -16,7 +16,7 @@ spec:
   images:
     - name: controller
       newName: altinncr.azurecr.io/ghcr.io/altinn/altinn-platform/dis-identity-operator
-      newTag: vv0.0.1
+      newTag: v0.0.2
   sourceRef:
     kind: OCIRepository
     name: dis-identity-operator
