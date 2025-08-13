@@ -75,12 +75,3 @@ variable "azurerm_kubernetes_cluster_id" {
   default     = ""
   description = "AKS cluster resource id"
 }
-variable "pipeline_sp_object_id" {
-  description = "Object ID of the service-principal that should read / write secrets in this env"
-  type        = string
-
-  validation {
-    condition     = length(var.pipeline_sp_object_id) > 0
-    error_message = "You must provide a non-empty value for pipeline_sp_object_id."
-  }
-}
