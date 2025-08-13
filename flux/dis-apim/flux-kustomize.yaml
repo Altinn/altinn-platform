@@ -21,7 +21,7 @@ spec:
       newTag: latest
   sourceRef:
     kind: OCIRepository
-    name: dis-identity-operator
+    name: dis-apim-operator
     namespace: flux-system
   targetNamespace: ${DISAPIM_TARGET_NAMESPACE:=dis-apim-operator-system}
   timeout: 5m0s
