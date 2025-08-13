@@ -94,8 +94,18 @@ ruler:
 
 # This exposes the Loki gateway so it can be written to and queried externaly
 gateway:
-  service:
-    type: LoadBalancer
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - host: k6.dis.altinn.cloud
+        paths:
+          - path: /
+            pathType: Prefix
+    #tls: # TODO: update values based on certmanager config
+    #- hosts:
+    #    - k6.dis.altinn.cloud
+    #  secretName: testsecret-tls
   basicAuth:
     enabled: true
     existingSecret: loki-basic-auth
