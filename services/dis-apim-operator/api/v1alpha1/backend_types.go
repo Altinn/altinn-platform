@@ -19,9 +19,9 @@ package v1alpha1
 import (
 	"fmt"
 
-	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 )
 
 // BackendSpec defines the desired state of Backend.
@@ -112,14 +112,14 @@ func (b *Backend) MatchesActualState(actual *apim.BackendClientGetResponse) bool
 func (b *Backend) ToAzureBackend() apim.BackendContract {
 	return apim.BackendContract{
 		Properties: &apim.BackendContractProperties{
-			Protocol:    utils.ToPointer(apim.BackendProtocolHTTP),
-			URL:         utils.ToPointer(b.Spec.Url),
+			Protocol:    ptr.To(apim.BackendProtocolHTTP),
+			URL:         ptr.To(b.Spec.Url),
 			Description: b.Spec.Description,
 			TLS: &apim.BackendTLSProperties{
 				ValidateCertificateChain: b.Spec.ValidateCertificateChain,
 				ValidateCertificateName:  b.Spec.ValidateCertificateName,
 			},
-			Title: utils.ToPointer(b.Spec.Title),
+			Title: ptr.To(b.Spec.Title),
 		},
 	}
 }

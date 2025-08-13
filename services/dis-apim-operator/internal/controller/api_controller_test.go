@@ -22,13 +22,13 @@ import (
 	"time"
 
 	apimv1alpha1 "github.com/Altinn/altinn-platform/services/dis-apim-operator/api/v1alpha1"
-	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v3"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -59,8 +59,8 @@ var _ = Describe("Api Controller", func() {
 					Path:        "/test-api",
 					Versions: []apimv1alpha1.ApiVersionSubSpec{
 						{
-							Name:        utils.ToPointer("v1"),
-							Content:     utils.ToPointer(`{"openapi": "3.0.0","info": {"title": "Minimal API v1","version": "1.0.0"},""paths": {}}`),
+							Name:        ptr.To("v1"),
+							Content:     ptr.To(`{"openapi": "3.0.0","info": {"title": "Minimal API v1","version": "1.0.0"},""paths": {}}`),
 							DisplayName: "the default version",
 						},
 					},
@@ -72,10 +72,10 @@ var _ = Describe("Api Controller", func() {
 			Expect(updatedApi.Spec.DisplayName).To(Equal("test-api"))
 			Eventually(fakeApim.APIMVersionSets).Should(HaveLen(1))
 			apimResourceName := resourceNamespace + "-" + resourceName
-			Expect(fakeApim.APIMVersionSets[apimResourceName].Properties.DisplayName).To(Equal(utils.ToPointer("test-api")))
-			Expect(fakeApim.APIMVersionSets[apimResourceName].Name).To(Equal(utils.ToPointer(fmt.Sprintf("%s-%s", resourceNamespace, resourceName))))
+			Expect(fakeApim.APIMVersionSets[apimResourceName].Properties.DisplayName).To(Equal(ptr.To("test-api")))
+			Expect(fakeApim.APIMVersionSets[apimResourceName].Name).To(Equal(ptr.To(fmt.Sprintf("%s-%s", resourceNamespace, resourceName))))
 			Expect(fakeApim.APIMVersionSets[apimResourceName].Properties).NotTo(BeNil())
-			Expect(fakeApim.APIMVersionSets[apimResourceName].Properties.DisplayName).To(Equal(utils.ToPointer("test-api")))
+			Expect(fakeApim.APIMVersionSets[apimResourceName].Properties.DisplayName).To(Equal(ptr.To("test-api")))
 			Expect(*fakeApim.APIMVersionSets[apimResourceName].Properties.VersioningScheme).To(Equal(apim.VersioningSchemeSegment))
 			Expect(fakeApim.APIMVersionSets[apimResourceName].Properties.VersionQueryName).To(BeNil())
 			var apiVersionList apimv1alpha1.ApiVersionList
@@ -91,7 +91,7 @@ var _ = Describe("Api Controller", func() {
 			By("updating the openapi content in the apiversion if it has changed")
 			Eventually(func(g Gomega) {
 				updatedApi = getUpdatedApi(ctx, typeNamespacedName)
-				updatedApi.Spec.Versions[0].Content = utils.ToPointer(`{"openapi": "3.0.0","info": {"title": "Minimal API v1","version": "1.0.0"},""paths": {"test": "test"}}`)
+				updatedApi.Spec.Versions[0].Content = ptr.To(`{"openapi": "3.0.0","info": {"title": "Minimal API v1","version": "1.0.0"},""paths": {"test": "test"}}`)
 				g.Expect(k8sClient.Update(ctx, &updatedApi)).To(Succeed())
 			}, timeout, interval).Should(Succeed(), "apiVersion content should eventually be updated")
 
@@ -106,8 +106,8 @@ var _ = Describe("Api Controller", func() {
 			Eventually(func(g Gomega) {
 				updatedApi = getUpdatedApi(ctx, typeNamespacedName)
 				updatedApi.Spec.Versions = append(updatedApi.Spec.Versions, apimv1alpha1.ApiVersionSubSpec{
-					Name:        utils.ToPointer("v2"),
-					Content:     utils.ToPointer(`{"openapi": "3.0.0","info": {"title": "Minimal API v2","version": "1.0.0"},""paths": {}}`),
+					Name:        ptr.To("v2"),
+					Content:     ptr.To(`{"openapi": "3.0.0","info": {"title": "Minimal API v2","version": "1.0.0"},""paths": {}}`),
 					DisplayName: "the second version",
 				})
 

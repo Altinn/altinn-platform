@@ -19,12 +19,12 @@ package controller
 import (
 	"context"
 
-	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 
 	apimv1alpha1 "github.com/Altinn/altinn-platform/services/dis-apim-operator/api/v1alpha1"
 )
@@ -49,7 +49,7 @@ var _ = Describe("Backend Controller", func() {
 				},
 				Spec: apimv1alpha1.BackendSpec{
 					Title:       "test-backend",
-					Description: utils.ToPointer("Test backend for the operator"),
+					Description: ptr.To("Test backend for the operator"),
 					Url:         "https://test.example.com",
 				},
 			}

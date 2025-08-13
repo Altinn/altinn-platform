@@ -3,10 +3,10 @@ package v1alpha1
 import (
 	"testing"
 
-	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v3"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/utils/ptr"
 )
 
 func TestGetAzureAPIAppInsightsDiagnosticSettings(t *testing.T) {
@@ -26,22 +26,22 @@ var _ = Describe("ApiVersion", func() {
 				ApiVersionSubSpec: ApiVersionSubSpec{
 					Diagnostics: &ApiDiagnosticSpec{
 						LoggerName:         &defaultLoggerID,
-						SamplingPercentage: utils.ToPointer(int32(75)),
-						EnableMetrics:      utils.ToPointer(false),
+						SamplingPercentage: ptr.To(int32(75)),
+						EnableMetrics:      ptr.To(false),
 						Frontend: &PipelineDiagnosticSettings{
 							Request: &HttpMessageDiagnostic{
-								Headers: []*string{utils.ToPointer("Frontend-Request-Header")},
+								Headers: []*string{ptr.To("Frontend-Request-Header")},
 							},
 							Response: &HttpMessageDiagnostic{
-								Headers: []*string{utils.ToPointer("Frontend-Response-Header")},
+								Headers: []*string{ptr.To("Frontend-Response-Header")},
 							},
 						},
 						Backend: &PipelineDiagnosticSettings{
 							Request: &HttpMessageDiagnostic{
-								Headers: []*string{utils.ToPointer("Backend-Request-Header")},
+								Headers: []*string{ptr.To("Backend-Request-Header")},
 							},
 							Response: &HttpMessageDiagnostic{
-								Headers: []*string{utils.ToPointer("Backend-Response-Header")},
+								Headers: []*string{ptr.To("Backend-Response-Header")},
 							},
 						},
 					},
@@ -55,12 +55,12 @@ var _ = Describe("ApiVersion", func() {
 			diagnosticSettings := apiVersion.GetAzureAPIAppInsightsDiagnosticSettings(defaultLoggerID)
 
 			Expect(diagnosticSettings.Properties.LoggerID).To(Equal(&defaultLoggerID))
-			Expect(diagnosticSettings.Properties.Sampling.Percentage).To(Equal(utils.ToPointer(75.0)))
-			Expect(diagnosticSettings.Properties.Metrics).To(Equal(utils.ToPointer(false)))
-			Expect(diagnosticSettings.Properties.Frontend.Request.Headers).To(ContainElement(utils.ToPointer("Frontend-Request-Header")))
-			Expect(diagnosticSettings.Properties.Frontend.Response.Headers).To(ContainElements(utils.ToPointer("Frontend-Response-Header")))
-			Expect(diagnosticSettings.Properties.Backend.Request.Headers).To(ContainElements(utils.ToPointer("Backend-Request-Header")))
-			Expect(diagnosticSettings.Properties.Backend.Response.Headers).To(ContainElement(utils.ToPointer("Backend-Response-Header")))
+			Expect(diagnosticSettings.Properties.Sampling.Percentage).To(Equal(ptr.To(75.0)))
+			Expect(diagnosticSettings.Properties.Metrics).To(Equal(ptr.To(false)))
+			Expect(diagnosticSettings.Properties.Frontend.Request.Headers).To(ContainElement(ptr.To("Frontend-Request-Header")))
+			Expect(diagnosticSettings.Properties.Frontend.Response.Headers).To(ContainElements(ptr.To("Frontend-Response-Header")))
+			Expect(diagnosticSettings.Properties.Backend.Request.Headers).To(ContainElements(ptr.To("Backend-Request-Header")))
+			Expect(diagnosticSettings.Properties.Backend.Response.Headers).To(ContainElement(ptr.To("Backend-Response-Header")))
 		})
 
 		It("should not override frontend and backend headers when not specified", func() {
@@ -70,10 +70,10 @@ var _ = Describe("ApiVersion", func() {
 			apiVersion.Spec.Diagnostics.Backend.Response.Headers = nil
 			diagnosticSettings := apiVersion.GetAzureAPIAppInsightsDiagnosticSettings(defaultLoggerID)
 
-			Expect(diagnosticSettings.Properties.Frontend.Request.Headers).To(ContainElements(utils.ToPointer("Ocp-Apim-Subscription-Key"), utils.ToPointer("X-Forwarded-For"), utils.ToPointer("Content-Type")))
-			Expect(diagnosticSettings.Properties.Frontend.Response.Headers).To(ContainElements(utils.ToPointer("Ocp-Apim-Subscription-Key"), utils.ToPointer("X-Forwarded-For"), utils.ToPointer("Content-Type")))
-			Expect(diagnosticSettings.Properties.Backend.Request.Headers).To(ContainElements(utils.ToPointer("Ocp-Apim-Subscription-Key"), utils.ToPointer("X-Forwarded-For"), utils.ToPointer("Content-Type")))
-			Expect(diagnosticSettings.Properties.Backend.Response.Headers).To(ContainElements(utils.ToPointer("Ocp-Apim-Subscription-Key"), utils.ToPointer("X-Forwarded-For"), utils.ToPointer("Content-Type")))
+			Expect(diagnosticSettings.Properties.Frontend.Request.Headers).To(ContainElements(ptr.To("Ocp-Apim-Subscription-Key"), ptr.To("X-Forwarded-For"), ptr.To("Content-Type")))
+			Expect(diagnosticSettings.Properties.Frontend.Response.Headers).To(ContainElements(ptr.To("Ocp-Apim-Subscription-Key"), ptr.To("X-Forwarded-For"), ptr.To("Content-Type")))
+			Expect(diagnosticSettings.Properties.Backend.Request.Headers).To(ContainElements(ptr.To("Ocp-Apim-Subscription-Key"), ptr.To("X-Forwarded-For"), ptr.To("Content-Type")))
+			Expect(diagnosticSettings.Properties.Backend.Response.Headers).To(ContainElements(ptr.To("Ocp-Apim-Subscription-Key"), ptr.To("X-Forwarded-For"), ptr.To("Content-Type")))
 		})
 
 		It("should use default values when diagnostics are not specified", func() {
@@ -81,20 +81,20 @@ var _ = Describe("ApiVersion", func() {
 			diagnosticSettings := apiVersion.GetAzureAPIAppInsightsDiagnosticSettings(defaultLoggerID)
 
 			Expect(diagnosticSettings.Properties.LoggerID).To(Equal(&defaultLoggerID))
-			Expect(diagnosticSettings.Properties.Metrics).To(Equal(utils.ToPointer(true)))
-			Expect(diagnosticSettings.Properties.AlwaysLog).To(Equal(utils.ToPointer(apim.AlwaysLogAllErrors)))
-			Expect(diagnosticSettings.Properties.HTTPCorrelationProtocol).To(Equal(utils.ToPointer(apim.HTTPCorrelationProtocolW3C)))
-			Expect(diagnosticSettings.Properties.Verbosity).To(Equal(utils.ToPointer(apim.VerbosityError)))
-			Expect(diagnosticSettings.Properties.Sampling.Percentage).To(Equal(utils.ToPointer(50.0)))
-			Expect(diagnosticSettings.Properties.Sampling.SamplingType).To(Equal(utils.ToPointer(apim.SamplingTypeFixed)))
-			Expect(diagnosticSettings.Properties.Frontend.Request.Body.Bytes).To(Equal(utils.ToPointer(int32(0))))
-			Expect(diagnosticSettings.Properties.Frontend.Request.Headers).To(ContainElements(utils.ToPointer("Ocp-Apim-Subscription-Key"), utils.ToPointer("X-Forwarded-For"), utils.ToPointer("Content-Type")))
-			Expect(diagnosticSettings.Properties.Frontend.Response.Body.Bytes).To(Equal(utils.ToPointer(int32(0))))
-			Expect(diagnosticSettings.Properties.Frontend.Response.Headers).To(ContainElements(utils.ToPointer("Ocp-Apim-Subscription-Key"), utils.ToPointer("X-Forwarded-For"), utils.ToPointer("Content-Type")))
-			Expect(diagnosticSettings.Properties.Backend.Request.Body.Bytes).To(Equal(utils.ToPointer(int32(0))))
-			Expect(diagnosticSettings.Properties.Backend.Request.Headers).To(ContainElements(utils.ToPointer("Ocp-Apim-Subscription-Key"), utils.ToPointer("X-Forwarded-For"), utils.ToPointer("Content-Type")))
-			Expect(diagnosticSettings.Properties.Backend.Response.Body.Bytes).To(Equal(utils.ToPointer(int32(0))))
-			Expect(diagnosticSettings.Properties.Backend.Response.Headers).To(ContainElements(utils.ToPointer("Ocp-Apim-Subscription-Key"), utils.ToPointer("X-Forwarded-For"), utils.ToPointer("Content-Type")))
+			Expect(diagnosticSettings.Properties.Metrics).To(Equal(ptr.To(true)))
+			Expect(diagnosticSettings.Properties.AlwaysLog).To(Equal(ptr.To(apim.AlwaysLogAllErrors)))
+			Expect(diagnosticSettings.Properties.HTTPCorrelationProtocol).To(Equal(ptr.To(apim.HTTPCorrelationProtocolW3C)))
+			Expect(diagnosticSettings.Properties.Verbosity).To(Equal(ptr.To(apim.VerbosityError)))
+			Expect(diagnosticSettings.Properties.Sampling.Percentage).To(Equal(ptr.To(50.0)))
+			Expect(diagnosticSettings.Properties.Sampling.SamplingType).To(Equal(ptr.To(apim.SamplingTypeFixed)))
+			Expect(diagnosticSettings.Properties.Frontend.Request.Body.Bytes).To(Equal(ptr.To(int32(0))))
+			Expect(diagnosticSettings.Properties.Frontend.Request.Headers).To(ContainElements(ptr.To("Ocp-Apim-Subscription-Key"), ptr.To("X-Forwarded-For"), ptr.To("Content-Type")))
+			Expect(diagnosticSettings.Properties.Frontend.Response.Body.Bytes).To(Equal(ptr.To(int32(0))))
+			Expect(diagnosticSettings.Properties.Frontend.Response.Headers).To(ContainElements(ptr.To("Ocp-Apim-Subscription-Key"), ptr.To("X-Forwarded-For"), ptr.To("Content-Type")))
+			Expect(diagnosticSettings.Properties.Backend.Request.Body.Bytes).To(Equal(ptr.To(int32(0))))
+			Expect(diagnosticSettings.Properties.Backend.Request.Headers).To(ContainElements(ptr.To("Ocp-Apim-Subscription-Key"), ptr.To("X-Forwarded-For"), ptr.To("Content-Type")))
+			Expect(diagnosticSettings.Properties.Backend.Response.Body.Bytes).To(Equal(ptr.To(int32(0))))
+			Expect(diagnosticSettings.Properties.Backend.Response.Headers).To(ContainElements(ptr.To("Ocp-Apim-Subscription-Key"), ptr.To("X-Forwarded-For"), ptr.To("Content-Type")))
 		})
 	})
 })

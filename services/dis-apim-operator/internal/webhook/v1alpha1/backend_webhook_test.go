@@ -17,9 +17,9 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/utils/ptr"
 
 	apimv1alpha1 "github.com/Altinn/altinn-platform/services/dis-apim-operator/api/v1alpha1"
 	// TODO (user): Add any additional imports if needed
@@ -56,7 +56,7 @@ var _ = Describe("Backend Webhook", func() {
 		})
 		It("Should not add a random string to AzureResourcePrefix if provided", func() {
 			By("simulating a scenario where AzureResourcePrefix is provided")
-			obj.Spec.AzureResourcePrefix = utils.ToPointer("test")
+			obj.Spec.AzureResourcePrefix = ptr.To("test")
 			By("calling the Default method to apply defaults")
 			Expect(defaulter.Default(ctx, obj)).To(Succeed())
 			By("checking that AzureResourcePrefix is not changed")

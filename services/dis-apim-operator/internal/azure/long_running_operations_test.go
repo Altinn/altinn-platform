@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/utils/ptr"
 )
 
 var _ = Describe("Long running operations", func() {
@@ -18,7 +18,7 @@ var _ = Describe("Long running operations", func() {
 		It("should return OperationStatusSucceeded", func() {
 			By("returning 200 res from poller.Poll and true poller.Done")
 			p, err := runtime.NewPoller(&http.Response{StatusCode: http.StatusOK}, runtime.Pipeline{}, &runtime.NewPollerOptions[string]{
-				Response: utils.ToPointer("fake response"),
+				Response: ptr.To("fake response"),
 				Handler: &MockPoller[string]{
 					IsDone: true,
 					PollResult: http.Response{
@@ -33,7 +33,7 @@ var _ = Describe("Long running operations", func() {
 			Expect(res).To(Equal("fake response"))
 			By("returning 202 res from poller.Poll and true poller.Done")
 			p, err = runtime.NewPoller(&http.Response{StatusCode: http.StatusAccepted}, runtime.Pipeline{}, &runtime.NewPollerOptions[string]{
-				Response: utils.ToPointer("fake response"),
+				Response: ptr.To("fake response"),
 				Handler: &MockPoller[string]{
 					IsDone: true,
 					PollResult: http.Response{
@@ -48,7 +48,7 @@ var _ = Describe("Long running operations", func() {
 			Expect(res).To(Equal("fake response"))
 			By("returning 201 res from poller.Poll and true poller.Done")
 			p, err = runtime.NewPoller(&http.Response{StatusCode: http.StatusCreated}, runtime.Pipeline{}, &runtime.NewPollerOptions[string]{
-				Response: utils.ToPointer("fake response"),
+				Response: ptr.To("fake response"),
 				Handler: &MockPoller[string]{
 					IsDone: true,
 					PollResult: http.Response{

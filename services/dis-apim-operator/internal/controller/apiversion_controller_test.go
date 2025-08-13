@@ -20,11 +20,11 @@ import (
 	"context"
 
 	apimv1alpha1 "github.com/Altinn/altinn-platform/services/dis-apim-operator/api/v1alpha1"
-	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 )
 
 var _ = Describe("ApiVersion Controller", func() {
@@ -49,9 +49,14 @@ var _ = Describe("ApiVersion Controller", func() {
 				Spec: apimv1alpha1.ApiVersionSpec{
 					Path: "/test-api",
 					ApiVersionSubSpec: apimv1alpha1.ApiVersionSubSpec{
-						Name:        utils.ToPointer("v1"),
-						Content:     utils.ToPointer(`{"openapi": "3.0.0","info": {"title": "Minimal API v1","version": "1.0.0"},"paths": {}}`),
+						Name:        ptr.To("v1"),
+						Content:     ptr.To(`{"openapi": "3.0.0","info": {"title": "Minimal API v1","version": "1.0.0"},"paths": {}}`),
 						DisplayName: "the default version",
+					},
+					Contact: &apimv1alpha1.APIContactInformation{
+						Name:  ptr.To("Test Contact"),
+						Email: ptr.To("test@example.com"),
+						URL:   ptr.To("https://example.com/contact"),
 					},
 				},
 			}
@@ -65,7 +70,7 @@ var _ = Describe("ApiVersion Controller", func() {
 			By("updating the openapi content in the apiversion if it has changed")
 			Eventually(func(g Gomega) {
 				updatedApiVersion = getUpdatedApiVersion(ctx, typeNamespacedName)
-				updatedApiVersion.Spec.Content = utils.ToPointer(`{"openapi": "3.0.0","info": {"title": "Minimal API v1","version": "1.0.0"},"paths": {"test": "test"}}`)
+				updatedApiVersion.Spec.Content = ptr.To(`{"openapi": "3.0.0","info": {"title": "Minimal API v1","version": "1.0.0"},"paths": {"test": "test"}}`)
 				g.Expect(k8sClient.Update(ctx, &updatedApiVersion)).To(Succeed())
 			}, timeout, interval).Should(Succeed(), "apiVersion content should eventually be updated")
 
@@ -81,12 +86,12 @@ var _ = Describe("ApiVersion Controller", func() {
 			Eventually(func(g Gomega) {
 				updatedApiVersion = getUpdatedApiVersion(ctx, typeNamespacedName)
 				updatedApiVersion.Spec.Policies = &apimv1alpha1.ApiPolicySpec{
-					PolicyContent: utils.ToPointer(`<inbound><base/></inbound>`),
-					PolicyFormat:  utils.ToPointer(apimv1alpha1.PolicyContentFormatXML),
+					PolicyContent: ptr.To(`<inbound><base/></inbound>`),
+					PolicyFormat:  ptr.To(apimv1alpha1.PolicyContentFormatXML),
 				}
 				updatedApiVersion.Spec.Diagnostics = &apimv1alpha1.ApiDiagnosticSpec{
-					LoggerName:         utils.ToPointer("custom-api-logger"),
-					SamplingPercentage: utils.ToPointer(int32(10)),
+					LoggerName:         ptr.To("custom-api-logger"),
+					SamplingPercentage: ptr.To(int32(10)),
 				}
 				g.Expect(k8sClient.Update(ctx, &updatedApiVersion)).To(Succeed())
 			}, timeout, interval).Should(Succeed(), "apiVersion content should eventually be updated")
