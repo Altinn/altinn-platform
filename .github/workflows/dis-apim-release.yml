@@ -1,4 +1,7 @@
-name: Scan/Release Dis Apim Operator Image
+name: Scan/Release Dis Apim Operator Image and Build Kustomize OCI Artifact
+
+env:
+  FLUX_ARTIFACT_NAME: dis/kustomize/dis-apim-operator
 
 on:
   pull_request:
@@ -16,19 +19,62 @@ on:
       - services/dis-apim-operator/**
       - .github/workflows/reusable-image-scan-and-release-ghcr.yml
     tags:
-      - "dis-apim-*"
+      - "dis-apim-v*"
+      - "kustomize-dis-apim-*"
 
 permissions:
   contents: read
   packages: write
+  id-token: write
 
 jobs:
-  build-and-release:
+  build-and-release-image:
     name: Build, scan and release
     uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yml
     with:
       release_latest: true
-      tag_prefix: dis-apim-
       image_name: dis-apim-operator
+      tag_prefix: dis-apim-v
       platforms: "linux/amd64"
       workdir: ./services/dis-apim-operator
+  build-release-flux-oci-latest:
+    name: Build latest from main
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Push latest flux oci image from main
+        uses: ./actions/flux/build-push-image
+        with:
+          workdir: ./services/dis-apim-operator/config
+          image_name: ${{ env.FLUX_ARTIFACT_NAME }}
+          tag: latest
+          azure_subscription_id: ${{ secrets.AZURE_ALTINNACR_SUBSCRIPTION_ID }}
+          azure_app_id: ${{ secrets.AZURE_ALTINNACR_APP_ID }}
+          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+  build-release-flux-oci-release:
+    name: Build release from tag
+    if: startsWith(github.ref, 'refs/tags/kustomize-dis-apim-')
+    environment: flux-release
+    defaults:
+      run:
+        working-directory: ./services/dis-apim-operator/config
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Setup vars
+        id: vars
+        run: |
+          tag=${GITHUB_REF/refs\/tags\/kustomize-dis-apim-/}
+          echo "tag=${tag}" >> ${GITHUB_OUTPUT}
+      - name: Push flux oci image from release tag
+        uses: ./actions/flux/build-push-image
+        with:
+          workdir: ./services/dis-apim-operator/config
+          image_name: ${{ env.FLUX_ARTIFACT_NAME }}
+          tag: ${{ steps.vars.outputs.tag }}
+          azure_subscription_id: ${{ secrets.AZURE_ALTINNACR_SUBSCRIPTION_ID }}
+          azure_app_id: ${{ secrets.AZURE_ALTINNACR_APP_ID }}
+          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
