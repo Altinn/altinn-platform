@@ -1,20 +1,16 @@
-# TODO: change to -production after testing and use prod server
 resource "kubernetes_manifest" "letsencrypt_issuer" {
   manifest = yamldecode(<<EOT
 apiVersion: cert-manager.io/v1
 kind: Issuer
 metadata:
-  name: letsencrypt-staging
+  name: letsencrypt-prod
   namespace: monitoring
 spec:
   acme:
-    # server: https://acme-v02.api.letsencrypt.org/directory
-    server: https://acme-staging-v02.api.letsencrypt.org/directory
-    # Email address used for ACME registration
-    # email: user@example.com
+    server: https://acme-v02.api.letsencrypt.org/directory
     profile: tlsserver
     privateKeySecretRef:
-      name: letsencrypt-staging
+      name: letsencrypt-prod
     solvers:
       - http01:
           ingress:
