@@ -96,7 +96,7 @@ ruler:
 gateway:
   ingress:
     annotations:
-      cert-manager.io/issuer: "letsencrypt-staging" # TODO: change to prod after testing
+      cert-manager.io/issuer: "letsencrypt-prod"
     enabled: true
     ingressClassName: nginx
     hosts:
