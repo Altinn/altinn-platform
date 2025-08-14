@@ -8,10 +8,7 @@ resource "helm_release" "certmanager" {
   chart            = "cert-manager" // jetstack/cert-manager
   version          = "1.18.2"
 
-  set = [
-    {
-      name  = "crds.enabled"
-      value = "true"
-    }
+  values = [
+    "${templatefile("${path.module}/certmanager_values.tftpl", {})}"
   ]
 }
