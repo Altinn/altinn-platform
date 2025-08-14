@@ -7,4 +7,7 @@ resource "helm_release" "ingress_nginx" {
   repository       = "https://kubernetes.github.io/ingress-nginx"
   chart            = "ingress-nginx"
   version          = "4.12.5"
+  values = [
+    "${templatefile("${path.module}/ingress-nginx_values.tftpl", {})}"
+  ]
 }
