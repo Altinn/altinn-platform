@@ -196,17 +196,21 @@ func (r *ApiVersionReconciler) deleteApiVersion(ctx context.Context, apiVersion 
 }
 
 func (r *ApiVersionReconciler) handleApiVersionUpdate(ctx context.Context, apiVersion apimv1alpha1.ApiVersion, apimApi apim.APIClientGetResponse) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
 	var err error
 	latestSha := ""
+	shaMatches := true
 	if !ptr.Equal(apiVersion.Spec.ContentFormat, ptr.To(apimv1alpha1.ContentFormatGraphqlLink)) {
 		latestSha, err = utils.Sha256FromContent(ctx, apiVersion.Spec.Content)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to get api spec sha: %w", err)
 		}
+		shaMatches = apiVersion.Status.LastAppliedSpecSha == latestSha
 	}
-
-	if (apiVersion.Status.LastAppliedSpecSha != latestSha) || !apiVersion.MatchesAzureResource(apimApi) {
-		return r.createUpdateApimApi(ctx, apiVersion)
+	apiVersionMatches := apiVersion.MatchesAzureResource(apimApi)
+	if !shaMatches || !apiVersionMatches {
+		logger.Info(fmt.Sprintf("API version %s has changed, updating shaMatches: %t, apiVersionMatches: %t", apiVersion.GetApiVersionAzureFullName(), shaMatches, apiVersionMatches))
+		return r.createUpdateApimApiVersion(ctx, apiVersion)
 	}
 	if apiVersion.Spec.Policies != nil {
 		_, policyErr := r.apimClient.GetApiPolicy(ctx, apiVersion.GetApiVersionAzureFullName(), nil)
@@ -239,10 +243,10 @@ func (r *ApiVersionReconciler) handleApiVersionUpdate(ctx context.Context, apiVe
 	return ctrl.Result{RequeueAfter: DEFAULT_REQUE_TIME}, nil
 }
 
-func (r *ApiVersionReconciler) createUpdateApimApi(ctx context.Context, apiVersion apimv1alpha1.ApiVersion) (ctrl.Result, error) {
+func (r *ApiVersionReconciler) createUpdateApimApiVersion(ctx context.Context, apiVersion apimv1alpha1.ApiVersion) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	resumeToken := apiVersion.Status.ResumeToken
-	logger.Info("Creating or updating API")
+	logger.Info("Creating or updating API Version", "Resumetoken", resumeToken)
 	apimApiParams := apiVersion.ToAzureCreateOrUpdateParameter()
 	poller, err := r.apimClient.CreateUpdateApi(
 		ctx,
@@ -286,7 +290,15 @@ func (r *ApiVersionReconciler) createUpdateApimApi(ctx context.Context, apiVersi
 		logger.Info("Operation completed")
 		apiVersion.Status.ResumeToken = ""
 		apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateSucceeded
-		apiVersion.Status.LastAppliedSpecSha, err = utils.Sha256FromContent(ctx, apiVersion.Spec.Content)
+		if !ptr.Equal(apiVersion.Spec.ContentFormat, ptr.To(apimv1alpha1.ContentFormatGraphqlLink)) {
+			apiVersion.Status.LastAppliedSpecSha, err = utils.Sha256FromContent(ctx, apiVersion.Spec.Content)
+			if err != nil {
+				logger.Error(err, "Failed to get spec sha")
+				return ctrl.Result{}, err
+			}
+		} else {
+			apiVersion.Status.LastAppliedSpecSha = ""
+		}
 		if apiVersion.Spec.Policies != nil {
 			apiVersion.Status.LastAppliedPolicyBase64, err = utils.Base64FromContent(ctx, apiVersion.Spec.Policies.PolicyContent)
 		}

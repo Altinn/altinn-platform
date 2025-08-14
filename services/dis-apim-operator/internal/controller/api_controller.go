@@ -63,7 +63,6 @@ type ApiReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.19.0/pkg/reconcile
 func (r *ApiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-	logger.Info("Reconciling Api")
 	var api apimv1alpha1.Api
 	if err := r.Get(ctx, req.NamespacedName, &api); err != nil {
 		if client.IgnoreNotFound(err) != nil {
