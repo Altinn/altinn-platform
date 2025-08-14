@@ -32,6 +32,17 @@ var _ = Describe("GeneratePolicyFromTemplate", func() {
 		})
 	})
 
+	Context("handles quotes and spaces", func() {
+		It("should generate the correct policy", func() {
+			expected := `Hello, "World"!`
+			templateContent := `Hello, "{{ .Name }}"!`
+			data := map[string]string{"Name": "World"}
+			result, err := GeneratePolicyFromTemplate(templateContent, data)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal(expected))
+		})
+	})
+
 	Context("with template missing data", func() {
 		It("should return an error", func() {
 			expected := ""

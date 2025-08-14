@@ -294,10 +294,8 @@ func (a *ApiVersion) MatchesAzureResource(current apim.APIClientGetResponse) boo
 		}
 	}
 	if a.Spec.Path != ptr.Deref(current.Properties.Path, "") ||
-		!ptr.Equal(a.Spec.ApiType.AzureApiType(), current.Properties.APIType) ||
 		!ptr.Equal(a.Spec.Name, current.Properties.APIVersion) ||
 		a.Spec.DisplayName != ptr.Deref(current.Properties.DisplayName, "") ||
-		a.Spec.Description != ptr.Deref(current.Properties.Description, "") ||
 		!ptr.Equal(a.Spec.ServiceUrl, current.Properties.ServiceURL) ||
 		!ptr.Equal(a.Spec.SubscriptionRequired, current.Properties.SubscriptionRequired) ||
 		!protocolsEqual(ToApimProtocolSlice(a.Spec.Protocols), current.Properties.Protocols) ||

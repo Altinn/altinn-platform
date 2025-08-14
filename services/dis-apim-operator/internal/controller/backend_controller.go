@@ -112,7 +112,6 @@ func (r *BackendReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		logger.Info("Backend updated")
 		return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 	}
-	logger.Info("Backend matches actual state")
 	orig := backend.DeepCopy()
 	patch := client.MergeFrom(orig)
 	if backend.Status.ProvisioningState != apimv1alpha1.BackendProvisioningStateSucceeded || backend.Status.BackendID != *azBackend.ID {
