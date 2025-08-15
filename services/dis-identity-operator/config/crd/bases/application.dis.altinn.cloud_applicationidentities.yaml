@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.17.2
+    controller-gen.kubebuilder.io/version: v0.18.0
   name: applicationidentities.application.dis.altinn.cloud
 spec:
   group: application.dis.altinn.cloud
@@ -25,7 +25,7 @@ spec:
     schema:
       openAPIV3Schema:
         description: ApplicationIdentity is the Schema for the applicationidentities
-          API.
+          API
         properties:
           apiVersion:
             description: |-
@@ -45,7 +45,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: ApplicationIdentitySpec defines the desired state of ApplicationIdentity.
+            description: spec defines the desired state of ApplicationIdentity
             properties:
               azureAudiences:
                 default:
@@ -64,7 +64,7 @@ spec:
                 type: object
             type: object
           status:
-            description: ApplicationIdentityStatus defines the observed state of ApplicationIdentity.
+            description: status defines the observed state of ApplicationIdentity
             properties:
               azureAudiences:
                 description: AzureAudiences list of audiences that can appear in the
@@ -142,6 +142,8 @@ spec:
                 description: PrincipalID is the ID of the managed identity in Azure.
                 type: string
             type: object
+        required:
+        - spec
         type: object
     served: true
     storage: true

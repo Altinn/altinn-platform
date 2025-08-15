@@ -23,7 +23,7 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// ApplicationIdentitySpec defines the desired state of ApplicationIdentity.
+// ApplicationIdentitySpec defines the desired state of ApplicationIdentity
 type ApplicationIdentitySpec struct {
 	// AzureAudiences list of audiences that can appear in the issued token from Azure. Defaults to: [api://AzureADTokenExchange]
 	// +kubebuilder:validation:Optional
@@ -69,18 +69,26 @@ const (
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].reason"
 
-// ApplicationIdentity is the Schema for the applicationidentities API.
+// ApplicationIdentity is the Schema for the applicationidentities API
 type ApplicationIdentity struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.TypeMeta `json:",inline"`
 
-	Spec   ApplicationIdentitySpec   `json:"spec,omitempty"`
-	Status ApplicationIdentityStatus `json:"status,omitempty"`
+	// metadata is a standard object metadata
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty,omitzero"`
+
+	// spec defines the desired state of ApplicationIdentity
+	// +required
+	Spec ApplicationIdentitySpec `json:"spec"`
+
+	// status defines the observed state of ApplicationIdentity
+	// +optional
+	Status ApplicationIdentityStatus `json:"status,omitempty,omitzero"`
 }
 
 // +kubebuilder:object:root=true
 
-// ApplicationIdentityList contains a list of ApplicationIdentity.
+// ApplicationIdentityList contains a list of ApplicationIdentity
 type ApplicationIdentityList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
