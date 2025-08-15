@@ -19,7 +19,7 @@ destinations:
 clusterEvents:
   enabled: true
   collector: alloy-logs
-  # namespaces:
+  namespaces: ${jsonencode(namespaces)}
 
 nodeLogs:
   enabled: false
@@ -28,7 +28,7 @@ podLogs:
   enabled: true
   gatherMethod: kubernetesApi
   collector: alloy-logs
-  # namespaces:
+  namespaces: ${jsonencode(namespaces)}
 
 # Collectors
 alloy-singleton:

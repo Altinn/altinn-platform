@@ -15,6 +15,7 @@ resource "helm_release" "grafana_k8s_monitoring" {
       "${path.module}/k6_tests_rg_grafana_k8s_monitoring_values.tftpl",
       {
         cluster_name = "${azurerm_kubernetes_cluster.k6tests.name}",
+        namespaces   = toset([for v in var.k8s_rbac : v["namespace"]])
       }
     )}"
   ]
