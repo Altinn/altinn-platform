@@ -14,27 +14,27 @@ import (
 var _ = Describe("Utils", func() {
 	Context("isUrl", func() {
 		It("should return true for valid URLs", func() {
-			Expect(isUrl("http://example.com")).To(BeTrue())
-			Expect(isUrl("https://example.com")).To(BeTrue())
-			Expect(isUrl("http://example.com:8080")).To(BeTrue())
+			Expect(isURL("http://example.com")).To(BeTrue())
+			Expect(isURL("https://example.com")).To(BeTrue())
+			Expect(isURL("http://example.com:8080")).To(BeTrue())
 		})
 
 		It("should return false for invalid URLs", func() {
-			Expect(isUrl("example.com")).To(BeFalse())
-			Expect(isUrl("/example/com")).To(BeFalse())
-			Expect(isUrl("ftp://example.com")).To(BeFalse())
-			Expect(isUrl("http://")).To(BeFalse())
+			Expect(isURL("example.com")).To(BeFalse())
+			Expect(isURL("/example/com")).To(BeFalse())
+			Expect(isURL("ftp://example.com")).To(BeFalse())
+			Expect(isURL("http://")).To(BeFalse())
 		})
 	})
 
-	Context("getContentUrl", func() {
+	Context("getContentURL", func() {
 		It("should return content for a valid URL", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				_, _ = fmt.Fprint(w, "test content")
 			}))
 			defer server.Close()
 
-			resp, err := getContentUrl(context.Background(), server.URL)
+			resp, err := getContentURL(context.Background(), server.URL)
 			Expect(err).NotTo(HaveOccurred())
 			defer closeIgnoreError(resp.Body)
 
@@ -44,7 +44,7 @@ var _ = Describe("Utils", func() {
 		})
 
 		It("should return an error for an invalid URL", func() {
-			_, err := getContentUrl(context.Background(), "http://invalid-url")
+			_, err := getContentURL(context.Background(), "http://nonexistent.invalid")
 			Expect(err).To(HaveOccurred())
 		})
 
@@ -55,7 +55,7 @@ var _ = Describe("Utils", func() {
 			}))
 			defer server.Close()
 
-			_, err := getContentUrl(context.Background(), server.URL)
+			_, err := getContentURL(context.Background(), server.URL)
 			Expect(err).To(HaveOccurred())
 		})
 		It("should return an error for non-200 status codes", func() {
@@ -64,7 +64,7 @@ var _ = Describe("Utils", func() {
 			}))
 			defer server.Close()
 
-			_, err := getContentUrl(context.Background(), server.URL)
+			_, err := getContentURL(context.Background(), server.URL)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unexpected status code 404"))
 		})

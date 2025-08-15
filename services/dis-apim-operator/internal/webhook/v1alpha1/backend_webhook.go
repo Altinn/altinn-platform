@@ -57,7 +57,7 @@ type BackendCustomDefaulter struct {
 var _ webhook.CustomDefaulter = &BackendCustomDefaulter{}
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind Backend.
-func (d *BackendCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
+func (d *BackendCustomDefaulter) Default(_ context.Context, obj runtime.Object) error {
 	backend, ok := obj.(*apimv1alpha1.Backend)
 
 	if !ok {

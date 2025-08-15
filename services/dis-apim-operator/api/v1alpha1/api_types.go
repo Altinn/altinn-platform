@@ -90,7 +90,7 @@ type Api struct {
 
 // +kubebuilder:object:root=true
 
-// ApiList contains a list of Api.
+// ApiList contains a list of Api
 type ApiList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
