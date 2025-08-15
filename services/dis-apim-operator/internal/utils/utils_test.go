@@ -14,16 +14,16 @@ import (
 var _ = Describe("Utils", func() {
 	Context("isUrl", func() {
 		It("should return true for valid URLs", func() {
-			Expect(isUrl("http://example.com")).To(BeTrue())
-			Expect(isUrl("https://example.com")).To(BeTrue())
-			Expect(isUrl("http://example.com:8080")).To(BeTrue())
+			Expect(isURL("http://example.com")).To(BeTrue())
+			Expect(isURL("https://example.com")).To(BeTrue())
+			Expect(isURL("http://example.com:8080")).To(BeTrue())
 		})
 
 		It("should return false for invalid URLs", func() {
-			Expect(isUrl("example.com")).To(BeFalse())
-			Expect(isUrl("/example/com")).To(BeFalse())
-			Expect(isUrl("ftp://example.com")).To(BeFalse())
-			Expect(isUrl("http://")).To(BeFalse())
+			Expect(isURL("example.com")).To(BeFalse())
+			Expect(isURL("/example/com")).To(BeFalse())
+			Expect(isURL("ftp://example.com")).To(BeFalse())
+			Expect(isURL("http://")).To(BeFalse())
 		})
 	})
 
@@ -44,7 +44,7 @@ var _ = Describe("Utils", func() {
 		})
 
 		It("should return an error for an invalid URL", func() {
-			_, err := getContentURL(context.Background(), "http://invalid-url")
+			_, err := getContentURL(context.Background(), "http://nonexistent.invalid")
 			Expect(err).To(HaveOccurred())
 		})
 

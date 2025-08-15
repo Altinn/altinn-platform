@@ -8,7 +8,7 @@ import (
 )
 
 // Sha256FromUrlContent returns the SHA256 hash of the content at the given URL.
-func sha256FromUrlContent(ctx context.Context, url string) (string, error) {
+func sha256FromURLContent(ctx context.Context, url string) (string, error) {
 	resp, err := getContentURL(ctx, url)
 	if err != nil {
 		return "", err
@@ -27,9 +27,9 @@ func Sha256FromContent(ctx context.Context, content *string) (string, error) {
 	if content == nil {
 		return "", nil
 	}
-	if isUrl(*content) {
+	if isURL(*content) {
 
-		return sha256FromUrlContent(ctx, *content)
+		return sha256FromURLContent(ctx, *content)
 	}
 	h := sha256.New()
 	h.Write([]byte(*content))

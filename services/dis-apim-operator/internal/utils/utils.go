@@ -17,7 +17,7 @@ var httpClient = &http.Client{
 	},
 }
 
-func isUrl(s string) bool {
+func isURL(s string) bool {
 	u, err := url.Parse(s)
 	if err != nil {
 		return false

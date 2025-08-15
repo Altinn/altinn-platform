@@ -7,7 +7,7 @@ import (
 )
 
 // Base64FromUrlContent returns the base64 encoding of the content at the given URL.
-func base64FromUrlContent(ctx context.Context, url string) (string, error) {
+func base64FromURLContent(ctx context.Context, url string) (string, error) {
 	resp, err := getContentURL(ctx, url)
 	if err != nil {
 		return "", err
@@ -26,8 +26,8 @@ func Base64FromContent(ctx context.Context, content *string) (string, error) {
 	if content == nil {
 		return "", nil
 	}
-	if isUrl(*content) {
-		return base64FromUrlContent(ctx, *content)
+	if isURL(*content) {
+		return base64FromURLContent(ctx, *content)
 	}
 	return base64.StdEncoding.EncodeToString([]byte(*content)), nil
 }
