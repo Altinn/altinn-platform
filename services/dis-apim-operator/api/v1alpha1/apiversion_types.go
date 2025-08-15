@@ -221,7 +221,7 @@ type ApiVersion struct {
 
 // +kubebuilder:object:root=true
 
-// ApiVersionList contains a list of ApiVersion.
+// ApiVersionList contains a list of ApiVersion
 type ApiVersionList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

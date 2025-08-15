@@ -25,8 +25,8 @@ func isUrl(s string) bool {
 	return (u.Scheme == "http" || u.Scheme == "https") && len(u.Host) > 0
 }
 
-func getContentUrl(ctx context.Context, url string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+func getContentUrl(ctx context.Context, urlInput string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlInput, nil)
 	if err != nil {
 		return nil, err
 	}

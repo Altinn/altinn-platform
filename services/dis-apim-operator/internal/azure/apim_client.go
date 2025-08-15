@@ -31,25 +31,25 @@ type ApimClientConfig struct {
 }
 
 // NewAPIMClient creates a new APIMClient
-func NewAPIMClient(config *ApimClientConfig) (*APIMClient, error) {
-	credential, err := azidentity.NewDefaultAzureCredential(config.ClientOptions)
+func NewAPIMClient(clientConfig *ApimClientConfig) (*APIMClient, error) {
+	credential, err := azidentity.NewDefaultAzureCredential(clientConfig.ClientOptions)
 	if err != nil {
 		return nil, err
 	}
-	clientFactory, err := apim.NewClientFactory(config.SubscriptionId, credential, config.FactoryOptions)
+	clientFactory, err := apim.NewClientFactory(clientConfig.SubscriptionId, credential, clientConfig.FactoryOptions)
 	if err != nil {
 		return nil, err
 	}
 	return &APIMClient{
-		ApimClientConfig:  *config,
+		ApimClientConfig:  *clientConfig,
 		apimClientFactory: clientFactory,
 	}, nil
 }
 
 // NewApimClientWithFactory creates a new APIMClient with a given client factory
-func NewApimClientWithFactory(config *ApimClientConfig, factory *apim.ClientFactory) *APIMClient {
+func NewApimClientWithFactory(clientConfig *ApimClientConfig, factory *apim.ClientFactory) *APIMClient {
 	return &APIMClient{
-		ApimClientConfig:  *config,
+		ApimClientConfig:  *clientConfig,
 		apimClientFactory: factory,
 	}
 }

@@ -88,7 +88,7 @@ type Backend struct {
 
 // +kubebuilder:object:root=true
 
-// BackendList contains a list of Backend.
+// BackendList contains a list of Backend
 type BackendList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

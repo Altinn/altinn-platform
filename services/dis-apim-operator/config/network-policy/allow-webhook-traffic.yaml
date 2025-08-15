@@ -13,6 +13,7 @@ spec:
   podSelector:
     matchLabels:
       control-plane: controller-manager
+      app.kubernetes.io/name: dis-apim-operator
   policyTypes:
     - Ingress
   ingress:
