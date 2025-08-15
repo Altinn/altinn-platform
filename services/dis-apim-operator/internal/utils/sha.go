@@ -9,7 +9,7 @@ import (
 
 // Sha256FromUrlContent returns the SHA256 hash of the content at the given URL.
 func sha256FromUrlContent(ctx context.Context, url string) (string, error) {
-	resp, err := getContentUrl(ctx, url)
+	resp, err := getContentURL(ctx, url)
 	if err != nil {
 		return "", err
 	}

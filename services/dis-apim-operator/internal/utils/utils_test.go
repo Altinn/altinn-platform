@@ -27,14 +27,14 @@ var _ = Describe("Utils", func() {
 		})
 	})
 
-	Context("getContentUrl", func() {
+	Context("getContentURL", func() {
 		It("should return content for a valid URL", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				_, _ = fmt.Fprint(w, "test content")
 			}))
 			defer server.Close()
 
-			resp, err := getContentUrl(context.Background(), server.URL)
+			resp, err := getContentURL(context.Background(), server.URL)
 			Expect(err).NotTo(HaveOccurred())
 			defer closeIgnoreError(resp.Body)
 
@@ -44,7 +44,7 @@ var _ = Describe("Utils", func() {
 		})
 
 		It("should return an error for an invalid URL", func() {
-			_, err := getContentUrl(context.Background(), "http://invalid-url")
+			_, err := getContentURL(context.Background(), "http://invalid-url")
 			Expect(err).To(HaveOccurred())
 		})
 
@@ -55,7 +55,7 @@ var _ = Describe("Utils", func() {
 			}))
 			defer server.Close()
 
-			_, err := getContentUrl(context.Background(), server.URL)
+			_, err := getContentURL(context.Background(), server.URL)
 			Expect(err).To(HaveOccurred())
 		})
 		It("should return an error for non-200 status codes", func() {
@@ -64,7 +64,7 @@ var _ = Describe("Utils", func() {
 			}))
 			defer server.Close()
 
-			_, err := getContentUrl(context.Background(), server.URL)
+			_, err := getContentURL(context.Background(), server.URL)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unexpected status code 404"))
 		})

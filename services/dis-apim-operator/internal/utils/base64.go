@@ -8,7 +8,7 @@ import (
 
 // Base64FromUrlContent returns the base64 encoding of the content at the given URL.
 func base64FromUrlContent(ctx context.Context, url string) (string, error) {
-	resp, err := getContentUrl(ctx, url)
+	resp, err := getContentURL(ctx, url)
 	if err != nil {
 		return "", err
 	}
