@@ -1,4 +1,6 @@
 name: Build and Release send-ci-cd-trace Action
+permissions:
+  contents: read
 
 env:
   WORKDIR: actions/send-ci-cd-trace
@@ -7,9 +9,9 @@ on:
   workflow_dispatch:
     inputs:
       git_tag:
-        description: 'Tag name for the release'
+        description: "Tag name for the release"
         required: true
-        default: '0.0.1'
+        default: "0.0.1"
 
 jobs:
   build-and-release:
@@ -24,12 +26,12 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: '${{ env.WORKDIR }}/package-lock.json'
- 
+          cache-dependency-path: "${{ env.WORKDIR }}/package-lock.json"
+
       - name: Install Dependencies
         run: npm ci --ignore-scripts
         working-directory: ${{ env.WORKDIR }}
-    
+
       - name: Build the Action
         run: npm run build
         working-directory: ${{ env.WORKDIR }}

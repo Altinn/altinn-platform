@@ -1,4 +1,7 @@
 name: Scan and Release Docker image to GHCR
+permissions:
+  contents: read
+  packages: write
 
 on:
   workflow_call:
