@@ -1,5 +1,5 @@
 resource "azurerm_monitor_data_collection_endpoint" "amw" {
-  count               = var.azurerm_kubernetes_cluster_id != "" ? 1 : 0
+  count               = var.azurerm_kubernetes_cluster_id != null ? 1 : 0
   name                = "${azurerm_monitor_workspace.obs.name}-mdce"
   resource_group_name = azurerm_resource_group.obs.name
   location            = azurerm_resource_group.obs.location
@@ -7,7 +7,7 @@ resource "azurerm_monitor_data_collection_endpoint" "amw" {
 }
 
 resource "azurerm_monitor_data_collection_rule" "amw" {
-  count                       = var.azurerm_kubernetes_cluster_id != "" ? 1 : 0
+  count                       = var.azurerm_kubernetes_cluster_id != null ? 1 : 0
   name                        = "${azurerm_monitor_workspace.obs.name}-mdcr"
   resource_group_name         = azurerm_resource_group.obs.name
   location                    = azurerm_resource_group.obs.location
@@ -41,7 +41,7 @@ resource "azurerm_monitor_data_collection_rule" "amw" {
 }
 
 resource "azurerm_monitor_data_collection_rule_association" "amw" {
-  count                   = var.azurerm_kubernetes_cluster_id != "" ? 1 : 0
+  count                   = var.azurerm_kubernetes_cluster_id != null ? 1 : 0
   name                    = "${azurerm_monitor_workspace.obs.name}-mdcra"
   target_resource_id      = var.azurerm_kubernetes_cluster_id
   data_collection_rule_id = azurerm_monitor_data_collection_rule.amw[0].id

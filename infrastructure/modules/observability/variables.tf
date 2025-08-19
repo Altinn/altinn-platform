@@ -72,6 +72,6 @@ variable "oidc_issuer_url" {
 
 variable "azurerm_kubernetes_cluster_id" {
   type        = string
-  default     = ""
+  default     = null
   description = "AKS cluster resource id"
 }
