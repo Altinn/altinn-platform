@@ -115,6 +115,7 @@ jobs:
           fi
 
       - name: Terraform Plan Foundational Module
+        id: terraform_partial_plan
         uses: Altinn/altinn-platform/actions/terraform/plan-only@ee2c9590639e882a4b87f9da9c71c9ab9bf25053 # main
         if: contains(github.event.pull_request.labels.*.name, 'partial-plan-apply')
         with:
@@ -146,8 +147,8 @@ jobs:
           FMT_STEP_OUTCOME: ${{steps.terraform_init.outputs.fmt_step_outcome}}
           INIT_STEP_OUTPUT: ${{steps.terraform_init.outputs.init_step_stdout}}
           INIT_STEP_OUTCOME: ${{steps.terraform_init.outputs.init_step_outcome}}
-          PLAN_STEP_EXITCODE: ${{steps.terraform_plan.outputs.plan_step_exitcode}}
-          PLAN_STEP_OUTCOME: ${{steps.terraform_plan.outputs.plan_step_outcome}}
+          PLAN_STEP_EXITCODE: "${{ steps.terraform_plan.outputs.plan_step_exitcode != '' && steps.terraform_plan.outputs.plan_step_exitcode || steps.terraform_partial_plan.outputs.plan_step_exitcode }}"
+          PLAN_STEP_OUTCOME: "${{ steps.terraform_plan.outputs.plan_step_outcome != '' && steps.terraform_plan.outputs.plan_step_outcome || steps.terraform_partial_plan.outputs.plan_step_outcome }}"
 
   deploy:
     name: Deploy
