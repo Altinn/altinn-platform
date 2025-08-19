@@ -1,4 +1,6 @@
 name: Vulncheck
+permissions:
+  contents: read
 
 on:
   push:
