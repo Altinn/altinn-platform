@@ -1,7 +1,7 @@
 resource "azurerm_storage_account" "loki" {
   name                            = "k6clusterlokisa${var.suffix}"
-  resource_group_name             = azurerm_resource_group.k6tests_rg.name
-  location                        = azurerm_resource_group.k6tests_rg.location
+  resource_group_name             = var.resource_group_name
+  location                        = var.resource_group_location
   account_tier                    = "Standard"
   account_replication_type        = "LRS"
   allow_nested_items_to_be_public = false
@@ -32,7 +32,7 @@ resource "azuread_application_federated_identity_credential" "loki" {
   application_id = azuread_application.loki.id
   display_name   = "adminservicestest-k6tests-loki${var.suffix}"
   audiences      = ["api://AzureADTokenExchange"]
-  issuer         = azurerm_kubernetes_cluster.k6tests.oidc_issuer_url
+  issuer         = var.oidc_issuer_url
   subject        = "system:serviceaccount:monitoring:loki"
 }
 
@@ -57,7 +57,7 @@ resource "helm_release" "loki" {
 
   values = [
     "${templatefile(
-      "${path.module}/k6_tests_rg_loki_values.tftpl",
+      "${path.module}/loki_values.tftpl",
       {
         account_name          = "${azurerm_storage_account.loki.name}",
         chunks_container_name = "${azurerm_storage_container.loki_chunks.name}",

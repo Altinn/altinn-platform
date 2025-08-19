@@ -33,10 +33,11 @@ locals {
       sp_group  = "b22b612d-9dc5-4f8b-8816-e551749bd19c"
     }
   }
-  namespaces                  = toset([for v in local.k8s_rbac : v["namespace"]])
-  k6tests_cluster_name        = module.foundational.k6tests_cluster_name
-  k6tests_resource_group_name = module.foundational.k6tests_resource_group_name
-  oidc_issuer_url             = data.azurerm_kubernetes_cluster.k6tests.oidc_issuer_url
+  namespaces                      = toset([for v in local.k8s_rbac : v["namespace"]])
+  k6tests_cluster_name            = module.foundational.k6tests_cluster_name
+  k6tests_resource_group_name     = module.foundational.k6tests_resource_group_name
+  k6tests_resource_group_location = module.foundational.k6tests_resource_group_location
+  oidc_issuer_url                 = data.azurerm_kubernetes_cluster.k6tests.oidc_issuer_url
 
   dce_metrics_ingestion_endpoint = data.azurerm_monitor_data_collection_endpoint.k6tests.metrics_ingestion_endpoint
 
