@@ -21,7 +21,9 @@ module "services" {
   depends_on = [module.foundational]
   source     = "./modules/services"
 
-  tenant_id = local.tenant_id
+  tenant_id               = local.tenant_id
+  resource_group_name     = local.k6tests_resource_group_name
+  resource_group_location = local.k6tests_resource_group_location
 
   k8s_rbac = local.k8s_rbac
 
