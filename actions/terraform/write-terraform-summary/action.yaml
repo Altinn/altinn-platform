@@ -46,14 +46,25 @@ runs:
       if: always()
       env:
         VALIDATE_OUTPUT: ${{ env.VALIDATE_STEP_OUTPUT }}
+        TERRAFORM_PLAN: ${{ env.PLAN }}
+        PLAN_STEP_OUTCOME: ${{ env.PLAN_STEP_OUTCOME }}
+        TERRAFORM_INIT_OUTCOME: ${{ env.INIT_STEP_OUTCOME }}
+        TERRAFORM_FMT_OUTCOME: ${{ env.FMT_STEP_OUTCOME }}
+        TERRAFORM_VALIDATE_OUTCOME: ${{ env.VALIDATE_STEP_OUTCOME }}
+        TERRAFORM_STATE_FILE: ${{ env.TF_STATE_FILE }}
+        ARTIFACT_KEY: ${{ env.ARTIFACT_KEY }}
+        OIDC_TYPE: ${{ inputs.oidc_type }}
+        OIDC_VALUE: ${{ inputs.oidc_value }}
+        EVENT_NAME: ${{ github.event_name }}
+        ACTOR: ${{ github.actor }}
       with:
         github-token: ${{ inputs.gh_token }}
         script: |
           // 1. Prep the output
-          const output = `# Terraform ${{ inputs.oidc_type }} ${{ inputs.oidc_value }}
-          #### Initialization ⚙️\`${{ env.INIT_STEP_OUTCOME }}\`
-          #### Format and Style 🖌\`${{ env.FMT_STEP_OUTCOME }}\`
-          #### Validation 🤖\`${{ env.VALIDATE_STEP_OUTCOME }}\`
+          const output = `# Terraform \`${process.env.OIDC_TYPE}\` \`${process.env.OIDC_VALUE}\`
+          #### Initialization ⚙️\`${process.env.TERRAFORM_INIT_OUTCOME}\`
+          #### Format and Style 🖌\`${process.env.TERRAFORM_FMT_OUTCOME}\`
+          #### Validation 🤖\`${process.env.TERRAFORM_VALIDATE_OUTCOME}\`
           <details><summary>Validation Output</summary>
 
           \`\`\`\n
@@ -62,23 +73,23 @@ runs:
 
           </details>
 
-          #### Plan 📖\`${{ env.PLAN_STEP_OUTCOME }}\`
+          #### Plan 📖\`${process.env.PLAN_STEP_OUTCOME}\`
 
           <details><summary>Show Plan</summary>
 
           \`\`\`\n
-          ${{ env.PLAN }}
+          ${process.env.TERRAFORM_PLAN}
           \`\`\`
 
           </details>
 
           | Context | Values |
           | - | - |
-          | Pusher | @${{ github.actor }} |
-          | Action | \`${{ github.event_name }}\` |
+          | Pusher | @\`${process.env.ACTOR}\` |
+          | Action | \`${process.env.EVENT_NAME}\` |
           | Working Directory | \`${{ inputs.working_directory }}\` |
-          | State | \`${{ env.TF_STATE_FILE }}\` |
-          | Artifact | \`${{ env.ARTIFACT_KEY }}\` |`;
+          | State | \`${process.env.TERRAFORM_STATE_FILE}\` |
+          | Artifact | \`${process.env.ARTIFACT_KEY}\` |`;
 
           // 2. Set the output variable
           const fs = require('fs');
@@ -120,8 +131,20 @@ runs:
       uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
       if: steps.issue_number.outputs.result != 'null' && env.PLAN_STEP_EXITCODE == 2
       env:
-        ISSUE_NUMBER: ${{ steps.issue_number.outputs.result }}
         VALIDATE_OUTPUT: ${{ env.VALIDATE_STEP_OUTPUT }}
+        TERRAFORM_PLAN: ${{ env.PLAN }}
+        PLAN_STEP_OUTCOME: ${{ env.PLAN_STEP_OUTCOME }}
+        TERRAFORM_INIT_OUTCOME: ${{ env.INIT_STEP_OUTCOME }}
+        TERRAFORM_FMT_OUTCOME: ${{ env.FMT_STEP_OUTCOME }}
+        TERRAFORM_VALIDATE_OUTCOME: ${{ env.VALIDATE_STEP_OUTCOME }}
+        TERRAFORM_STATE_FILE: ${{ env.TF_STATE_FILE }}
+        ARTIFACT_KEY: ${{ env.ARTIFACT_KEY }}
+        EVENT_NAME: ${{ github.event_name }}
+        OIDC_TYPE: ${{ inputs.oidc_type  }}
+        OIDC_VALUE: ${{ inputs.oidc_value }}
+        WORKING_DIRECTORY: ${{ inputs.working_directory }}
+        ACTOR: ${{ github.actor }}
+        ISSUE_NUMBER: ${{ steps.issue_number.outputs.result }}
       with:
         github-token: ${{ inputs.gh_token }}
         script: |
@@ -132,14 +155,14 @@ runs:
             issue_number: ${{ env.ISSUE_NUMBER }},
           })
           const botComment = comments.find(comment => {
-            return comment.user.type === 'Bot' && comment.body.includes('Terraform ${{ inputs.oidc_type }} ${{ inputs.oidc_value }}')
+            return comment.user.type === 'Bot' && comment.body.includes(`Terraform ${process.env.OIDC_TYPE} ${process.env.OIDC_VALUE}`)
           })
 
           // 2. Prepare format of the comment
-          const output = `# Terraform ${{ inputs.oidc_type }} ${{ inputs.oidc_value }}
-          #### Format and Style 🖌\`${{ env.FMT_STEP_OUTCOME }}\`
-          #### Initialization ⚙️\`${{ env.INIT_STEP_OUTCOME }}\`
-          #### Validation 🤖\`${{ env.VALIDATE_STEP_OUTCOME }}\`
+          const output = `# Terraform \`${process.env.OIDC_TYPE}\` \`${process.env.OIDC_VALUE}\`
+          #### Initialization ⚙️\`${process.env.TERRAFORM_INIT_OUTCOME}\`
+          #### Format and Style 🖌\`${process.env.TERRAFORM_FMT_OUTCOME}\`
+          #### Validation 🤖\`${process.env.TERRAFORM_VALIDATE_OUTCOME}\`
           <details><summary>Validation Output</summary>
 
           \`\`\`\n
@@ -148,23 +171,23 @@ runs:
 
           </details>
 
-          #### Plan 📖\`${{ env.PLAN_STEP_OUTCOME }}\`
+          #### Plan 📖\`${process.env.PLAN_STEP_OUTCOME}\`
 
           <details><summary>Show Plan</summary>
 
           \`\`\`\n
-          ${{ env.PLAN }}
+          ${process.env.TERRAFORM_PLAN}
           \`\`\`
 
           </details>
 
           | Context | Values |
           | - | - |
-          | Pusher | @${{ github.actor }} |
-          | Action | \`${{ github.event_name }}\` |
-          | Working Directory | \`${{ inputs.working_directory }}\` |
-          | State File | \`${{ env.TF_STATE_FILE }}\` |
-          | Plan File | \`${{ env.ARTIFACT_KEY }}\``;
+          | Pusher | @\`${process.env.ACTOR}\` |
+          | Action | \`${process.env.EVENT_NAME}\` |
+          | Working Directory | \`${process.env.WORKING_DIRECTORY}\` |
+          | State File | \`${process.env.TERRAFORM_STATE_FILE}\` |
+          | Plan File | \`${process.env.ARTIFACT_KEY}\` |`;
 
           // 3. If we have a comment, update it, otherwise create a new one
           if (botComment) {
