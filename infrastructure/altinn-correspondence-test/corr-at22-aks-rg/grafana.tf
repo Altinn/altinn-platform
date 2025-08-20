@@ -4,9 +4,9 @@ module "grafana" {
   prefix                          = var.team_name
   environment                     = var.environment
   client_config_current_object_id = data.azurerm_client_config.current.object_id
-  monitor_workspace_id = [
-    module.observability.monitor_workspace_id
-  ]
+  monitor_workspace_ids = {
+    "default-obs-workspace" : module.observability.monitor_workspace_id
+  }
   grafana_admin_access = [
     "143ed28a-6e6d-4ca0-8273-eecb9c1665ba", # Altinn-30-Test-Operations
   ]
