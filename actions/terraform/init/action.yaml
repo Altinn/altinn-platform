@@ -84,7 +84,11 @@ runs:
     - name: Terraform Set Logger
       id: logger
       shell: bash
-      run: export TF_LOG="${{ inputs.tf_log_level == '' && 'INFO' || inputs.tf_log_level }}"
+      env:
+        TERRAFORM_LOG_LEVEL: ${{ inputs.tf_log_level }}
+      run: |
+        SAFE_TERRAFORM_LOG_LEVEL=$(echo "${TERRAFORM_LOG_LEVEL:-INFO}" | tr -d '\n')
+        echo "TF_LOG=$SAFE_TERRAFORM_LOG_LEVEL" >> "$GITHUB_ENV"
 
     - name: Terraform Set State File Path
       id: state_file_path_tmp
