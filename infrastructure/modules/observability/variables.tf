@@ -70,8 +70,17 @@ variable "oidc_issuer_url" {
   }
 }
 
+variable "enable_aks_monitoring" {
+  type        = bool
+  description = "Should monitoring of a AKS cluster be enabled. If true azurerm_kubernetes_cluster_id is required."
+}
+
 variable "azurerm_kubernetes_cluster_id" {
   type        = string
-  default     = null
+  default     = ""
   description = "AKS cluster resource id"
+  validation {
+    condition     = var.enable_aks_monitoring == false || (var.enable_aks_monitoring == true && length(var.azurerm_kubernetes_cluster_id) > 0)
+    error_message = "You must provide a value for azurerm_kubernetes_cluster_id when enable_aks_monitoring is true."
+  }
 }
