@@ -80,18 +80,21 @@ runs:
       if: always()
       working-directory: ${{ inputs.working_directory }}
       run: |
-        terraform plan -detailed-exitcode -no-color -input=false -out tfplan.out ${{ inputs.tf_args }} 2>&1 > tfplan.log  && cat tfplan.log || export EC=$?; cat tfplan.log; exit $EC
+        terraform plan -detailed-exitcode -no-color -input=false -out tfplan.out $TERRAFORM_ARGS 2>&1 > tfplan.log  && cat tfplan.log || export EC=$?; cat tfplan.log; exit $EC
       env:
         ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
         ARM_SUBSCRIPTION_ID: ${{ inputs.arm_subscription_id }}
         ARM_TENANT_ID: ${{ inputs.arm_tenant_id }}
         ARM_USE_OIDC: "true"
+        TERRAFORM_ARGS: ${{ inputs.tf_args }}
 
     - name: Artifact Key
       id: artifact_key
       shell: bash
+      env:
+        TERRAFORM_STATE_FILE: ${{ env.TF_STATE_FILE }}
       run: |
-        TF_STATE_FILE=${{ env.TF_STATE_FILE }}
+        TF_STATE_FILE=$TERRAFORM_STATE_FILE
         ARTIFACT_KEY="${TF_STATE_FILE////_}.tfplan"
         echo "ARTIFACT_KEY=$ARTIFACT_KEY" >> $GITHUB_ENV
 
