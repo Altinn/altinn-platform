@@ -52,9 +52,9 @@ variable "location" {
   description = "Default region for resources"
 }
 
-variable "monitor_workspace_id" {
-  type        = list(string)
-  default     = []
+variable "monitor_workspace_ids" {
+  type        = map(string)
+  default     = {}
   description = "List of azure monitor workspaces to connect grafana."
 }
 

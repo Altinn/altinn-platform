@@ -1,5 +1,5 @@
 resource "azapi_resource" "grafana_operator" {
-  count      = var.grafana_endpoint != null && var.grafana_endpoint != "" ? 1 : 0
+  count      = var.enable_grafana_operator ? 1 : 0
   depends_on = [azapi_resource.linkerd]
   type       = "Microsoft.KubernetesConfiguration/fluxConfigurations@2024-11-01"
   name       = "grafana-operator"
