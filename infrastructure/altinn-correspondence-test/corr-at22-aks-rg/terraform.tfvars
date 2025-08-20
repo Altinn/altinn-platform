@@ -1,4 +1,4 @@
-subscription_id = "37bac63a-b964-46b2-8de8-ba93c432ea1f"
+subscription_id = "cc6b5886-36af-4d54-9d30-1b0fffc736d8"
 aks_vnet_address_spaces = [
   "10.203.0.0/20",
   "fd96:20bf:3235::/56"
