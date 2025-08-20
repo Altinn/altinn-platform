@@ -26,19 +26,22 @@ runs:
 
     - name: truncate terraform plan result
       shell: bash
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working_directory }}
+        DELIMITER: ${{ env.DELIMITER }}
       run: |
-        plan=$(cat ${{ inputs.working_directory }}/tfplan.log)
+        plan=$(cat $WORKING_DIRECTORY/tfplan.log)
         original_length=${#plan}
         plan=$(echo "${plan//\`}" | grep -v 'Refreshing state' | tail --bytes 120000)
         new_length=${#plan}
-        echo "PLAN<<${{ env.DELIMITER }}2" >> $GITHUB_ENV
+        echo "PLAN<<${DELIMITER}2" >> $GITHUB_ENV
         echo '[Lines containing Refreshing state removed]' >> $GITHUB_ENV
         if [ $new_length -lt $original_length ]; then
           echo '[Truncated to 120000 bytes! See logoutput for complete plan]' >> $GITHUB_ENV
         fi
         echo "${plan}" >> $GITHUB_ENV
         echo >> $GITHUB_ENV
-        echo "${{ env.DELIMITER }}2" >> $GITHUB_ENV
+        echo "${DELIMITER}2" >> $GITHUB_ENV
 
     - name: Generate Terraform Summary
       id: action_summary
@@ -57,6 +60,7 @@ runs:
         OIDC_VALUE: ${{ inputs.oidc_value }}
         EVENT_NAME: ${{ github.event_name }}
         ACTOR: ${{ github.actor }}
+        WORKING_DIRECTORY: ${{ inputs.working_directory }}
       with:
         github-token: ${{ inputs.gh_token }}
         script: |
@@ -85,15 +89,15 @@ runs:
 
           | Context | Values |
           | - | - |
-          | Pusher | @\`${process.env.ACTOR}\` |
+          | Pusher | @${process.env.ACTOR} |
           | Action | \`${process.env.EVENT_NAME}\` |
-          | Working Directory | \`${{ inputs.working_directory }}\` |
+          | Working Directory | \`${process.env.WORKING_DIRECTORY}\` |
           | State | \`${process.env.TERRAFORM_STATE_FILE}\` |
           | Artifact | \`${process.env.ARTIFACT_KEY}\` |`;
 
           // 2. Set the output variable
           const fs = require('fs');
-          fs.writeFileSync('${{ inputs.working_directory }}/summary.md', output);
+          fs.writeFileSync(`${process.env.WORKING_DIRECTORY}/summary.md`, output);
           core.setOutput('summary', output);
     - name: Write Terraform Summary
       if: always()
@@ -152,7 +156,7 @@ runs:
           const { data: comments } = await github.rest.issues.listComments({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            issue_number: ${{ env.ISSUE_NUMBER }},
+            issue_number: `${process.env.ISSUE_NUMBER}`,
           })
           const botComment = comments.find(comment => {
             return comment.user.type === 'Bot' && comment.body.includes(`Terraform ${process.env.OIDC_TYPE} ${process.env.OIDC_VALUE}`)
@@ -183,7 +187,7 @@ runs:
 
           | Context | Values |
           | - | - |
-          | Pusher | @\`${process.env.ACTOR}\` |
+          | Pusher | @${process.env.ACTOR} |
           | Action | \`${process.env.EVENT_NAME}\` |
           | Working Directory | \`${process.env.WORKING_DIRECTORY}\` |
           | State File | \`${process.env.TERRAFORM_STATE_FILE}\` |
@@ -199,7 +203,7 @@ runs:
             })
           } else {
             github.rest.issues.createComment({
-              issue_number: ${{ env.ISSUE_NUMBER }},
+              issue_number: `${process.env.ISSUE_NUMBER}`,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: output
