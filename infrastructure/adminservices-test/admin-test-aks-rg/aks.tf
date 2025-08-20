@@ -49,4 +49,5 @@ module "aks_resources" {
   grafana_endpoint                 = var.grafana_endpoint
   token_grafana_operator           = var.token_grafana_operator
   grafana_dashboard_release_branch = "main"
+  enable_grafana_operator          = true
 }
