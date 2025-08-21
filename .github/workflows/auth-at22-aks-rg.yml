@@ -64,7 +64,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
 
       - name: Set up Grafana Token
         uses: Altinn/altinn-platform/actions/terraform/azure-app-token@ef7bd56ddb11f200f1c388ed3dba399c7316b7ec # main
@@ -91,7 +91,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
 
       - name: Terraform Apply
         uses: Altinn/altinn-platform/actions/terraform/apply@ef7bd56ddb11f200f1c388ed3dba399c7316b7ec # main
