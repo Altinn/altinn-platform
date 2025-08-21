@@ -1,5 +1,5 @@
 resource "azurerm_resource_group" "aso_rg" {
-  name     = var.azurerm_resource_group_aso_name != "" ? var.azurerm_resource_group_aso_name : "aso-${var.prefix}-${var.environment}-rg"
+  name     = var.azurerm_resource_group_aso_name != "" ? var.azurerm_resource_group_aso_name : "${var.prefix}-${var.environment}-aso-rg"
   location = var.location
   tags     = var.tags
 }
