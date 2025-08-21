@@ -15,6 +15,10 @@
       "runner": {
          "env": [
             {
+               "name": "ENVIRONMENT",
+               "value": "{{ .DeployEnv }}"
+            },
+            {
                "name": "GITHUB_REPOSITORY",
                "value": "octocat/Hello-World"
             },

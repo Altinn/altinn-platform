@@ -41,6 +41,10 @@ local default_env = [
     name: 'TESTID',
     value: unique_name,
   },
+  {
+    name: 'ENVIRONMENT',
+    value: deploy_env,
+  },
 ];
 
 local slo = {
