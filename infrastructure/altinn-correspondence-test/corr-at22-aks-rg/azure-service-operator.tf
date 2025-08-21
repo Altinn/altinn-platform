@@ -1,4 +1,5 @@
 module "azure_service_operator" {
+  depends_on                                 = [module.aks, module.infra-resources]
   source                                     = "../../modules/azure-service-operator"
   prefix                                     = var.team_name
   environment                                = var.environment
