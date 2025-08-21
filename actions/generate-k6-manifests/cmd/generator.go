@@ -279,7 +279,7 @@ func (r K8sManifestGenerator) Generate() {
 				fmt.Printf("\nTo run the test '%s' in '%s' run\n\tkubectl --context k6tests-cluster apply --server-side -f %s", *c.TestRun.Name, c.Environment, filepath.Join(r.DistDirectory, dirName))
 				fmt.Printf("\nTo check the logs run\n\tkubectl --context k6tests-cluster -n %s logs -f --tail=-1 -l \"k6-test=%s,runner=true\"", cf.Namespace, uniqName)
 				fmt.Printf("\nGrafana URL: \n\t%s/%s?orgId=1&var-DS_PROMETHEUS=%s&var-namespace=%s&var-testid=%s&from=%s&to=now&refresh=1m\n\n",
-					"https://altinn-grafana-test-b2b8dpdkcvfuhfd3.eno.grafana.azure.com",
+					"https://grafana.altinn.cloud",
 					grafanaDashboard,
 					"k6tests-amw",
 					cf.Namespace,
