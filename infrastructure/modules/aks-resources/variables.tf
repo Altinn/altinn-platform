@@ -34,9 +34,9 @@ variable "grafana_dashboard_release_branch" {
 }
 
 variable "enable_grafana_operator" {
-  type = bool
+  type        = bool
   description = "Toggle deployment of grafana operator in cluster. If deployed grafana_endpoint must be defined"
-  default = true
+  default     = true
 }
 
 variable "grafana_endpoint" {

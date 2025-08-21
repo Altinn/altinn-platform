@@ -44,7 +44,7 @@ module "aks" {
 }
 
 module "infra-resources" {
-  depends_on                                 = [module.aks, module.observability, module.azure_service_operator]
+  depends_on                                 = [module.aks, module.observability]
   source                                     = "../../modules/aks-resources"
   aks_node_resource_group                    = module.aks.aks_node_resource_group
   azurerm_kubernetes_cluster_id              = module.aks.azurerm_kubernetes_cluster_id

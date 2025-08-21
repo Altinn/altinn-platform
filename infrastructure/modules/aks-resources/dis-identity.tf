@@ -1,8 +1,9 @@
 resource "azapi_resource" "dis_identity_operator" {
-  count     = var.enable_dis_identity_operator ? 1 : 0
-  type      = "Microsoft.KubernetesConfiguration/fluxConfigurations@2024-11-01"
-  name      = "dis-identity"
-  parent_id = var.azurerm_kubernetes_cluster_id
+  depends_on = [azapi_resource.cert_manager]
+  count      = var.enable_dis_identity_operator ? 1 : 0
+  type       = "Microsoft.KubernetesConfiguration/fluxConfigurations@2024-11-01"
+  name       = "dis-identity"
+  parent_id  = var.azurerm_kubernetes_cluster_id
   body = {
     properties = {
       kustomizations = {
