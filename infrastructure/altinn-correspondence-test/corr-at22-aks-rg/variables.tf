@@ -3,6 +3,12 @@ variable "subscription_id" {
   description = "Subscription id to deploy services"
 }
 
+variable "parent_zone_subscription_id" {
+  type        = string
+  description = "Subscription id for parent dns zone"
+  sensitive   = true
+}
+
 variable "aks_vnet_address_spaces" {
   type        = list(string)
   description = "vnet address space reserved for AKS"

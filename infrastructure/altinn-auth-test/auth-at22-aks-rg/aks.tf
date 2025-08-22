@@ -46,6 +46,7 @@ module "aks" {
 module "infra-resources" {
   depends_on                                 = [module.aks, module.observability]
   source                                     = "../../modules/aks-resources"
+  subscription_id                            = var.subscription_id
   aks_node_resource_group                    = module.aks.aks_node_resource_group
   azurerm_kubernetes_cluster_id              = module.aks.azurerm_kubernetes_cluster_id
   flux_release_tag                           = local.flux_release_tag
@@ -61,6 +62,7 @@ module "infra-resources" {
   token_grafana_operator                     = module.grafana.token_grafana_operator
   enable_dis_identity_operator               = true
   enable_grafana_operator                    = true
+  enable_cert_manager_tls_issuer             = false
   azurerm_dis_identity_resource_group_id     = module.aks.dis_resource_group_id
   azurerm_kubernetes_cluster_oidc_issuer_url = module.aks.aks_oidc_issuer_url
 }
