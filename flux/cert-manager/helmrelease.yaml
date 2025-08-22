@@ -27,6 +27,11 @@ spec:
       enabled: true
     dns01RecursiveNameservers: "1.1.1.1:53,8.8.8.8:53"
     dns01RecursiveNameserversOnly: true
+    podLabels:
+      azure.workload.identity/use: "true"
+    serviceAccount:
+      labels:
+        azure.workload.identity/use: "true"
     image:
       registry: altinncr.azurecr.io
     webhook:
