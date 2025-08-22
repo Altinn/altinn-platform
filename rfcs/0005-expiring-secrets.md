@@ -1,7 +1,7 @@
 - Feature Name: monitoring_expiring_secrets
 - Start Date: 2025-08-07
-- RFC PR: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/pull/0000)
-- Github Issue: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/issues/0000)
+- RFC PR: [altinn/altinn-platform#2018](https://github.com/altinn/altinn-platform/pull/2018)
+- Github Issue: [altinn/altinn-platform#1945](https://github.com/altinn/altinn-platform/issues/1945)
 - Product/Category: Observability
 - State: **REVIEW**
 
@@ -44,8 +44,16 @@ graph TD
 Initially it will use a metric per secret in the KV. These metrics can be consumed directly by Prometheus and therefore queried for alerts later in Grafana:
 
 ```
-lakmus_secret_expiring_or_expired == 1
+secret_expiration_timestamp_seconds{secret="my-sec", kv="mykv-prod"}
 ```
+
+A simple query for dashboards and alerts can be as simple as:
+
+```
+# secrets expiring or already expired
+(secret_expiration_timestamp_seconds - time()) < 7*24*60*60
+```
+
 
 ## Operational Impact
 
@@ -91,8 +99,13 @@ func checkSecrets(client *azsecrets.Client) {
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
 
+There is alternatives from Azure but these use Event Grid which we don't support and don't
+seem to be compatible with Grafana.
+
 # Prior art
 [prior-art]: #prior-art
+
+None.
 
 # Unresolved questions
 [unresolved-questions]: #unresolved-questions
@@ -100,4 +113,6 @@ func checkSecrets(client *azsecrets.Client) {
 # Future possibilities
 [future-possibilities]: #future-possibilities
 
+We might use this app for other data that we need to expose and that can't be fetched easily
+from the cloud vendor.
 
