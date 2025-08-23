@@ -38,23 +38,28 @@ module "aks" {
 }
 
 module "infra-resources" {
-  depends_on                                 = [module.aks, module.observability]
-  source                                     = "../../modules/aks-resources"
-  aks_node_resource_group                    = module.aks.aks_node_resource_group
-  azurerm_kubernetes_cluster_id              = module.aks.azurerm_kubernetes_cluster_id
-  flux_release_tag                           = var.flux_release_tag
-  pip4_ip_address                            = module.aks.pip4_ip_address
-  pip6_ip_address                            = module.aks.pip6_ip_address
-  subnet_address_prefixes                    = var.subnet_address_prefixes
-  obs_kv_uri                                 = module.observability.key_vault_uri
-  obs_client_id                              = module.observability.obs_client_id
-  obs_tenant_id                              = local.tenant_id
-  environment                                = var.environment
-  syncroot_namespace                         = var.team_name
-  grafana_endpoint                           = module.grafana.grafana_endpoint
-  token_grafana_operator                     = module.grafana.token_grafana_operator
-  enable_dis_identity_operator               = true
-  enable_grafana_operator                    = true
-  azurerm_dis_identity_resource_group_id     = module.aks.dis_resource_group_id
-  azurerm_kubernetes_cluster_oidc_issuer_url = module.aks.aks_oidc_issuer_url
+  depends_on                                   = [module.aks, module.observability, module.dns-child-zone]
+  source                                       = "../../modules/aks-resources"
+  subscription_id                              = var.subscription_id
+  aks_node_resource_group                      = module.aks.aks_node_resource_group
+  azurerm_kubernetes_cluster_id                = module.aks.azurerm_kubernetes_cluster_id
+  flux_release_tag                             = var.flux_release_tag
+  pip4_ip_address                              = module.aks.pip4_ip_address
+  pip6_ip_address                              = module.aks.pip6_ip_address
+  subnet_address_prefixes                      = var.subnet_address_prefixes
+  obs_kv_uri                                   = module.observability.key_vault_uri
+  obs_client_id                                = module.observability.obs_client_id
+  obs_tenant_id                                = local.tenant_id
+  environment                                  = var.environment
+  syncroot_namespace                           = var.team_name
+  grafana_endpoint                             = module.grafana.grafana_endpoint
+  token_grafana_operator                       = module.grafana.token_grafana_operator
+  enable_dis_identity_operator                 = true
+  enable_grafana_operator                      = true
+  azurerm_dis_identity_resource_group_id       = module.aks.dis_resource_group_id
+  azurerm_kubernetes_cluster_oidc_issuer_url   = module.aks.aks_oidc_issuer_url
+  enable_cert_manager_tls_issuer               = true
+  tls_cert_manager_workload_identity_client_id = module.dns-child-zone.azuread_cert_manager_client_id
+  tls_cert_manager_zone_name                   = module.dns-child-zone.azurerm_dns_zone_name
+  tls_cert_manager_zone_rg_name                = module.dns-child-zone.azurerm_dns_zone_resource_group_name
 }
