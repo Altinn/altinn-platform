@@ -94,5 +94,9 @@
     "tt_ring2": "1.0.0",
     "prod_ring1": "1.0.0",
     "prod_ring2": "1.0.0"
+  },
+  "certm-lets-encrypt-dns-issuer": {
+    "at_ring1": "0.1.0",
+    "at_ring2": "0.1.0"
   }
 }
