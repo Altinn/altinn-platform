@@ -32,7 +32,7 @@ resource "azapi_resource" "cert_manager_issuer" {
         }
         syncIntervalInSeconds = 300
         timeoutInSeconds      = 300
-        url                   = "oci://altinncr.azurecr.io/manifests/infra/cert-manager-dns-issuer"
+        url                   = "oci://altinncr.azurecr.io/manifests/infra/certm-lets-encrypt-dns-issuer"
         useWorkloadIdentity   = true
       }
       namespace                  = "flux-system"
