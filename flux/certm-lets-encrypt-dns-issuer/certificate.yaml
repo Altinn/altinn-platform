@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-tls
+  namespace: traefik
+spec:
+  secretName: ssl-cert
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+  dnsNames:
+    - "${AZURE_DNS_ZONE_NAME}"
+    - "*.${AZURE_DNS_ZONE_NAME}"
