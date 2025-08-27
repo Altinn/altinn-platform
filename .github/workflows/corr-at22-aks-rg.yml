@@ -17,6 +17,7 @@ on:
       - infrastructure/modules/azure-service-operator/**
       - infrastructure/modules/observability/**
       - infrastructure/modules/grafana/**
+      - infrastructure/modules/dns-child-zone/**
       - infrastructure/altinn-correspondence-test/corr-at22-aks-rg/**
   pull_request:
     branches:
@@ -30,6 +31,7 @@ on:
       - infrastructure/modules/azure-service-operator/**
       - infrastructure/modules/observability/**
       - infrastructure/modules/grafana/**
+      - infrastructure/modules/dns-child-zone/**
       - infrastructure/altinn-correspondence-test/corr-at22-aks-rg/**
   workflow_dispatch:
     inputs:
