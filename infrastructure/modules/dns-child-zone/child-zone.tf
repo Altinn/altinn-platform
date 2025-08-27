@@ -10,11 +10,27 @@ resource "azurerm_dns_zone" "child_zone" {
   resource_group_name = azurerm_resource_group.dns_child_zone_rg.name
 }
 
+resource "azurerm_dns_a_record" "base_record" {
+  name                = "@"
+  zone_name           = azurerm_dns_zone.child_zone.name
+  resource_group_name = azurerm_dns_zone.child_zone.resource_group_name
+  records             = toset(["${var.cluster_ipv4_address}"])
+  ttl                 = 300
+}
+
 resource "azurerm_dns_a_record" "wildcard_record" {
   name                = "*"
   zone_name           = azurerm_dns_zone.child_zone.name
   resource_group_name = azurerm_dns_zone.child_zone.resource_group_name
   records             = toset(["${var.cluster_ipv4_address}"])
+  ttl                 = 300
+}
+
+resource "azurerm_dns_aaaa_record" "base_record" {
+  name                = "@"
+  zone_name           = azurerm_dns_zone.child_zone.name
+  resource_group_name = azurerm_dns_zone.child_zone.resource_group_name
+  records             = toset(["${var.cluster_ipv6_address}"])
   ttl                 = 300
 }
 
