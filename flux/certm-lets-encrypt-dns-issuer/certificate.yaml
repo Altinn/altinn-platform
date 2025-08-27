@@ -9,4 +9,5 @@ spec:
     name: letsencrypt-production
     kind: ClusterIssuer
   dnsNames:
+    - "${AZURE_DNS_ZONE_NAME}"
     - "*.${AZURE_DNS_ZONE_NAME}"
