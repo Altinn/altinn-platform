@@ -12,6 +12,8 @@ module "grafana" {
   ]
   grafana_editor_access = [
     "416302ed-fbab-41a4-8c8d-61f486fa79ca", # Altinn-30-Test-developers
+    "12b73376-8726-493c-8d27-aa87e5213e6b", # Altinn-30-Correspondence-Test-Developers
+    "9b99f951-3873-4310-8baf-464b4da43f26", # Altinn-30-Broker-Test-Developers
   ]
   grafana_monitor_reader_subscription_id = [
     var.subscription_id,
