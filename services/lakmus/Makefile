@@ -57,8 +57,9 @@ clean:
 
 ## Run container in the foreground (Ctrl-C to stop)
 docker-run: docker-build
-	$(CONTAINER_RUNTIME) run --rm -p $(METRICS_PORT):$(METRICS_PORT) $(IMAGE) \
+	$(CONTAINER_RUNTIME) run --rm -p $(METRICS_PORT):$(METRICS_PORT) \
 	  -e AZURE_SUBSCRIPTION_ID=$(SUBSCRIPTION_ID) \
+	  $(IMAGE) \
 	  --subscription-id=$(SUBSCRIPTION_ID) \
 	  --tick-interval=$(TICK_INTERVAL) \
 	  --metrics-address=$(METRICS_ADDR) \
