@@ -32,3 +32,51 @@ resource "azurerm_role_assignment" "altinncr_acrpush_altinn_platform" {
   scope                            = azurerm_container_registry.acr.id
   skip_service_principal_aad_check = true
 }
+
+resource "azurerm_role_assignment" "altinncr_writer_corr" {
+  principal_id         = "27bfa3f2-2b60-4de5-a3b9-09dd3b01b490"
+  role_definition_name = "Container Registry Repository Writer"
+  principal_type       = "ServicePrincipal"
+  scope                = azurerm_container_registry.acr.id
+  condition            = <<-EOT
+(
+ (
+  !(ActionMatches{'Microsoft.ContainerRegistry/registries/repositories/content/write'})
+  AND
+  !(ActionMatches{'Microsoft.ContainerRegistry/registries/repositories/content/read'})
+  AND
+  !(ActionMatches{'Microsoft.ContainerRegistry/registries/repositories/metadata/read'})
+  AND
+  !(ActionMatches{'Microsoft.ContainerRegistry/registries/repositories/metadata/write'})
+ )
+ OR 
+ (
+  @Request[Microsoft.ContainerRegistry/registries/repositories:name] StringLike 'corr'
+ )
+)
+EOT
+}
+
+resource "azurerm_role_assignment" "altinncr_writer_broker" {
+  principal_id         = "3f5e6dcb-b782-49ca-939f-fd21dda34e4e"
+  role_definition_name = "Container Registry Repository Writer"
+  principal_type       = "ServicePrincipal"
+  scope                = azurerm_container_registry.acr.id
+  condition            = <<-EOT
+(
+ (
+  !(ActionMatches{'Microsoft.ContainerRegistry/registries/repositories/content/write'})
+  AND
+  !(ActionMatches{'Microsoft.ContainerRegistry/registries/repositories/content/read'})
+  AND
+  !(ActionMatches{'Microsoft.ContainerRegistry/registries/repositories/metadata/read'})
+  AND
+  !(ActionMatches{'Microsoft.ContainerRegistry/registries/repositories/metadata/write'})
+ )
+ OR 
+ (
+  @Request[Microsoft.ContainerRegistry/registries/repositories:name] StringLike 'corr'
+ )
+)
+EOT
+}
