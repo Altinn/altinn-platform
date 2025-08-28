@@ -28,8 +28,8 @@ func ListSecrets(ctx context.Context, vaultURL string, cred azcore.TokenCredenti
 			return nil, err
 		}
 		// Append properties from this page
-		if page.SecretPropertiesListResult.Value != nil {
-			out = append(out, page.SecretPropertiesListResult.Value...)
+		if page.Value != nil {
+			out = append(out, page.Value...)
 		}
 	}
 
