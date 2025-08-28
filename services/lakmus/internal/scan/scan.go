@@ -4,12 +4,10 @@ import (
 	"context"
 	"log"
 
+	secrets "github.com/Altinn/altinn-platform/services/lakmus/pkg/secrets"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	azsecrets "github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
-
-	// replace with your module path
-	secrets "github.com/Altinn/altinn-platform/services/lakmus/pkg/secrets"
 )
 
 // MetricSetter lets callers record an expiry timestamp for a secret in a KV.
@@ -19,8 +17,8 @@ type MetricSetter func(kvName, secretName string, expiryUnix float64)
 // Scan enumerates Key Vaults in a subscription and, for each vault, lists secret
 // metadata and invokes setMetric for secrets that have an expiry timestamp.
 //
-// - cred: typically azidentity.NewDefaultAzureCredential(nil) (Workload Identity)
-// - armOpts / secretsOpts: usually nil in prod; tests may inject fakes/transports
+// - cred: Workload Identity
+// - armOpts / secretsOpts: usually nil in prod; used for fakes in tests
 func Scan(
 	ctx context.Context,
 	subscriptionID string,
