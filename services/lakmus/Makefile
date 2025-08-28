@@ -28,7 +28,7 @@ docker-build:
 ## Integration test: run container with fakes, curl metrics, stop container
 test-integration: docker-build
 	@set -euo pipefail; \
-	CID=$$( podman run -d --rm \
+	CID=$$( $(CONTAINER_RUNTIME) run -d --rm \
 		-p $(METRICS_PORT):$(METRICS_PORT) \
 		-e AZURE_SUBSCRIPTION_ID=$(SUBSCRIPTION_ID) \
 		$(IMAGE) \
@@ -40,11 +40,11 @@ test-integration: docker-build
 	sleep $(INTEG_WAIT_S); \
 	if curl -sf "http://127.0.0.1:$(METRICS_PORT)/metrics" | grep -q 'lakmus_keyvault_secret_expiration_timestamp_seconds'; then \
 		echo "✅ Metric found"; \
-		podman rm -f "$$CID" >/dev/null; \
+		$(CONTAINER_RUNTIME) rm -f "$$CID" >/dev/null; \
 	else \
 		echo "❌ Metric not found; recent logs:"; \
-		podman logs --tail=200 "$$CID" || true; \
-		podman rm -f "$$CID" >/dev/null; \
+		$(CONTAINER_RUNTIME) logs --tail=200 "$$CID" || true; \
+		$(CONTAINER_RUNTIME) rm -f "$$CID" >/dev/null; \
 		exit 1; \
 	fi
 

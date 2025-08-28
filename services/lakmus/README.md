@@ -4,7 +4,7 @@
 features for things that just don't come out of the box.
 
 #### Features
-- **AKV secret expiry exporter** — periodically scans Azure Key Vaults and exposes a Prometheus metric (`lakmus_azure_keyvault_secret_expiration_timestamp_seconds`) so teams can alert in Grafana before secrets expire.
+- **AKV secret expiry exporter** — periodically scans Azure Key Vaults and exposes a Prometheus metric (`lakmus_azure_keyvault_lakmus_azure_keyvault_secret_expiration_timestamp_seconds`) so teams can alert in Grafana before secrets expire.
 
 > The name **Lakmus** is Norwegian for “[litmus](https://en.wikipedia.org/wiki/Litmus)”.
 
@@ -32,14 +32,14 @@ graph TD
 Lakmus polls Key Vault on a fixed interval and exports a per-secret Prometheus metric:
 
 ```text
-secret_expiration_timestamp_seconds{secret="my-sec", kv="mykv-prod"}
+lakmus_azure_keyvault_secret_expiration_timestamp_seconds{secret="my-sec", kv="mykv-prod"}
 ```
 
 A simple dashboard/alert query:
 
 ```promql
 # secrets expiring or already expired within 7 days
-(secret_expiration_timestamp_seconds - time()) < 7 * 24 * 60 * 60
+(lakmus_azure_keyvault_secret_expiration_timestamp_seconds - time()) < 7 * 24 * 60 * 60
 ```
 
 ---
@@ -101,7 +101,7 @@ make test-integration
 make test-integration CONTAINER_RUNTIME=docker
 ```
 
-> The target looks for `secret_expiration_timestamp_seconds` on `http://127.0.0.1:${METRICS_PORT}/metrics`.
+> The target looks for `lakmus_azure_keyvault_secret_expiration_timestamp_seconds` on `http://127.0.0.1:${METRICS_PORT}/metrics`.
 
 #### 5) Local binary build
 
@@ -169,14 +169,14 @@ GET http://<lakmus-host>:8080/metrics
 Key metric emitted:
 
 ```text
-lakmus_keyvault_secret_expiration_timestamp_seconds{secret="<name>", kv="<kv-name>"} <unix_timestamp_seconds>
+lakmus_keyvault_lakmus_azure_keyvault_secret_expiration_timestamp_seconds{secret="<name>", kv="<kv-name>"} <unix_timestamp_seconds>
 ```
 
 Quick sanity check:
 
 ```bash
 curl -sf "http://127.0.0.1:8080/metrics" \
-  | grep -q 'secret_expiration_timestamp_seconds' && echo "Metric OK"
+  | grep -q 'lakmus_azure_keyvault_secret_expiration_timestamp_seconds' && echo "Metric OK"
 ```
 
 
