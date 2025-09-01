@@ -17,7 +17,6 @@ COPY test/ test/
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o lakmus cmd/main.go
 
-# Pin by sha later
 FROM gcr.io/distroless/static:nonroot
 
 WORKDIR /
