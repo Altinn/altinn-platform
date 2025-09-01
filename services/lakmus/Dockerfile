@@ -1,4 +1,3 @@
-# Use sha later
 FROM golang:1.25-alpine AS builder
 ARG TARGETOS
 ARG TARGETARCH
