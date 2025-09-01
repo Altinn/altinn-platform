@@ -6,7 +6,7 @@ resource "helm_release" "ingress_nginx" {
   create_namespace = true
   repository       = "https://kubernetes.github.io/ingress-nginx"
   chart            = "ingress-nginx"
-  version          = "4.12.5"
+  version          = "4.13.1"
   values = [
     "${templatefile("${path.module}/ingress-nginx_values.tftpl", {})}"
   ]
