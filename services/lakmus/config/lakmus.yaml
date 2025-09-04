@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    azure.workload.identity/client-id: ${CLIENT_ID}
+  labels:
+    app: lakmus
+    owner: platform
+  name: lakmus
+  namespace: monitoring
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: lakmus
+    owner: platform
+  name: lakmus
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lakmus
+      owner: platform
+  template:
+    metadata:
+      labels:
+        app: lakmus
+        owner: platform
+    spec:
+      containers:
+        - args:
+            - --subscription-id=$(AZURE_SUBSCRIPTION_ID)
+          env:
+            - name: AZURE_SUBSCRIPTION_ID
+              value: ${AZURE_SUBSCRIPTION_ID}
+          image: ghcr.io/altinn/altinn-platform/lakmus
+          name: lakmus
+          ports:
+            - containerPort: 8080
+      serviceAccountName: lakmus
