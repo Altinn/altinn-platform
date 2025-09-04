@@ -11,7 +11,7 @@ resource "azapi_resource" "lakmus" {
           postBuild = {
             substitute = {
               AZURE_SUBSCRIPTION_ID = "${var.subscription_id}"
-              LAKMUS_WORKLOAD_IDENTITY_CLIENT_ID = "${azuread_application.lakmus_app.client_id}"
+              LAKMUS_WORKLOAD_IDENTITY_CLIENT_ID = "${var.lakmus_client_id}"
             }
           }
           prune                  = false
