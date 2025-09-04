@@ -58,7 +58,7 @@ EOT
 }
 
 resource "azurerm_role_assignment" "altinncr_writer_corr_test" {
-  principal_id         = "ec40031a-d620-4313-a10b-ac2fb329281e"
+  principal_id         = "d3c35a12-5465-4ba3-b50d-8ab1bedbef2a"
   role_definition_name = "Container Registry Repository Writer"
   principal_type       = "ServicePrincipal"
   scope                = azurerm_container_registry.acr.id
