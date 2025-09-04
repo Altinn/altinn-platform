@@ -99,3 +99,4 @@ spec:
     podMonitor:
       enabled: true
     disableIPv6: "${DISABLE_IPV6:=false}"
+    defaultInboundPolicy: "${DEFAULT_INBOUND_POLICY:=all-unauthenticated}"

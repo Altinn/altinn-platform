@@ -54,6 +54,12 @@ variable "grafana_endpoint" {
   }
 }
 
+variable "linkerd_default_inbound_policy" {
+  description = "Default inbound policy for Linkerd"
+  type        = string
+  default     = "all-unauthenticated"
+}
+
 variable "obs_client_id" {
   type        = string
   description = "Client id for the obs app"
