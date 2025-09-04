@@ -62,4 +62,5 @@ module "infra-resources" {
   tls_cert_manager_workload_identity_client_id = module.dns-child-zone.azuread_cert_manager_client_id
   tls_cert_manager_zone_name                   = module.dns-child-zone.azurerm_dns_zone_name
   tls_cert_manager_zone_rg_name                = module.dns-child-zone.azurerm_dns_zone_resource_group_name
+  linkerd_default_inbound_policy               = "cluster-authenticated"
 }

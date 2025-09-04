@@ -46,3 +46,8 @@ variable "flux_release_tag" {
   description = "Flux release tag that the infra flux resources will follow"
   type        = string
 }
+
+variable "linkerd_default_inbound_policy" {
+  description = "Default inbound policy for Linkerd"
+  type        = string
+}
