@@ -37,7 +37,9 @@ export class LakmusChart extends cdk8s.Chart {
         replicas: 1,
         selector: { matchLabels: labels },
         template: {
-          metadata: { labels },
+          metadata: { 
+            labels: { ...labels, 'azure.workload.identity/use': 'true'} 
+          },
           spec: {
             serviceAccountName: sa.name,
             containers: [

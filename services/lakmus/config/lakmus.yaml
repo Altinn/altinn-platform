@@ -28,6 +28,7 @@ spec:
     metadata:
       labels:
         app: lakmus
+        azure.workload.identity/use: "true"
         owner: platform
     spec:
       containers:
