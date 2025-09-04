@@ -51,7 +51,31 @@ resource "azurerm_role_assignment" "altinncr_writer_corr" {
  )
  OR 
  (
-  @Request[Microsoft.ContainerRegistry/registries/repositories:name] StringLike 'corr'
+  @Request[Microsoft.ContainerRegistry/registries/repositories:name] StringStartsWith 'corr'
+ )
+)
+EOT
+}
+
+resource "azurerm_role_assignment" "altinncr_writer_corr_test" {
+  principal_id         = "ec40031a-d620-4313-a10b-ac2fb329281e"
+  role_definition_name = "Container Registry Repository Writer"
+  principal_type       = "ServicePrincipal"
+  scope                = azurerm_container_registry.acr.id
+  condition            = <<-EOT
+(
+ (
+  !(ActionMatches{'Microsoft.ContainerRegistry/registries/repositories/content/write'})
+  AND
+  !(ActionMatches{'Microsoft.ContainerRegistry/registries/repositories/content/read'})
+  AND
+  !(ActionMatches{'Microsoft.ContainerRegistry/registries/repositories/metadata/read'})
+  AND
+  !(ActionMatches{'Microsoft.ContainerRegistry/registries/repositories/metadata/write'})
+ )
+ OR 
+ (
+  @Request[Microsoft.ContainerRegistry/registries/repositories:name] StringStartsWith 'corr'
  )
 )
 EOT
@@ -75,7 +99,7 @@ resource "azurerm_role_assignment" "altinncr_writer_broker" {
  )
  OR 
  (
-  @Request[Microsoft.ContainerRegistry/registries/repositories:name] StringLike 'corr'
+  @Request[Microsoft.ContainerRegistry/registries/repositories:name] StringStartsWith 'corr'
  )
 )
 EOT
