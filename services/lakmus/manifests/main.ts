@@ -26,7 +26,7 @@ export class LakmusChart extends cdk8s.Chart {
         ...baseMetadata,
         annotations: {
           ...(baseMetadata.annotations ?? {}),
-          'azure.workload.identity/client-id': '${CLIENT_ID}',
+          'azure.workload.identity/client-id': '${LAKMUS_WORKLOAD_IDENTITY_CLIENT_ID}',
         },
       },
     });
