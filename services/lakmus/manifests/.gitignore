@@ -1,0 +1,24 @@
+# node / tooling
+node_modules/
+.npmrc
+package-lock.json#*  # npm conflict files
+
+# cdk8s outputs
+dist/
+cdk8s.out/
+.cdk8s/
+.jssi/
+jsii/
+coverage/
+
+# tests (if you’re not keeping them)
+__snapshots__/
+
+# OS/editor junk
+.DS_Store
+*.swp
+
+
+# don't commit compiled artifacts from imports/
+imports/*.js
+imports/*.d.ts
