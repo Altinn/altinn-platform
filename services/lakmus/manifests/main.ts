@@ -2,7 +2,7 @@ import * as cdk8s from 'cdk8s';
 import { Construct } from 'constructs';
 import * as kplus from 'cdk8s-plus-32';
 import * as k8s from './imports/k8s';
-import { App, YamlOutputType } from 'cdk8s';
+import { ApiObject, App, YamlOutputType } from 'cdk8s';
 
 export class LakmusChart extends cdk8s.Chart {
   constructor(scope: Construct, id: string) {
@@ -50,11 +50,35 @@ export class LakmusChart extends cdk8s.Chart {
                 env: [
                   { name: 'AZURE_SUBSCRIPTION_ID', value: '${AZURE_SUBSCRIPTION_ID}' },
                 ],
-                ports: [{ containerPort: 8080 }],
+                ports: [{ name: 'http', containerPort: 8080 }],
               },
             ],
           },
         },
+      },
+    });
+
+    // TODO: find the crd for this and import it properly
+    new ApiObject(this, 'lakmus-podmonitor', {
+      apiVersion: 'azmonitoring.coreos.com/v1',
+      kind: 'PodMonitor',
+      metadata: {
+        name,
+        namespace,
+        labels,
+      },
+      spec: {
+        selector: {
+          matchLabels: labels,
+        },
+        namespaceSelector: { any: true },
+        podMetricsEndpoints: [
+          {
+            port: 'http',
+            path: '/metrics',
+            interval: '30s',
+          },
+        ],
       },
     });
 

@@ -41,4 +41,25 @@ spec:
           name: lakmus
           ports:
             - containerPort: 8080
+              name: http
       serviceAccountName: lakmus
+---
+apiVersion: azmonitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  labels:
+    app: lakmus
+    owner: platform
+  name: lakmus
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    any: true
+  podMetricsEndpoints:
+    - interval: 30s
+      path: /metrics
+      port: http
+  selector:
+    matchLabels:
+      app: lakmus
+      owner: platform
