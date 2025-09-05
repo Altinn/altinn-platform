@@ -93,10 +93,10 @@ spec:
     proxy:
       image:
         name: altinncr.azurecr.io/linkerd/proxy
+      defaultInboundPolicy: "${DEFAULT_INBOUND_POLICY:=all-unauthenticated}"
     proxyInit:
       image:
         name: altinncr.azurecr.io/linkerd/proxy-init
     podMonitor:
       enabled: true
     disableIPv6: "${DISABLE_IPV6:=false}"
-    defaultInboundPolicy: "${DEFAULT_INBOUND_POLICY:=all-unauthenticated}"
