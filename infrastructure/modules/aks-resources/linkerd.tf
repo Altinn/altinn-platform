@@ -11,8 +11,8 @@ resource "azapi_resource" "linkerd" {
           path  = "./"
           postBuild = {
             substitute = {
-              DISABLE_IPV6           = "false"
-              DEFAULT_INBOUND_POLICY = var.linkerd_default_inbound_policy
+              DISABLE_IPV6 : "${var.linkerd_disable_ipv6}"
+              DEFAULT_INBOUND_POLICY : "${var.linkerd_default_inbound_policy}"
             }
           }
           prune                  = false
