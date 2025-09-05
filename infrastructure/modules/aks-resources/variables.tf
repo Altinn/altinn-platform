@@ -66,11 +66,11 @@ variable "linkerd_default_inbound_policy" {
 
 variable "linkerd_disable_ipv6" {
   description = "Disable IPv6 for Linkerd"
-  type        = bool
-  default     = false
+  type        = string
+  default     = "false"
   validation {
-    condition     = var.linkerd_disable_ipv6 == true || var.linkerd_disable_ipv6 == false
-    error_message = "linkerd_disable_ipv6 must be either true or false."
+    condition     = contains(["true", "false"], var.linkerd_disable_ipv6)
+    error_message = "linkerd_disable_ipv6 must be either 'true' or 'false'."
   }
 }
 
