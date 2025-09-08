@@ -31,6 +31,8 @@ jobs:
       matrix:
         module-dir:
           - "services/dis-apim-operator"
+          - "services/dis-identity-operator"
+          - "services/lakmus"
           - "tools/daisctl"
           - "actions/generate-k6-manifests"
     steps:
