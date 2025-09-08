@@ -9,6 +9,8 @@ on:
     paths:
       - .github/workflows/govulncheck.yaml
       - "services/dis-apim-operator"
+      - "services/dis-identity-operator"
+      - "services/lakmus"
       - "tools/daisctl"
       - "actions/generate-k6-manifests"
   pull_request:
@@ -17,6 +19,8 @@ on:
     paths:
       - .github/workflows/govulncheck.yaml
       - "services/dis-apim-operator"
+      - "services/dis-identity-operator"
+      - "services/lakmus"
       - "tools/daisctl"
       - "actions/generate-k6-manifests"
   schedule:
