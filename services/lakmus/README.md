@@ -51,6 +51,7 @@ A simple dashboard/alert query:
 - Access to Azure if running against a real Key Vault (Workload Identity recommended)
 - curl for integration tests
 - golangci-lint for make lint
+- [cdk8s](https://cdk8s.io/) to generate manifests/yaml
 
 ---
 

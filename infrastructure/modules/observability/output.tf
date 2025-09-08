@@ -19,3 +19,8 @@ output "obs_client_id" {
   value     = azuread_application.app.client_id
   sensitive = true
 }
+
+output "lakmus_client_id" {
+  value     = azuread_application.lakmus_app.client_id
+  sensitive = true
+}

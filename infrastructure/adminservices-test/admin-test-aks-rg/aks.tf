@@ -35,6 +35,7 @@ module "aks" {
 module "aks_resources" {
   depends_on                       = [module.aks, module.observability]
   source                           = "../../modules/aks-resources"
+  subscription_id                  = var.subscription_id
   aks_node_resource_group          = module.aks.aks_node_resource_group
   azurerm_kubernetes_cluster_id    = module.aks.azurerm_kubernetes_cluster_id
   flux_release_tag                 = var.flux_release_tag
@@ -50,4 +51,5 @@ module "aks_resources" {
   token_grafana_operator           = var.token_grafana_operator
   grafana_dashboard_release_branch = "main"
   enable_grafana_operator          = true
+  lakmus_client_id                 = module.observability.lakmus_client_id
 }
