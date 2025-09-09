@@ -52,6 +52,8 @@ jobs:
     name: Plan
     environment: reader
     runs-on: ubuntu-latest
+    env:
+      TF_VAR_subs_to_monitor: '{platform-test:"${{secrets.AZR_PLATFORM_TEST_SUB_ID}}",platform-staging:"${{secrets.AZR_PLATFORM_STAGING_SUB_ID}}",platform-prod:"${{secrets.AZR_PLATFORM_PROD_SUB_ID}}"}'
     steps:
       - name: Checkout Repository
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
@@ -101,6 +103,8 @@ jobs:
     if: github.ref == 'refs/heads/main'
     needs: plan
     runs-on: ubuntu-latest
+    env:
+      TF_VAR_subs_to_monitor: '{platform-test:"${{secrets.AZR_PLATFORM_TEST_SUB_ID}}",platform-staging:"${{secrets.AZR_PLATFORM_STAGING_SUB_ID}}",platform-prod:"${{secrets.AZR_PLATFORM_PROD_SUB_ID}}"}'
     steps:
       - name: Checkout Repository
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
