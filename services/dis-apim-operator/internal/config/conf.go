@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/knadh/koanf/parsers/toml/v2"
-	"github.com/knadh/koanf/providers/env"
+	"github.com/knadh/koanf/providers/env/v2"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/posflag"
 	"github.com/knadh/koanf/v2"
@@ -20,6 +20,8 @@ type AzureConfig struct {
 	ApimServiceName string `json:"apimServiceName,omitempty" koanf:"apimServiceName" toml:"apimServiceName"`
 	DefaultLoggerId string `json:"defaultLoggerId,omitempty" koanf:"defaultLoggerId" toml:"defaultLoggerId"`
 }
+
+const CONFIG_PREFIX = "DISAPIM_"
 
 func LoadConfig(configFile string, flagset *pflag.FlagSet) (*AzureConfig, error) {
 	k := koanf.New(".")
@@ -35,8 +37,11 @@ func LoadConfig(configFile string, flagset *pflag.FlagSet) (*AzureConfig, error)
 	}
 
 	// Load from environment
-	err := k.Load(env.Provider("DISAPIM_", ".", func(s string) string {
-		return toCamelCase(strings.ToLower(strings.TrimPrefix(s, "DISAPIM_")))
+	err := k.Load(env.Provider(".", env.Opt{
+		Prefix: CONFIG_PREFIX,
+		TransformFunc: func(k, v string) (string, any) {
+			return toCamelCase(strings.ToLower(strings.TrimPrefix(k, CONFIG_PREFIX))), v
+		},
 	}), nil)
 
 	if err != nil {
