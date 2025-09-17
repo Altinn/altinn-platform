@@ -69,6 +69,14 @@ func LoadConfigOrDie(configFile string, flagset *pflag.FlagSet) *AzureConfig {
 }
 
 func toCamelCase(snake string) string {
+	// Validate for malformed patterns that could cause collisions or panics
+	if strings.Contains(snake, "__") {
+		panic(fmt.Sprintf("invalid environment variable format: '%s' contains double underscores", snake))
+	}
+	if strings.HasSuffix(snake, "_") {
+		panic(fmt.Sprintf("invalid environment variable format: '%s' has trailing underscore", snake))
+	}
+
 	parts := strings.Split(snake, "_")
 	for i := 1; i < len(parts); i++ {
 		parts[i] = strings.ToUpper(parts[i][:1]) + strings.ToLower(parts[i][1:])

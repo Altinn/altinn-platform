@@ -69,11 +69,16 @@ func LoadConfigOrDie(configFile string, flagset *pflag.FlagSet) *DisIdentityConf
 }
 
 func toCamelCase(snake string) string {
+	// Validate for malformed patterns that could cause collisions or panics
+	if strings.Contains(snake, "__") {
+		panic(fmt.Sprintf("invalid environment variable format: '%s' contains double underscores", snake))
+	}
+	if strings.HasSuffix(snake, "_") {
+		panic(fmt.Sprintf("invalid environment variable format: '%s' has trailing underscore", snake))
+	}
+
 	parts := strings.Split(snake, "_")
 	for i := 1; i < len(parts); i++ {
-		if parts[i] == "" {
-			continue // skip empty segments (e.g., “FOO__BAR” or trailing “_”)
-		}
 		parts[i] = strings.ToUpper(parts[i][:1]) + strings.ToLower(parts[i][1:])
 	}
 	return strings.Join(parts, "")
