@@ -69,6 +69,43 @@ apimServiceName = "test-apim-service"
 		Expect(cfg.ApimServiceName).To(Equal("env-apim-service"))
 	})
 
+	It("should ignore double underscores in non DISAPIM prefixed variables", func() {
+		Expect(os.Setenv("DISAPIM_NAMESPACE_SUFFIX", "env")).To(Succeed())
+		Expect(os.Setenv("_DISAPIM_SUBSCRIPTION__ID", "env-subscription-id")).To(Succeed())
+		defer func() {
+			_ = os.Unsetenv("DISAPIM_NAMESPACE_SUFFIX")
+			_ = os.Unsetenv("_DISAPIM_SUBSCRIPTION__ID")
+		}()
+
+		flagset := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		cfg, err := LoadConfig(configFile.Name(), flagset)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.NamespaceSuffix).To(Equal("env"))
+		Expect(cfg.SubscriptionId).To(Equal("test-subscription-id"))
+		Expect(cfg.ResourceGroup).To(Equal("test-resource-group"))
+		Expect(cfg.ApimServiceName).To(Equal("test-apim-service"))
+	})
+
+	It("should panic if environment has double underscores", func() {
+		Expect(os.Setenv("DISAPIM_NAMESPACE__SUFFIX", "env")).To(Succeed())
+		defer func() {
+			_ = os.Unsetenv("DISAPIM_NAMESPACE__SUFFIX")
+		}()
+
+		flagset := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		Expect(func() { _, _ = LoadConfig(configFile.Name(), flagset) }).To(Panic())
+	})
+
+	It("should panic if environment has trailing underscore", func() {
+		Expect(os.Setenv("DISAPIM_NAMESPACE_SUFFIX_", "env")).To(Succeed())
+		defer func() {
+			_ = os.Unsetenv("DISAPIM_NAMESPACE_SUFFIX_")
+		}()
+
+		flagset := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		Expect(func() { _, _ = LoadConfig(configFile.Name(), flagset) }).To(Panic())
+	})
+
 	It("should load config from flags", func() {
 		Expect(os.Setenv("DISAPIM_NAMESPACE_SUFFIX", "env")).To(Succeed())
 		Expect(os.Setenv("DISAPIM_SUBSCRIPTION_ID", "env-subscription-id")).To(Succeed())
