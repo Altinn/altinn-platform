@@ -1,8 +1,8 @@
 module github.com/altinn/altinn-platform/daisctl
 
-go 1.23.0
+go 1.25.0
 
-toolchain go1.24.5
+toolchain go1.25.1
 
 require (
 	github.com/charmbracelet/bubbles v0.21.0
