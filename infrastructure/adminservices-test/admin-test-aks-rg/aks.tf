@@ -50,4 +50,5 @@ module "aks_resources" {
   token_grafana_operator           = var.token_grafana_operator
   grafana_dashboard_release_branch = "main"
   enable_grafana_operator          = true
+  subscription_id                  = var.subscription_id
 }
