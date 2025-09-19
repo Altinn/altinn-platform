@@ -1,7 +1,7 @@
 import http from 'k6/http';
 
-import { createDefaultPayload } from './payload';
-import { config } from '../config';
+import { createDefaultPayload } from './payload.js';
+import { config } from '../config.js';
 
 function performanceMetrics(data) {
   const numberOfRequests = data.metrics.http_reqs.values['count'];
@@ -72,7 +72,7 @@ function buildHeaders() {
   };
 }
 
-function postSlackMessage(data, reportType = 'performance') {
+export function postSlackMessage(data, reportType = 'performance') {
   if (!__ENV.SLACK_WEBHOOK_URL) {
     console.error('SLACK_WEBHOOK_URL environment variable is not defined');
     return;
@@ -95,5 +95,3 @@ function postSlackMessage(data, reportType = 'performance') {
     console.error('Error sending Slack message:', error);
   }
 }
-
-exports.postSlackMessage = postSlackMessage;
