@@ -22,6 +22,7 @@ products:
         - altinn-authentication
         - altinn-authorization
         - altinn-authorization-tmp
+        - altinn-access-management-frontend
 
   - name: Studio
     slug: PAS # Product Altinn Studio
