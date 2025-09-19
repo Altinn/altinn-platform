@@ -51,4 +51,5 @@ module "aks_resources" {
   grafana_dashboard_release_branch = "main"
   enable_grafana_operator          = true
   subscription_id                  = var.subscription_id
+  enable_cert_manager_tls_issuer   = false
 }
