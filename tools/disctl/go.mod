@@ -1,4 +1,4 @@
-module github.com/altinn/altinn-platform/daisctl
+module github.com/altinn/altinn-platform/disctl
 
 go 1.25.0
 

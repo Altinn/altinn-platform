@@ -4,8 +4,8 @@ Copyright © 2024, Altinn
 package main
 
 import (
-	"github.com/altinn/altinn-platform/daisctl/cmd"
-	"github.com/altinn/altinn-platform/daisctl/internal/version"
+	"github.com/altinn/altinn-platform/disctl/cmd"
+	"github.com/altinn/altinn-platform/disctl/internal/version"
 )
 
 func main() {

@@ -1,25 +1,25 @@
-name: Daisctl PRs
+name: Disctl PRs
 permissions:
   contents: read
 
 env:
-  WORKDIR: tools/daisctl
+  WORKDIR: tools/disctl
 
 on:
   push:
     branches:
       - "main"
     paths:
-      - "tools/daisctl/**/*.go"
-      - "tools/daisctl/go.*"
-      - "tools/daisctl/Makefile"
-      - ".github/workflows/daisctl-pr.yml"
+      - "tools/disctl/**/*.go"
+      - "tools/disctl/go.*"
+      - "tools/disctl/Makefile"
+      - ".github/workflows/disctl-pr.yml"
   pull_request:
     paths:
-      - "tools/daisctl/**/*.go"
-      - "tools/daisctl/go.*"
-      - "tools/daisctl/Makefile"
-      - ".github/workflows/daisctl-pr.yml"
+      - "tools/disctl/**/*.go"
+      - "tools/disctl/go.*"
+      - "tools/disctl/Makefile"
+      - ".github/workflows/disctl-pr.yml"
 
 jobs:
   tidy:
@@ -34,6 +34,7 @@ jobs:
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: "${{ env.WORKDIR }}/go.mod"
+          cache-dependency-path: '${{ env.WORKDIR }}/go.sum'
           cache: true
       - name: Check go mod
         run: |
@@ -53,6 +54,7 @@ jobs:
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: "${{ env.WORKDIR }}/go.mod"
+          cache-dependency-path: '${{ env.WORKDIR }}/go.sum'
           cache: true
       - name: lint
         uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8.0.0
@@ -86,6 +88,7 @@ jobs:
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: "${{ env.WORKDIR }}/go.mod"
+          cache-dependency-path: '${{ env.WORKDIR }}/go.sum'
           cache: true
       - name: Run tests
         run: ${{ matrix.test-cmd }}

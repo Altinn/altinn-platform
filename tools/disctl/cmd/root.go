@@ -8,8 +8,8 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "dais",
-	Short: "Daisctl is a CLI tool for managing and interacting with the Dais platform",
+	Use:   "dis",
+	Short: "Disctl is a CLI tool for managing and interacting with the Dis platform",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()

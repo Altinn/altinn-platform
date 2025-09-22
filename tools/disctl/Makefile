@@ -1,8 +1,8 @@
 .DEFAULT_GOAL = all
 
-BINARY = dais
-PROJECT_NAME = github.com/altinn/altinn-platform/daisctl
-VERSION_PKG = github.com/altinn/altinn-platform/daisctl/internal/version
+BINARY = dis
+PROJECT_NAME = github.com/altinn/altinn-platform/disctl
+VERSION_PKG = github.com/altinn/altinn-platform/disctl/internal/version
 CONCURRENCY := 4
 GO := go
 TAGS ?= ""
