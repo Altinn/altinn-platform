@@ -7,6 +7,10 @@
       value: "${DISAPIM_RESOURCE_GROUP}"
     - name: DISAPIM_APIM_SERVICE_NAME
       value: "${DISAPIM_APIM_SERVICE_NAME}"
+    - name: DISAPIM_DEFAULT_LOGGER_ID
+      value: "${DISAPIM_DEFAULT_LOGGER_ID}"
+    - name: DISAPIM_NAMESPACE_SUFFIX
+      value: "${DISAPIM_NAMESPACE_SUFFIX}"
 - op: add
   path: /spec/template/metadata/labels/azure.workload.identity~1use
   value: "true"

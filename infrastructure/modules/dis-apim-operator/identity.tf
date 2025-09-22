@@ -15,7 +15,7 @@ resource "azurerm_federated_identity_credential" "disapim_fic" {
 }
 
 resource "azurerm_role_assignment" "disapim_service_operator_role_assignment" {
-  scope              = var.apim_id
+  scope                = var.apim_id
   role_definition_name = "API Management Service Contributor"
-  principal_id       = azurerm_user_assigned_identity.disapim_identity.principal_id
+  principal_id         = azurerm_user_assigned_identity.disapim_identity.principal_id
 }
