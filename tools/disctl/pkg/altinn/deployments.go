@@ -3,8 +3,8 @@ package altinn
 import (
 	"fmt"
 
-	"github.com/altinn/altinn-platform/daisctl/pkg/kube"
-	"github.com/altinn/altinn-platform/daisctl/pkg/util"
+	"github.com/altinn/altinn-platform/disctl/pkg/kube"
+	"github.com/altinn/altinn-platform/disctl/pkg/util"
 )
 
 type Deployments struct {

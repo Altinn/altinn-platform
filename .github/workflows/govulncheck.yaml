@@ -11,7 +11,7 @@ on:
       - "services/dis-apim-operator/**"
       - "services/dis-identity-operator/**"
       - "services/lakmus/**"
-      - "tools/daisctl/**"
+      - "tools/disctl/**"
       - "actions/generate-k6-manifests/**"
   pull_request:
     branches:
@@ -21,7 +21,7 @@ on:
       - "services/dis-apim-operator/**"
       - "services/dis-identity-operator/**"
       - "services/lakmus/**"
-      - "tools/daisctl/**"
+      - "tools/disctl/**"
       - "actions/generate-k6-manifests/**"
   schedule:
     - cron: "0 6 * * *" #Every day at 6
@@ -37,7 +37,7 @@ jobs:
           - "services/dis-apim-operator"
           - "services/dis-identity-operator"
           - "services/lakmus"
-          - "tools/daisctl"
+          - "tools/disctl"
           - "actions/generate-k6-manifests"
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0

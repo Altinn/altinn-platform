@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/altinn/altinn-platform/daisctl/pkg/altinn"
-	"github.com/altinn/altinn-platform/daisctl/pkg/kube"
+	"github.com/altinn/altinn-platform/disctl/pkg/altinn"
+	"github.com/altinn/altinn-platform/disctl/pkg/kube"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 

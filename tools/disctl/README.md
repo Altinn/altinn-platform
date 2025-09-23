@@ -1,6 +1,6 @@
-# daisctl
+# disctl
 
-Welcome to **daisctl**! This is a command-line tool built with Go and Cobra that provides various utilities for managing and interacting with our platform.
+Welcome to **disctl**! This is a command-line tool built with Go and Cobra that provides various utilities for managing and interacting with our platform.
 
 ## Table of Contents
 
@@ -12,14 +12,14 @@ Welcome to **daisctl**! This is a command-line tool built with Go and Cobra that
 
 ## Installation
 
-To install daisctl, you can download the latest release from the [releases page](https://github.com/Altinn/altinn-platform/releases) or build it from source.
+To install disctl, you can download the latest release from the [releases page](https://github.com/Altinn/altinn-platform/releases) or build it from source.
 
 ### Building from Source
 
 1. **Clone the repository**:
    ```sh
    git clone https://github.com/altinn/altinn-platform.git
-   cd altinn-platform/tools/daisctl
+   cd altinn-platform/tools/disctl
    ```
 
 2. **Build the application**:
@@ -32,24 +32,24 @@ To install daisctl, you can download the latest release from the [releases page]
      Add it to Environment variables in system properties
    - On **macOS/Linux**:
      ```sh
-     export PATH=$PATH:/path/to/daisctl
+     export PATH=$PATH:/path/to/disctl
      ```
 
 ## Usage
 
-After installation, you can use daisctl by running the `dais` command followed by a specific command and options.
+After installation, you can use disctl by running the `dis` command followed by a specific command and options.
 
 ```sh
-dais [command] [flags]
+dis [command] [flags]
 ```
 
 ### Example
 
-To check the version of daisctl:
+To check the version of disctl:
 
 ```sh
-dais version
-Dais version: dais-v0.0.1
+dis version
+Dis version: dis-v0.0.1
 Commit: f6e5cacf1029e28a260b4a28fffee85eb4f67aa9
 Build Date: 2024-07-30T10:58:16Z
 ```
@@ -58,21 +58,21 @@ Build Date: 2024-07-30T10:58:16Z
 
 The CLI Application currently supports the following commands:
 
-- **version**: Displays the current version of daisctl.
+- **version**: Displays the current version of disctl.
   ```sh
-  dais version
+  dis version
   ```
 
 - **releases**: Lists the current releases running.
   ```sh
-  dais releases --app my-app
-  dais r
-  dais rel --app=myapp
+  dis releases --app my-app
+  dis r
+  dis rel --app=myapp
   ```
 
-- **help**: Displays help information for daisctl and its commands. 
+- **help**: Displays help information for disctl and its commands. 
   ```sh
-  dais help
+  dis help
   ```
 
 ## License

@@ -1,6 +1,6 @@
 package altinn
 
-import "github.com/altinn/altinn-platform/daisctl/pkg/util"
+import "github.com/altinn/altinn-platform/disctl/pkg/util"
 
 type Environment struct {
 	PlatformUrl    string `json:"platformUrl"`

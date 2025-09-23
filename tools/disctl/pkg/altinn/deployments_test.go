@@ -1,7 +1,7 @@
 package altinn
 
 import (
-	"github.com/altinn/altinn-platform/daisctl/pkg/kube"
+	"github.com/altinn/altinn-platform/disctl/pkg/kube"
 	"github.com/google/go-cmp/cmp"
 	"net/http"
 	"net/http/httptest"

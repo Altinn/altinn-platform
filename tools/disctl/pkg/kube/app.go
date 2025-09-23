@@ -1,7 +1,7 @@
 package kube
 
 import (
-	"github.com/altinn/altinn-platform/daisctl/pkg/util"
+	"github.com/altinn/altinn-platform/disctl/pkg/util"
 )
 
 type AppInfo struct {

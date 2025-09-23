@@ -1,7 +1,7 @@
-project_name: daisctl
+project_name: disctl
 
 builds:
-  - binary: dais
+  - binary: dis
     env:
       - CGO_ENABLED=0
     goos:
@@ -14,9 +14,9 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w -X github.com/altinn/altinn-platform/daisctl/internal/version.version={{ .Version }}
-      - -X github.com/altinn/altinn-platform/daisctl/internal/version.commit={{ .Commit }}
-      - -X github.com/altinn/altinn-platform/daisctl/internal/version.date={{ .CommitDate }}
+      - -s -w -X github.com/altinn/altinn-platform/disctl/internal/version.version={{ .Version }}
+      - -X github.com/altinn/altinn-platform/disctl/internal/version.commit={{ .Commit }}
+      - -X github.com/altinn/altinn-platform/disctl/internal/version.date={{ .CommitDate }}
 
 
 changelog:
@@ -33,7 +33,7 @@ changelog:
       - go mod tidy
     include:
       - cli
-      - daisctl
+      - disctl
 
 archives:
   - format: tar.gz
