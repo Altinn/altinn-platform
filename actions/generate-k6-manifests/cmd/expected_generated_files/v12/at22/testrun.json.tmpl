@@ -1,0 +1,89 @@
+{
+   "apiVersion": "k6.io/v1alpha1",
+   "kind": "TestRun",
+   "metadata": {
+      "labels": {
+         "generated-by": "k6-action-image"
+      },
+      "name": "{{ .UniqueName }}",
+      "namespace": "platform"
+   },
+   "spec": {
+      "arguments": "--tag testid={{ .UniqueName }} --tag namespace=platform --tag deploy_env={{ .DeployEnv }} --tag test_name=get-deployments --out experimental-prometheus-rw",
+      "cleanup": "post",
+      "parallelism": 1,
+      "runner": {
+         "env": [
+            {
+               "name": "ENVIRONMENT",
+               "value": "{{ .DeployEnv }}"
+            },
+            {
+               "name": "K6_NO_USAGE_REPORT",
+               "value": "true"
+            },
+            {
+               "name": "K6_PROMETHEUS_RW_SERVER_URL",
+               "value": "http://kube-prometheus-stack-prometheus.monitoring:9090/api/v1/write"
+            },
+            {
+               "name": "K6_PROMETHEUS_RW_TREND_STATS",
+               "value": "avg,min,med,max,count,p(95),p(99),p(99.5),p(99.9)"
+            },
+            {
+               "name": "MANIFEST_GENERATION_TIMESTAMP",
+               "value": "{{ .ManifestGenerationTimestamp }}"
+            },
+            {
+               "name": "NAMESPACE",
+               "value": "platform"
+            },
+            {
+               "name": "TESTID",
+               "value": "{{ .UniqueName }}"
+            }
+         ],
+         "envFrom": [
+            {
+               "configMapRef": {
+                  "name": "deploy-environments-at22"
+               }
+            },
+            {
+               "secretRef": {
+                  "name": "slack-test"
+               }
+            }
+         ],
+         "metadata": {
+            "labels": {
+               "k6-test": "{{ .UniqueName }}"
+            }
+         },
+         "nodeSelector": {
+            "kubernetes.azure.com/scalesetpriority": "spot",
+            "spot": "true"
+         },
+         "resources": {
+            "requests": {
+               "cpu": "250m",
+               "memory": "200Mi"
+            }
+         },
+         "tolerations": [
+            {
+               "effect": "NoSchedule",
+               "key": "kubernetes.azure.com/scalesetpriority",
+               "operator": "Equal",
+               "value": "spot"
+            }
+         ]
+      },
+      "script": {
+         "configMap": {
+            "file": "archive.tar",
+            "name": "{{ .DirName }}"
+         }
+      }
+   }
+}

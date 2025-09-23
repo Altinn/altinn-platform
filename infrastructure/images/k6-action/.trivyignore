@@ -7,3 +7,6 @@ CVE-2024-34156
 
 # database/sql: Postgres Scan Race Condition https://avd.aquasec.com/nvd/cve-2025-47907
 CVE-2025-47907
+
+# If the PATH environment variable contains paths which are executables (rather than just directories), passing certain strings to LookPath (, ., and ..), can result in the binaries listed in the PATH being unexpectedly returned.
+CVE-2025-47906

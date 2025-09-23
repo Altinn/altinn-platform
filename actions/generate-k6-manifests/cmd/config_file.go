@@ -35,6 +35,7 @@ type TestTypeDefinition struct {
 
 type TestRun struct {
 	Name             *string    `yaml:"name"` // Use the path to the file by default?
+	Id               *string    `yaml:"id,omitempty"`
 	Parallelism      *int       `yaml:"parallelism"`
 	Resources        *Resources `yaml:"resources"`
 	Env              []*Env     `yaml:"env"`

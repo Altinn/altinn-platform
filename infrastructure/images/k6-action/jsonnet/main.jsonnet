@@ -9,6 +9,7 @@ local namespace = std.extVar('namespace');
 local deploy_env = std.extVar('deploy_env');
 // Testrun
 local is_browser_test = if std.asciiLower(std.extVar('is_browser_test')) == 'true' then true else false;
+local testid = if std.length(std.extVar('testid')) > 0 then std.extVar('testid') else unique_name;  // Only used in metrics
 local parallelism = std.parseInt(std.extVar('parallelism'));
 local extra_env_vars = std.parseYaml(std.extVar('extra_env_vars'));
 local secret_references = std.parseYaml(std.extVar('secret_references'));
@@ -97,7 +98,7 @@ local testrun = {
       cleanup: 'post',
       arguments: std.stripChars(
         std.format('--tag testid=%s --tag namespace=%s --tag deploy_env=%s --tag test_name=%s --out experimental-prometheus-rw %s',
-                   [unique_name, namespace, deploy_env, test_name, extra_cli_args]), ' '
+                   [testid, namespace, deploy_env, test_name, extra_cli_args]), ' '
       ),
       parallelism: parallelism,
       script: {

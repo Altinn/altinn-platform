@@ -61,6 +61,7 @@ test_definitions:
 			"prod",
 		},
 		ValidTestTypes: []string{
+			"functional",
 			"smoke",
 			"soak",
 			"spike",
@@ -134,6 +135,7 @@ test_definitions:
 			"prod",
 		},
 		ValidTestTypes: []string{
+			"functional",
 			"smoke",
 			"soak",
 			"spike",
