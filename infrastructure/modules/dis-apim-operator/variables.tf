@@ -100,6 +100,22 @@ variable "target_namespace" {
   }
 }
 
+variable "namespace_suffix" {
+  type        = string
+  default     = ""
+  description = "Suffix of namespaces that the operator will reconcile APIM objects in. No suffix watches all namespaces."
+}
+
+variable "default_logger_name" {
+  type        = string
+  description = "Name of the logger in the APIM service that will be used as default for APIs"
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9_-]+$", var.default_logger_name))
+    error_message = "default_logger_name must consist of alphanumeric characters, '-' or '_'"
+  }
+}
+
+
 variable "flux_release_tag" {
   type        = string
   description = "Flux release tag"
