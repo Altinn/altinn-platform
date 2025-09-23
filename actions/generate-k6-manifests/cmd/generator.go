@@ -26,7 +26,7 @@ type Generator interface {
 	HandleConfigFileOverride(base map[string]interface{}, overrideConfigFile string) map[string]interface{}
 	CallK6Archive(dirName string, testConfigFileToUse string, testFile string)
 	CallKubectl(dirName string, uniqName string, namespace string)
-	CallJsonnet(dirName string, uniqName string, testName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte, isBrowserTest bool)
+	CallJsonnet(dirName string, uniqName string, testName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte, isBrowserTest bool, testid string)
 }
 
 type K8sManifestGenerator struct {
@@ -55,6 +55,7 @@ func (r K8sManifestGenerator) Initialize(filePath string) *ConfigFile {
 			"prod",
 		},
 		ValidTestTypes: []string{
+			"functional",
 			"smoke",
 			"soak",
 			"spike",
@@ -190,7 +191,7 @@ func (r K8sManifestGenerator) Generate() {
 				}
 
 				manifestGenerationTimestamp := time.Now().UnixMilli()
-				uniqName := fmt.Sprintf("%s-%s-%d-%d", c.Environment, *c.TestRun.Name, i, manifestGenerationTimestamp)
+				uniqName := fmt.Sprintf("%s-%s-%d-%d", c.Environment, *c.TestRun.Name, manifestGenerationTimestamp, i)
 
 				marshalledConfigFile, err := json.MarshalIndent(configFile, "", "  ")
 				if err != nil {
@@ -269,7 +270,11 @@ func (r K8sManifestGenerator) Generate() {
 				if *c.TestTypeDefinition.Type == "browser" {
 					isBrowserTest = true
 				}
-				r.CallJsonnet(dirName, uniqName, *c.TestRun.Name, strconv.FormatInt(manifestGenerationTimestamp, 10), cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, mergedEnvsMarshalled, resources, isBrowserTest)
+				if c.TestRun.Id != nil {
+					r.CallJsonnet(dirName, uniqName, *c.TestRun.Name, strconv.FormatInt(manifestGenerationTimestamp, 10), cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, mergedEnvsMarshalled, resources, isBrowserTest, *c.TestRun.Id)
+				} else {
+					r.CallJsonnet(dirName, uniqName, *c.TestRun.Name, strconv.FormatInt(manifestGenerationTimestamp, 10), cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, mergedEnvsMarshalled, resources, isBrowserTest, "")
+				}
 
 				grafanaDashboard, ok := os.LookupEnv("GRAFANA_DASHBOARD")
 				if !ok {
@@ -449,7 +454,7 @@ func (r K8sManifestGenerator) CallKubectl(dirName string, uniqName string, names
 	}
 }
 
-func (r K8sManifestGenerator) CallJsonnet(dirName string, uniqName string, testName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte, isBrowserTest bool) {
+func (r K8sManifestGenerator) CallJsonnet(dirName string, uniqName string, testName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte, isBrowserTest bool, testid string) {
 	var errb strings.Builder
 	k6ClusterConfigFile, err := os.ReadFile("/actions/generate-k6-manifests/infra/k6_cluster_conf.yaml")
 	if err != nil {
@@ -463,6 +468,7 @@ func (r K8sManifestGenerator) CallJsonnet(dirName string, uniqName string, testN
 	cmd := exec.Command("jsonnet",
 		"--jpath", "/jsonnet/vendor",
 		"--ext-str", fmt.Sprintf("unique_name=%s", uniqName),
+		"--ext-str", fmt.Sprintf("testid=%s", testid),
 		"--ext-str", fmt.Sprintf("dir_name=%s", dirName),
 		"--ext-str", fmt.Sprintf("test_name=%s", testName),
 		"--ext-str", fmt.Sprintf("manifest_generation_timestamp=%s", manifestGenerationTimestamp),

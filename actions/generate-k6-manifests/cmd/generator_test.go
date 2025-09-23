@@ -50,11 +50,11 @@ func validateConfigFolder(confDir string, testVersion string, t *testing.T) {
 
 func validateTestRun(path, dirName, testVersion, deployEnv string, t *testing.T) {
 	uniqName, err := extractUniqueIdFromGeneratedTestRun(path)
-	manifestGenerationTimestamp := strings.Split(uniqName, "-")[len(strings.Split(uniqName, "-"))-1]
-
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
+	manifestGenerationTimestamp := strings.Split(uniqName, "-")[len(strings.Split(uniqName, "-"))-2]
+
 	generatedFile, knownExpectedFile, equalContents := readFileAndCompareWithTemplatedFile(
 		path,
 		fmt.Sprintf("./expected_generated_files/%s/%s/testrun.json.tmpl", testVersion, deployEnv),
@@ -138,6 +138,7 @@ func postTest(version string) {
 	}
 }
 
+// TODO: Missing v12. It's getting more complex to manage non deterministic values. I should find an easier way to test this.
 var generateExamplesVersion = []string{"v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11"}
 
 func TestGenerate(t *testing.T) {
