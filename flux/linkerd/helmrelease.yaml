@@ -93,6 +93,7 @@ spec:
     proxy:
       image:
         name: altinncr.azurecr.io/linkerd/proxy
+      defaultInboundPolicy: "${DEFAULT_INBOUND_POLICY:=all-unauthenticated}"
     proxyInit:
       image:
         name: altinncr.azurecr.io/linkerd/proxy-init

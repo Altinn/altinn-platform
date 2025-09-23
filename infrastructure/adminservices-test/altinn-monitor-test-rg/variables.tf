@@ -5,3 +5,8 @@ variable "insights_workspace_test_dp" {
     "dp-be-yt01-insightsWorkspace" = "dp-be-yt01-rg"
   }
 }
+
+variable "subs_to_monitor" {
+  type    = map(string)
+  default = {}
+}

@@ -21,7 +21,7 @@
     "tt_ring1": "1.2.0",
     "tt_ring2": "1.2.0",
     "prod_ring1": "1.2.0",
-    "prod_ring2": "1.1.0"
+    "prod_ring2": "1.2.0"
   },
   "traefik": {
     "at_ring1": "1.2.0",
@@ -80,12 +80,12 @@
     "prod_ring2": "0.1.0"
   },
   "dis-identity": {
-    "at_ring1": "0.0.3",
-    "at_ring2": "0.0.3",
-    "tt_ring1": "0.0.3",
-    "tt_ring2": "0.0.3",
-    "prod_ring1": "0.0.3",
-    "prod_ring2": "0.0.3"
+    "at_ring1": "0.0.4",
+    "at_ring2": "0.0.4",
+    "tt_ring1": "0.0.4",
+    "tt_ring2": "0.0.4",
+    "prod_ring1": "0.0.4",
+    "prod_ring2": "0.0.4"
   },
   "azure-service-operator": {
     "at_ring1": "1.0.0",

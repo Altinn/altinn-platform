@@ -143,6 +143,13 @@ resource "azurerm_role_assignment" "grafana_identity_reader_rg_studio_prod" {
   skip_service_principal_aad_check = true
 }
 
+resource "azurerm_role_assignment" "grafna_identity_monitor_reader" {
+  for_each                         = local.additional_subs_to_monitor
+  scope                            = "/subscriptions/${each.value}"
+  role_definition_name             = "Monitoring Reader"
+  principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
+  skip_service_principal_aad_check = true
+}
 
 locals {
   altinn_30_appmigration_test_developers  = "8ea6868e-317e-45b5-8437-464fb8e48e7e"
@@ -156,6 +163,8 @@ locals {
   altinn_30_operations_prod               = "5a5ed585-9f7c-4b94-80af-9ceee8124db3"
   dialogporten_developers                 = "857b3aa1-bde3-469c-a052-a24c81503646"
   dialogporten_developers_prod            = "415cfc7b-40f6-4540-9aef-cb9c9050aada"
+  product_auth_developers_dev             = "6d54df21-3547-41a2-8d0d-529fad054807"
+  product_auth_developers_prod            = "c410f062-def4-44f5-9a45-b23ddcdd57c3"
 
   grafana_editor = [
     local.altinn_30_appmigration_test_developers,
@@ -166,9 +175,13 @@ locals {
     local.altinn_30_developers,
     local.altinn_30_developers_prod,
     local.dialogporten_developers,
-    local.dialogporten_developers_prod
+    local.dialogporten_developers_prod,
+    local.product_auth_developers_dev,
+    local.product_auth_developers_prod
   ]
   grafana_admin = [local.altinn_30_operations, local.altinn_30_operations_prod]
+
+  additional_subs_to_monitor = { for k, v in var.subs_to_monitor : k => sensitive(v) } # Create map where the value is sensitive to remove log outputs
 }
 
 resource "azurerm_role_assignment" "grafana_admin" {

@@ -11,6 +11,7 @@ products:
       repositories:
         - altinn-platform
         - terraform-azurerm-altinn-modules
+        - altinn-platform-validation-tests
 
   - name: Authorization
     slug: PAA # Product Altinn Authorization
@@ -21,6 +22,7 @@ products:
         - altinn-authentication
         - altinn-authorization
         - altinn-authorization-tmp
+        - altinn-access-management-frontend
 
   - name: Studio
     slug: PAS # Product Altinn Studio

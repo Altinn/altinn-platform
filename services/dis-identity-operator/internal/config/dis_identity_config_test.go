@@ -61,6 +61,48 @@ targetResourceGroup = "/subscriptions/00000000-0000-0000-0000-000000000000/resou
 		Expect(cfg.TargetResourceGroup).To(Equal("env-resource-group"))
 	})
 
+	It("should ignore double underscores in non DISID prefixed variables", func() {
+		Expect(os.Setenv("DISID_ISSUER_URL", "https://env-issuer-url.local")).To(Succeed())
+		Expect(os.Setenv("_DISID_SUBSCRIPTION__ID", "env-subscription-id")).To(Succeed())
+		defer func() {
+			_ = os.Unsetenv("DISID_ISSUER_URL")
+		}()
+
+		flagset := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		cfg, err := LoadConfig(configFile.Name(), flagset)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.IssuerURL).To(Equal("https://env-issuer-url.local"))
+		Expect(cfg.TargetResourceGroup).To(Equal("/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/dis-operator-test"))
+	})
+
+	It("should panic if environment has double underscores", func() {
+		Expect(os.Setenv("DISID_ISSUER__URL", "https://env-issuer-url.local")).To(Succeed())
+		Expect(os.Setenv("DISID_TARGET_RESOURCE_GROUP", "env-resource-group")).To(Succeed())
+		defer func() {
+			_ = os.Unsetenv("DISID_ISSUER__URL")
+		}()
+		defer func() {
+			_ = os.Unsetenv("DISID_TARGET_RESOURCE_GROUP")
+		}()
+
+		flagset := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		Expect(func() { _, _ = LoadConfig(configFile.Name(), flagset) }).To(Panic())
+	})
+
+	It("should panic if environment has trailing underscore", func() {
+		Expect(os.Setenv("DISID_ISSUER_URL_", "https://env-issuer-url.local")).To(Succeed())
+		Expect(os.Setenv("DISID_TARGET_RESOURCE_GROUP", "env-resource-group")).To(Succeed())
+		defer func() {
+			_ = os.Unsetenv("DISID_ISSUER_URL_")
+		}()
+		defer func() {
+			_ = os.Unsetenv("DISID_TARGET_RESOURCE_GROUP")
+		}()
+
+		flagset := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		Expect(func() { _, _ = LoadConfig(configFile.Name(), flagset) }).To(Panic())
+	})
+
 	It("should load config from flags", func() {
 		Expect(os.Setenv("DISID_ISSUER_URL", "https://env-issuer-url.local")).To(Succeed())
 		Expect(os.Setenv("DISID_TARGET_RESOURCE_GROUP", "env-resource-group")).To(Succeed())

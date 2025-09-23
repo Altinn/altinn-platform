@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/knadh/koanf/parsers/toml/v2"
-	"github.com/knadh/koanf/providers/env"
+	"github.com/knadh/koanf/providers/env/v2"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/posflag"
 	"github.com/knadh/koanf/v2"
@@ -37,8 +37,11 @@ func LoadConfig(configFile string, flagset *pflag.FlagSet) (*DisIdentityConfig, 
 	}
 
 	// Load from environment
-	err := k.Load(env.Provider(CONFIG_PREFIX, ".", func(s string) string {
-		return toCamelCase(strings.ToLower(strings.TrimPrefix(s, CONFIG_PREFIX)))
+	err := k.Load(env.Provider(".", env.Opt{
+		Prefix: CONFIG_PREFIX,
+		TransformFunc: func(k, v string) (string, any) {
+			return toCamelCase(strings.ToLower(strings.TrimPrefix(k, CONFIG_PREFIX))), v
+		},
 	}), nil)
 
 	if err != nil {
@@ -66,11 +69,16 @@ func LoadConfigOrDie(configFile string, flagset *pflag.FlagSet) *DisIdentityConf
 }
 
 func toCamelCase(snake string) string {
+	// Validate for malformed patterns that could cause collisions or panics
+	if strings.Contains(snake, "__") {
+		panic(fmt.Sprintf("invalid environment variable format: '%s' contains double underscores", snake))
+	}
+	if strings.HasSuffix(snake, "_") {
+		panic(fmt.Sprintf("invalid environment variable format: '%s' has trailing underscore", snake))
+	}
+
 	parts := strings.Split(snake, "_")
 	for i := 1; i < len(parts); i++ {
-		if parts[i] == "" {
-			continue // skip empty segments (e.g., “FOO__BAR” or trailing “_”)
-		}
 		parts[i] = strings.ToUpper(parts[i][:1]) + strings.ToLower(parts[i][1:])
 	}
 	return strings.Join(parts, "")
