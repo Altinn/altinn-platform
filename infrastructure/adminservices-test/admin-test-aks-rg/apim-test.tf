@@ -9,4 +9,5 @@ module "dis_apim_test" {
   apim_resource_group_name           = "altinn-apim-test-rg"
   apim_service_name                  = "altinn-apim-test-apim"
   target_namespace                   = "dis-altinn-apim-test-operator"
+  default_logger_name                = "altinn-apim-test-apimlogger"
 }
