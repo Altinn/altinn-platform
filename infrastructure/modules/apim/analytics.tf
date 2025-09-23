@@ -40,13 +40,13 @@ resource "azurerm_monitor_diagnostic_setting" "apimdiagnostics_settings" {
 }
 
 resource "azurerm_api_management_diagnostic" "apim_application_insights" {
-  identifier               = "default-applicationinsights"
+  identifier               = "applicationinsights"
   resource_group_name      = azurerm_resource_group.apim_rg.name
   api_management_name      = azurerm_api_management.apim.name
   api_management_logger_id = azurerm_api_management_logger.apimlogger.id
 
   # A sampling percentage of 0.0 means no successful requests are sampled. Only errors will be logged due to always_log_errors = true.
-  sampling_percentage       = 0.0
+  sampling_percentage       = var.sampling_percentage
   always_log_errors         = true
   log_client_ip             = false
   verbosity                 = "error"

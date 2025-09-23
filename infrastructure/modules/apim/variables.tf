@@ -37,6 +37,10 @@ variable "publisher" {
 variable "publisher_email" {
   type        = string
   description = "The email address of the publisher for the API Management service."
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.publisher_email))
+    error_message = "The 'publisher_email' variable must be a valid email address."
+  }
 }
 
 variable "sku_name" {
@@ -46,6 +50,16 @@ variable "sku_name" {
   validation {
     condition     = can(regex("^(Consumption|Developer|Basic|BasicV2|Standard|StandardV2|Premium|PremiumV2)(_[0-9]+)?$", var.sku_name))
     error_message = "Invalid sku_name. Valid values are: Consumption, Developer_1, Basic_1, BasicV2_1, Standard_1, StandardV2_1, Premium_1, PremiumV2_1. With the number of scale units at the end for non-Consumption SKUs. e.g. Developer_1"
+  }
+}
+
+variable "sampling_percentage" {
+  type        = number
+  description = "Sampling percentage for Application Insights diagnostics. Set to 0.0 to log only errors."
+  default     = 0.0
+  validation {
+    condition     = var.sampling_percentage >= 0.0 && var.sampling_percentage <= 100.0
+    error_message = "The 'sampling_percentage' variable must be between 0.0 and 100.0."
   }
 }
 
