@@ -13,6 +13,10 @@ on:
       - actions/terraform/apply/**
       - actions/terraform/plan/**
       - infrastructure/adminservices-test/admin-test-aks-rg/**
+      - infrastructure/modules/aks/**
+      - infrastructure/modules/aks-resources/**
+      - infrastructure/modules/dis-apim-operator/**
+      - infrastructure/modules/observability/**
   pull_request:
     branches:
       - main
@@ -21,6 +25,10 @@ on:
       - actions/terraform/apply/**
       - actions/terraform/plan/**
       - infrastructure/adminservices-test/admin-test-aks-rg/**
+      - infrastructure/modules/aks/**
+      - infrastructure/modules/aks-resources/**
+      - infrastructure/modules/dis-apim-operator/**
+      - infrastructure/modules/observability/**
   workflow_dispatch:
     inputs:
       log_level:
