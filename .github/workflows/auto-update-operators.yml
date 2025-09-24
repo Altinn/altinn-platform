@@ -5,6 +5,11 @@ on:
     - cron: "0 0 * * 2" # Every Tuesday at 00:00 UTC
   workflow_dispatch:
 
+permissions:
+  contents: write
+  issues: write
+  models: read
+
 jobs:
   auto-update-operator:
     strategy:
