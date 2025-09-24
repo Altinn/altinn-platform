@@ -24,7 +24,7 @@ type Generator interface {
 	Generate()
 	HandleConfigFile(defaultConfigFile string, testType string) map[string]interface{}
 	HandleConfigFileOverride(base map[string]interface{}, overrideConfigFile string) map[string]interface{}
-	CallK6Archive(dirName string, testConfigFileToUse string, testFile string)
+	CallK6Archive(dirName string, testConfigFileToUse string, testFile string, k6ArchiveArgs []string)
 	CallKubectl(dirName string, uniqName string, namespace string)
 	CallJsonnet(dirName string, uniqName string, testName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte, isBrowserTest bool, testid string)
 }
@@ -213,7 +213,15 @@ func (r K8sManifestGenerator) Generate() {
 				}
 				fmt.Printf("Wrote k6 test config file into: %s\n", testConfigFileToUse)
 
-				r.CallK6Archive(dirName, testConfigFileToUse, fmt.Sprintf("%s/%s", r.RepoRootDirectory, td.TestFile))
+				// Add Env Vars to archive
+				mergedEnvs := handleExtraEnvVars(envFileSlice, c.TestRun.Env)
+				var k6ArchiveArgs []string
+				for _, env := range mergedEnvs {
+					// --env MY_USER_AGENT="hello"
+					k6ArchiveArgs = append(k6ArchiveArgs, "--env", fmt.Sprintf("%s=%s", *env.Name, *env.Value))
+				}
+
+				r.CallK6Archive(dirName, testConfigFileToUse, fmt.Sprintf("%s/%s", r.RepoRootDirectory, td.TestFile), k6ArchiveArgs)
 
 				if utf8.RuneCountInString(uniqName) > 51 {
 					log.Fatalf("Automatic generated name is too big: %s. Provide a default name such that the generated name does not go over 51 characters", uniqName)
@@ -249,8 +257,7 @@ func (r K8sManifestGenerator) Generate() {
 					})
 				}
 
-				testRunEnvWithGithubContext := handleExtraEnvVars(c.TestRun.Env, githubRelatedEnvVars)
-				mergedEnvs := handleExtraEnvVars(envFileSlice, testRunEnvWithGithubContext)
+				mergedEnvs = handleExtraEnvVars(mergedEnvs, githubRelatedEnvVars)
 				mergedEnvsMarshalled, err := yaml.Marshal(mergedEnvs)
 				if err != nil {
 					log.Fatalf("error: %v", err)
@@ -361,33 +368,20 @@ func (r K8sManifestGenerator) HandleConfigFile(defaultConfigFile string, testTyp
 	return mergedOut
 }
 
-func (r K8sManifestGenerator) CallK6Archive(dirName string, testConfigFileToUse string, testFile string) {
+func (r K8sManifestGenerator) CallK6Archive(dirName string, testConfigFileToUse string, testFile string, k6ArchiveArgs []string) {
 	newpath := filepath.Join(r.BuildDirectory, dirName)
 	err := os.MkdirAll(newpath, os.ModePerm)
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	// https://grafana.com/docs/k6/latest/using-k6/environment-variables/#-the--e-flag-does-not-configure-options
 	// https://grafana.com/docs/k6/latest/reference/archive/#how-to-create-and-run-an-archive
 	// https://grafana.com/docs/k6/latest/using-k6/test-lifecycle/#the-init-stage
 	var cmd *exec.Cmd
 	var out, errb strings.Builder
 	k6Args := []string{"archive"}
-	extraEnvForArchiveCommand, ok := os.LookupEnv("INPUT_INIT_STAGE_ENV_VARS")
+	k6Args = append(k6Args, k6ArchiveArgs...)
 
-	if ok {
-		splitInput := strings.Split(extraEnvForArchiveCommand, " ")
-		if len(splitInput) > 1 {
-			for _, aux := range splitInput {
-				if strings.Contains(aux, "=") {
-					k6Args = append(k6Args, "-e", aux)
-				}
-			}
-		} else {
-			k6Args = append(k6Args, "-e", extraEnvForArchiveCommand)
-		}
-	}
 	if testConfigFileToUse != "" {
 		k6Args = append(k6Args, "--config", testConfigFileToUse)
 	}
