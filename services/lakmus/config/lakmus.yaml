@@ -31,6 +31,7 @@ spec:
         azure.workload.identity/use: "true"
         owner: platform
     spec:
+      automountServiceAccountToken: false
       containers:
         - args:
             - --subscription-id=$(AZURE_SUBSCRIPTION_ID)
@@ -42,6 +43,17 @@ spec:
           ports:
             - containerPort: 8080
               name: http
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       serviceAccountName: lakmus
 ---
 apiVersion: azmonitoring.coreos.com/v1

@@ -41,7 +41,6 @@ export class LakmusChart extends cdk8s.Chart {
             labels: { ...labels, 'azure.workload.identity/use': 'true'} 
           },
           spec: {
-           spec: {
              serviceAccountName: sa.name,
              automountServiceAccountToken: false,
              enableServiceLinks: false,
