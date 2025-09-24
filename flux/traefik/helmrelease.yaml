@@ -198,8 +198,6 @@ spec:
           honorLabels: true
           namespaceSelector:
             any: true
-        prometheusRule:
-          apiVersion: "azmonitoring.coreos.com/v1"
     affinity:
       podAntiAffinity:
         preferredDuringSchedulingIgnoredDuringExecution:
