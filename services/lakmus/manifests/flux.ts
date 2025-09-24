@@ -48,7 +48,7 @@ class FluxKustomizeChart extends Chart {
         retryInterval: '5m0s',
         images: [
           {
-            name: 'lakmus',
+            name: 'ghcr.io/altinn/altinn-platform/lakmus',
             newName: 'altinncr.azurecr.io/ghcr.io/altinn/altinn-platform/lakmus',
             newTag: 'v0.0.1',
           },
