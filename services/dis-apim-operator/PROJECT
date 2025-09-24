@@ -6,6 +6,8 @@ cliVersion: 4.7.1
 domain: dis.altinn.cloud
 layout:
 - go.kubebuilder.io/v4
+plugins:
+  grafana.kubebuilder.io/v1-alpha: {}
 projectName: dis-apim-operator
 repo: github.com/Altinn/altinn-platform/services/dis-apim-operator
 resources:
