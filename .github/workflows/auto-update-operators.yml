@@ -1,0 +1,24 @@
+name: Auto Update Kubebuilder Operators
+
+on:
+  schedule:
+    - cron: "0 0 * * 2" # Every Tuesday at 00:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  models: read
+
+jobs:
+  auto-update-operator:
+    strategy:
+      matrix:
+        operators:
+          - dis-apim-operator
+          - dis-identity-operator
+    uses: ./.github/workflows/reusable-auto-update-kubebuilder.yml
+    with:
+      workdir: services/${{ matrix.operators }}
+    secrets:
+      gh-token: ${{ secrets.GITHUB_TOKEN }}
