@@ -79,9 +79,6 @@ spec:
         config.linkerd.io/proxy-memory-limit: 250Mi
         config.linkerd.io/proxy-memory-request: 40Mi
         cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
-        prometheus.io/path: "/metrics"
-        prometheus.io/port: "9100"
-        prometheus.io/scrape: "true"
     podDisruptionBudget:
       enabled: true
       minAvailable: 1
