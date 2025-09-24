@@ -180,11 +180,7 @@ spec:
           metricRelabelings:
             - sourceLabels: [__name__]
               separator: ;
-              regex: ^traefik_service_requests_total$
-              action: keep
-            - sourceLabels: [__name__]
-              separator: ;
-              regex: ^traefik_entrypoint_requests_total$
+              regex: ^(traefik_service_requests_total|traefik_entrypoint_requests_total)$
               action: keep
           relabelings:
             - sourceLabels: [__meta_kubernetes_pod_node_name]
