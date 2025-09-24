@@ -41,19 +41,31 @@ export class LakmusChart extends cdk8s.Chart {
             labels: { ...labels, 'azure.workload.identity/use': 'true'} 
           },
           spec: {
-            serviceAccountName: sa.name,
-            containers: [
-              {
-                name: 'lakmus',
-                image: 'ghcr.io/altinn/altinn-platform/lakmus',
-                args: ['--subscription-id=$(AZURE_SUBSCRIPTION_ID)'],
-                env: [
-                  { name: 'AZURE_SUBSCRIPTION_ID', value: '${AZURE_SUBSCRIPTION_ID}' },
-                ],
-                ports: [{ name: 'http', containerPort: 8080 }],
-              },
-            ],
-          },
+           spec: {
+             serviceAccountName: sa.name,
+             automountServiceAccountToken: false,
+             enableServiceLinks: false,
+             securityContext: {
+               runAsNonRoot: true,
+               seccompProfile: { type: 'RuntimeDefault' },
+             },
+             containers: [
+               {
+                 name: 'lakmus',
+                 image: 'ghcr.io/altinn/altinn-platform/lakmus',
+                 args: ['--subscription-id=$(AZURE_SUBSCRIPTION_ID)'],
+                 env: [
+                   { name: 'AZURE_SUBSCRIPTION_ID', value: '${AZURE_SUBSCRIPTION_ID}' },
+                 ],
+                 securityContext: {
+                   allowPrivilegeEscalation: false,
+                   readOnlyRootFilesystem: true,
+                   capabilities: { drop: ['ALL'] },
+                 },
+                 ports: [{ name: 'http', containerPort: 8080 }],
+               },
+             ],
+           },
         },
       },
     });
