@@ -65,4 +65,5 @@ module "infra-resources" {
   enable_cert_manager_tls_issuer             = false
   azurerm_dis_identity_resource_group_id     = module.aks.dis_resource_group_id
   azurerm_kubernetes_cluster_oidc_issuer_url = module.aks.aks_oidc_issuer_url
+  lakmus_client_id                           = module.observability.lakmus_client_id
 }

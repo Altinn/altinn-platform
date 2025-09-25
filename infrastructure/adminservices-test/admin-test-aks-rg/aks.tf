@@ -50,6 +50,7 @@ module "aks_resources" {
   token_grafana_operator           = var.token_grafana_operator
   grafana_dashboard_release_branch = "main"
   enable_grafana_operator          = true
+  lakmus_client_id                 = module.observability.lakmus_client_id
   subscription_id                  = var.subscription_id
   enable_cert_manager_tls_issuer   = false
 }
