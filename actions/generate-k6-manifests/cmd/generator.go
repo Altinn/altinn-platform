@@ -215,7 +215,7 @@ func (r K8sManifestGenerator) Generate() {
 
 				// Add Env Vars to archive
 				mergedEnvs := handleExtraEnvVars(envFileSlice, c.TestRun.Env)
-				var k6ArchiveArgs []string
+				k6ArchiveArgs := []string{"--env", fmt.Sprintf("%s=%s", "ENVIRONMENT", c.Environment)}
 				for _, env := range mergedEnvs {
 					// --env MY_USER_AGENT="hello"
 					k6ArchiveArgs = append(k6ArchiveArgs, "--env", fmt.Sprintf("%s=%s", *env.Name, *env.Value))
