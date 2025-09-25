@@ -5,7 +5,7 @@ set -e
 # renovate: datasource=github-tags depName=kubectl packageName=kubernetes/kubectl versioning=semver extractVersion=^kubernetes-(?<version>.*)$
 KUBECTL_VERSION="v1.33.4" #Get the latest version with: curl -L -s https://dl.k8s.io/release/stable.txt
 # renovate: datasource=github-releases depName=helm packageName=helm/helm versioning=semver
-HELM_VERSION="v3.18.6" #Find the latest version at https://github.com/helm/helm/releases
+HELM_VERSION="v3.19.0" #Find the latest version at https://github.com/helm/helm/releases
 
 ###################################
 ### Install kubectl
