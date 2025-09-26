@@ -69,7 +69,9 @@
          ],
          "metadata": {
             "labels": {
-               "k6-test": "{{ .UniqueName }}"
+               "k6-test": "{{ .UniqueName }}",
+               "test_name": "{{ .TestName }}",
+               "testid": "{{ .UniqueName }}"
             }
          },
          "nodeSelector": {

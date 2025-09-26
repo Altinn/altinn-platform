@@ -29,6 +29,31 @@ podLogs:
   gatherMethod: kubernetesApi
   collector: alloy-logs
   namespaces: ${jsonencode(namespaces)}
+  labels:
+    app_kubernetes_io_name: app.kubernetes.io/name
+    testid: testid
+    test_name: test_name
+  labelsToKeep:
+    - app.kubernetes.io/name
+    - container
+    - instance
+    - job
+    - level
+    - namespace
+    - service.name
+    - service.namespace
+    - deployment.environment
+    - deployment.environment.name
+    - k8s.namespace.name
+    - k8s.deployment.name
+    - k8s.statefulset.name
+    - k8s.daemonset.name
+    - k8s.cronjob.name
+    - k8s.job.name
+    - k8s.node.name
+    # custom
+    - testid
+    - test_name
 
 # Collectors
 alloy-singleton:

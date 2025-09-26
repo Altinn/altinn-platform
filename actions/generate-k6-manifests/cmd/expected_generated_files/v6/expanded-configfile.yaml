@@ -11,7 +11,7 @@ test_definitions:
             enabled: true
             config_file: ""
           test_run:
-            name: k8s-wrapper-deployments
+            name: get-deployments
             parallelism: 1
             resources:
                 requests:
@@ -30,7 +30,7 @@ test_definitions:
             enabled: true
             config_file: actions/generate-k6-manifests/test_service/test_configs/yt01_config.json
           test_run:
-            name: k8s-wrapper-ds
+            name: get-daemonsets
             parallelism: 1
             resources:
                 requests:
