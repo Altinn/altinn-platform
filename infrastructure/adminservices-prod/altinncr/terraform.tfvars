@@ -61,6 +61,34 @@ acr_push_object_ids = [
     object_id = "fc900cb0-fb05-45f9-be11-f4a663b3c9a3" # SP: GitHub: altinn/altinn-tools
     type      = "ServicePrincipal"
   },
+  {
+    object_id = "27bfa3f2-2b60-4de5-a3b9-09dd3b01b490" # SP: Github: altinn/correspondence-prod
+    type      = "ServicePrincipal"
+  },
+  {
+    object_id = "d3c35a12-5465-4ba3-b50d-8ab1bedbef2a" # SP: Github: altinn/correspondence-test
+    type      = "ServicePrincipal"
+  },
+  {
+    object_id = "e3d2ce71-0d61-4332-9d44-278aac2846ab" # SP: Github: altinn/correspondence-staging
+    type      = "ServicePrincipal"
+  },
+  {
+    object_id = "3f5e6dcb-b782-49ca-939f-fd21dda34e4e" # SP: Github: altinn/broker-prod
+    type      = "ServicePrincipal"
+  },
+  {
+    object_id = "e5213800-3bdc-4f13-a212-0f4c8cd6c1ea" # SP: Github: altinn/broker-test
+    type      = "ServicePrincipal"
+  },
+  {
+    object_id = "512341b6-a349-4d08-8301-154a48a43b13" # SP: Github: altinn/altinn-studio dev
+    type      = "ServicePrincipal"
+  },
+  {
+    object_id = "99357379-c461-45bc-b9e7-6a2a51ccdac0" # SP: Github: altinn/altinn-studio prod
+    type      = "ServicePrincipal"
+  }
 ]
 
 acr_pull_object_ids = [
