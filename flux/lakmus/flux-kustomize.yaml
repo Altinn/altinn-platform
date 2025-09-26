@@ -8,7 +8,7 @@ spec:
   images:
     - name: ghcr.io/altinn/altinn-platform/lakmus
       newName: altinncr.azurecr.io/ghcr.io/altinn/altinn-platform/lakmus
-      newTag: v0.0.1
+      newTag: v1.0.0
   interval: 5m0s
   path: ./default
   postBuild:
