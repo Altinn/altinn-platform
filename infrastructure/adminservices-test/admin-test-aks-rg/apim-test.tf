@@ -10,4 +10,5 @@ module "dis_apim_test" {
   apim_service_name                  = "altinn-apim-test-apim"
   target_namespace                   = "dis-altinn-apim-test-operator"
   default_logger_name                = "altinn-apim-test-apimlogger"
+  namespace_suffix                   = "-apim-dev"
 }
