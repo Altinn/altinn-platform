@@ -112,6 +112,8 @@ local testrun = {
         metadata: {
           labels: {
             'k6-test': unique_name,
+            testid: testid,
+            test_name: test_name,
           },
         },
         resources: resources,

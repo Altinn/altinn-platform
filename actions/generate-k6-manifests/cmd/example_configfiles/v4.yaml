@@ -4,7 +4,7 @@ test_definitions:
     contexts:
       - environment: at22
         test_run:
-          name: "k8s-wrapper-deployments"
+          name: "get-deployments"
         test_type:
           type: spike # Check Grafana to see the spike
           enabled: true

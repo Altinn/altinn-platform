@@ -53,7 +53,9 @@ func validateTestRun(path, dirName, testVersion, deployEnv string, t *testing.T)
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
-	manifestGenerationTimestamp := strings.Split(uniqName, "-")[len(strings.Split(uniqName, "-"))-2]
+	splitName := strings.Split(uniqName, "-")
+	manifestGenerationTimestamp := splitName[len(splitName)-2]
+	testName := fmt.Sprintf("%s-%s", splitName[len(splitName)-4], splitName[len(splitName)-3])
 
 	generatedFile, knownExpectedFile, equalContents := readFileAndCompareWithTemplatedFile(
 		path,
@@ -63,6 +65,7 @@ func validateTestRun(path, dirName, testVersion, deployEnv string, t *testing.T)
 			"DirName":                     dirName,
 			"DeployEnv":                   deployEnv,
 			"ManifestGenerationTimestamp": manifestGenerationTimestamp,
+			"TestName":                    testName,
 		},
 	)
 	if !equalContents {

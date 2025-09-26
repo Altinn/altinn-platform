@@ -9,7 +9,7 @@
       "namespace": "platform"
    },
    "spec": {
-      "arguments": "--tag testid={{ .UniqueName }} --tag namespace=platform --tag deploy_env=yt01 --tag test_name=k8s-wrapper-ds --out experimental-prometheus-rw",
+      "arguments": "--tag testid={{ .UniqueName }} --tag namespace=platform --tag deploy_env=yt01 --tag test_name=get-daemonsets --out experimental-prometheus-rw",
       "cleanup": "post",
       "parallelism": 1,
       "runner": {
@@ -65,7 +65,9 @@
          ],
          "metadata": {
             "labels": {
-               "k6-test": "{{ .UniqueName }}"
+               "k6-test": "{{ .UniqueName }}",
+               "test_name": "{{ .TestName }}",
+               "testid": "{{ .UniqueName }}"
             }
          },
          "nodeSelector": { },

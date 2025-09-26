@@ -4,7 +4,7 @@ test_definitions:
     contexts:
       - environment: at22
         test_run:
-          name: "k8s-wrapper-deployments"
+          name: "get-deployments"
           resources:
             requests:
               cpu: "1"
@@ -18,7 +18,7 @@ test_definitions:
           enabled: true
           config_file: actions/generate-k6-manifests/test_service/test_configs/yt01_config.json
         test_run:
-          name: "k8s-wrapper-ds"
+          name: "get-daemonsets"
           env:
             - name: API_VERSION
               value: 3

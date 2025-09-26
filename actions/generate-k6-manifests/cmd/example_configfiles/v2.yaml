@@ -6,4 +6,4 @@ test_definitions:
       - environment: at22
         node_type: "default"
         test_run:
-          name: "k8s-wrapper-deployments"
+          name: "get-deployments"
