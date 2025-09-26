@@ -1,5 +1,5 @@
 resource "azapi_resource" "cert_manager_issuer" {
-  count = var.enable_cert_manager_tls_issuer ? 1 : 0
+  count      = var.enable_cert_manager_tls_issuer ? 1 : 0
   depends_on = [azapi_resource.cert_manager]
   type       = "Microsoft.KubernetesConfiguration/fluxConfigurations@2025-04-01"
   name       = "tls-issuer"

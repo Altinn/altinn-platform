@@ -66,4 +66,5 @@ module "infra-resources" {
   azurerm_dis_identity_resource_group_id     = module.aks.dis_resource_group_id
   azurerm_kubernetes_cluster_oidc_issuer_url = module.aks.aks_oidc_issuer_url
   lakmus_client_id                           = module.observability.lakmus_client_id
+  developer_entra_id_group                   = var.developer_entra_id_group
 }
