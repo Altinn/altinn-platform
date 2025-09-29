@@ -202,6 +202,13 @@ resource "azurerm_role_assignment" "grafana_editors" {
   skip_service_principal_aad_check = true
 }
 
+resource "azurerm_role_assignment" "grafna_monitors_viewer" {
+  scope                = azurerm_dashboard_grafana.grafana.id
+  role_definition_name = "Grafana Viewer"
+  principal_id         = "07a416db-8783-459b-a469-1e17ae37000d"
+  principal_type       = "User"
+}
+
 resource "azurerm_role_assignment" "log_analytics_reader" {
   principal_id                     = azurerm_dashboard_grafana.grafana.identity[0].principal_id
   scope                            = azurerm_log_analytics_workspace.application.id
