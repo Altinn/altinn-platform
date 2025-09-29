@@ -1,7 +1,7 @@
 resource "azapi_resource" "lakmus" {
-  type       = "Microsoft.KubernetesConfiguration/fluxConfigurations@2024-11-01"
-  name       = "lakmus"
-  parent_id  = var.azurerm_kubernetes_cluster_id
+  type      = "Microsoft.KubernetesConfiguration/fluxConfigurations@2024-11-01"
+  name      = "lakmus"
+  parent_id = var.azurerm_kubernetes_cluster_id
   body = {
     properties = {
       kustomizations = {
@@ -10,7 +10,7 @@ resource "azapi_resource" "lakmus" {
           path  = "./"
           postBuild = {
             substitute = {
-              AZURE_SUBSCRIPTION_ID = "${var.subscription_id}"
+              AZURE_SUBSCRIPTION_ID              = "${var.subscription_id}"
               LAKMUS_WORKLOAD_IDENTITY_CLIENT_ID = "${var.lakmus_client_id}"
             }
           }
