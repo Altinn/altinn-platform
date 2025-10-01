@@ -184,9 +184,13 @@ func (r K8sManifestGenerator) Generate() {
 			if c.TestTypeDefinition.Enabled {
 				var configFile map[string]interface{}
 				if *c.TestTypeDefinition.Type != "custom" {
-					configFile = r.HandleConfigFile(td.ConfigFile, *c.TestTypeDefinition.Type)
-					if c.TestTypeDefinition.ConfigFile != "" {
-						configFile = r.HandleConfigFileOverride(configFile, c.TestTypeDefinition.ConfigFile)
+					if *c.TestTypeDefinition.Type == "breakpoint" {
+						configFile = r.HandleBreakpointConfigFile(c.TestRun.Env)
+					} else {
+						configFile = r.HandleConfigFile(td.ConfigFile, *c.TestTypeDefinition.Type)
+						if c.TestTypeDefinition.ConfigFile != "" {
+							configFile = r.HandleConfigFileOverride(configFile, c.TestTypeDefinition.ConfigFile)
+						}
 					}
 				}
 
@@ -334,6 +338,66 @@ func (r K8sManifestGenerator) HandleConfigFileOverride(base map[string]interface
 	maps.Copy(base, override)
 
 	return base
+}
+
+func (r K8sManifestGenerator) HandleBreakpointConfigFile(envSlice []*Env) map[string]interface{} {
+	env := map[string]string{}
+	for _, e := range envSlice {
+		if strings.HasPrefix(*e.Name, "BREAKPOINT_") {
+			env[*e.Name] = *e.Value
+		}
+	}
+	var breakPointConf BreakpointConfig
+
+	defaultScenario, err := os.ReadFile(fmt.Sprintf("%s/%s.json", r.DefaultScenariosDirectory, "breakpoint"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = json.Unmarshal([]byte(defaultScenario), &breakPointConf)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	duration, ok := env["BREAKPOINT_STAGE_DURATION"]
+	if ok {
+		breakPointConf.Stages[0].Duration = duration
+	}
+
+	target, ok := env["BREAKPOINT_STAGE_TARGET"]
+	if ok {
+		i, err := strconv.Atoi(target)
+		if err != nil {
+			log.Fatal(err)
+		}
+		breakPointConf.Stages[0].Target = i
+	}
+
+	abortOnFail, ok := env["BREAKPOINT_STAGE_ABORTONFAIL"]
+	if ok {
+		b, err := strconv.ParseBool(abortOnFail)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for k := range breakPointConf.Thresholds {
+			for idx := range breakPointConf.Thresholds[k] {
+				breakPointConf.Thresholds[k][idx].AbortOnFail = b
+			}
+		}
+	}
+
+	// TODO: Hacky, make a better interface as we are likely to do something similar with smoke tests, etc.
+	var gInterface map[string]interface{}
+	breakPointConfMarshalled, err := json.Marshal(breakPointConf)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = json.Unmarshal(breakPointConfMarshalled, &gInterface)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return gInterface
 }
 
 func (r K8sManifestGenerator) HandleConfigFile(defaultConfigFile string, testType string) map[string]interface{} {
