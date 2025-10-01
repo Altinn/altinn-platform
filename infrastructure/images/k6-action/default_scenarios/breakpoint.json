@@ -2,23 +2,23 @@
     "executor": "ramping-arrival-rate",
     "stages": [
         {
-            "duration": "2h",
-            "target": 20000
+            "duration": "10m",
+            "target": 100
         }
     ],
     "thresholds": {
         "http_req_failed": [
             {
-                "threshold": "rate<0.01",
+                "threshold": "rate==0.0",
                 "abortOnFail": true,
-                "delayAbortEval": "1s"
+                "delayAbortEval": "10s"
             }
         ],
         "http_req_duration": [
             {
-                "threshold": "p(95)<200",
+                "threshold": "max<5000",
                 "abortOnFail": true,
-                "delayAbortEval": "1s"
+                "delayAbortEval": "10s"
             }
         ]
     }
