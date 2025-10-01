@@ -5,7 +5,8 @@ inputs:
   flux_version:
     description: "Version of flux to use"
     required: false
-    default: "latest"
+    # renovate: datasource=github-releases depName=flux-cli packageName=fluxcd/flux2 versioning=semver
+    default: "2.6.4"
     type: string
   azure_app_id:
     description: "Azure application id used to authenticate to altinncr"
