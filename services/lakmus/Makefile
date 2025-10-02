@@ -29,7 +29,7 @@ manifests:
 	  echo "$(FLUX_OUT) does not exist. Please create the flux folder first."; \
 	  exit 1; \
 	fi
-	@echo ">> Synthesizing manifests into $(FLUX_OUT)/lakmus-manifests.yaml"
+	@echo ">> Synthesizing all manifests into $(FLUX_OUT)"
 	cd "$(MANIFESTS_DIR)" && npx cdk8s synth \
 	  --app "npx ts-node main.ts" \
 	  --output "$(FLUX_OUT)"
