@@ -4,5 +4,4 @@ metadata:
   name: lakmus
   namespace: flux-system
 resources:
-  - oci-repository.yaml
-  - flux-kustomize.yaml
+  - lakmus-manifests.yaml
