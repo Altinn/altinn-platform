@@ -4,6 +4,8 @@ import * as kplus from 'cdk8s-plus-32';
 import * as k8s from './imports/k8s';
 import { ApiObject, App, YamlOutputType } from 'cdk8s';
 
+const IMAGE_TAG  = process.env.IMAGE_TAG  ?? 'latest'; 
+
 export class LakmusChart extends cdk8s.Chart {
   constructor(scope: Construct, id: string) {
     super(scope, id);
@@ -51,7 +53,7 @@ export class LakmusChart extends cdk8s.Chart {
              containers: [
                {
                  name: 'lakmus',
-                 image: 'ghcr.io/altinn/altinn-platform/lakmus',
+                 image: `altinncr.azurecr.io/ghcr.io/altinn/altinn-platform/lakmus:${IMAGE_TAG}`,
                  args: ['--subscription-id=$(AZURE_SUBSCRIPTION_ID)'],
                  env: [
                    { name: 'AZURE_SUBSCRIPTION_ID', value: '${AZURE_SUBSCRIPTION_ID}' },
@@ -96,9 +98,24 @@ export class LakmusChart extends cdk8s.Chart {
   }
 }
 
+class RootKustomization extends cdk8s.Chart {
+  constructor(scope: Construct, id: string) {
+    super(scope, id);
+
+    // Plain kustomize Kustomization that references only the workload file
+    new ApiObject(this, 'RootKustomization', {
+      apiVersion: 'kustomize.config.k8s.io/v1beta1',
+      kind: 'Kustomization',
+      metadata: { name: 'lakmus', namespace: 'flux-system' },
+      resources: ['lakmus-manifests.yaml'],
+    });
+  }
+}
+
 const app = new App({
   outputFileExtension: '.yaml',
   yamlOutputType: YamlOutputType.FILE_PER_CHART,
 });
-new LakmusChart(app, 'lakmus');
+new LakmusChart(app, 'lakmus-manifests');
+new RootKustomization(app, 'kustomization');
 app.synth();
