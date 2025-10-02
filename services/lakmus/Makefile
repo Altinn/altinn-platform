@@ -29,6 +29,13 @@ manifests:
 	  echo "$(FLUX_OUT) does not exist. Please create the flux folder first."; \
 	  exit 1; \
 	fi
+
+	@echo ">> Cleaning old cdk8s imports"
+	rm -rf $(MANIFESTS_DIR)/imports
+
+	@echo ">> Updating cdk8s imports"
+	cd $(MANIFESTS_DIR) && npx cdk8s import
+
 	@echo ">> Synthesizing all manifests into $(FLUX_OUT)"
 	cd "$(MANIFESTS_DIR)" && npx cdk8s synth \
 	  --app "npx ts-node main.ts" \

@@ -2,5 +2,3 @@ language: typescript
 app: npx ts-node main.ts
 imports:
   - k8s
-  - https://github.com/fluxcd/source-controller/releases/download/v1.6.2/source-controller.crds.yaml
-  - https://github.com/fluxcd/kustomize-controller/releases/download/v1.6.1/kustomize-controller.crds.yaml
