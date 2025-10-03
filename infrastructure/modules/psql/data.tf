@@ -5,16 +5,11 @@ data "azuread_service_principal" "current" {
 }
 
 data "azuread_group" "psql_admin_groups" {
-  for_each = toset(var.psql_AdminGroups)
-  display_name = each.value
-}
-
-data "azurerm_log_analytics_workspace" "workspace" {
-  name                = var.log_analytics_workspace_name
-  resource_group_name = var.log_analytics_workspace_rg
+  for_each  = toset(var.psql_admin_group_ids)
+  object_id = each.value
 }
 
 data "azurerm_virtual_network" "psql" {
-  name                = var.psql_NetworkName
-  resource_group_name = var.psql_NetworkResourceGroup
+  name                = var.psql_network_name
+  resource_group_name = var.psql_network_resource_group
 }

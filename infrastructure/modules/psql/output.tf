@@ -31,11 +31,16 @@ output "psql_database_name" {
 }
 
 output "psql_private_dns_zone_name" {
-  value = var.psql_enable_vnet_integration ? azurerm_private_dns_zone.psql[0].name : null
+  description = "Name of private DNS zone if module created it; null if external supplied."
+  value       = local.create_private_dns_zone ? try(azurerm_private_dns_zone.psql[0].name, null) : null
 }
 
-output "psql_private_dns_zone_id" {
-  value = var.psql_enable_vnet_integration ? azurerm_private_dns_zone.psql[0].id : null
+output "psql_effective_private_dns_zone_id" {
+  description = "Effective private DNS zone ID (created or supplied). Null hvis private DNS ikke brukes."
+  value       = var.psql_enable_private_access ? coalesce(
+    var.existing_private_dns_zone_id,
+    try(azurerm_private_dns_zone.psql[0].id, null)
+  ) : null
 }
 
 output "psql_actual_storage_mb" {

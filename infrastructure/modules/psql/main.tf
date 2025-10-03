@@ -1,10 +1,10 @@
 resource "azurerm_subnet" "psql" {
-  count = var.psql_enable_vnet_integration ? 1 : 0
-  name  = coalesce(var.psql_subnet_name, "${var.psql_ServerName}-subnet")
-  resource_group_name               = var.psql_NetworkResourceGroup
-  virtual_network_name              = var.psql_NetworkName
+  count                             = var.psql_enable_private_access ? 1 : 0
+  name                              = coalesce(var.psql_subnet_name, "${var.psql_server_name}-subnet")
+  resource_group_name               = var.psql_network_resource_group
+  virtual_network_name              = var.psql_network_name
   private_endpoint_network_policies = "Enabled"
-  address_prefixes                  = [var.psql_SubnetCidr]
+  address_prefixes                  = [var.psql_subnet_cidr]
   service_endpoints                 = ["Microsoft.Storage"]
   delegation {
     name = "fs"
@@ -17,6 +17,10 @@ resource "azurerm_subnet" "psql" {
   }
 }
 
+locals {
+  create_private_dns_zone = var.psql_enable_private_access && var.existing_private_dns_zone_id == null
+}
+
 resource "azurerm_private_dns_zone" "psql" {
   lifecycle {
     ignore_changes = [
@@ -24,9 +28,9 @@ resource "azurerm_private_dns_zone" "psql" {
       tags["solution"],
     ]
   }
-  count               = var.psql_enable_vnet_integration ? 1 : 0
-  name                = "${var.psql_ServerName}.privatelink.postgres.database.azure.com"
-  resource_group_name = var.psql_ResourceGroup
+  count               = local.create_private_dns_zone ? 1 : 0
+  name                = "${var.psql_server_name}.private.postgres.database.azure.com"
+  resource_group_name = var.psql_resource_group
 
   tags = {
     env     = "${var.environment}"
@@ -43,11 +47,19 @@ resource "azurerm_private_dns_zone_virtual_network_link" "psql" {
       tags["solution"],
     ]
   }
-  count                 = var.psql_enable_vnet_integration ? 1 : 0
-  name                  = "${var.psql_ServerName}-link"
+  count                 = local.create_private_dns_zone ? 1 : 0
+  name                  = "${var.psql_server_name}-link"
   private_dns_zone_name = azurerm_private_dns_zone.psql[0].name
+  resource_group_name   = var.psql_resource_group
   virtual_network_id    = data.azurerm_virtual_network.psql.id
-  resource_group_name   = var.psql_ResourceGroup
+  registration_enabled  = false
+}
+
+locals {
+  effective_private_dns_zone_id = coalesce(
+    var.existing_private_dns_zone_id,
+    try(azurerm_private_dns_zone.psql[0].id, null)
+  )
 }
 
 resource "azurerm_user_assigned_identity" "psql_identity" {
@@ -57,8 +69,8 @@ resource "azurerm_user_assigned_identity" "psql_identity" {
       tags["solution"],
     ]
   }
-  name                = "${var.psql_ServerName}-identity"
-  resource_group_name = var.psql_ResourceGroup
+  name                = "${var.psql_server_name}-identity"
+  resource_group_name = var.psql_resource_group
   location            = var.location
 
   tags = {
@@ -78,21 +90,21 @@ resource "azurerm_postgresql_flexible_server" "psql" {
       storage_mb,  # Always ignore to avoid drift after AutoGrow
     ]
   }
-  name                            = "${var.psql_ServerName}"
-  resource_group_name             = var.psql_ResourceGroup
+  name                            = "${var.psql_server_name}"
+  resource_group_name             = var.psql_resource_group
   location                        = var.location
-  version                         = var.psql_Version
-  delegated_subnet_id             = var.psql_enable_vnet_integration ? azurerm_subnet.psql[0].id : null #azurerm_subnet.psql.id
-  private_dns_zone_id             = var.psql_enable_vnet_integration ? azurerm_private_dns_zone.psql[0].id : null #azurerm_private_dns_zone.psql.id
-  public_network_access_enabled   = var.psql_enable_vnet_integration ? false : true
+  version                         = var.psql_version
+  delegated_subnet_id             = var.psql_enable_private_access ? azurerm_subnet.psql[0].id : null
+  private_dns_zone_id             = var.psql_enable_private_access ? azurerm_private_dns_zone.psql[0].id : null
+  public_network_access_enabled   = var.psql_enable_private_access ? false : true
   backup_retention_days           = var.psql_backup_retention_days
-  geo_redundant_backup_enabled    = var.psql_GeoRedundantBackup
+  geo_redundant_backup_enabled    = var.psql_geo_redundant_backup_enabled
 
-  storage_mb                      = var.psql_StorageSize
-  auto_grow_enabled               = var.psql_StorageAutoGrow 
+  storage_mb                      = var.psql_storage_size
+  auto_grow_enabled               = var.psql_storage_auto_grow
 
-  sku_name                        = var.psql_ComputeSize
-  storage_tier                    = var.psql_StorageTier == null ? null : var.psql_StorageTier
+  sku_name                        = var.psql_compute_size
+  storage_tier                    = var.psql_storage_tier == null ? null : var.psql_storage_tier
   depends_on                      = [azurerm_private_dns_zone_virtual_network_link.psql]
 
   authentication {
@@ -107,7 +119,7 @@ resource "azurerm_postgresql_flexible_server" "psql" {
   }
 
   dynamic "high_availability" {
-    for_each = var.psql_HighAvailability == true ? [1] : []
+    for_each = var.psql_high_availability_enabled == true ? [1] : []
     content {
       mode = "ZoneRedundant"
     }
@@ -128,14 +140,14 @@ resource "azurerm_postgresql_flexible_server" "psql" {
 }
 
 resource "azurerm_postgresql_flexible_server_configuration" "pgbouncer_enabled" {
-  count     = var.psql_pgbouncer ? 1 : 0
+  count     = var.psql_pgbouncer_enabled ? 1 : 0
   name      = "pgbouncer.enabled"
   server_id = azurerm_postgresql_flexible_server.psql.id
   value     = "true"
 }
 
 resource "azurerm_postgresql_flexible_server_configuration" "pgbouncer_pool_mode" {
-  count     = var.psql_pgbouncer ? 1 : 0
+  count     = var.psql_pgbouncer_enabled ? 1 : 0
   name      = "pgbouncer.pool_mode"
   server_id = azurerm_postgresql_flexible_server.psql.id
   value     = var.psql_pgbouncer_pool_mode
@@ -179,15 +191,15 @@ resource "azurerm_management_lock" "flexible_server" {
 }
 
 resource "azurerm_postgresql_flexible_server_database" "psql" {
-  name      = var.psql_dbname
+  name      = var.psql_database_name
   server_id = azurerm_postgresql_flexible_server.psql.id
-  collation = var.psql_DatabaseCollation
+  collation = var.psql_database_collation
   charset   = "utf8"
 }
 
 resource "azurerm_postgresql_flexible_server_virtual_endpoint" "psql" {
-  count             = var.psql_enable_endpoint ? 1 : 0
-  name              = var.psql_endpoint_name
+  count             = var.psql_enable_virtual_endpoint ? 1 : 0
+  name              = var.psql_virtual_endpoint_name
   source_server_id  = azurerm_postgresql_flexible_server.psql.id
   replica_server_id = azurerm_postgresql_flexible_server.psql.id
   type              = "ReadWrite"
@@ -258,7 +270,7 @@ data "azapi_resource" "psql_actual" {
   count  = var.psql_track_actual_storage ? 1 : 0
   type   = "Microsoft.DBforPostgreSQL/flexibleServers@2023-12-01-preview"
   name   = azurerm_postgresql_flexible_server.psql.name
-  parent_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${var.psql_ResourceGroup}"
+  parent_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${var.psql_resource_group}"
   response_export_values = ["properties.storage.sizeGb"]
   depends_on = [azurerm_postgresql_flexible_server.psql]
 }
@@ -272,35 +284,9 @@ locals {
 }
 
 resource "azurerm_postgresql_flexible_server_firewall_rule" "psql" {
-  for_each = var.psql_enable_vnet_integration ? {} : var.psql_firewall_rules
-  name      = each.key
-  server_id = azurerm_postgresql_flexible_server.psql.id
+  for_each         = var.psql_enable_private_access ? {} : var.psql_firewall_rules
+  name             = each.key
+  server_id        = azurerm_postgresql_flexible_server.psql.id
   start_ip_address = each.value.start_ip
   end_ip_address   = each.value.end_ip
 }
-
-#Example of peering
-/*
-resource "azurerm_virtual_network_peering" "psql_to_aks" {
-  name                      = var.aks_vnet_name
-  resource_group_name       = azurerm_resource_group.psql.name
-  virtual_network_name      = azurerm_virtual_network.psql.name
-  remote_virtual_network_id = var.aks_vnet_id
-
-  allow_virtual_network_access = true
-  allow_forwarded_traffic      = true
-  allow_gateway_transit        = false
-  use_remote_gateways          = false
-}
-resource "azurerm_virtual_network_peering" "aks_to_psql" {
-  name                      = azurerm_virtual_network.psql.name
-  resource_group_name       = var.aks_resource_group_name
-  virtual_network_name      = var.aks_vnet_name
-  remote_virtual_network_id = azurerm_virtual_network.psql.id
-
-  allow_virtual_network_access = true
-  allow_forwarded_traffic      = true
-  allow_gateway_transit        = false
-  use_remote_gateways          = false
-}
-*/

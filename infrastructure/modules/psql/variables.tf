@@ -1,4 +1,4 @@
-variable "psql_SubnetCidr" {
+variable "psql_subnet_cidr" {
   type        = string
   description = "The CIDR range to use for psql subnet"
 }
@@ -18,17 +18,18 @@ variable "location" {
   default     = "norwayeast"
   description = "The location where the resources will be placed."
 }
-variable "psql_NetworkName" {
+
+variable "psql_network_name" {
   type        = string
   description = "psql network name"
 }
 
-variable "psql_NetworkResourceGroup" {
+variable "psql_network_resource_group" {
   type        = string
   description = "psql network name"
 }
 
-variable "psql_ResourceGroup" {
+variable "psql_resource_group" {
   type        = string
   description = "psql resource group"
 }
@@ -38,95 +39,96 @@ variable "product" {
   description = "Product the resource belongs to"
 }
 
-variable "psql_ComputeSize" {
+variable "psql_compute_size" {
   type        = string
   description = "psql compute size"
 }
 
-variable "psql_HighAvailability" {
+variable "psql_high_availability_enabled" {
   type        = bool
+  default     = true
   description = "Enable psql high availability"
 }
 
 variable "locks_off" {
   type        = bool
+  default     = false
   description = "If locks should be on or off"
 }
 
-variable "psql_AdminGroups" {
-  description = "A list of Azure AD groups to be used as administrators"
+variable "psql_admin_group_ids" {
+  description = "A list of EntraID group ids to be used as administrators"
   type        = list(string)
 }
 
-variable "psql_StorageSize" {
+variable "psql_storage_size" {
   description = "PostgreSQL storage size in MB"
   type        = number
 }
 
-variable "psql_dbname" {
+variable "psql_database_name" {
   description = "The name of the database"
   type        = string
 }
 
-variable "log_analytics_workspace_name" {
-  description = "Log analytics workspace name"
+variable "log_analytics_workspace_id" {
+  description = "Log analytics workspace id"
   type        = string
 }
 
-variable "log_analytics_workspace_rg" {
-  description = "Log analytics workspace resource group"
-  type        = string
-}
- 
-variable "psql_StorageAutoGrow" {
+variable "psql_storage_auto_grow" {
   type        = bool
+  default     = true
   description = "Enable psql storage auto grow"
 }
 
-variable "psql_GeoRedundantBackup" {
+variable "psql_geo_redundant_backup_enabled" {
   type        = bool
+  default     = true
   description = "Enable psql georedundant backup"
 }
 
-variable "psql_DatabaseCollation" {
+variable "psql_database_collation" {
   description = "The collation to use for the database"
   type        = string
 }
 
-variable "psql_ServerName" {
+variable "psql_server_name" {
   description = "The name of the psql server"
   type        = string
 }
  
-variable "psql_pgbouncer" {
+variable "psql_pgbouncer_enabled" {
   type        = bool
+  default     = false
   description = "Enable pgbouncer for postgresql" 
 }
 
 variable "psql_pgbouncer_pool_mode" {
   type        = string
+  default     = "transaction"
   description = "pgbouncer pool mode (SESSION, TRANSACTION, STATEMENT)"
 }
 
-variable "psql_enable_vnet_integration" {
+variable "psql_enable_private_access" {
   description = "Set to true to deploy PostgreSQL with VNet integration (private access). False for public access."
   type        = bool
   default     = true
 }
 
-variable "psql_Version" {
+variable "psql_version" {
   description = "PostgreSQL version to use"
   type        = string
 }
 
-variable "psql_enable_endpoint" {
-  description = "Set to true to deploy PostgreSQL with endpoint"
+variable "psql_enable_virtual_endpoint" {
+  description = "Set to true to deploy PostgreSQL with virtual endpoint"
   type        = bool
-  default     = true
+  default     = false
 }
 
-variable "psql_endpoint_name" {
-  description = "The name of the PostgreSQL endpoint"
+variable "psql_virtual_endpoint_name" {
+  description = "The name of the PostgreSQL virtual endpoint"
   type        = string
 }
 
@@ -144,7 +146,7 @@ variable "psql_maintenance_start_hour" {
 
 variable "psql_maintenance_start_minute" {
   type        = number
-  default     = 4
+  default     = 0
   description = "0, 5, 10 ... 55 (increments of 5)."
 }
 
@@ -211,37 +213,24 @@ variable "psql_custom_configurations" {
   }
 }
 
-variable "psql_schemas" {
-  description = "List of additional schemas to create in the primary database. Empty = none."
-  type        = list(string)
-  default     = []
-  validation {
-    condition = length([
-      for s in var.psql_schemas :
-      s if (length(trimspace(s)) > 0 && can(regex("^[a-zA-Z0-9_]+$", s)) && lower(s) != "public")
-    ]) == length(var.psql_schemas)
-    error_message = "Schemas must be non-empty, match ^[a-zA-Z0-9_]+$, and cannot be 'public'."
-  }
-}
-
 variable "psql_track_actual_storage" {
   description = "If true, expose actual grown storage size (read-only) via AzAPI. Does not change storage_mb."
   type        = bool
   default     = false
 }
 
-variable "psql_StorageTier" {
+variable "psql_storage_tier" {
   description = "Optional storage tier for the flexible server (e.g. P4, P6, P10 ...). Null = Azure default."
   type        = string
   default     = null
   validation {
     condition = (
-      var.psql_StorageTier == null ||
+      var.psql_storage_tier == null ||
       contains([
         "P4","P6","P10","P15","P20","P30","P40","P50","P60","P70","P80"
-      ], var.psql_StorageTier)
+      ], var.psql_storage_tier)
     )
-    error_message = "psql_StorageTier must be one of: P4,P6,P10,P15,P20,P30,P40,P50,P60,P70,P80 or null."
+    error_message = "psql_storage_tier must be one of: P4,P6,P10,P15,P20,P30,P40,P50,P60,P70,P80 or null."
   }
 }
 
@@ -312,4 +301,10 @@ variable "psql_subnet_name" {
   description = "Optional explicit name for the PostgreSQL subnet. Defaults to \"<psql_ServerName>-subnet\" when null."
   type        = string
   default     = null
+}
+
+variable "existing_private_dns_zone_id" {
+  type        = string
+  default     = null
+  description = "Set if zone already exists; module will not create zone or link."
 }

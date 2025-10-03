@@ -21,7 +21,7 @@ resource "azurerm_monitor_diagnostic_setting" "postgresql" {
   count                      = var.psql_diagnostics_enabled ? 1 : 0
   name                       = "psql-diag"
   target_resource_id         = azurerm_postgresql_flexible_server.psql.id
-  log_analytics_workspace_id = data.azurerm_log_analytics_workspace.workspace.id
+  log_analytics_workspace_id = var.log_analytics_workspace_id
 
   dynamic "enabled_log" {
     for_each = toset(local.psql_effective_log_categories)
@@ -30,11 +30,10 @@ resource "azurerm_monitor_diagnostic_setting" "postgresql" {
     }
   }
 
-  dynamic "metric" {
+  dynamic "enabled_metric" {
     for_each = toset(local.psql_effective_metric_categories)
     content {
-      category = metric.value
-      enabled  = true
+      category = enabled_metric.value
     }
   }
 }
