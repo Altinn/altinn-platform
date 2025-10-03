@@ -175,6 +175,24 @@ func (r K8sManifestGenerator) Generate() {
 	}
 	fmt.Printf("Wrote config file into: %s/expanded-configfile.yaml\n", r.ConfigDirectory)
 
+	cliArgs, ok := os.LookupEnv("INPUT_COMMAND_LINE_ARGS")
+	var envOptions []*Env
+	if ok {
+		args := strings.Fields(cliArgs)
+		for i, arg := range args {
+			if strings.HasPrefix(arg, "-e") || strings.HasPrefix(arg, "--env") {
+				if i < len(args)-1 {
+					keyValue := strings.Split(args[i+1], "=")
+					if len(keyValue) == 2 {
+						key := keyValue[0]
+						value := keyValue[1]
+						envOptions = append(envOptions, &Env{Name: &key, Value: &value})
+					}
+				}
+			}
+		}
+	}
+
 	for _, td := range cf.TestDefinitions {
 		var envFileSlice []*Env
 		if td.EnvFile != "" {
@@ -182,6 +200,7 @@ func (r K8sManifestGenerator) Generate() {
 		}
 		for i, c := range td.Contexts {
 			if c.TestTypeDefinition.Enabled {
+				c.TestRun.Env = append(c.TestRun.Env, envOptions...)
 				var configFile map[string]interface{}
 				if *c.TestTypeDefinition.Type != "custom" {
 					if *c.TestTypeDefinition.Type == "breakpoint" {
