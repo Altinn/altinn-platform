@@ -95,7 +95,7 @@ resource "azurerm_postgresql_flexible_server" "psql" {
   location                        = var.location
   version                         = var.psql_version
   delegated_subnet_id             = var.psql_enable_private_access ? azurerm_subnet.psql[0].id : null
-  private_dns_zone_id             = var.psql_enable_private_access ? azurerm_private_dns_zone.psql[0].id : null
+  private_dns_zone_id             = var.psql_enable_private_access ? local.effective_private_dns_zone_id : null
   public_network_access_enabled   = var.psql_enable_private_access ? false : true
   backup_retention_days           = var.psql_backup_retention_days
   geo_redundant_backup_enabled    = var.psql_geo_redundant_backup_enabled
