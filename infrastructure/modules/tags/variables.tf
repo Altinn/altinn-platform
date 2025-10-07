@@ -19,24 +19,33 @@ variable "finops_product" {
 }
 
 variable "finops_serviceownercode" {
-  description = "Service owner code for billing attribution"
+  description = "Service owner code for billing attribution - will be used to lookup organization number from Altinn CDN"
   type        = string
 
   validation {
-    condition     = can(regex("^(skd|udir|nav|na|[a-z]{2,5})$", var.finops_serviceownercode))
-    error_message = "Service owner code must be skd, udir, nav, na, or 2-5 lowercase letters."
+    condition     = contains(keys(jsondecode(data.http.altinn_orgs.response_body).orgs), var.finops_serviceownercode)
+    error_message = "Service owner code must exist in the Altinn organization registry. Check https://altinncdn.no/orgs/altinn-orgs.json for valid codes."
   }
 }
 
 variable "finops_serviceownerorgnr" {
-  description = "Service owner organization number (9 digits)"
+  description = "Service owner organization number (9 digits). If not provided, will be automatically looked up from finops_serviceownercode"
   type        = string
+  default     = null
 
   validation {
-    condition     = can(regex("^[0-9]{9}$", var.finops_serviceownerorgnr))
-    error_message = "Service owner organization number must be exactly 9 digits."
+    condition     = var.finops_serviceownerorgnr == null || can(regex("^[0-9]{9}$", var.finops_serviceownerorgnr))
+    error_message = "Service owner organization number must be exactly 9 digits when provided."
   }
 }
+
+
+# Data source to fetch organization data for validation
+data "http" "altinn_orgs" {
+  url = "https://altinncdn.no/orgs/altinn-orgs.json"
+}
+
+
 
 variable "capacity_values" {
   description = "Map of capacity values (in vCPUs) to be summed for total finops_capacity"

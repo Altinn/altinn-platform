@@ -19,7 +19,6 @@ module "tags" {
   finops_environment          = "prod"
   finops_product              = "dialogporten"
   finops_serviceownercode     = "skd"
-  finops_serviceownerorgnr    = "974761076"
   capacity_values = {
     webapp      = 4
     database    = 2
@@ -45,7 +44,6 @@ module "tags" {
   finops_environment          = "dev"
   finops_product              = "studio"
   finops_serviceownercode     = "skd"
-  finops_serviceownerorgnr    = "974761076"
   capacity_values = {
     app_service = 2
     functions   = 1
@@ -117,7 +115,6 @@ module "tags" {
   finops_environment       = "prod"
   finops_product          = "dialogporten"
   finops_serviceownercode = "skd"
-  finops_serviceownerorgnr = "974761076"
   capacity_values         = local.pool_capacities  # { syspool = 12, workpool = 24 }
   repository              = "github.com/altinn/dialogporten"
 }
@@ -145,12 +142,50 @@ module "tags" {
   finops_environment       = "prod"
   finops_product          = "studio"
   finops_serviceownercode = "skd"
-  finops_serviceownerorgnr = "974761076"
   capacity_values         = local.capacity_breakdown
   repository              = "github.com/altinn/altinn-studio"
 }
 
 # Result: finops_capacity tag = "50vcpu" (36 + 8 + 2 + 4)
+```
+
+### Automatic vs Override Examples
+
+**Automatic Lookup (Recommended):**
+```hcl
+module "tags" {
+  source              = "./modules/tags"
+  finops_environment  = "prod"
+  finops_product      = "dialogporten"
+  finops_serviceownercode = "skd"  # Will automatically resolve to "974761076"
+  capacity_values = {
+    webapp = 4
+  }
+  repository = "github.com/altinn/dialogporten"
+}
+
+# Outputs:
+# finops_serviceownerorgnr = "974761076" (automatically looked up)
+# organization_name = "Skatteetaten"
+```
+
+**Manual Override (When needed):**
+```hcl
+module "tags" {
+  source                   = "./modules/tags"
+  finops_environment       = "prod"
+  finops_product          = "dialogporten"
+  finops_serviceownercode = "skd"
+  finops_serviceownerorgnr = "123456789"  # Explicit override
+  capacity_values = {
+    webapp = 4
+  }
+  repository = "github.com/altinn/dialogporten"
+}
+
+# Outputs:
+# finops_serviceownerorgnr = "123456789" (provided override)
+# organization_name = null (not available when overriding)
 ```
 
 ## Variables
@@ -159,8 +194,8 @@ module "tags" {
 |------|-------------|------|----------|------------|---------|
 | `finops_environment` | Environment designation for cost allocation | `string` | Yes | Must be one of: `dev`, `test`, `prod`, `at22`, `at23`, `at24`, `yt01`, `tt02` | `"prod"` |
 | `finops_product` | Product name for cost allocation | `string` | Yes | Must be one of: `studio`, `dialogporten`, `formidling`, `autorisasjon`, `varsling`, `melding`, `altinn2` | `"dialogporten"` |
-| `finops_serviceownercode` | Service owner code for billing attribution | `string` | Yes | Must be `skd`, `udir`, `nav`, `na`, or 2-5 lowercase letters | `"skd"` |
-| `finops_serviceownerorgnr` | Service owner organization number (9 digits) | `string` | Yes | Exactly 9 digits | `"974761076"` |
+| `finops_serviceownercode` | Service owner code for billing attribution (organization number will be looked up automatically unless overridden) | `string` | Yes | Must exist in Altinn organization registry | `"skd"` |
+| `finops_serviceownerorgnr` | Service owner organization number override (optional) | `string` | No (default: null) | Exactly 9 digits when provided | `"974761076"` |
 | `capacity_values` | Map of capacity values (in vCPUs) to be summed for total finops_capacity | `map(number)` | No (default: {}) | All values must be non-negative numbers | `{ syspool = 12, workpool = 24 }` |
 | `repository` | Repository URL for infrastructure traceability | `string` | Yes | Must be from `github.com/altinn/` organization | `"github.com/altinn/dialogporten"` |
 | `createdby` | Who or what created the resource | `string` | No (default: "terraform") | Must be `terraform`, `azure-policy`, or valid username | `"terraform"` |
@@ -174,7 +209,8 @@ module "tags" {
 | `finops_environment` | Normalized environment name | `string` |
 | `finops_product` | Normalized product name | `string` |
 | `finops_serviceownercode` | Normalized service owner code | `string` |
-| `finops_serviceownerorgnr` | Service owner organization number | `string` |
+| `finops_serviceownerorgnr` | Service owner organization number (provided as input or automatically looked up) | `string` |
+| `organization_name` | Organization name in Norwegian (only available when using automatic lookup) | `string` |
 | `finops_capacity` | Total vCPU capacity calculated from provided capacity values | `string` |
 | `total_vcpus` | Total vCPU capacity calculated from all provided capacity values | `number` |
 | `capacity_breakdown` | Breakdown of individual capacity values used in calculation | `map(number)` |
@@ -216,11 +252,45 @@ The module automatically generates the following tags according to Altinn FinOps
 
 5. **Capacity Calculation**: Provide capacity values as numbers in the `capacity_values` map. The module will sum them and format as `{total}vcpu`.
 
-5. **Service Owner Codes**: Use approved codes (`skd`, `udir`, `nav`, `na`) or follow the 2-5 lowercase letter pattern.
+4. **Service Owner Codes**: Use only codes that exist in the Altinn organization registry. The organization number will be automatically looked up.
 
 6. **Repository URLs**: Always use repositories from `github.com/altinn/` organization for traceability.
 
 7. **Lowercase Convention**: All tag names are lowercase and singular, values are normalized to lowercase where appropriate.
+
+## Automatic Organization Lookup
+
+The module automatically fetches organization data from Altinn's CDN and looks up the organization number (`finops_serviceownerorgnr`) based on the provided service owner code. This ensures:
+
+- **Data Consistency**: Organization numbers are always accurate and up-to-date
+- **Simplified Usage**: You only need to provide the service owner code
+- **Validation**: The module validates that the service owner code exists in the registry
+- **Transparency**: The organization name is also available as an output
+
+Valid service owner codes include: `skd`, `udir`, `nav`, `digdir`, `brg`, `ssb`, and many others. See the [Altinn organization registry](https://altinncdn.no/orgs/altinn-orgs.json) for the complete list.
+
+### Override Organization Number
+
+If needed, you can override the automatic lookup by providing `finops_serviceownerorgnr` explicitly:
+
+```hcl
+module "tags" {
+  source                   = "./modules/tags"
+  finops_environment       = "prod"
+  finops_product          = "dialogporten"
+  finops_serviceownercode = "skd"
+  finops_serviceownerorgnr = "123456789"  # Override automatic lookup
+  capacity_values = {
+    webapp = 4
+  }
+  repository = "github.com/altinn/dialogporten"
+}
+```
+
+When you provide an explicit organization number:
+- The automatic lookup is bypassed
+- The `organization_name` output will be `null`
+- The provided organization number must be exactly 9 digits
 
 ## FinOps Integration
 
@@ -248,8 +318,8 @@ The module includes built-in validation to ensure compliance with Altinn FinOps 
 
 - **Environment**: Must be exactly one of `dev`, `test`, `prod`, `at22`, `at23`, `at24`, `yt01`, `tt02`
 - **Product**: Must be exactly one of `studio`, `dialogporten`, `formidling`, `autorisasjon`, `varsling`, `melding`, `altinn2`
-- **Service Owner Code**: Must be `skd`, `udir`, `nav`, `na`, or 2-5 lowercase letters
-- **Organization Number**: Must be exactly 9 digits
+- **Service Owner Code**: Must exist in the Altinn organization registry (see https://altinncdn.no/orgs/altinn-orgs.json)
+- **Organization Number Override**: Must be exactly 9 digits when provided
 - **Capacity Values**: All values in the map must be non-negative numbers
 - **Repository**: Must be from `github.com/altinn/` organization
 - **Created/Modified By**: Must be `terraform`, `azure-policy`, or valid username format
@@ -258,6 +328,7 @@ The module includes built-in validation to ensure compliance with Altinn FinOps 
 
 - Terraform >= 1.0
 - Time Provider ~> 0.9
+- HTTP Provider ~> 3.4 (for fetching organization data)
 
 ## License
 

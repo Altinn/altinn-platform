@@ -19,7 +19,7 @@ output "finops_serviceownercode" {
 }
 
 output "finops_serviceownerorgnr" {
-  description = "Service owner organization number"
+  description = "Service owner organization number (provided as input or automatically looked up from finops_serviceownercode)"
   value       = local.tags.finops_serviceownerorgnr
 }
 
@@ -61,4 +61,9 @@ output "total_vcpus" {
 output "capacity_breakdown" {
   description = "Breakdown of individual capacity values used in calculation"
   value       = var.capacity_values
+}
+
+output "organization_name" {
+  description = "Organization name in Norwegian (looked up from finops_serviceownercode, only available when using automatic lookup)"
+  value       = var.finops_serviceownerorgnr == null ? local.orgs_response.orgs[var.finops_serviceownercode].name.nb : null
 }
