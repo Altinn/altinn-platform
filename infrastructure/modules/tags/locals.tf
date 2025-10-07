@@ -20,9 +20,9 @@ locals {
     finops_serviceownercode  = lower(var.finops_serviceownercode)
     finops_serviceownerorgnr = var.finops_serviceownerorgnr != null ? var.finops_serviceownerorgnr : lookup(local.org_lookup, lower(var.finops_serviceownercode), "")
     finops_capacity          = "${local.total_vcpus}vcpu"
-    createdby                = lower(var.createdby)
+    createdby                = lower(var.current_user)
     createddate              = local.today
-    modifiedby               = lower(var.modifiedby)
+    modifiedby               = lower(var.current_user)
     modifieddate             = local.today
     repository               = lower(var.repository)
   }

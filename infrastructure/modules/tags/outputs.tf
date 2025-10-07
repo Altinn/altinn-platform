@@ -34,12 +34,12 @@ output "repository" {
 }
 
 output "createdby" {
-  description = "Who or what created the resource"
+  description = "Who or what created the resource (provided by caller)"
   value       = local.tags.createdby
 }
 
 output "modifiedby" {
-  description = "Who or what last modified the resource"
+  description = "Who or what last modified the resource (provided by caller)"
   value       = local.tags.modifiedby
 }
 

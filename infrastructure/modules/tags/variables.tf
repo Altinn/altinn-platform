@@ -70,24 +70,12 @@ variable "repository" {
   }
 }
 
-variable "createdby" {
-  description = "Who or what created the resource"
+variable "current_user" {
+  description = "Current user/service principal running Terraform. Used for both createdby and modifiedby."
   type        = string
-  default     = "terraform"
 
   validation {
-    condition     = can(regex("^(terraform|azure-policy|[a-z0-9._-]+)$", var.createdby))
-    error_message = "createdby must be 'terraform', 'azure-policy', or a valid username."
-  }
-}
-
-variable "modifiedby" {
-  description = "Who or what last modified the resource"
-  type        = string
-  default     = "terraform"
-
-  validation {
-    condition     = can(regex("^(terraform|azure-policy|[a-z0-9._-]+)$", var.modifiedby))
-    error_message = "modifiedby must be 'terraform', 'azure-policy', or a valid username."
+    condition     = can(regex("^[a-zA-Z0-9._@-]+$", var.current_user)) && length(var.current_user) >= 3
+    error_message = "current_user must be a meaningful identity (username, service principal name, or application name) with at least 3 characters."
   }
 }

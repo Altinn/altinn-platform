@@ -14,16 +14,20 @@ This Terraform module provides standardized tags for Azure resources following A
 ### Basic Example
 
 ```hcl
+# Get current Azure client configuration for traceability
+data "azurerm_client_config" "current" {}
+
 module "tags" {
-  source                      = "./modules/tags"
-  finops_environment          = "prod"
-  finops_product              = "dialogporten"
-  finops_serviceownercode     = "skd"
+  source                  = "./modules/tags"
+  finops_environment      = "prod"
+  finops_product          = "dialogporten"
+  finops_serviceownercode = "skd"
   capacity_values = {
-    webapp      = 4
-    database    = 2
+    webapp   = 4
+    database = 2
   }
-  repository                  = "github.com/altinn/dialogporten"
+  repository   = "github.com/altinn/dialogporten"
+  current_user = data.azurerm_client_config.current.client_id
 }
 
 resource "azurerm_storage_account" "example" {
@@ -33,29 +37,47 @@ resource "azurerm_storage_account" "example" {
   account_tier             = "Standard"
   account_replication_type = "LRS"
   tags                     = module.tags.tags
+
+  lifecycle {
+    ignore_changes = [
+      tags["createdby"],
+      tags["createddate"]
+    ]
+  }
 }
 ```
 
 ### Complete Example with Resource Group
 
 ```hcl
+# Get current Azure client configuration for traceability
+data "azurerm_client_config" "current" {}
+
 module "tags" {
-  source                      = "./modules/tags"
-  finops_environment          = "dev"
-  finops_product              = "studio"
-  finops_serviceownercode     = "skd"
+  source                  = "./modules/tags"
+  finops_environment      = "dev"
+  finops_product          = "studio"
+  finops_serviceownercode = "skd"
   capacity_values = {
     app_service = 2
     functions   = 1
     containers  = 4
   }
-  repository                  = "github.com/altinn/altinn-studio"
+  repository   = "github.com/altinn/altinn-studio"
+  current_user = data.azurerm_client_config.current.client_id
 }
 
 resource "azurerm_resource_group" "main" {
   name     = "rg-studio-dev"
   location = "Norway East"
   tags     = module.tags.tags
+
+  lifecycle {
+    ignore_changes = [
+      tags["createdby"],
+      tags["createddate"]
+    ]
+  }
 }
 
 resource "azurerm_app_service_plan" "main" {
@@ -69,6 +91,13 @@ resource "azurerm_app_service_plan" "main" {
   }
   
   tags = module.tags.tags
+
+  lifecycle {
+    ignore_changes = [
+      tags["createdby"],
+      tags["createddate"]
+    ]
+  }
 }
 ```
 
@@ -110,13 +139,17 @@ locals {
   }
 }
 
+# Get current Azure client configuration for traceability
+data "azurerm_client_config" "current" {}
+
 module "tags" {
-  source                   = "./modules/tags"
-  finops_environment       = "prod"
+  source                  = "./modules/tags"
+  finops_environment      = "prod"
   finops_product          = "dialogporten"
   finops_serviceownercode = "skd"
   capacity_values         = local.pool_capacities  # { syspool = 12, workpool = 24 }
   repository              = "github.com/altinn/dialogporten"
+  current_user            = data.azurerm_client_config.current.client_id
 }
 
 # Result: finops_capacity tag = "36vcpu" (12 + 24)
@@ -137,40 +170,68 @@ locals {
   }
 }
 
+# Get current Azure client configuration for traceability  
+data "azurerm_client_config" "current" {}
+
 module "tags" {
-  source                   = "./modules/tags"
-  finops_environment       = "prod"
+  source                  = "./modules/tags"
+  finops_environment      = "prod"
   finops_product          = "studio"
   finops_serviceownercode = "skd"
   capacity_values         = local.capacity_breakdown
   repository              = "github.com/altinn/altinn-studio"
+  current_user            = data.azurerm_client_config.current.client_id
 }
 
 # Result: finops_capacity tag = "50vcpu" (36 + 8 + 2 + 4)
 ```
 
-### Automatic vs Override Examples
+### Simple Usage Pattern
 
-**Automatic Lookup (Recommended):**
+**Standard Usage:**
 ```hcl
+# Get current Azure client configuration
+data "azurerm_client_config" "current" {}
+
 module "tags" {
-  source              = "./modules/tags"
-  finops_environment  = "prod"
-  finops_product      = "dialogporten"
+  source                  = "./modules/tags"
+  finops_environment      = "prod"
+  finops_product          = "dialogporten"
   finops_serviceownercode = "skd"  # Will automatically resolve to "974761076"
   capacity_values = {
     webapp = 4
   }
-  repository = "github.com/altinn/dialogporten"
+  repository   = "github.com/altinn/dialogporten"
+  current_user = data.azurerm_client_config.current.client_id
 }
 
-# Outputs:
+resource "azurerm_storage_account" "example" {
+  name                     = "mystorageaccount"
+  resource_group_name      = azurerm_resource_group.rg.name
+  location                 = azurerm_resource_group.rg.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+  tags                     = module.tags.tags
+
+  lifecycle {
+    ignore_changes = [
+      tags["createdby"],
+      tags["createddate"]
+    ]
+  }
+}
+
+# Results:
 # finops_serviceownerorgnr = "974761076" (automatically looked up)
 # organization_name = "Skatteetaten"
+# createdby = current_user
+# modifiedby = current_user
 ```
 
-**Manual Override (When needed):**
+**With Organization Number Override:**
 ```hcl
+data "azurerm_client_config" "current" {}
+
 module "tags" {
   source                   = "./modules/tags"
   finops_environment       = "prod"
@@ -180,12 +241,15 @@ module "tags" {
   capacity_values = {
     webapp = 4
   }
-  repository = "github.com/altinn/dialogporten"
+  repository   = "github.com/altinn/dialogporten"
+  current_user = data.azurerm_client_config.current.client_id
 }
 
-# Outputs:
+# Results:
 # finops_serviceownerorgnr = "123456789" (provided override)
 # organization_name = null (not available when overriding)
+# createdby = current_user
+# modifiedby = current_user
 ```
 
 ## Variables
@@ -198,8 +262,7 @@ module "tags" {
 | `finops_serviceownerorgnr` | Service owner organization number override (optional) | `string` | No (default: null) | Exactly 9 digits when provided | `"974761076"` |
 | `capacity_values` | Map of capacity values (in vCPUs) to be summed for total finops_capacity | `map(number)` | No (default: {}) | All values must be non-negative numbers | `{ syspool = 12, workpool = 24 }` |
 | `repository` | Repository URL for infrastructure traceability | `string` | Yes | Must be from `github.com/altinn/` organization | `"github.com/altinn/dialogporten"` |
-| `createdby` | Who or what created the resource | `string` | No (default: "terraform") | Must be `terraform`, `azure-policy`, or valid username | `"terraform"` |
-| `modifiedby` | Who or what last modified the resource | `string` | No (default: "terraform") | Must be `terraform`, `azure-policy`, or valid username | `"terraform"` |
+| `current_user` | Current user/service principal running Terraform | `string` | Yes | Must be meaningful identity (username, service principal name, app name) | `"john.doe@altinn.no"` |
 
 ## Outputs
 
@@ -215,10 +278,11 @@ module "tags" {
 | `total_vcpus` | Total vCPU capacity calculated from all provided capacity values | `number` |
 | `capacity_breakdown` | Breakdown of individual capacity values used in calculation | `map(number)` |
 | `repository` | Normalized repository URL | `string` |
-| `createdby` | Who or what created the resource | `string` |
-| `modifiedby` | Who or what last modified the resource | `string` |
-| `created_date` | Date when the tags were created | `string` |
-| `modified_date` | Date when the tags were last modified | `string` |
+| `createdby` | Who or what created the resource (set to current_user) | `string` |
+| `modifiedby` | Who or what last modified the resource (set to current_user) | `string` |
+| `created_date` | Date when the tags were created (set to today) | `string` |
+| `modified_date` | Date when the tags were last modified (set to today) | `string` |
+
 
 ## Generated Tags
 
@@ -292,6 +356,176 @@ When you provide an explicit organization number:
 - The `organization_name` output will be `null`
 - The provided organization number must be exactly 9 digits
 
+## createdby Immutability via Lifecycle Rules
+
+Since the module cannot automatically detect existing resources, immutability protection for `createdby` is handled at the resource level using Terraform lifecycle rules:
+
+**Resource-level immutability:**
+```hcl
+resource "azurerm_storage_account" "example" {
+  name = "mystorageaccount"
+  # ... other configuration
+  tags = module.tags.tags
+
+  lifecycle {
+    ignore_changes = [
+      tags["createdby"],
+      tags["createddate"]
+    ]
+  }
+}
+```
+
+**How it works:**
+- Module sets both `createdby` and `modifiedby` to `current_user`
+- Module sets both `createddate` and `modifieddate` to today's date
+- Terraform's `ignore_changes` prevents updates to `createdby` and `createddate` after first creation
+- `modifiedby` and `modifieddate` will update on subsequent runs
+
+## User/Principal Identification
+
+The module uses a single `current_user` parameter for both `createdby` and `modifiedby` tags, with immutability handled at the resource level.
+
+### Common Patterns
+
+**Azure Service Principal (CI/CD):**
+```hcl
+data "azurerm_client_config" "current" {}
+
+module "tags" {
+  source                  = "./modules/tags"
+  finops_serviceownercode = "skd"
+  current_user            = data.azurerm_client_config.current.client_id
+  # ... other variables
+}
+# Both createdby and modifiedby set to service principal ID
+```
+
+**Named Service Principal:**
+```hcl
+module "tags" {
+  source                  = "./modules/tags"
+  finops_serviceownercode = "skd"
+  current_user            = "azure-devops-deployment-sp"
+  # ... other variables
+}
+# Both createdby and modifiedby set to named service principal
+```
+
+**Service Principal Names (Recommended for automation):**
+```hcl
+module "tags" {
+  source              = "./modules/tags"
+  finops_serviceownercode = "skd"
+  createdby           = "initial-deployment-sp"  # Service principal that created
+  modifiedby          = "maintenance-sp"         # Service principal modifying
+  # ... other variables
+}
+```
+
+**Examples of Good Identity Values:**
+```hcl
+# Good examples for createdby (meaningful, specific identities):
+createdby = "john.doe@altinn.no"              # User email
+createdby = "deployment-service-principal"     # Service principal name
+createdby = "terraform-bootstrap-script"       # Application/script name
+createdby = "initial-setup-pipeline"          # Pipeline name
+
+# Good examples for modifiedby (current modifier):
+modifiedby = "jane.smith@altinn.no"           # Current user
+modifiedby = "azure-devops-sp"                # Pipeline service principal
+modifiedby = "maintenance-automation"         # Automated system
+modifiedby = "emergency-response-team"        # Team identifier
+
+# Bad examples (too generic, not allowed):
+createdby = "terraform"     # ❌ Too generic
+createdby = "azure-policy"  # ❌ Too generic
+createdby = "system"        # ❌ Too generic
+```
+
+### Lifecycle Management Best Practices
+
+**Pattern 1: Consistent lifecycle rules across resources**
+```hcl
+locals {
+  # Define common lifecycle rule for all tagged resources
+  tag_lifecycle = {
+    ignore_changes = [
+      tags["createdby"],
+      tags["createddate"]
+    ]
+  }
+}
+
+resource "azurerm_resource_group" "main" {
+  # ... configuration
+  tags = module.tags.tags
+  
+  lifecycle {
+    ignore_changes = local.tag_lifecycle.ignore_changes
+  }
+}
+
+resource "azurerm_storage_account" "example" {
+  # ... configuration
+  tags = module.tags.tags
+  
+  lifecycle {
+    ignore_changes = local.tag_lifecycle.ignore_changes
+  }
+}
+```
+
+**Pattern 2: Module wrapper for consistent tagging**
+```hcl
+# Create a wrapper module that includes lifecycle rules
+module "tagged_storage_account" {
+  source = "./modules/tagged-storage-account"
+  
+  # Storage account parameters
+  name = "mystorageaccount"
+  # ... other parameters
+  
+  # Tag parameters
+  current_user = data.azurerm_client_config.current.client_id
+  # ... other tag parameters
+}
+
+# In the wrapper module:
+resource "azurerm_storage_account" "this" {
+  # ... configuration
+  tags = module.tags.tags
+  
+  lifecycle {
+    ignore_changes = [
+      tags["createdby"],
+      tags["createddate"]
+    ]
+  }
+}
+```
+
+**Pattern 3: CI/CD pipeline with consistent identity**
+```hcl
+# Use consistent service principal name across all resources
+module "tags" {
+  source       = "./modules/tags"
+  current_user = "azure-devops-deployment-sp"
+  # ... other variables
+}
+```
+
+### Benefits
+
+- **Simple Interface**: Single `current_user` parameter for all identity tracking
+- **Lifecycle Protection**: Terraform lifecycle rules ensure `createdby` immutability  
+- **Audit Trail**: Clear tracking of who created and who modified resources
+- **Accountability**: Meaningful identities enable tracking back to specific users/systems
+- **Compliance**: Supports audit requirements with specific user/system identification
+- **Reduced Dependencies**: Tags module doesn't need Azure provider dependency
+- **Testing Friendly**: Easier to test with explicit values
+- **Flexible**: Works with any resource type using standard Terraform patterns
+
 ## FinOps Integration
 
 These tags are designed to support FinOps practices by providing:
@@ -322,7 +556,7 @@ The module includes built-in validation to ensure compliance with Altinn FinOps 
 - **Organization Number Override**: Must be exactly 9 digits when provided
 - **Capacity Values**: All values in the map must be non-negative numbers
 - **Repository**: Must be from `github.com/altinn/` organization
-- **Created/Modified By**: Must be `terraform`, `azure-policy`, or valid username format
+- **Created/Modified By**: Must be meaningful identities (usernames, service principal names, application names) - generic names like 'terraform' or 'azure-policy' are not allowed
 
 ## Requirements
 
