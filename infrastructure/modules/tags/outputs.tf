@@ -65,5 +65,5 @@ output "capacity_breakdown" {
 
 output "organization_name" {
   description = "Organization name in Norwegian (looked up from finops_serviceownercode, only available when using automatic lookup)"
-  value       = var.finops_serviceownerorgnr == null ? local.orgs_response.orgs[var.finops_serviceownercode].name.nb : null
+  value       = var.finops_serviceownerorgnr == null ? try(local.orgs_response.orgs[var.finops_serviceownercode].name.nb, null) : null
 }

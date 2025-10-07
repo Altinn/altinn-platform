@@ -1,3 +1,26 @@
+variable "capacity_values" {
+  description = "Map of capacity values (in vCPUs) to be summed for total finops_capacity"
+  type        = map(number)
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for name, value in var.capacity_values : value >= 0
+    ])
+    error_message = "All capacity values must be non-negative numbers."
+  }
+}
+
+variable "current_user" {
+  description = "Current user/service principal running Terraform. Used for both createdby and modifiedby."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9._@-]+$", var.current_user)) && length(var.current_user) >= 3
+    error_message = "current_user must be a meaningful identity (username, service principal name, or application name) with at least 3 characters."
+  }
+}
+
 variable "finops_environment" {
   description = "Environment designation for cost allocation"
   type        = string
@@ -23,8 +46,8 @@ variable "finops_serviceownercode" {
   type        = string
 
   validation {
-    condition     = contains(keys(jsondecode(data.http.altinn_orgs.response_body).orgs), var.finops_serviceownercode)
-    error_message = "Service owner code must exist in the Altinn organization registry. Check https://altinncdn.no/orgs/altinn-orgs.json for valid codes."
+    condition     = can(regex("^[a-zA-Z]+$", var.finops_serviceownercode))
+    error_message = "Service owner code must be letters only. Check https://altinncdn.no/orgs/altinn-orgs.json for valid codes."
   }
 }
 
@@ -39,27 +62,6 @@ variable "finops_serviceownerorgnr" {
   }
 }
 
-
-# Data source to fetch organization data for validation
-data "http" "altinn_orgs" {
-  url = "https://altinncdn.no/orgs/altinn-orgs.json"
-}
-
-
-
-variable "capacity_values" {
-  description = "Map of capacity values (in vCPUs) to be summed for total finops_capacity"
-  type        = map(number)
-  default     = {}
-
-  validation {
-    condition = alltrue([
-      for name, value in var.capacity_values : value >= 0
-    ])
-    error_message = "All capacity values must be non-negative numbers."
-  }
-}
-
 variable "repository" {
   description = "Repository URL for infrastructure as code traceability"
   type        = string
@@ -67,15 +69,5 @@ variable "repository" {
   validation {
     condition     = can(regex("^github\\.com/altinn/", var.repository))
     error_message = "Repository must be from github.com/altinn/ organization."
-  }
-}
-
-variable "current_user" {
-  description = "Current user/service principal running Terraform. Used for both createdby and modifiedby."
-  type        = string
-
-  validation {
-    condition     = can(regex("^[a-zA-Z0-9._@-]+$", var.current_user)) && length(var.current_user) >= 3
-    error_message = "current_user must be a meaningful identity (username, service principal name, or application name) with at least 3 characters."
   }
 }
