@@ -38,13 +38,16 @@ variable "finops_serviceownerorgnr" {
   }
 }
 
-variable "finops_capacity" {
-  description = "Capacity specification (e.g., 2vcpu, 4vcpu, 8vcpu)"
-  type        = string
+variable "capacity_values" {
+  description = "Map of capacity values (in vCPUs) to be summed for total finops_capacity"
+  type        = map(number)
+  default     = {}
 
   validation {
-    condition     = can(regex("^[0-9]+vcpu$", var.finops_capacity))
-    error_message = "Capacity must be in format: {number}vcpu (e.g., 2vcpu, 4vcpu, 8vcpu)."
+    condition = alltrue([
+      for name, value in var.capacity_values : value >= 0
+    ])
+    error_message = "All capacity values must be non-negative numbers."
   }
 }
 

@@ -24,7 +24,7 @@ output "finops_serviceownerorgnr" {
 }
 
 output "finops_capacity" {
-  description = "Normalized capacity specification"
+  description = "Total vCPU capacity calculated from provided capacity values"
   value       = local.tags.finops_capacity
 }
 
@@ -51,4 +51,14 @@ output "created_date" {
 output "modified_date" {
   description = "Date when the tags were last modified"
   value       = local.tags.modifieddate
+}
+
+output "total_vcpus" {
+  description = "Total vCPU capacity calculated from all provided capacity values"
+  value       = local.total_vcpus
+}
+
+output "capacity_breakdown" {
+  description = "Breakdown of individual capacity values used in calculation"
+  value       = var.capacity_values
 }

@@ -20,7 +20,10 @@ module "tags" {
   finops_product              = "dialogporten"
   finops_serviceownercode     = "skd"
   finops_serviceownerorgnr    = "974761076"
-  finops_capacity             = "2vcpu"
+  capacity_values = {
+    webapp      = 4
+    database    = 2
+  }
   repository                  = "github.com/altinn/dialogporten"
 }
 
@@ -43,7 +46,11 @@ module "tags" {
   finops_product              = "studio"
   finops_serviceownercode     = "skd"
   finops_serviceownerorgnr    = "974761076"
-  finops_capacity             = "4vcpu"
+  capacity_values = {
+    app_service = 2
+    functions   = 1
+    containers  = 4
+  }
   repository                  = "github.com/altinn/altinn-studio"
 }
 
@@ -67,6 +74,85 @@ resource "azurerm_app_service_plan" "main" {
 }
 ```
 
+### Calculating Capacity from Node Pools
+
+For AKS clusters or other scenarios where you need to calculate capacity from multiple pools:
+
+```hcl
+# Define your pool configurations
+variable "pool_configs" {
+  default = {
+    syspool = {
+      vm_size    = "standard_b4s_v2"
+      max_count  = 3
+    }
+    workpool = {
+      vm_size    = "standard_b4s_v2" 
+      max_count  = 6
+    }
+  }
+}
+
+# Create mapping of VM sizes to vCPUs (business logic)
+locals {
+  vm_size_to_vcpus = {
+    "standard_b1s_v2"  = 1
+    "standard_b2s_v2"  = 2
+    "standard_b4s_v2"  = 4
+    "standard_b8s_v2"  = 8
+    "standard_b16s_v2" = 16
+    "standard_b32s_v2" = 32
+    # Add more VM sizes as needed
+  }
+  
+  # Calculate capacity for each pool
+  pool_capacities = {
+    for pool_name, pool in var.pool_configs :
+    pool_name => pool.max_count * local.vm_size_to_vcpus[lower(pool.vm_size)]
+  }
+}
+
+module "tags" {
+  source                   = "./modules/tags"
+  finops_environment       = "prod"
+  finops_product          = "dialogporten"
+  finops_serviceownercode = "skd"
+  finops_serviceownerorgnr = "974761076"
+  capacity_values         = local.pool_capacities  # { syspool = 12, workpool = 24 }
+  repository              = "github.com/altinn/dialogporten"
+}
+
+# Result: finops_capacity tag = "36vcpu" (12 + 24)
+```
+
+### Mixed Resource Capacity Calculation
+
+For environments with different types of resources:
+
+```hcl
+locals {
+  # Calculate capacity from different resource types
+  capacity_breakdown = {
+    aks_cluster    = 36  # Calculated from node pools above
+    app_services   = 8   # 4 instances × 2 vCPUs each
+    function_apps  = 2   # 2 dedicated function apps
+    sql_database   = 4   # DTU converted to approximate vCPU equivalent
+  }
+}
+
+module "tags" {
+  source                   = "./modules/tags"
+  finops_environment       = "prod"
+  finops_product          = "studio"
+  finops_serviceownercode = "skd"
+  finops_serviceownerorgnr = "974761076"
+  capacity_values         = local.capacity_breakdown
+  repository              = "github.com/altinn/altinn-studio"
+}
+
+# Result: finops_capacity tag = "50vcpu" (36 + 8 + 2 + 4)
+```
+
 ## Variables
 
 | Name | Description | Type | Required | Validation | Example |
@@ -75,7 +161,7 @@ resource "azurerm_app_service_plan" "main" {
 | `finops_product` | Product name for cost allocation | `string` | Yes | Must be one of: `studio`, `dialogporten`, `formidling`, `autorisasjon`, `varsling`, `melding`, `altinn2` | `"dialogporten"` |
 | `finops_serviceownercode` | Service owner code for billing attribution | `string` | Yes | Must be `skd`, `udir`, `nav`, `na`, or 2-5 lowercase letters | `"skd"` |
 | `finops_serviceownerorgnr` | Service owner organization number (9 digits) | `string` | Yes | Exactly 9 digits | `"974761076"` |
-| `finops_capacity` | Capacity specification for cost optimization | `string` | Yes | Format: `{number}vcpu` (e.g., 2vcpu, 4vcpu, 8vcpu) | `"2vcpu"` |
+| `capacity_values` | Map of capacity values (in vCPUs) to be summed for total finops_capacity | `map(number)` | No (default: {}) | All values must be non-negative numbers | `{ syspool = 12, workpool = 24 }` |
 | `repository` | Repository URL for infrastructure traceability | `string` | Yes | Must be from `github.com/altinn/` organization | `"github.com/altinn/dialogporten"` |
 | `createdby` | Who or what created the resource | `string` | No (default: "terraform") | Must be `terraform`, `azure-policy`, or valid username | `"terraform"` |
 | `modifiedby` | Who or what last modified the resource | `string` | No (default: "terraform") | Must be `terraform`, `azure-policy`, or valid username | `"terraform"` |
@@ -89,7 +175,9 @@ resource "azurerm_app_service_plan" "main" {
 | `finops_product` | Normalized product name | `string` |
 | `finops_serviceownercode` | Normalized service owner code | `string` |
 | `finops_serviceownerorgnr` | Service owner organization number | `string` |
-| `finops_capacity` | Normalized capacity specification | `string` |
+| `finops_capacity` | Total vCPU capacity calculated from provided capacity values | `string` |
+| `total_vcpus` | Total vCPU capacity calculated from all provided capacity values | `number` |
+| `capacity_breakdown` | Breakdown of individual capacity values used in calculation | `map(number)` |
 | `repository` | Normalized repository URL | `string` |
 | `createdby` | Who or what created the resource | `string` |
 | `modifiedby` | Who or what last modified the resource | `string` |
@@ -107,7 +195,7 @@ The module automatically generates the following tags according to Altinn FinOps
 | `finops_product` | Main product allocation for cost distribution | `"dialogporten"` |
 | `finops_serviceownercode` | Service owner code for billing | `"skd"` |
 | `finops_serviceownerorgnr` | Formal service owner identification | `"974761076"` |
-| `finops_capacity` | Capacity planning and cost optimization | `"2vcpu"` |
+| `finops_capacity` | Capacity planning and cost optimization | `"36vcpu"` |
 
 ### Traceability Tags (5 tags)
 | Tag Name | Description | Example Value |
@@ -126,7 +214,7 @@ The module automatically generates the following tags according to Altinn FinOps
 
 3. **Product Names**: Use only approved product names: `studio`, `dialogporten`, `formidling`, `autorisasjon`, `varsling`, `melding`, `altinn2`.
 
-4. **Capacity Format**: Always use the format `{number}vcpu` (e.g., `2vcpu`, `4vcpu`, `8vcpu`) for capacity specification.
+5. **Capacity Calculation**: Provide capacity values as numbers in the `capacity_values` map. The module will sum them and format as `{total}vcpu`.
 
 5. **Service Owner Codes**: Use approved codes (`skd`, `udir`, `nav`, `na`) or follow the 2-5 lowercase letter pattern.
 
@@ -162,7 +250,7 @@ The module includes built-in validation to ensure compliance with Altinn FinOps 
 - **Product**: Must be exactly one of `studio`, `dialogporten`, `formidling`, `autorisasjon`, `varsling`, `melding`, `altinn2`
 - **Service Owner Code**: Must be `skd`, `udir`, `nav`, `na`, or 2-5 lowercase letters
 - **Organization Number**: Must be exactly 9 digits
-- **Capacity**: Must follow format `{number}vcpu` (e.g., 2vcpu, 4vcpu, 8vcpu)
+- **Capacity Values**: All values in the map must be non-negative numbers
 - **Repository**: Must be from `github.com/altinn/` organization
 - **Created/Modified By**: Must be `terraform`, `azure-policy`, or valid username format
 
