@@ -2,6 +2,31 @@
 
 This document provides comprehensive examples for using the Tags Terraform module.
 
+## Table of Contents
+
+- [Basic Usage](#basic-usage)
+  - [Simple Example](#simple-example)
+  - [Complete Example with Multiple Resources](#complete-example-with-multiple-resources)
+- [Capacity Calculation Examples](#capacity-calculation-examples)
+  - [Calculating Capacity from Node Pools](#calculating-capacity-from-node-pools)
+  - [Mixed Resource Capacity Calculation](#mixed-resource-capacity-calculation)
+- [Organization Number Examples](#organization-number-examples)
+  - [Automatic Lookup (Recommended)](#automatic-lookup-recommended)
+  - [With Organization Number Override](#with-organization-number-override)
+- [User/Principal Identification Patterns](#userprincipal-identification-patterns)
+  - [Azure Service Principal (CI/CD)](#azure-service-principal-cicd)
+  - [Named Service Principal](#named-service-principal)
+  - [Examples of Good Identity Values](#examples-of-good-identity-values)
+- [Lifecycle Management Examples](#lifecycle-management-examples)
+  - [Consistent Lifecycle Rules Across Resources](#consistent-lifecycle-rules-across-resources)
+  - [Module Wrapper for Consistent Tagging](#module-wrapper-for-consistent-tagging)
+  - [CI/CD Pipeline with Consistent Identity](#cicd-pipeline-with-consistent-identity)
+- [Environment-Specific Examples](#environment-specific-examples)
+  - [Development Environment](#development-environment)
+  - [Production Environment](#production-environment)
+  - [Test Environment](#test-environment)
+- [Complete Real-World Example](#complete-real-world-example)
+
 ## Basic Usage
 
 ### Simple Example
