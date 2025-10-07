@@ -5,16 +5,15 @@ This Terraform module provides standardized tags for Azure resources following A
 ## Features
 
 - Standardized FinOps tags for cost allocation and tracking
+- Automatic organization number lookup from Altinn CDN
+- Flexible capacity calculation from multiple input sources
 - Automatic creation and modification timestamps
 - Lowercase normalization of key values
 - Repository tracking for infrastructure as code traceability
 
-## Usage
-
-### Basic Example
+## Quick Start
 
 ```hcl
-# Get current Azure client configuration for traceability
 data "azurerm_client_config" "current" {}
 
 module "tags" {
@@ -31,65 +30,8 @@ module "tags" {
 }
 
 resource "azurerm_storage_account" "example" {
-  name                     = "mystorageaccount"
-  resource_group_name      = azurerm_resource_group.rg.name
-  location                 = azurerm_resource_group.rg.location
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
-  tags                     = module.tags.tags
-
-  lifecycle {
-    ignore_changes = [
-      tags["createdby"],
-      tags["createddate"]
-    ]
-  }
-}
-```
-
-### Complete Example with Resource Group
-
-```hcl
-# Get current Azure client configuration for traceability
-data "azurerm_client_config" "current" {}
-
-module "tags" {
-  source                  = "./modules/tags"
-  finops_environment      = "dev"
-  finops_product          = "studio"
-  finops_serviceownercode = "skd"
-  capacity_values = {
-    app_service = 2
-    functions   = 1
-    containers  = 4
-  }
-  repository   = "github.com/altinn/altinn-studio"
-  current_user = data.azurerm_client_config.current.client_id
-}
-
-resource "azurerm_resource_group" "main" {
-  name     = "rg-studio-dev"
-  location = "Norway East"
-  tags     = module.tags.tags
-
-  lifecycle {
-    ignore_changes = [
-      tags["createdby"],
-      tags["createddate"]
-    ]
-  }
-}
-
-resource "azurerm_app_service_plan" "main" {
-  name                = "plan-studio-dev"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
-  
-  sku {
-    tier = "Standard"
-    size = "S1"
-  }
-  
+  name = "mystorageaccount"
+  # ... other configuration
   tags = module.tags.tags
 
   lifecycle {
@@ -101,168 +43,19 @@ resource "azurerm_app_service_plan" "main" {
 }
 ```
 
-### Calculating Capacity from Node Pools
-
-For AKS clusters or other scenarios where you need to calculate capacity from multiple pools:
-
-```hcl
-# Define your pool configurations
-variable "pool_configs" {
-  default = {
-    syspool = {
-      vm_size    = "standard_b4s_v2"
-      max_count  = 3
-    }
-    workpool = {
-      vm_size    = "standard_b4s_v2" 
-      max_count  = 6
-    }
-  }
-}
-
-# Create mapping of VM sizes to vCPUs (business logic)
-locals {
-  vm_size_to_vcpus = {
-    "standard_b1s_v2"  = 1
-    "standard_b2s_v2"  = 2
-    "standard_b4s_v2"  = 4
-    "standard_b8s_v2"  = 8
-    "standard_b16s_v2" = 16
-    "standard_b32s_v2" = 32
-    # Add more VM sizes as needed
-  }
-  
-  # Calculate capacity for each pool
-  pool_capacities = {
-    for pool_name, pool in var.pool_configs :
-    pool_name => pool.max_count * local.vm_size_to_vcpus[lower(pool.vm_size)]
-  }
-}
-
-# Get current Azure client configuration for traceability
-data "azurerm_client_config" "current" {}
-
-module "tags" {
-  source                  = "./modules/tags"
-  finops_environment      = "prod"
-  finops_product          = "dialogporten"
-  finops_serviceownercode = "skd"
-  capacity_values         = local.pool_capacities  # { syspool = 12, workpool = 24 }
-  repository              = "github.com/altinn/dialogporten"
-  current_user            = data.azurerm_client_config.current.client_id
-}
-
-# Result: finops_capacity tag = "36vcpu" (12 + 24)
-```
-
-### Mixed Resource Capacity Calculation
-
-For environments with different types of resources:
-
-```hcl
-locals {
-  # Calculate capacity from different resource types
-  capacity_breakdown = {
-    aks_cluster    = 36  # Calculated from node pools above
-    app_services   = 8   # 4 instances × 2 vCPUs each
-    function_apps  = 2   # 2 dedicated function apps
-    sql_database   = 4   # DTU converted to approximate vCPU equivalent
-  }
-}
-
-# Get current Azure client configuration for traceability  
-data "azurerm_client_config" "current" {}
-
-module "tags" {
-  source                  = "./modules/tags"
-  finops_environment      = "prod"
-  finops_product          = "studio"
-  finops_serviceownercode = "skd"
-  capacity_values         = local.capacity_breakdown
-  repository              = "github.com/altinn/altinn-studio"
-  current_user            = data.azurerm_client_config.current.client_id
-}
-
-# Result: finops_capacity tag = "50vcpu" (36 + 8 + 2 + 4)
-```
-
-### Simple Usage Pattern
-
-**Standard Usage:**
-```hcl
-# Get current Azure client configuration
-data "azurerm_client_config" "current" {}
-
-module "tags" {
-  source                  = "./modules/tags"
-  finops_environment      = "prod"
-  finops_product          = "dialogporten"
-  finops_serviceownercode = "skd"  # Will automatically resolve to "974761076"
-  capacity_values = {
-    webapp = 4
-  }
-  repository   = "github.com/altinn/dialogporten"
-  current_user = data.azurerm_client_config.current.client_id
-}
-
-resource "azurerm_storage_account" "example" {
-  name                     = "mystorageaccount"
-  resource_group_name      = azurerm_resource_group.rg.name
-  location                 = azurerm_resource_group.rg.location
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
-  tags                     = module.tags.tags
-
-  lifecycle {
-    ignore_changes = [
-      tags["createdby"],
-      tags["createddate"]
-    ]
-  }
-}
-
-# Results:
-# finops_serviceownerorgnr = "974761076" (automatically looked up)
-# organization_name = "Skatteetaten"
-# createdby = current_user
-# modifiedby = current_user
-```
-
-**With Organization Number Override:**
-```hcl
-data "azurerm_client_config" "current" {}
-
-module "tags" {
-  source                   = "./modules/tags"
-  finops_environment       = "prod"
-  finops_product          = "dialogporten"
-  finops_serviceownercode = "skd"
-  finops_serviceownerorgnr = "123456789"  # Explicit override
-  capacity_values = {
-    webapp = 4
-  }
-  repository   = "github.com/altinn/dialogporten"
-  current_user = data.azurerm_client_config.current.client_id
-}
-
-# Results:
-# finops_serviceownerorgnr = "123456789" (provided override)
-# organization_name = null (not available when overriding)
-# createdby = current_user
-# modifiedby = current_user
-```
+For detailed examples, see [EXAMPLES.md](./EXAMPLES.md).
 
 ## Variables
 
-| Name | Description | Type | Required | Validation | Example |
-|------|-------------|------|----------|------------|---------|
-| `finops_environment` | Environment designation for cost allocation | `string` | Yes | Must be one of: `dev`, `test`, `prod`, `at22`, `at23`, `at24`, `yt01`, `tt02` | `"prod"` |
-| `finops_product` | Product name for cost allocation | `string` | Yes | Must be one of: `studio`, `dialogporten`, `formidling`, `autorisasjon`, `varsling`, `melding`, `altinn2` | `"dialogporten"` |
-| `finops_serviceownercode` | Service owner code for billing attribution (organization number will be looked up automatically unless overridden) | `string` | Yes | Must exist in Altinn organization registry | `"skd"` |
-| `finops_serviceownerorgnr` | Service owner organization number override (optional) | `string` | No (default: null) | Exactly 9 digits when provided | `"974761076"` |
-| `capacity_values` | Map of capacity values (in vCPUs) to be summed for total finops_capacity | `map(number)` | No (default: {}) | All values must be non-negative numbers | `{ syspool = 12, workpool = 24 }` |
-| `repository` | Repository URL for infrastructure traceability | `string` | Yes | Must be from `github.com/altinn/` organization | `"github.com/altinn/dialogporten"` |
-| `current_user` | Current user/service principal running Terraform | `string` | Yes | Must be meaningful identity (username, service principal name, app name) | `"john.doe@altinn.no"` |
+| Name | Description | Type | Required | Default | Validation | Example |
+|------|-------------|------|----------|---------|------------|---------|
+| `capacity_values` | Map of capacity values (in vCPUs) to be summed for total finops_capacity | `map(number)` | No | `{}` | All values must be non-negative numbers | `{ syspool = 12, workpool = 24 }` |
+| `current_user` | Current user/service principal running Terraform | `string` | Yes | - | Must be meaningful identity with at least 3 characters | `"john.doe@altinn.no"` |
+| `finops_environment` | Environment designation for cost allocation | `string` | Yes | - | Must be one of: `dev`, `test`, `prod`, `at22`, `at23`, `at24`, `yt01`, `tt02` | `"prod"` |
+| `finops_product` | Product name for cost allocation | `string` | Yes | - | Must be one of: `studio`, `dialogporten`, `formidling`, `autorisasjon`, `varsling`, `melding`, `altinn2` | `"dialogporten"` |
+| `finops_serviceownercode` | Service owner code for billing attribution | `string` | Yes | - | Must be letters only | `"skd"` |
+| `finops_serviceownerorgnr` | Service owner organization number override (optional) | `string` | No | `null` | Exactly 9 digits when provided | `"974761076"` |
+| `repository` | Repository URL for infrastructure traceability | `string` | Yes | - | Must be from `github.com/altinn/` organization | `"github.com/altinn/dialogporten"` |
 
 ## Outputs
 
@@ -273,7 +66,6 @@ module "tags" {
 | `finops_product` | Normalized product name | `string` |
 | `finops_serviceownercode` | Normalized service owner code | `string` |
 | `finops_serviceownerorgnr` | Service owner organization number (provided as input or automatically looked up) | `string` |
-| `organization_name` | Organization name in Norwegian (only available when using automatic lookup) | `string` |
 | `finops_capacity` | Total vCPU capacity calculated from provided capacity values | `string` |
 | `total_vcpus` | Total vCPU capacity calculated from all provided capacity values | `number` |
 | `capacity_breakdown` | Breakdown of individual capacity values used in calculation | `map(number)` |
@@ -282,7 +74,7 @@ module "tags" {
 | `modifiedby` | Who or what last modified the resource (set to current_user) | `string` |
 | `created_date` | Date when the tags were created (set to today) | `string` |
 | `modified_date` | Date when the tags were last modified (set to today) | `string` |
-
+| `organization_name` | Organization name in Norwegian (only available when using automatic lookup) | `string` |
 
 ## Generated Tags
 
@@ -300,11 +92,55 @@ The module automatically generates the following tags according to Altinn FinOps
 ### Traceability Tags (5 tags)
 | Tag Name | Description | Example Value |
 |----------|-------------|---------------|
-| `createdby` | Who/what created the resource | `"terraform"` |
+| `createdby` | Who/what created the resource | `"john.doe@altinn.no"` |
 | `createddate` | Resource creation date (YYYY-MM-DD) | `"2024-01-15"` |
-| `modifiedby` | Who/what last modified the resource | `"terraform"` |
+| `modifiedby` | Who/what last modified the resource | `"jane.smith@altinn.no"` |
 | `modifieddate` | Last modification date (YYYY-MM-DD) | `"2024-01-15"` |
 | `repository` | IaC repository for traceability | `"github.com/altinn/dialogporten"` |
+
+## Key Features
+
+### Automatic Organization Lookup
+
+The module automatically fetches organization data from Altinn's CDN and looks up the organization number (`finops_serviceownerorgnr`) based on the provided service owner code. This ensures:
+
+- **Data Consistency**: Organization numbers are always accurate and up-to-date
+- **Simplified Usage**: You only need to provide the service owner code
+- **Validation**: The module validates that the service owner code exists in the registry
+- **Override Option**: You can still manually provide an organization number if needed
+
+Valid service owner codes include: `skd`, `udir`, `nav`, `digdir`, `brg`, `ssb`, and many others. See the [Altinn organization registry](https://altinncdn.no/orgs/altinn-orgs.json) for the complete list.
+
+### Flexible Capacity Calculation
+
+The module accepts capacity values as numbers in a `capacity_values` map and automatically sums them to create the `finops_capacity` tag. This allows you to:
+
+- Calculate capacity from multiple sources (node pools, app services, databases)
+- Keep business logic (VM size mappings, etc.) in your calling code
+- Provide transparency through the `capacity_breakdown` output
+
+### createdby Immutability Protection
+
+Since the module cannot automatically detect existing resources, immutability protection for `createdby` is handled at the resource level using Terraform lifecycle rules:
+
+```hcl
+resource "azurerm_storage_account" "example" {
+  # ... configuration
+  tags = module.tags.tags
+
+  lifecycle {
+    ignore_changes = [
+      tags["createdby"],
+      tags["createddate"]
+    ]
+  }
+}
+```
+
+This ensures that:
+- `createdby` and `createddate` are set on first creation but never updated
+- `modifiedby` and `modifieddate` are updated on each subsequent run
+- Original creator information is preserved for audit trails
 
 ## Best Practices
 
@@ -314,217 +150,13 @@ The module automatically generates the following tags according to Altinn FinOps
 
 3. **Product Names**: Use only approved product names: `studio`, `dialogporten`, `formidling`, `autorisasjon`, `varsling`, `melding`, `altinn2`.
 
-5. **Capacity Calculation**: Provide capacity values as numbers in the `capacity_values` map. The module will sum them and format as `{total}vcpu`.
+4. **Service Owner Codes**: Use codes that exist in the Altinn organization registry. The organization number will be automatically looked up.
 
-4. **Service Owner Codes**: Use only codes that exist in the Altinn organization registry. The organization number will be automatically looked up.
+5. **Repository URLs**: Always use repositories from `github.com/altinn/` organization for traceability.
 
-6. **Repository URLs**: Always use repositories from `github.com/altinn/` organization for traceability.
+6. **Lifecycle Rules**: Apply lifecycle rules to protect `createdby` and `createddate` from being modified after initial creation.
 
-7. **Lowercase Convention**: All tag names are lowercase and singular, values are normalized to lowercase where appropriate.
-
-## Automatic Organization Lookup
-
-The module automatically fetches organization data from Altinn's CDN and looks up the organization number (`finops_serviceownerorgnr`) based on the provided service owner code. This ensures:
-
-- **Data Consistency**: Organization numbers are always accurate and up-to-date
-- **Simplified Usage**: You only need to provide the service owner code
-- **Validation**: The module validates that the service owner code exists in the registry
-- **Transparency**: The organization name is also available as an output
-
-Valid service owner codes include: `skd`, `udir`, `nav`, `digdir`, `brg`, `ssb`, and many others. See the [Altinn organization registry](https://altinncdn.no/orgs/altinn-orgs.json) for the complete list.
-
-### Override Organization Number
-
-If needed, you can override the automatic lookup by providing `finops_serviceownerorgnr` explicitly:
-
-```hcl
-module "tags" {
-  source                   = "./modules/tags"
-  finops_environment       = "prod"
-  finops_product          = "dialogporten"
-  finops_serviceownercode = "skd"
-  finops_serviceownerorgnr = "123456789"  # Override automatic lookup
-  capacity_values = {
-    webapp = 4
-  }
-  repository = "github.com/altinn/dialogporten"
-}
-```
-
-When you provide an explicit organization number:
-- The automatic lookup is bypassed
-- The `organization_name` output will be `null`
-- The provided organization number must be exactly 9 digits
-
-## createdby Immutability via Lifecycle Rules
-
-Since the module cannot automatically detect existing resources, immutability protection for `createdby` is handled at the resource level using Terraform lifecycle rules:
-
-**Resource-level immutability:**
-```hcl
-resource "azurerm_storage_account" "example" {
-  name = "mystorageaccount"
-  # ... other configuration
-  tags = module.tags.tags
-
-  lifecycle {
-    ignore_changes = [
-      tags["createdby"],
-      tags["createddate"]
-    ]
-  }
-}
-```
-
-**How it works:**
-- Module sets both `createdby` and `modifiedby` to `current_user`
-- Module sets both `createddate` and `modifieddate` to today's date
-- Terraform's `ignore_changes` prevents updates to `createdby` and `createddate` after first creation
-- `modifiedby` and `modifieddate` will update on subsequent runs
-
-## User/Principal Identification
-
-The module uses a single `current_user` parameter for both `createdby` and `modifiedby` tags, with immutability handled at the resource level.
-
-### Common Patterns
-
-**Azure Service Principal (CI/CD):**
-```hcl
-data "azurerm_client_config" "current" {}
-
-module "tags" {
-  source                  = "./modules/tags"
-  finops_serviceownercode = "skd"
-  current_user            = data.azurerm_client_config.current.client_id
-  # ... other variables
-}
-# Both createdby and modifiedby set to service principal ID
-```
-
-**Named Service Principal:**
-```hcl
-module "tags" {
-  source                  = "./modules/tags"
-  finops_serviceownercode = "skd"
-  current_user            = "azure-devops-deployment-sp"
-  # ... other variables
-}
-# Both createdby and modifiedby set to named service principal
-```
-
-**Service Principal Names (Recommended for automation):**
-```hcl
-module "tags" {
-  source              = "./modules/tags"
-  finops_serviceownercode = "skd"
-  createdby           = "initial-deployment-sp"  # Service principal that created
-  modifiedby          = "maintenance-sp"         # Service principal modifying
-  # ... other variables
-}
-```
-
-**Examples of Good Identity Values:**
-```hcl
-# Good examples for createdby (meaningful, specific identities):
-createdby = "john.doe@altinn.no"              # User email
-createdby = "deployment-service-principal"     # Service principal name
-createdby = "terraform-bootstrap-script"       # Application/script name
-createdby = "initial-setup-pipeline"          # Pipeline name
-
-# Good examples for modifiedby (current modifier):
-modifiedby = "jane.smith@altinn.no"           # Current user
-modifiedby = "azure-devops-sp"                # Pipeline service principal
-modifiedby = "maintenance-automation"         # Automated system
-modifiedby = "emergency-response-team"        # Team identifier
-
-# Bad examples (too generic, not allowed):
-createdby = "terraform"     # ❌ Too generic
-createdby = "azure-policy"  # ❌ Too generic
-createdby = "system"        # ❌ Too generic
-```
-
-### Lifecycle Management Best Practices
-
-**Pattern 1: Consistent lifecycle rules across resources**
-```hcl
-locals {
-  # Define common lifecycle rule for all tagged resources
-  tag_lifecycle = {
-    ignore_changes = [
-      tags["createdby"],
-      tags["createddate"]
-    ]
-  }
-}
-
-resource "azurerm_resource_group" "main" {
-  # ... configuration
-  tags = module.tags.tags
-  
-  lifecycle {
-    ignore_changes = local.tag_lifecycle.ignore_changes
-  }
-}
-
-resource "azurerm_storage_account" "example" {
-  # ... configuration
-  tags = module.tags.tags
-  
-  lifecycle {
-    ignore_changes = local.tag_lifecycle.ignore_changes
-  }
-}
-```
-
-**Pattern 2: Module wrapper for consistent tagging**
-```hcl
-# Create a wrapper module that includes lifecycle rules
-module "tagged_storage_account" {
-  source = "./modules/tagged-storage-account"
-  
-  # Storage account parameters
-  name = "mystorageaccount"
-  # ... other parameters
-  
-  # Tag parameters
-  current_user = data.azurerm_client_config.current.client_id
-  # ... other tag parameters
-}
-
-# In the wrapper module:
-resource "azurerm_storage_account" "this" {
-  # ... configuration
-  tags = module.tags.tags
-  
-  lifecycle {
-    ignore_changes = [
-      tags["createdby"],
-      tags["createddate"]
-    ]
-  }
-}
-```
-
-**Pattern 3: CI/CD pipeline with consistent identity**
-```hcl
-# Use consistent service principal name across all resources
-module "tags" {
-  source       = "./modules/tags"
-  current_user = "azure-devops-deployment-sp"
-  # ... other variables
-}
-```
-
-### Benefits
-
-- **Simple Interface**: Single `current_user` parameter for all identity tracking
-- **Lifecycle Protection**: Terraform lifecycle rules ensure `createdby` immutability  
-- **Audit Trail**: Clear tracking of who created and who modified resources
-- **Accountability**: Meaningful identities enable tracking back to specific users/systems
-- **Compliance**: Supports audit requirements with specific user/system identification
-- **Reduced Dependencies**: Tags module doesn't need Azure provider dependency
-- **Testing Friendly**: Easier to test with explicit values
-- **Flexible**: Works with any resource type using standard Terraform patterns
+7. **Meaningful Identities**: Use specific user names, service principal names, or application names for `current_user` rather than generic terms.
 
 ## FinOps Integration
 
@@ -535,34 +167,34 @@ These tags are designed to support FinOps practices by providing:
 - **Compliance**: Standardized tags support compliance and audit requirements
 - **Automation**: Tags can be used for automated resource management and policies
 
-## Module Structure
-
-The module is organized into the following files:
-
-- `variables.tf` - Input variable definitions with validation rules
-- `locals.tf` - Tag computation and normalization logic
-- `outputs.tf` - Output definitions for consuming modules
-- `versions.tf` - Terraform and provider version constraints
-- `tags.tf` - Main module documentation and organization
-- `README.md` - This documentation file
-
 ## Validation Rules
 
 The module includes built-in validation to ensure compliance with Altinn FinOps requirements:
 
 - **Environment**: Must be exactly one of `dev`, `test`, `prod`, `at22`, `at23`, `at24`, `yt01`, `tt02`
 - **Product**: Must be exactly one of `studio`, `dialogporten`, `formidling`, `autorisasjon`, `varsling`, `melding`, `altinn2`
-- **Service Owner Code**: Must exist in the Altinn organization registry (see https://altinncdn.no/orgs/altinn-orgs.json)
+- **Service Owner Code**: Must be letters only (case-insensitive, automatically normalized to lowercase)
 - **Organization Number Override**: Must be exactly 9 digits when provided
 - **Capacity Values**: All values in the map must be non-negative numbers
 - **Repository**: Must be from `github.com/altinn/` organization
-- **Created/Modified By**: Must be meaningful identities (usernames, service principal names, application names) - generic names like 'terraform' or 'azure-policy' are not allowed
+- **Current User**: Must be at least 3 characters and contain only alphanumeric characters, dots, underscores, @ signs, and hyphens
 
 ## Requirements
 
 - Terraform >= 1.0
-- Time Provider ~> 0.9
 - HTTP Provider ~> 3.4 (for fetching organization data)
+
+## Module Structure
+
+The module is organized into the following files:
+
+- `variables.tf` - Input variable definitions with validation rules
+- `data.tf` - HTTP data source for fetching organization data
+- `locals.tf` - Tag computation and normalization logic
+- `outputs.tf` - Output definitions for consuming modules
+- `versions.tf` - Terraform and provider version constraints
+- `README.md` - This documentation file
+- `EXAMPLES.md` - Comprehensive usage examples
 
 ## License
 
