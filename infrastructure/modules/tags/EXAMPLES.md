@@ -32,6 +32,7 @@ This document provides comprehensive examples for using the Tags Terraform modul
   - [Service Owner Code Validation](#service-owner-code-validation)
   - [External API Error Handling](#external-api-error-handling)
   - [Debug Information Usage](#debug-information-usage)
+- [Single Module for Entire Infrastructure](#single-module-for-entire-infrastructure)
 - [Complete Real-World Example](#complete-real-world-example)
 
 ## Resource Type Examples
@@ -733,6 +734,129 @@ output "available_service_owners" {
 #   capacity_breakdown = [4]
 # }
 ```
+
+## Single Module for Entire Infrastructure
+
+The simplest approach is to use **one tag module per infrastructure project**, calculating the total capacity from all computing resources:
+
+```hcl
+# Get current Azure client configuration
+data "azurerm_client_config" "current" {}
+
+# Calculate total capacity from ALL computing resources in your infrastructure
+locals {
+  # AKS capacity: 3 system nodes + 5 user nodes, each with 4 vCPUs
+  aks_vcpus = (3 + 5) * 4  # 32 vCPUs
+  
+  # PostgreSQL database: 8 vCores
+  db_vcpus = 8
+  
+  # App Services: 4 instances × 2 vCPUs each
+  app_vcpus = 4 * 2  # 8 vCPUs
+  
+  # Total capacity across ALL computing resources
+  total_computing_capacity = [
+    local.aks_vcpus,    # 32
+    local.db_vcpus,     # 8  
+    local.app_vcpus     # 8
+  ]
+  # Result: [32, 8, 8] = 48 total vCPUs
+}
+
+# Single tag module for entire infrastructure
+module "tags" {
+  source                  = "./modules/tags"
+  finops_environment      = "prod"
+  finops_product          = "dialogporten"
+  finops_serviceownercode = "skd"
+  capacity_values         = local.total_computing_capacity
+  repository              = "github.com/altinn/dialogporten"
+  current_user            = data.azurerm_client_config.current.client_id
+}
+
+# Apply same tags to ALL resources
+resource "azurerm_resource_group" "main" {
+  name     = "rg-dialogporten-prod"
+  location = "Norway East"
+  tags     = module.tags.tags  # No finops_capacity (non-computing)
+
+  lifecycle {
+    ignore_changes = [tags["createdby"], tags["createddate"]]
+  }
+}
+
+resource "azurerm_kubernetes_cluster" "main" {
+  name                = "aks-dialogporten-prod"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  dns_prefix          = "aks-dialogporten-prod"
+
+  default_node_pool {
+    name       = "system"
+    node_count = 3
+    vm_size    = "Standard_B4s_v2"
+  }
+
+  tags = module.tags.tags  # Includes finops_capacity = "48vcpu"
+  lifecycle {
+    ignore_changes = [tags["createdby"], tags["createddate"]]
+  }
+}
+
+resource "azurerm_postgresql_flexible_server" "main" {
+  name                = "psql-dialogporten-prod"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  sku_name           = "GP_Standard_D8s_v3"
+  
+  tags = module.tags.tags  # Includes finops_capacity = "48vcpu"
+  lifecycle {
+    ignore_changes = [tags["createdby"], tags["createddate"]]
+  }
+}
+
+resource "azurerm_storage_account" "main" {
+  name                     = "stdialogportenprod"
+  resource_group_name      = azurerm_resource_group.main.name
+  location                 = azurerm_resource_group.main.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+
+  tags = module.tags.tags  # Includes finops_capacity = "48vcpu"
+  lifecycle {
+    ignore_changes = [tags["createdby"], tags["createddate"]]
+  }
+}
+
+resource "azurerm_key_vault" "main" {
+  name                = "kv-dialogporten-prod"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  tenant_id           = data.azurerm_client_config.current.tenant_id
+  sku_name           = "standard"
+
+  tags = module.tags.tags  # Includes finops_capacity = "48vcpu"
+  lifecycle {
+    ignore_changes = [tags["createdby"], tags["createddate"]]
+  }
+}
+```
+
+**Key Benefits:**
+- ✅ **One module call** for entire infrastructure
+- ✅ **Consistent tags** across all resources  
+- ✅ **Total capacity** represents entire project's computing needs
+- ✅ **Simple to maintain** - single source of truth
+- ✅ **FinOps compliant** - capacity represents total project cost
+
+**When to use this approach:**
+- Most infrastructure projects (recommended)
+- When you want consistent tagging across all resources
+- When capacity represents total project computing needs
+- For cost allocation at the project/product level
+
+**Alternative for resource-specific capacity:**
+If you need different capacity tags per resource type, use the individual resource approach from previous examples.
 
 ## Complete Real-World Example
 
