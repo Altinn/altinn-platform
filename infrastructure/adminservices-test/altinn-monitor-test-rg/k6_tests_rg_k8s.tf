@@ -113,6 +113,8 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot" {
   node_taints = [
     "kubernetes.azure.com/scalesetpriority=spot:NoSchedule", # Automatically added by Azure
   ]
+
+  temporary_name_for_rotation = "tmpspot"
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "spot8c28g" {
@@ -133,6 +135,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot8c28g" {
   node_taints = [
     "kubernetes.azure.com/scalesetpriority=spot:NoSchedule", # Automatically added by Azure
   ]
+  temporary_name_for_rotation = "tmpd8c28g"
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "prometheus" {
@@ -153,4 +156,5 @@ resource "azurerm_kubernetes_cluster_node_pool" "prometheus" {
     max_surge                     = "10%"
     node_soak_duration_in_minutes = 0
   }
+  temporary_name_for_rotation = "tmpprom"
 }
