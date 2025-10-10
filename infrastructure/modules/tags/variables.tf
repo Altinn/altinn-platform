@@ -1,13 +1,24 @@
 variable "capacity_values" {
-  description = "Map of capacity values (in vCPUs) to be summed for total finops_capacity"
-  type        = map(number)
-  default     = {}
+  description = "List of capacity values (in vCPUs) to be summed for total finops_capacity. Only provide for computing resources (AKS, VMs, PostgreSQL, etc.)"
+  type        = list(number)
+  default     = []
 
   validation {
     condition = alltrue([
-      for name, value in var.capacity_values : value >= 0
+      for value in var.capacity_values : value >= 0
     ])
     error_message = "All capacity values must be non-negative numbers."
+  }
+}
+
+variable "include_capacity_tag" {
+  description = "Whether to include the finops_capacity tag. Set to true only for computing resources (AKS, VMs, PostgreSQL, App Services, etc.). Set to false for storage accounts, networking, and other non-computing resources."
+  type        = bool
+  default     = null # Will be auto-determined based on whether capacity_values is provided
+
+  validation {
+    condition     = var.include_capacity_tag == null || var.include_capacity_tag == true || var.include_capacity_tag == false
+    error_message = "include_capacity_tag must be true, false, or null (auto-determine)."
   }
 }
 
@@ -49,6 +60,9 @@ variable "finops_serviceownercode" {
     condition     = can(regex("^[a-zA-Z]+$", var.finops_serviceownercode))
     error_message = "Service owner code must be letters only. Check https://altinncdn.no/orgs/altinn-orgs.json for valid codes."
   }
+
+  # Note: Additional validation for code existence in external data is handled in locals.tf
+  # to avoid circular dependencies with the data source
 }
 
 variable "finops_serviceownerorgnr" {
