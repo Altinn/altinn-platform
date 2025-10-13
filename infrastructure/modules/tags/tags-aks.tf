@@ -1,5 +1,5 @@
-# Altinn Platform - Standardized Resource Tags
-# Copy this file into your Terraform project for consistent tagging
+# AKS-specific tags with automatic capacity calculation
+# Copy this file into your AKS Terraform project
 
 # Data source to fetch organization data from Altinn CDN
 data "http" "altinn_orgs" {
@@ -13,7 +13,7 @@ data "http" "altinn_orgs" {
   }
 }
 
-# Variables - add these to your terraform.tfvars
+# Variables for AKS projects
 variable "finops_environment" {
   description = "Environment designation for cost allocation"
   type        = string
@@ -38,16 +38,6 @@ variable "finops_serviceownercode" {
   validation {
     condition     = can(regex("^[a-zA-Z]+$", var.finops_serviceownercode))
     error_message = "Service owner code must be letters only. Check https://altinncdn.no/orgs/altinn-orgs.json for valid codes."
-  }
-}
-
-variable "capacity_values" {
-  description = "List of vCPU capacity values for computing resources"
-  type        = list(number)
-  default     = []
-  validation {
-    condition = alltrue([for value in var.capacity_values : value >= 0])
-    error_message = "All capacity values must be non-negative numbers."
   }
 }
 
@@ -89,7 +79,30 @@ variable "modified_date" {
   }
 }
 
-# Local values for tag generation
+# AKS-specific variables
+variable "pool_configs" {
+  description = "AKS node pool configurations for automatic capacity calculation"
+  type = map(object({
+    vm_size              = string
+    auto_scaling_enabled = optional(bool, true)
+    node_count           = optional(number, 1)
+    min_count            = optional(number, 1)
+    max_count            = number
+  }))
+}
+
+# Additional capacity for other resources (optional)
+variable "additional_capacity" {
+  description = "Additional vCPU capacity from other resources (PostgreSQL, VMs, etc.)"
+  type        = list(number)
+  default     = []
+  validation {
+    condition = alltrue([for value in var.additional_capacity : value >= 0])
+    error_message = "All additional capacity values must be non-negative numbers."
+  }
+}
+
+# Local values for AKS capacity calculation
 locals {
   # Parse organization data with error handling
   orgs_response = can(jsondecode(data.http.altinn_orgs.response_body)) ?
@@ -111,10 +124,7 @@ locals {
   creation_date     = var.created_date != "" ? var.created_date : local.current_date
   modification_date = var.modified_date != "" ? var.modified_date : local.current_date
 
-  # Calculate total capacity from provided values
-  total_vcpus = length(var.capacity_values) > 0 ? sum(var.capacity_values) : 0
-
-  # SKU to vCPU mapping tables
+  # VM size to vCPU mapping for AKS node pools
   vm_cpu_map = {
     "standard_b1s"       = 1
     "standard_b2s"       = 2
@@ -125,24 +135,23 @@ locals {
     "standard_d8s_v3"    = 8
     "standard_d16s_v3"   = 16
     "standard_d32s_v3"   = 32
+    "standard_ds2_v2"    = 2
+    "standard_ds3_v2"    = 4
+    "standard_ds4_v2"    = 8
+    "standard_ds5_v2"    = 16
   }
 
-  postgresql_cpu_map = {
-    "GP_Standard_D2s_v3"  = 2
-    "GP_Standard_D4s_v3"  = 4
-    "GP_Standard_D8s_v3"  = 8
-    "GP_Standard_D16s_v3" = 16
-    "GP_Standard_D32s_v3" = 32
-  }
+  # Calculate AKS capacity from pool configurations
+  aks_capacity = sum([
+    for pool_name, pool_config in var.pool_configs :
+    lookup(local.vm_cpu_map, lower(pool_config.vm_size), 0) * pool_config.max_count
+  ])
 
-  app_service_cpu_map = {
-    "P1v2" = 1
-    "P2v2" = 2
-    "P3v2" = 4
-    "S1"   = 1
-    "S2"   = 2
-    "S3"   = 4
-  }
+  # Add any additional capacity from other resources
+  additional_vcpus = length(var.additional_capacity) > 0 ? sum(var.additional_capacity) : 0
+
+  # Total capacity
+  total_vcpus = local.aks_capacity + local.additional_vcpus
 
   # Base tags for all resources (no capacity)
   base_tags = {
@@ -158,12 +167,15 @@ locals {
   }
 
   # Capacity tag for merging with base_tags
-  capacity_tag = {
+  aks_capacity_tag = {
     finops_capacity = "${local.total_vcpus}vcpu"
   }
 
-  # Pre-built capacity tags (for convenience)
-  base_tags_with_capacity = merge(local.base_tags, local.capacity_tag)
+  # Pre-built AKS tags (for convenience)
+  aks_tags = merge(local.base_tags, local.aks_capacity_tag)
+
+  # Tags for non-computing resources (no capacity)
+  base_tags_no_capacity = local.base_tags
 }
 
 # Validation to ensure service owner code is valid
@@ -181,26 +193,96 @@ resource "terraform_data" "validate_service_owner" {
   }
 }
 
+# Validation to ensure VM sizes are recognized
+resource "terraform_data" "validate_vm_sizes" {
+  count = length([
+    for pool_name, pool_config in var.pool_configs :
+    pool_name if !contains(keys(local.vm_cpu_map), lower(pool_config.vm_size))
+  ]) > 0 ? 1 : 0
+
+  lifecycle {
+    precondition {
+      condition = length([
+        for pool_name, pool_config in var.pool_configs :
+        pool_name if !contains(keys(local.vm_cpu_map), lower(pool_config.vm_size))
+      ]) == 0
+      error_message = <<-EOF
+        Unknown VM sizes detected in pool_configs: ${join(", ", [
+          for pool_name, pool_config in var.pool_configs :
+          "${pool_name}: ${pool_config.vm_size}" if !contains(keys(local.vm_cpu_map), lower(pool_config.vm_size))
+        ])}
+
+        Supported VM sizes: ${join(", ", keys(local.vm_cpu_map))}
+      EOF
+    }
+  }
+}
+
+# Outputs for debugging and verification
+output "aks_capacity_calculation" {
+  description = "Breakdown of AKS capacity calculation"
+  value = {
+    pools = {
+      for pool_name, pool_config in var.pool_configs :
+      pool_name => {
+        vm_size     = pool_config.vm_size
+        max_count   = pool_config.max_count
+        vcpu_per_vm = lookup(local.vm_cpu_map, lower(pool_config.vm_size), 0)
+        total_vcpu  = lookup(local.vm_cpu_map, lower(pool_config.vm_size), 0) * pool_config.max_count
+      }
+    }
+    aks_total_vcpu      = local.aks_capacity
+    additional_vcpu     = local.additional_vcpus
+    grand_total_vcpu    = local.total_vcpus
+    finops_capacity_tag = "${local.total_vcpus}vcpu"
+  }
+}
+
+output "aks_capacity_tag" {
+  description = "Capacity tag for merging with base_tags"
+  value       = local.aks_capacity_tag
+}
+
+output "aks_tags" {
+  description = "Tags for AKS cluster (includes finops_capacity)"
+  value       = local.aks_tags
+}
+
+output "base_tags" {
+  description = "Base tags for non-computing resources (no capacity)"
+  value       = local.base_tags_no_capacity
+}
+
 # Usage:
 #
 # Option 1 - Pre-built tags:
-#   tags = local.base_tags_with_capacity
-#   tags = local.base_tags
+#   tags = local.aks_tags
 #
 # Option 2 - Flexible merging:
-#   tags = merge(local.base_tags, local.capacity_tag, {
+#   tags = merge(local.base_tags, local.aks_capacity_tag, {
 #     managed = "terraform"
 #   })
+#
+# Non-computing resources:
 #   tags = merge(local.base_tags, {
 #     managed = "terraform"
 #   })
 #
 # Example terraform.tfvars:
-#   finops_environment      = "prod"
-#   finops_product          = "dialogporten"
+#   finops_environment      = "test"
+#   finops_product          = "altinn2"
 #   finops_serviceownercode = "skd"
-#   capacity_values         = [32, 8, 4]
-#   repository              = "github.com/altinn/dialogporten"
-#   current_user            = "terraform-sp"
+#   pool_configs = {
+#     syspool = {
+#       vm_size              = "standard_b2s_v2"
+#       max_count            = 6
+#     }
+#     workpool = {
+#       vm_size              = "standard_b2s_v2"
+#       max_count            = 6
+#     }
+#   }
+#   additional_capacity     = [4]  # PostgreSQL: GP_Standard_D4s_v3
+#   repository              = "github.com/altinn/altinn-platform"
+#   current_user            = "terraform-adminservices"
 #   created_date            = "2024-03-15"
-#   modified_date           = ""
