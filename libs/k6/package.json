@@ -14,7 +14,7 @@
     "scripts": {
         "lint": "eslint --max-warnings 0 src",
         "fix": "eslint --fix src",
-        "build": "esbuild ./src/index.js --external:k6/http --bundle --sourcemap --minify --format=cjs --legal-comments=none --outfile=./build/index.js",
+        "build": "esbuild ./src/index.js --external:k6/http --external:k6/encoding --bundle --sourcemap --minify --format=cjs --legal-comments=none --outfile=./build/index.js",
         "test": "echo \"Error: no test specified\" && exit 1"
     },
     "keywords": [],
