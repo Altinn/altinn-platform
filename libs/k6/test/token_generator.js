@@ -79,7 +79,7 @@ function testTokenGeneratorOptionsValidation() {
     options.set("invalidkey", "something");
 
     try {
-        new PersonalTokenGeneratorTokenGenerator(options)
+        new PersonalTokenGenerator(options)
         throw new Error(`TokenGenerator constructor should have thrown an error for invalid key: "invalidkey" but it did not.`)
     } catch (e) {
         const expectedErrorMessage = 'TokenGeneratorOptions: "invalidkey" is not a valid option'
