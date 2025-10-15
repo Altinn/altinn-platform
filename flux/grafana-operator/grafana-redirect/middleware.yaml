@@ -6,5 +6,5 @@ metadata:
 spec:
   redirectRegex:
     permanent: true
-    regex: ^http(|s)://(.*)altinn.(no|cloud)/monitor(.*)
-    replacement: ${EXTERNAL_GRAFANA_URL}${4}
+    regex: ^https?://(.*)altinn\.(no|cloud)/monitor(.*)
+    replacement: ${EXTERNAL_GRAFANA_URL}$4

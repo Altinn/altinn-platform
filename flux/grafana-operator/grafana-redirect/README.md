@@ -13,7 +13,7 @@ The configuration consists of two main components:
 
 When a user accesses `https://${K8S_DNS_NAME}/monitor/*`, the IngressRoute catches the request and applies the redirect middleware, which:
 
-1. Matches requests with the pattern: `^http(|s)://(.*)altinn.(no|cloud)/monitor(.*)`
+1. Matches requests with the pattern: `^https?://(.*)altinn\.(no|cloud)/monitor(.*)`
 2. Redirects them permanently to: `${EXTERNAL_GRAFANA_URL}${captured_path}`
 
 This effectively redirects all monitoring requests from any Altinn domain to the Azure Managed Grafana instance while preserving the original path.
@@ -51,8 +51,8 @@ metadata:
 spec:
   redirectRegex:
     permanent: true
-    regex: ^http(|s)://(.*)altinn.(no|cloud)/monitor(.*)
-    replacement: ${azurerm_dashboard_grafana.grafana.endpoint}$${4}
+    regex: ^https?://(.*)altinn\.(no|cloud)/monitor(.*)
+    replacement: ${azurerm_dashboard_grafana.grafana.endpoint}$4
 YAML
 }
 
