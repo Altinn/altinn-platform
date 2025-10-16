@@ -13,8 +13,8 @@ resource "random_string" "obs_kv_postfix" {
 
 resource "azurerm_key_vault" "obs_kv" {
   name                       = substr("obs-${var.prefix}-${var.environment}-${random_string.obs_kv_postfix.result}", 0, 24)
-  location                   = var.location
-  resource_group_name        = azurerm_resource_group.obs.name
+  location                   = local.rg.location
+  resource_group_name        = local.rg.name
   sku_name                   = "standard"
   tenant_id                  = local.tenant_id
   tags                       = var.tags

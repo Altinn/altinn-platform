@@ -24,7 +24,7 @@ variable "prefix" {
 
 variable "azurerm_resource_group_obs_name" {
   type        = string
-  default     = ""
+  default     = null
   description = "Optional explicit name of the observability resource group"
 }
 
