@@ -35,7 +35,7 @@ resource "azurerm_role_assignment" "obs_kv_reader" {
 resource "azurerm_key_vault_secret" "conn_string" {
   depends_on      = [azurerm_role_assignment.ci_kv_secrets_role]
   name            = "connectionString"
-  value           = azurerm_application_insights.obs.connection_string
+  value           = local.ai_connection_string
   key_vault_id    = azurerm_key_vault.obs_kv.id
   expiration_date = timeadd(timestamp(), "8760h") # 1 year
 

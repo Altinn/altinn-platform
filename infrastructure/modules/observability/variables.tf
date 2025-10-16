@@ -30,7 +30,7 @@ variable "azurerm_resource_group_obs_name" {
 
 variable "log_analytics_workspace_name" {
   type        = string
-  default     = ""
+  default     = null
   description = "Name for the Log Analytics workspace."
 }
 
@@ -41,7 +41,7 @@ variable "log_analytics_retention_days" {
 
 variable "app_insights_name" {
   type        = string
-  default     = ""
+  default     = null
   description = "Name for the Application Insights instance."
 }
 
@@ -52,7 +52,7 @@ variable "app_insights_app_type" {
 
 variable "monitor_workspace_name" {
   type        = string
-  default     = ""
+  default     = null
   description = "Name for the Azure Monitor workspace."
 }
 
