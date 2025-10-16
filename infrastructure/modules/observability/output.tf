@@ -1,5 +1,5 @@
 output "log_analytics_workspace_id" {
-  value = local.law_id
+  value = local.law.id
 }
 
 output "monitor_workspace_id" {
@@ -7,7 +7,7 @@ output "monitor_workspace_id" {
 }
 
 output "application_insights_id" {
-  value = local.ai_id
+  value = local.ai.id
 }
 
 output "key_vault_uri" {
