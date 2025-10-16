@@ -3,7 +3,7 @@ output "log_analytics_workspace_id" {
 }
 
 output "monitor_workspace_id" {
-  value = local.amw_id
+  value = local.amw.id
 }
 
 output "application_insights_id" {
