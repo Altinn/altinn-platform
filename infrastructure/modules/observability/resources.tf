@@ -35,7 +35,12 @@ locals {
   law_id               = local.reuse_law ? one(data.azurerm_log_analytics_workspace.existing).id : one(azurerm_log_analytics_workspace.obs).id
   ai_connection_string = local.reuse_ai ? one(data.azurerm_application_insights.existing).connection_string : one(azurerm_application_insights.obs).connection_string
   ai_id                = local.reuse_ai ? one(data.azurerm_application_insights.existing).id : one(azurerm_application_insights.obs).id
-  amw_id               = local.reuse_amw ? one(data.azurerm_monitor_workspace.existing).id : one(azurerm_monitor_workspace.obs).id
   law_name             = local.reuse_law ? one(data.azurerm_log_analytics_workspace.existing).name : one(azurerm_log_analytics_workspace.obs).name
-  amw_name             = local.reuse_amw ? one(data.azurerm_monitor_workspace.existing).name : one(azurerm_monitor_workspace.obs).name
+  amw = local.reuse_amw ? {
+    id   = one(data.azurerm_monitor_workspace.existing).id
+    name = one(data.azurerm_monitor_workspace.existing).name
+    } : {
+    id   = one(azurerm_monitor_workspace.obs).id
+    name = one(azurerm_monitor_workspace.obs).name
+  }
 }
