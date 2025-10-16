@@ -1,13 +1,13 @@
 output "log_analytics_workspace_id" {
-  value = azurerm_log_analytics_workspace.obs.id
+  value = local.law_id
 }
 
 output "monitor_workspace_id" {
-  value = azurerm_monitor_workspace.obs.id
+  value = local.amw_id
 }
 
 output "application_insights_id" {
-  value = azurerm_application_insights.obs.id
+  value = local.ai_id
 }
 
 output "key_vault_uri" {

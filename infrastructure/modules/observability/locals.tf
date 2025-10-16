@@ -1,8 +1,8 @@
 # Determine if existing resources should be reused based on whether names are provided
 locals {
   reuse_law = length(trimspace(coalesce(var.log_analytics_workspace_name, ""))) > 0
-  reuse_ai  = length(trimspace(coalesce(var.app_insights_name, "")))           > 0
-  reuse_amw = length(trimspace(coalesce(var.monitor_workspace_name, "")))      > 0
+  reuse_ai  = length(trimspace(coalesce(var.app_insights_name, ""))) > 0
+  reuse_amw = length(trimspace(coalesce(var.monitor_workspace_name, ""))) > 0
 }
 
 data "azurerm_log_analytics_workspace" "existing" {

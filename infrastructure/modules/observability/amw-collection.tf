@@ -8,7 +8,7 @@ resource "azurerm_monitor_data_collection_endpoint" "amw" {
 
 resource "azurerm_monitor_data_collection_rule" "amw" {
   count                       = var.enable_aks_monitoring ? 1 : 0
-  name                        = "${azurerm_monitor_workspace.obs.name}-mdcr"
+  name                        = "${local.amw_name}-mdcr"
   resource_group_name         = azurerm_resource_group.obs.name
   location                    = azurerm_resource_group.obs.location
   data_collection_endpoint_id = azurerm_monitor_data_collection_endpoint.amw[0].id

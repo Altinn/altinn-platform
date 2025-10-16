@@ -22,7 +22,7 @@ resource "azurerm_application_insights" "obs" {
   name                = "${var.prefix}-${var.environment}-obs-appinsights"
   resource_group_name = azurerm_resource_group.obs.name
   location            = var.location
-  workspace_id        = azurerm_log_analytics_workspace.obs.id
+  workspace_id        = local.law_id
   application_type    = var.app_insights_app_type
   retention_in_days   = 30
 
@@ -32,9 +32,10 @@ resource "azurerm_application_insights" "obs" {
 # local values to simplify access to either existing or created resources
 locals {
 
-  law_id = local.reuse_law ? one(data.azurerm_log_analytics_workspace.existing).id : one(azurerm_log_analytics_workspace.obs).id
-
+  law_id               = local.reuse_law ? one(data.azurerm_log_analytics_workspace.existing).id : one(azurerm_log_analytics_workspace.obs).id
   ai_connection_string = local.reuse_ai ? one(data.azurerm_application_insights.existing).connection_string : one(azurerm_application_insights.obs).connection_string
-
-  amw_id = local.reuse_amw ? one(data.azurerm_monitor_workspace.existing).id : one(azurerm_monitor_workspace.obs).id
+  ai_id                = local.reuse_ai ? one(data.azurerm_application_insights.existing).id : one(azurerm_application_insights.obs).id
+  amw_id               = local.reuse_amw ? one(data.azurerm_monitor_workspace.existing).id : one(azurerm_monitor_workspace.obs).id
+  law_name             = local.reuse_law ? one(data.azurerm_log_analytics_workspace.existing).name : one(azurerm_log_analytics_workspace.obs).name
+  amw_name             = local.reuse_amw ? one(data.azurerm_monitor_workspace.existing).name : one(azurerm_monitor_workspace.obs).name
 }
