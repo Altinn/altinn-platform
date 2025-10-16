@@ -1,16 +1,16 @@
 resource "azurerm_monitor_data_collection_endpoint" "amw" {
   count               = var.enable_aks_monitoring ? 1 : 0
   name                = "${local.amw.name}-mdce"
-  resource_group_name = azurerm_resource_group.obs.name
-  location            = azurerm_resource_group.obs.location
+  resource_group_name = local.rg.name
+  location            = local.rg.name
   kind                = "Linux"
 }
 
 resource "azurerm_monitor_data_collection_rule" "amw" {
   count                       = var.enable_aks_monitoring ? 1 : 0
   name                        = "${local.amw.name}-mdcr"
-  resource_group_name         = azurerm_resource_group.obs.name
-  location                    = azurerm_resource_group.obs.location
+  resource_group_name         = local.rg.name
+  location                    = local.rg.location
   data_collection_endpoint_id = azurerm_monitor_data_collection_endpoint.amw[0].id
   kind                        = "Linux"
 
