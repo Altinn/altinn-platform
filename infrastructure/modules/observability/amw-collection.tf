@@ -2,7 +2,7 @@ resource "azurerm_monitor_data_collection_endpoint" "amw" {
   count               = var.enable_aks_monitoring ? 1 : 0
   name                = "${local.amw.name}-mdce"
   resource_group_name = local.rg.name
-  location            = local.rg.name
+  location            = local.rg.location
   kind                = "Linux"
 }
 
