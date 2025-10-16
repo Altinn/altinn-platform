@@ -1,6 +1,6 @@
 resource "azurerm_monitor_data_collection_endpoint" "amw" {
   count               = var.enable_aks_monitoring ? 1 : 0
-  name                = "${azurerm_monitor_workspace.obs.name}-mdce"
+  name                = "${local.amw_name}-mdce"
   resource_group_name = azurerm_resource_group.obs.name
   location            = azurerm_resource_group.obs.location
   kind                = "Linux"
@@ -42,7 +42,7 @@ resource "azurerm_monitor_data_collection_rule" "amw" {
 
 resource "azurerm_monitor_data_collection_rule_association" "amw" {
   count                   = var.enable_aks_monitoring ? 1 : 0
-  name                    = "${azurerm_monitor_workspace.obs.name}-mdcra"
+  name                    = "${local.amw_name}-mdcra"
   target_resource_id      = var.azurerm_kubernetes_cluster_id
   data_collection_rule_id = azurerm_monitor_data_collection_rule.amw[0].id
   description             = "Association of data collection rule. Deleting this association will break the data collection for this AKS Cluster."
