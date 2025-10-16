@@ -36,7 +36,7 @@ The `base/` directory contains shared Grafana manifests that are common across e
 
 ## Application Configuration
 
-The `apps/` directory contains application-specific Grafana manifests:
+The `apps/` directory contains apps cluster specific Grafana manifests:
 
 - **Dashboards**: Application-specific monitoring dashboards
 - **Future**: Ready for expansion with alerts, datasources, etc.
