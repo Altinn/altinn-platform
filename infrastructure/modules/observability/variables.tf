@@ -24,14 +24,14 @@ variable "prefix" {
 
 variable "azurerm_resource_group_obs_name" {
   type        = string
-  default     = ""
-  description = "Optional explicit name of the observability resource group"
+  default     = null
+  description = "Name of the existing observability resource group. If provided, the module will use this resource instead of creating a new one."
 }
 
 variable "log_analytics_workspace_name" {
   type        = string
-  default     = ""
-  description = "Name for the Log Analytics workspace."
+  default     = null
+  description = "Name of the existing Log Analytics workspace. If provided, the module will use this resource instead of creating a new one."
 }
 
 variable "log_analytics_retention_days" {
@@ -41,8 +41,8 @@ variable "log_analytics_retention_days" {
 
 variable "app_insights_name" {
   type        = string
-  default     = ""
-  description = "Name for the Application Insights instance."
+  default     = null
+  description = "Name of the existing Application Insights instance. If provided, the module will use this resource instead of creating a new one."
 }
 
 variable "app_insights_app_type" {
@@ -52,8 +52,8 @@ variable "app_insights_app_type" {
 
 variable "monitor_workspace_name" {
   type        = string
-  default     = ""
-  description = "Name for the Azure Monitor workspace."
+  default     = null
+  description = "Name of the existing Azure Monitor workspace. If provided, the module will use this resource instead of creating a new one."
 }
 
 variable "tags" {
