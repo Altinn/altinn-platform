@@ -46,11 +46,11 @@ body:
       options:
         - label: "Prepare subscription for [CUSTOMER] test and production"
           required: false
-        - label: "Create AD-groups for [CUSTOMER]"
+        - label: "Create AD-groups for [CUSTOMER] test and production"
           required: false
-        - label: "Prepare pipeline for [CUSTOMER] prod"
+        - label: "Prepare pipeline for [CUSTOMER] [ENVIRONMENT]"
           required: false
-        - label: "Run pipeline for [CUSTOMER] prod"
+        - label: "Run pipeline for [CUSTOMER] [ENVIRONMENT]"
           required: false
         - label: "Add DNS record for [CUSTOMER] cluster"
           required: false
