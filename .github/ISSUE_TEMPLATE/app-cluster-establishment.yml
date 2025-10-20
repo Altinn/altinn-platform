@@ -34,7 +34,7 @@ body:
       description: In which environment should the APP cluster be established?
       options:
         - "Produksjon (apps.altinn.no)"
-        - "Test (tt02.altinn.no)"
+        - "Test (apps.tt02.altinn.no)"
     validations:
       required: true
 
