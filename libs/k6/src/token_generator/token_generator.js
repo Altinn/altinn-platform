@@ -34,6 +34,12 @@ class PersonalTokenGenerator {
     );
   }
 
+  setTokenGeneratorOptions(tokenGeneratorOptions) {
+    this.tokenGeneratorOptions = new PersonalTokenGeneratorOptions(
+      tokenGeneratorOptions,
+    );
+  }
+
   #getPersonalToken() {
     const url = new URL(config.getPersonalTokenUrl);
     for (let [k, v] of this.tokenGeneratorOptions) {
@@ -136,6 +142,12 @@ class EnterpriseTokenGenerator {
     );
   }
 
+  setTokenGeneratorOptions(tokenGeneratorOptions) {
+    this.tokenGeneratorOptions = new EnterpriseTokenGeneratorOptions(
+      tokenGeneratorOptions,
+    );
+  }
+
   #getEnterpriseToken() {
     const url = new URL(config.getEnterpriseTokenUrl);
     for (let [k, v] of this.tokenGeneratorOptions) {
@@ -177,6 +189,7 @@ class EnterpriseTokenGeneratorOptions extends Map {
     'org',
     'orgName', // This is in the README but not on the validator.
     'orgNo',
+    'bulkCount',
     'supplierOrgNo',
     'partyId',
     'userId',

@@ -52,6 +52,54 @@ function testGetEnterpriseToken() {
     }
 }
 
+function testSetTokenGeneratorOptions() {
+    const options0 = new Map();
+    options0.set('env', 'yt01');
+    options0.set('scopes', 'altinn:authorization/authorize.admin');
+    options0.set('orgNo', '727963294');
+
+    const tokenGenerator = new EnterpriseTokenGenerator(options0);
+    const token0 = tokenGenerator.getToken();
+    if (!(token0 && typeof token0 === 'string' && token0.length > 0)) {
+        throw new Error('Unexpected token value');
+    }
+
+    const options1 = new Map();
+    options1.set('env', 'yt01');
+    options1.set('scopes', 'altinn:authorization/authorize.admin');
+    options1.set('orgNo', '717560094');
+
+    tokenGenerator.setTokenGeneratorOptions(options1);
+    const token1 = tokenGenerator.getToken();
+    if (!(token1 && typeof token1 === 'string' && token1.length > 0)) {
+        throw new Error('Unexpected token value');
+    }
+
+    const options2 = new Map();
+    options2.set('env', 'yt01');
+    options2.set('scopes', 'altinn:authorization/authorize.admin');
+    options2.set('orgNo', '726633436');
+
+    tokenGenerator.setTokenGeneratorOptions(options2);
+    const token2 = tokenGenerator.getToken();
+    if (!(token2 && typeof token2 === 'string' && token2.length > 0)) {
+        throw new Error('Unexpected token value');
+    }
+
+    if (token0 == token1 || token1 == token2 || token0 == token2) {
+        throw new Error('Tokens should not be equal');
+    }
+
+    tokenGenerator.setTokenGeneratorOptions(options0);
+    const sameToken0 = tokenGenerator.getToken();
+    if (!(sameToken0 && typeof sameToken0 === 'string' && sameToken0.length > 0)) {
+        throw new Error('Unexpected token value');
+    }
+    if (sameToken0 != token0) {
+        throw new Error('Token returned should be the same as it should be fetched via cache');
+    }
+}
+
 function testGetEnterpriseTokenBulk() {
     const options = new Map();
     options.set("env", "none") // It is highly recommended to use the none environment when using bulk mode
@@ -95,4 +143,5 @@ export default function testTokenGenerator() {
     testGetEnterpriseToken()
     testGetPersonalTokenBulk()
     testGetEnterpriseTokenBulk()
+    testSetTokenGeneratorOptions()
 }
