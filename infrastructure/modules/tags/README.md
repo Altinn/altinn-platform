@@ -44,17 +44,20 @@ modified_date           = ""
 ### 4. Tag Your Resources
 
 ```hcl
-# All resources use the same tags
+# Option 1 - Use base tags directly
 resource "azurerm_kubernetes_cluster" "main" {
   name = "aks-example"
   # ... configuration
   tags = local.base_tags
 }
 
+# Option 2 - Add custom tags with merge()
 resource "azurerm_storage_account" "main" {
   name = "stexample"
   # ... configuration
-  tags = local.base_tags
+  tags = merge(local.base_tags, {
+    providedby = "teamname"
+  })
 }
 ```
 
@@ -105,12 +108,25 @@ Check https://altinncdn.no/orgs/altinn-orgs.json
 
 ## Best Practices
 
+### Adding Custom Tags
+
+Use the `merge()` function to add custom tags while preserving base tags:
+
+```hcl
+resource "azurerm_resource_group" "main" {
+  tags = merge(local.base_tags, {
+    providedby = "teamname"
+    managed    = "terraform"
+  })
+}
+```
+
 ### Prevent Tag Drift
 
 ```hcl
 resource "azurerm_resource_group" "main" {
   tags = local.base_tags
-  
+
   lifecycle {
     ignore_changes = [tags["createdby"], tags["createddate"]]
   }
@@ -171,18 +187,19 @@ The external API is down. This is rare but can happen. The validation will preve
 
 - `tags.tf` - Main implementation (copy this into your project)
 - `tags-example.tf` - Complete usage examples
-- `TAGS-README.md` - This documentation
+- `README.md` - This documentation
 
 ## Available Tag Sets
 
 - `local.base_tags` - Standard tags for all resources
+- `merge(local.base_tags, {...})` - Base tags combined with custom tags
 
 ## Benefits
 
 - ✅ **Simple**: One file, copy & paste
-- ✅ **Fast**: No module resolution overhead
 - ✅ **Reliable**: Minimal external dependencies
 - ✅ **Consistent**: Standardized tags across all projects
+- ✅ **Flexible**: Easy to add custom tags with merge()
 - ✅ **FinOps compliant**: Follows Altinn tagging requirements
 
 ---
