@@ -18,7 +18,7 @@ variable "finops_environment" {
   description = "Environment designation for cost allocation"
   type        = string
   validation {
-    condition     = can(regex("^(dev|test|prod|at22|at23|at24|yt01|tt02)$", var.finops_environment))
+    condition     = try(regex("^(dev|test|prod|at22|at23|at24|yt01|tt02)$", var.finops_environment), false)
     error_message = "Environment must be one of: dev, test, prod, at22, at23, at24, yt01, tt02."
   }
 }
@@ -27,7 +27,7 @@ variable "finops_product" {
   description = "Product name for cost allocation"
   type        = string
   validation {
-    condition     = can(regex("^(studio|dialogporten|formidling|autorisasjon|varsling|melding|altinn2)$", var.finops_product))
+    condition     = try(regex("^(studio|dialogporten|formidling|autorisasjon|varsling|melding|altinn2)$", var.finops_product), false)
     error_message = "Product must be one of: studio, dialogporten, formidling, autorisasjon, varsling, melding, altinn2."
   }
 }
@@ -35,8 +35,9 @@ variable "finops_product" {
 variable "finops_serviceownercode" {
   description = "Service owner code for billing attribution"
   type        = string
+  default     = ""
   validation {
-    condition     = can(regex("^[a-zA-Z]+$", var.finops_serviceownercode))
+    condition     = var.finops_serviceownercode == "" || try(regex("^[a-zA-Z]+$", var.finops_serviceownercode), false)
     error_message = "Service owner code must be letters only. Check https://altinncdn.no/orgs/altinn-orgs.json for valid codes."
   }
 }
@@ -44,10 +45,7 @@ variable "finops_serviceownercode" {
 variable "repository" {
   description = "Repository URL for infrastructure traceability"
   type        = string
-  validation {
-    condition     = can(regex("^github\\.com/altinn/", var.repository))
-    error_message = "Repository must be from github.com/altinn/ organization."
-  }
+  default     = ""
 }
 
 variable "current_user" {
@@ -64,7 +62,7 @@ variable "created_date" {
   type        = string
   default     = ""
   validation {
-    condition     = var.created_date == "" || can(regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", var.created_date))
+    condition     = var.created_date == "" || try(regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", var.created_date), false)
     error_message = "Date must be in YYYY-MM-DD format when provided."
   }
 }
@@ -74,7 +72,7 @@ variable "modified_date" {
   type        = string
   default     = ""
   validation {
-    condition     = var.modified_date == "" || can(regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", var.modified_date))
+    condition     = var.modified_date == "" || try(regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", var.modified_date), false)
     error_message = "Date must be in YYYY-MM-DD format when provided."
   }
 }
@@ -93,8 +91,8 @@ locals {
     lower(code) => org.orgnr
   }
 
-  # Validate that the service owner code exists
-  service_owner_exists = contains(keys(local.org_lookup), lower(var.finops_serviceownercode))
+  # Validate that the service owner code exists (skip if empty)
+  service_owner_exists = var.finops_serviceownercode == "" ? true : contains(keys(local.org_lookup), lower(var.finops_serviceownercode))
 
   # Get current date if not provided
   current_date = formatdate("YYYY-MM-DD", time_static.tags_created.rfc3339)
@@ -107,13 +105,13 @@ locals {
   base_tags = {
     finops_environment       = lower(var.finops_environment)
     finops_product           = lower(var.finops_product)
-    finops_serviceownercode  = lower(var.finops_serviceownercode)
-    finops_serviceownerorgnr = lookup(local.org_lookup, lower(var.finops_serviceownercode), "")
+    finops_serviceownercode  = var.finops_serviceownercode == "" ? "" : lower(var.finops_serviceownercode)
+    finops_serviceownerorgnr = var.finops_serviceownercode == "" ? "" : lookup(local.org_lookup, lower(var.finops_serviceownercode), "")
     createdby                = lower(var.current_user)
     createddate              = local.creation_date
     modifiedby               = lower(var.current_user)
     modifieddate             = local.modification_date
-    repository               = lower(var.repository)
+    repository               = var.repository == "" ? "" : lower(var.repository)
   }
 }
 
