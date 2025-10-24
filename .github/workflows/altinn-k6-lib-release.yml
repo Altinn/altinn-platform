@@ -1,0 +1,38 @@
+name: Altinn K6 Lib Release
+
+on:
+  push:
+    tags:
+      - "altinn-k6-lib-*"
+
+permissions:
+  contents: write
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: libs/k6
+    if: startsWith(github.ref, 'refs/tags/altinn-k6-lib-')
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.x"
+
+      - name: Dependencies
+        run: yarn
+
+      - name: Check build
+        run: yarn build
+
+      - name: Create Release & Upload Asset
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -x
+          VERSION="${GITHUB_REF##*/}"
+          gh release create "$VERSION" ./build/* --target "$GITHUB_SHA" --title "$VERSION"

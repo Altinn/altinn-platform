@@ -1,0 +1,36 @@
+name: Altinn K6 Lib Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/altinn-k6-lib-test-pr.yml
+      - libs/k6/**
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/altinn-k6-lib-test-pr.yml
+      - libs/k6/**
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: libs/k6
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.x"
+
+      - name: Dependencies
+        run: yarn
+
+      - name: Lint Code
+        run: yarn lint

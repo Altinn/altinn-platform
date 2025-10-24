@@ -1,10 +1,65 @@
-# JS library to be used with K6 based tests
+# JS library for K6 based tests
 
 Import the library
 ```javascript
-import * as altinnK6Lib from 'https://raw.githubusercontent.com/Altinn/altinn-platform/refs/heads/main/libs/k6/build/index.js'
+import {
+    PersonalTokenGenerator,
+    EnterpriseTokenGenerator,
+    MaskinportenAccessTokenGenerator
+} from "https://github.com/Altinn/altinn-platform/releases/download/altinn-k6-lib-0.0.4/index.js"
 ```
-Use it
+
+More information about valid options can be seen in the [AltinnTestTools](https://github.com/Altinn/AltinnTestTools?tab=readme-ov-file#usage) repository.
+
+
+
+## PersonalTokenGenerator
+
+Expected environmental variables for PersonalTokenGenerator. Otherwise pass the values explicitly in the constructor.
+- TOKEN_GENERATOR_USERNAME
+- TOKEN_GENERATOR_PASSWORD
+
 ```javascript
-altinnK6Lib.postSlackMessage(data)
+        const options = new Map();
+        options.set("env", __ENV.ENVIRONMENT);
+        options.set("ttl", ttl);
+        options.set("scopes", scopes)
+        options.set("userId", userId);
+
+        const tokenGenerator = new PersonalTokenGenerator(options);
+        // const tokenGenerator = new PersonalTokenGenerator(options, username, password);
+```
+
+## EnterpriseTokenGenerator
+
+Expected environmental variables for EnterpriseTokenGenerator. Otherwise pass the values explicitly in the constructor.
+- TOKEN_GENERATOR_USERNAME
+- TOKEN_GENERATOR_PASSWORD
+
+```javascript
+    const options = new Map();
+    options.set("env", __ENV.ENVIRONMENT);
+    options.set("ttl", ttl);
+    options.set("scopes", scopes);
+    options.set("orgNo", orgNo);
+
+    const tokenGenerator = new EnterpriseTokenGenerator(options);
+    // const tokenGenerator = new EnterpriseTokenGenerator(options, username, password);
+```
+
+## MaskinportenAccessTokenGenerator
+
+More information about [Maskinporten](https://docs.digdir.no/docs/Maskinporten/maskinporten_guide_apikonsument.html) and helper utilities can be found [here](https://docs.digdir.no/docs/Maskinporten/maskinporten_protocol_jwtgrant) and [here](https://github.com/Altinn/altinn-authorization-utils/tree/main/src/Altinn.Cli).
+
+Expected environmental variables for MaskinportenAccessTokenGenerator. Otherwise pass the values explicitly in the constructor.
+- MACHINEPORTEN_KID
+- MACHINEPORTEN_CLIENT_ID
+- ENCODED_JWK
+
+```javascript
+    const options = new Map();
+    options.set("scopes", scopes);
+
+    const tokenGenerator = new MaskinportenAccessTokenGenerator(options);
+    // const tokenGenerator = new MaskinportenAccessTokenGenerator(options, machineportenKid, machineportenClientId, encodedJwk);
 ```
