@@ -41,16 +41,6 @@ variable "finops_serviceownercode" {
   }
 }
 
-variable "capacity_values" {
-  description = "List of vCPU capacity values for computing resources"
-  type        = list(number)
-  default     = []
-  validation {
-    condition = alltrue([for value in var.capacity_values : value >= 0])
-    error_message = "All capacity values must be non-negative numbers."
-  }
-}
-
 variable "repository" {
   description = "Repository URL for infrastructure traceability"
   type        = string
@@ -92,8 +82,7 @@ variable "modified_date" {
 # Local values for tag generation
 locals {
   # Parse organization data with error handling
-  orgs_response = can(jsondecode(data.http.altinn_orgs.response_body)) ?
-    jsondecode(data.http.altinn_orgs.response_body) : { orgs = {} }
+  orgs_response = try(jsondecode(data.http.altinn_orgs.response_body), { orgs = {} })
 
   # Create lookup map from service owner code to organization number
   org_lookup = {
@@ -111,40 +100,7 @@ locals {
   creation_date     = var.created_date != "" ? var.created_date : local.current_date
   modification_date = var.modified_date != "" ? var.modified_date : local.current_date
 
-  # Calculate total capacity from provided values
-  total_vcpus = length(var.capacity_values) > 0 ? sum(var.capacity_values) : 0
-
-  # SKU to vCPU mapping tables
-  vm_cpu_map = {
-    "standard_b1s"       = 1
-    "standard_b2s"       = 2
-    "standard_b2s_v2"    = 2
-    "standard_b4s_v2"    = 4
-    "standard_d2s_v3"    = 2
-    "standard_d4s_v3"    = 4
-    "standard_d8s_v3"    = 8
-    "standard_d16s_v3"   = 16
-    "standard_d32s_v3"   = 32
-  }
-
-  postgresql_cpu_map = {
-    "GP_Standard_D2s_v3"  = 2
-    "GP_Standard_D4s_v3"  = 4
-    "GP_Standard_D8s_v3"  = 8
-    "GP_Standard_D16s_v3" = 16
-    "GP_Standard_D32s_v3" = 32
-  }
-
-  app_service_cpu_map = {
-    "P1v2" = 1
-    "P2v2" = 2
-    "P3v2" = 4
-    "S1"   = 1
-    "S2"   = 2
-    "S3"   = 4
-  }
-
-  # Base tags for all resources (no capacity)
+  # Base tags for all resources
   base_tags = {
     finops_environment       = lower(var.finops_environment)
     finops_product           = lower(var.finops_product)
@@ -156,14 +112,6 @@ locals {
     modifieddate             = local.modification_date
     repository               = lower(var.repository)
   }
-
-  # Capacity tag for merging with base_tags
-  capacity_tag = {
-    finops_capacity = "${local.total_vcpus}vcpu"
-  }
-
-  # Pre-built capacity tags (for convenience)
-  base_tags_with_capacity = merge(local.base_tags, local.capacity_tag)
 }
 
 # Validation to ensure service owner code is valid
@@ -172,7 +120,7 @@ resource "terraform_data" "validate_service_owner" {
 
   lifecycle {
     precondition {
-      condition = local.service_owner_exists
+      condition     = local.service_owner_exists
       error_message = <<-EOF
         Service owner code '${var.finops_serviceownercode}' not found in Altinn organization registry.
         Check https://altinncdn.no/orgs/altinn-orgs.json for valid codes.
@@ -184,13 +132,9 @@ resource "terraform_data" "validate_service_owner" {
 # Usage:
 #
 # Option 1 - Pre-built tags:
-#   tags = local.base_tags_with_capacity
 #   tags = local.base_tags
 #
 # Option 2 - Flexible merging:
-#   tags = merge(local.base_tags, local.capacity_tag, {
-#     managed = "terraform"
-#   })
 #   tags = merge(local.base_tags, {
 #     managed = "terraform"
 #   })
@@ -199,7 +143,6 @@ resource "terraform_data" "validate_service_owner" {
 #   finops_environment      = "prod"
 #   finops_product          = "dialogporten"
 #   finops_serviceownercode = "skd"
-#   capacity_values         = [32, 8, 4]
 #   repository              = "github.com/altinn/dialogporten"
 #   current_user            = "terraform-sp"
 #   created_date            = "2024-03-15"

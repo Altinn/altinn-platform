@@ -21,25 +21,26 @@ provider "azurerm" {
 # finops_environment      = "prod"
 # finops_product          = "dialogporten"
 # finops_serviceownercode = "skd"
-# capacity_values         = [32, 8, 4]
 # repository              = "github.com/altinn/dialogporten"
 # current_user            = "terraform-sp"
 # created_date            = "2024-03-15"
 # modified_date           = ""
 
-# Resource Group - Non-computing resource
+# Resource Group
 resource "azurerm_resource_group" "main" {
   name     = "rg-${var.finops_product}-${var.finops_environment}"
   location = "Norway East"
 
-  tags = local.base_tags # No capacity tag
+  tags = merge(local.base_tags, {
+    providedby = "teamname"
+  })
 
   lifecycle {
     ignore_changes = [tags["createdby"], tags["createddate"]]
   }
 }
 
-# AKS Cluster - Computing resource
+# AKS Cluster
 resource "azurerm_kubernetes_cluster" "main" {
   name                = "aks-${var.finops_product}-${var.finops_environment}"
   location            = azurerm_resource_group.main.location
@@ -56,14 +57,16 @@ resource "azurerm_kubernetes_cluster" "main" {
     type = "SystemAssigned"
   }
 
-  tags = local.base_tags_with_capacity # Includes capacity tag
+  tags = merge(local.base_tags, {
+    providedby = "teamname"
+  })
 
   lifecycle {
     ignore_changes = [tags["createdby"], tags["createddate"]]
   }
 }
 
-# PostgreSQL - Computing resource
+# PostgreSQL
 resource "azurerm_postgresql_flexible_server" "main" {
   name                = "psql-${var.finops_product}-${var.finops_environment}"
   resource_group_name = azurerm_resource_group.main.name
@@ -71,14 +74,16 @@ resource "azurerm_postgresql_flexible_server" "main" {
   version             = "15"
   sku_name            = "GP_Standard_D2s_v3"
 
-  tags = local.base_tags_with_capacity # Includes capacity tag
+  tags = merge(local.base_tags, {
+    providedby = "teamname"
+  })
 
   lifecycle {
     ignore_changes = [tags["createdby"], tags["createddate"]]
   }
 }
 
-# Storage Account - Non-computing resource
+# Storage Account
 resource "azurerm_storage_account" "main" {
   name                     = "st${replace(var.finops_product, "-", "")}${var.finops_environment}"
   resource_group_name      = azurerm_resource_group.main.name
@@ -86,14 +91,16 @@ resource "azurerm_storage_account" "main" {
   account_tier             = "Standard"
   account_replication_type = "LRS"
 
-  tags = local.base_tags # No capacity tag
+  tags = merge(local.base_tags, {
+    providedby = "teamname"
+  })
 
   lifecycle {
     ignore_changes = [tags["createdby"], tags["createddate"]]
   }
 }
 
-# Key Vault - Non-computing resource
+# Key Vault
 resource "azurerm_key_vault" "main" {
   name                = "kv-${var.finops_product}-${var.finops_environment}"
   location            = azurerm_resource_group.main.location
@@ -101,7 +108,9 @@ resource "azurerm_key_vault" "main" {
   tenant_id           = data.azurerm_client_config.current.tenant_id
   sku_name            = "standard"
 
-  tags = local.base_tags # No capacity tag
+  tags = merge(local.base_tags, {
+    providedby = "teamname"
+  })
 
   lifecycle {
     ignore_changes = [tags["createdby"], tags["createddate"]]
@@ -111,17 +120,7 @@ resource "azurerm_key_vault" "main" {
 data "azurerm_client_config" "current" {}
 
 # Outputs for verification
-output "compute_tags_example" {
-  description = "Example tags for computing resources"
-  value       = local.base_tags_with_capacity
-}
-
-output "storage_tags_example" {
-  description = "Example tags for non-computing resources"
+output "tags_example" {
+  description = "Example tags for all resources"
   value       = local.base_tags
-}
-
-output "total_capacity_example" {
-  description = "Total vCPU capacity from capacity_values"
-  value       = "${local.total_vcpus} vCPU"
 }

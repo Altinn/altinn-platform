@@ -35,7 +35,6 @@ Create or update your `terraform.tfvars`:
 finops_environment      = "prod"
 finops_product          = "dialogporten"
 finops_serviceownercode = "skd"
-capacity_values         = [32, 8, 4]
 repository              = "github.com/altinn/dialogporten"
 current_user            = "terraform-sp"
 created_date            = "2024-03-15"
@@ -45,14 +44,13 @@ modified_date           = ""
 ### 4. Tag Your Resources
 
 ```hcl
-# Computing resources (includes capacity tag)
+# All resources use the same tags
 resource "azurerm_kubernetes_cluster" "main" {
   name = "aks-example"
   # ... configuration
-  tags = local.base_tags_with_capacity
+  tags = local.base_tags
 }
 
-# Non-computing resources (no capacity tag)
 resource "azurerm_storage_account" "main" {
   name = "stexample"
   # ... configuration
@@ -60,40 +58,20 @@ resource "azurerm_storage_account" "main" {
 }
 ```
 
-## Resource Types
-
-### Computing Resources → `local.base_tags_with_capacity`
-- Azure Kubernetes Service (AKS)
-- Virtual Machines
-- PostgreSQL / MySQL Flexible Servers
-- App Service Plans
-- Azure Container Instances
-
-### Non-Computing Resources → `local.base_tags`
-- Storage Accounts
-- Key Vaults
-- Virtual Networks
-- Resource Groups
-- Application Insights
-
 ## Generated Tags
 
-### Computing Resources
+All resources receive the same standardized tags:
 ```
 finops_environment       = "prod"
 finops_product           = "dialogporten"
 finops_serviceownercode  = "skd"
 finops_serviceownerorgnr = "974761076"
-finops_capacity          = "44vcpu"          ← Only on computing resources
 createdby                = "terraform-sp"
 createddate              = "2024-03-15"
 modifiedby               = "terraform-sp"
 modifieddate             = "2024-03-15"
 repository               = "github.com/altinn/dialogporten"
 ```
-
-### Non-Computing Resources
-Same as above, but without `finops_capacity`.
 
 ## Configuration
 
@@ -111,7 +89,6 @@ Same as above, but without `finops_capacity`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `capacity_values` | `[]` | vCPU values for capacity calculation |
 | `created_date` | current date | Creation date (YYYY-MM-DD) |
 | `modified_date` | current date | Modification date (YYYY-MM-DD) |
 
@@ -137,28 +114,6 @@ resource "azurerm_resource_group" "main" {
   lifecycle {
     ignore_changes = [tags["createdby"], tags["createddate"]]
   }
-}
-```
-
-### Resource-Specific Capacity
-
-If you need different capacity per resource:
-
-```hcl
-locals {
-  aks_capacity = 32
-  db_capacity  = 8
-  
-  aks_tags = merge(local.base_tags, { finops_capacity = "${local.aks_capacity}vcpu" })
-  db_tags  = merge(local.base_tags, { finops_capacity = "${local.db_capacity}vcpu" })
-}
-
-resource "azurerm_kubernetes_cluster" "main" {
-  tags = local.aks_tags  # finops_capacity = "32vcpu"
-}
-
-resource "azurerm_postgresql_flexible_server" "main" {
-  tags = local.db_tags   # finops_capacity = "8vcpu"
 }
 ```
 
@@ -214,16 +169,13 @@ The external API is down. This is rare but can happen. The validation will preve
 
 ## Files
 
-## Available Tag Sets
-
-- `local.base_tags` - Standard tags for non-computing resources (no capacity)
-- `local.base_tags_with_capacity` - Tags for computing resources (includes finops_capacity)
-
-## Files
-
 - `tags.tf` - Main implementation (copy this into your project)
 - `tags-example.tf` - Complete usage examples
 - `TAGS-README.md` - This documentation
+
+## Available Tag Sets
+
+- `local.base_tags` - Standard tags for all resources
 
 ## Benefits
 
