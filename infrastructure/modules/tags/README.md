@@ -68,7 +68,7 @@ resource "azurerm_storage_account" "main" {
 ## Generated Tags
 
 All resources receive the same standardized tags:
-```
+```hcl
 finops_environment       = "prod"
 finops_product           = "dialogporten"
 finops_serviceownercode  = "skd"
@@ -172,7 +172,7 @@ steps:
 
 **Error:**
 ```hcl
-Service owner code 'xyz' not found in Altinn organization registry.
+ Service owner code 'xyz' not found in Altinn organization registry.
 ```
 
 **Solution:**
@@ -182,7 +182,7 @@ Use a valid code from [https://altinncdn.no/orgs/altinn-orgs.json](https://altin
 
 **Error:**
 ```hcl
-Error retrieving data from https://altinncdn.no/orgs/altinn-orgs.json
+ Error retrieving data from https://altinncdn.no/orgs/altinn-orgs.json
 ```
 
 **Solution:**
