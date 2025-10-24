@@ -12,9 +12,9 @@ Copy `tags.tf` into your Terraform project:
 cp tags.tf /path/to/your/terraform/project/
 ```
 
-### 2. Add Required Provider
+### 2. Add Required Providers
 
-Add to your `versions.tf`:
+Add to your `providers.tf`:
 
 ```hcl
 terraform {
@@ -22,6 +22,10 @@ terraform {
     http = {
       source  = "hashicorp/http"
       version = "~> 3.4"
+    }
+    time = {
+      source  = "hashicorp/time"
+      version = "~> 0.9"
     }
   }
 }
@@ -104,7 +108,7 @@ repository               = "github.com/altinn/dialogporten"
 `studio`, `dialogporten`, `formidling`, `autorisasjon`, `varsling`, `melding`, `altinn2`
 
 **Service Owner Codes:**
-Check https://altinncdn.no/orgs/altinn-orgs.json
+Check [https://altinncdn.no/orgs/altinn-orgs.json](https://altinncdn.no/orgs/altinn-orgs.json)
 
 ## Best Practices
 
@@ -138,6 +142,7 @@ resource "azurerm_resource_group" "main" {
 ### Azure DevOps
 
 ```yaml
+```yaml
 variables:
   TF_VAR_current_user: "$(Build.RequestedFor)"
   TF_VAR_modified_date: "$[format('{0:yyyy-MM-dd}', pipeline.startTime)]"
@@ -166,22 +171,34 @@ steps:
 ### Service Owner Code Not Found
 
 **Error:**
-```
+```hcl
 Service owner code 'xyz' not found in Altinn organization registry.
 ```
 
 **Solution:**
-Use a valid code from https://altinncdn.no/orgs/altinn-orgs.json
+Use a valid code from [https://altinncdn.no/orgs/altinn-orgs.json](https://altinncdn.no/orgs/altinn-orgs.json)
 
 ### HTTP Timeout
 
 **Error:**
-```
+```hcl
 Error retrieving data from https://altinncdn.no/orgs/altinn-orgs.json
 ```
 
 **Solution:**
 The external API is down. This is rare but can happen. The validation will prevent deployment until the API is available again.
+
+### Creation Date Changes Every Plan
+
+**Error:**
+```
+  ~ tags = {
+      ~ createddate = "2024-10-24" -> "2024-10-25"
+    }
+```
+
+**Solution:**
+This is normal behavior for the first few plans. The `time_static` resource ensures creation_date stabilizes after the initial deployment and won't change on subsequent plans.
 
 ## Files
 

@@ -79,6 +79,9 @@ variable "modified_date" {
   }
 }
 
+# Static time resource to prevent creation_date drift
+resource "time_static" "tags_created" {}
+
 # Local values for tag generation
 locals {
   # Parse organization data with error handling
@@ -87,14 +90,14 @@ locals {
   # Create lookup map from service owner code to organization number
   org_lookup = {
     for code, org in local.orgs_response.orgs :
-    code => org.orgnr
+    lower(code) => org.orgnr
   }
 
   # Validate that the service owner code exists
   service_owner_exists = contains(keys(local.org_lookup), lower(var.finops_serviceownercode))
 
   # Get current date if not provided
-  current_date = formatdate("YYYY-MM-DD", timestamp())
+  current_date = formatdate("YYYY-MM-DD", time_static.tags_created.rfc3339)
 
   # Use provided dates or fallback to current date
   creation_date     = var.created_date != "" ? var.created_date : local.current_date
@@ -105,7 +108,7 @@ locals {
     finops_environment       = lower(var.finops_environment)
     finops_product           = lower(var.finops_product)
     finops_serviceownercode  = lower(var.finops_serviceownercode)
-    finops_serviceownerorgnr = local.service_owner_exists ? local.org_lookup[lower(var.finops_serviceownercode)] : ""
+    finops_serviceownerorgnr = lookup(local.org_lookup, lower(var.finops_serviceownercode), "")
     createdby                = lower(var.current_user)
     createddate              = local.creation_date
     modifiedby               = lower(var.current_user)
