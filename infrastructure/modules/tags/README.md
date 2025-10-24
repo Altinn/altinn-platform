@@ -142,10 +142,9 @@ resource "azurerm_resource_group" "main" {
 ### Azure DevOps
 
 ```yaml
-```yaml
-variables:
-  TF_VAR_current_user: "$(Build.RequestedFor)"
-  TF_VAR_modified_date: "$[format('{0:yyyy-MM-dd}', pipeline.startTime)]"
+  variables:
+    TF_VAR_current_user: "$(Build.RequestedFor)"
+    TF_VAR_modified_date: "$[format('{0:yyyy-MM-dd}', pipeline.startTime)]"
 
 steps:
   - task: TerraformTaskV4@4
