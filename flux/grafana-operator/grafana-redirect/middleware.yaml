@@ -7,4 +7,4 @@ spec:
   redirectRegex:
     permanent: true
     regex: ^https?://(.*)altinn\.(no|cloud)/monitor(.*)
-    replacement: ${EXTERNAL_GRAFANA_URL}$4
+    replacement: ${EXTERNAL_GRAFANA_URL}$3
