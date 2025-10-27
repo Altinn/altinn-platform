@@ -49,6 +49,8 @@ body:
           required: false
         - label: "Create AD-groups for [CUSTOMER] test and production"
           required: false
+        - label: "Check and run RBAC scripts"
+          required: false
         - label: "Prepare pipeline for [CUSTOMER] [ENVIRONMENT]"
           required: false
         - label: "Run pipeline for [CUSTOMER] [ENVIRONMENT]"
