@@ -45,15 +45,17 @@ body:
       label: Infrastructure Tasks
       description: Check off tasks as they are completed
       options:
-        - label: "Prepare subscription for [CUSTOMER] test and production"
+        - label: "Prepare subscription for test and production"
           required: false
-        - label: "Create AD-groups for [CUSTOMER] test and production"
+        - label: "Create AD-groups for test and production"
           required: false
-        - label: "Prepare pipeline for [CUSTOMER] [ENVIRONMENT]"
+        - label: "Check and run RBAC scripts"
           required: false
-        - label: "Run pipeline for [CUSTOMER] [ENVIRONMENT]"
+        - label: "Prepare pipeline and run plan"
           required: false
-        - label: "Add DNS record for [CUSTOMER] cluster"
+        - label: "Run pipeline with apply"
+          required: false
+        - label: "Add DNS record for cluster"
           required: false
         - label: "Assign CRM ticket to Team Studio"
           required: false
