@@ -19,6 +19,10 @@ Add to your `providers.tf`:
 ```hcl
 terraform {
   required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
+    }
     http = {
       source  = "hashicorp/http"
       version = "~> 3.4"
@@ -27,7 +31,15 @@ terraform {
       source  = "hashicorp/time"
       version = "~> 0.9"
     }
+    terraform = {
+      source  = "hashicorp/terraform"
+      version = "~> 1.0"
+    }
   }
+}
+
+provider "azurerm" {
+  features {}
 }
 ```
 
@@ -35,14 +47,19 @@ terraform {
 
 Create or update your `terraform.tfvars`:
 
+#### Minimal Example (required variables only):
 ```hcl
-finops_environment      = "prod"
-finops_product          = "dialogporten"
-finops_serviceownercode = "skd"
-repository              = "github.com/altinn/dialogporten"
-current_user            = "terraform-sp"
-created_date            = "2024-03-15"
-modified_date           = ""
+finops_environment = "prod"
+finops_product     = "dialogporten"
+```
+
+#### Full Example (all variables):
+```hcl
+finops_environment       = "prod"
+finops_product           = "dialogporten"
+finops_serviceownercode  = "skd"          # Optional
+finops_serviceownerorgnr = "974761076"    # Optional - overrides automatic lookup
+repository               = "github.com/altinn/dialogporten"  # Optional
 ```
 
 ### 4. Tag Your Resources
@@ -67,37 +84,37 @@ resource "azurerm_storage_account" "main" {
 
 ## Generated Tags
 
-All resources receive the same standardized tags:
+All resources receive the same standardized tags (when all variables are provided):
 ```hcl
 finops_environment       = "prod"
 finops_product           = "dialogporten"
-finops_serviceownercode  = "skd"
-finops_serviceownerorgnr = "974761076"
+finops_serviceownercode  = "skd"                    # Empty if not provided
+finops_serviceownerorgnr = "974761076"              # Manual override or automatic lookup
 createdby                = "terraform-sp"
-createddate              = "2024-03-15"
+createddate              = "2024-10-24"             # Current date when created (stable via time_static)
 modifiedby               = "terraform-sp"
-modifieddate             = "2024-03-15"
-repository               = "github.com/altinn/dialogporten"
+modifieddate             = "2024-10-24"             # Current date per run if not provided (will drift)
+repository               = "github.com/altinn/dialogporten"  # Empty if not provided
 ```
 
 ## Configuration
 
 ### Required Variables
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `finops_environment` | Environment name | `"prod"` |
-| `finops_product` | Product name | `"dialogporten"` |
-| `finops_serviceownercode` | Service owner code | `"skd"` |
-| `repository` | Repository URL | `"github.com/altinn/dialogporten"` |
-| `current_user` | User/service principal | `"terraform-sp"` |
+| Variable             | Description              | Example |
+|----------------------|--------------------------|---------|
+| `finops_environment` | Environment name         | `"prod"` |
+| `finops_product`     | Product name             | `"dialogporten"` |
 
 ### Optional Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `created_date` | current date | Creation date (YYYY-MM-DD) |
-| `modified_date` | current date | Modification date (YYYY-MM-DD) |
+| Variable                    | Default | Description |
+|----------------------------|---------|-------------|
+| `finops_serviceownercode`  | `""`    | Service owner code for billing attribution |
+| `finops_serviceownerorgnr` | `""`    | Organization number for billing attribution (overrides automatic lookup) |
+| `repository`               | `""`    | Repository URL for infrastructure traceability |
+
+
 
 ### Valid Values
 
@@ -125,45 +142,9 @@ resource "azurerm_resource_group" "main" {
 }
 ```
 
-### Prevent Tag Drift
 
-```hcl
-resource "azurerm_resource_group" "main" {
-  tags = local.base_tags
 
-  lifecycle {
-    ignore_changes = [tags["createdby"], tags["createddate"]]
-  }
-}
-```
 
-## CI/CD Integration
-
-### Azure DevOps
-
-```yaml
-  variables:
-    TF_VAR_current_user: "$(Build.RequestedFor)"
-    TF_VAR_modified_date: "$[format('{0:yyyy-MM-dd}', pipeline.startTime)]"
-
-steps:
-  - task: TerraformTaskV4@4
-    inputs:
-      command: 'apply'
-      commandOptions: '-var="finops_environment=$(Environment)"'
-```
-
-### GitHub Actions
-
-```yaml
-- name: Set Terraform Variables
-  run: |
-    echo "TF_VAR_current_user=${{ github.actor }}" >> $GITHUB_ENV
-    echo "TF_VAR_modified_date=$(date +%Y-%m-%d)" >> $GITHUB_ENV
-
-- name: Terraform Apply
-  run: terraform apply -auto-approve
-```
 
 ## Troubleshooting
 
@@ -187,17 +168,7 @@ Use a valid code from [https://altinncdn.no/orgs/altinn-orgs.json](https://altin
 **Solution:**
 The external API is down. This is rare but can happen. The validation will prevent deployment until the API is available again.
 
-### Creation Date Changes Every Plan
 
-**Error:**
-```
-  ~ tags = {
-      ~ createddate = "2024-10-24" -> "2024-10-25"
-    }
-```
-
-**Solution:**
-This is normal behavior for the first few plans. The `time_static` resource ensures creation_date stabilizes after the initial deployment and won't change on subsequent plans.
 
 ## Files
 

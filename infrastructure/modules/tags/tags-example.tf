@@ -20,11 +20,11 @@ provider "azurerm" {
 # Example terraform.tfvars values:
 # finops_environment      = "prod"
 # finops_product          = "dialogporten"
-# finops_serviceownercode = "skd"
-# repository              = "github.com/altinn/dialogporten"
+# finops_serviceownercode = "skd"  # Optional
+# repository              = "github.com/altinn/dialogporten"  # Optional
 # current_user            = "terraform-sp"
-# created_date            = "2024-03-15"
-# modified_date           = ""
+# created_date            = "2024-03-15"  # Optional
+# modified_date           = ""  # Optional
 
 # Resource Group
 resource "azurerm_resource_group" "main" {
