@@ -1,6 +1,9 @@
 resource "azurerm_resource_group" "grafana" {
   name     = var.azurerm_resource_group_grafana_name != "" ? var.azurerm_resource_group_grafana_name : "grafana-${var.prefix}-${var.environment}-rg"
   location = var.location
+  tags = merge(var.localtags, {
+    submodule = "grafana"
+  })
 }
 
 resource "azurerm_dashboard_grafana" "grafana" {
@@ -10,6 +13,9 @@ resource "azurerm_dashboard_grafana" "grafana" {
   api_key_enabled                   = true
   deterministic_outbound_ip_enabled = true
   grafana_major_version             = var.grafana_major_version
+  tags = merge(var.localtags, {
+    submodule = "grafana"
+  })
 
   dynamic "azure_monitor_workspace_integrations" {
     for_each = var.monitor_workspace_ids

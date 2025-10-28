@@ -66,3 +66,9 @@ variable "prefix" {
     error_message = "You must provide a value for prefix for name generation."
   }
 }
+
+variable "localtags" {
+  type        = map(string)
+  description = "A map of tags to assign to the created resources."
+  default     = {}
+}
