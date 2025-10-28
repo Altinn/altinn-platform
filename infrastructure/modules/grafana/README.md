@@ -36,8 +36,9 @@ No modules.
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_azurerm_resource_group_grafana_name"></a> [azurerm\_resource\_group\_grafana\_name](#input\_azurerm\_resource\_group\_grafana\_name) | Optional explicit name of the grafana resource group | `string` | `""` | no |
 | <a name="input_client_config_current_object_id"></a> [client\_config\_current\_object\_id](#input\_client\_config\_current\_object\_id) | Object id for pipeline runner id | `string` | n/a | yes |
+| <a name="input_create_resource_group"></a> [create\_resource\_group](#input\_create\_resource\_group) | Whether to create a new resource group. If false, will use an existing resource group specified by resource\_group\_name. | `bool` | `true` | no |
+| <a name="input_dashboard_name"></a> [dashboard\_name](#input\_dashboard\_name) | Name of Grafana dashboard. If not provided, generates 'grafana-{prefix}-{environment}'. | `string` | `""` | no |
 | <a name="input_environment"></a> [environment](#input\_environment) | Environment for resources | `string` | n/a | yes |
 | <a name="input_grafana_admin_access"></a> [grafana\_admin\_access](#input\_grafana\_admin\_access) | List of user groups to grant admin access to grafana. | `list(string)` | `[]` | no |
 | <a name="input_grafana_editor_access"></a> [grafana\_editor\_access](#input\_grafana\_editor\_access) | List of user groups to grant editor access to grafana. | `list(string)` | `[]` | no |
@@ -47,6 +48,7 @@ No modules.
 | <a name="input_location"></a> [location](#input\_location) | Default region for resources | `string` | `"norwayeast"` | no |
 | <a name="input_monitor_workspace_ids"></a> [monitor\_workspace\_ids](#input\_monitor\_workspace\_ids) | List of azure monitor workspaces to connect grafana. | `map(string)` | `{}` | no |
 | <a name="input_prefix"></a> [prefix](#input\_prefix) | Prefix for resource names | `string` | n/a | yes |
+| <a name="input_resource_group_name"></a> [resource\_group\_name](#input\_resource\_group\_name) | Name of the resource group. When create\_resource\_group is true, uses this name if provided, otherwise generates 'grafana-{prefix}-{environment}-rg'. When create\_resource\_group is false, this is required and must be the name of an existing resource group. | `string` | `""` | no |
 
 ## Outputs
 
