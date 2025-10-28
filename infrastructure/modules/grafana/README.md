@@ -1,3 +1,4 @@
+<!-- BEGIN_TF_DOCS -->
 ## Requirements
 
 | Name | Version |
@@ -35,14 +36,16 @@ No modules.
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
+| <a name="input_azurerm_resource_group_grafana_name"></a> [azurerm\_resource\_group\_grafana\_name](#input\_azurerm\_resource\_group\_grafana\_name) | Optional explicit name of the grafana resource group | `string` | `""` | no |
 | <a name="input_client_config_current_object_id"></a> [client\_config\_current\_object\_id](#input\_client\_config\_current\_object\_id) | Object id for pipeline runner id | `string` | n/a | yes |
 | <a name="input_environment"></a> [environment](#input\_environment) | Environment for resources | `string` | n/a | yes |
 | <a name="input_grafana_admin_access"></a> [grafana\_admin\_access](#input\_grafana\_admin\_access) | List of user groups to grant admin access to grafana. | `list(string)` | `[]` | no |
 | <a name="input_grafana_editor_access"></a> [grafana\_editor\_access](#input\_grafana\_editor\_access) | List of user groups to grant editor access to grafana. | `list(string)` | `[]` | no |
 | <a name="input_grafana_major_version"></a> [grafana\_major\_version](#input\_grafana\_major\_version) | Managed Grafana major version. | `number` | `11` | no |
 | <a name="input_grafana_monitor_reader_subscription_id"></a> [grafana\_monitor\_reader\_subscription\_id](#input\_grafana\_monitor\_reader\_subscription\_id) | List of subscription ids to grant reader access to grafana. | `list(string)` | `[]` | no |
+| <a name="input_localtags"></a> [localtags](#input\_localtags) | A map of tags to assign to the created resources. | `map(string)` | `{}` | no |
 | <a name="input_location"></a> [location](#input\_location) | Default region for resources | `string` | `"norwayeast"` | no |
-| <a name="input_monitor_workspace_id"></a> [monitor\_workspace\_id](#input\_monitor\_workspace\_id) | List of azure monitor workspaces to connect grafana. | `list(string)` | `[]` | no |
+| <a name="input_monitor_workspace_ids"></a> [monitor\_workspace\_ids](#input\_monitor\_workspace\_ids) | List of azure monitor workspaces to connect grafana. | `map(string)` | `{}` | no |
 | <a name="input_prefix"></a> [prefix](#input\_prefix) | Prefix for resource names | `string` | n/a | yes |
 
 ## Outputs
@@ -51,3 +54,4 @@ No modules.
 |------|-------------|
 | <a name="output_grafana_endpoint"></a> [grafana\_endpoint](#output\_grafana\_endpoint) | n/a |
 | <a name="output_token_grafana_operator"></a> [token\_grafana\_operator](#output\_token\_grafana\_operator) | n/a |
+<!-- END_TF_DOCS -->
