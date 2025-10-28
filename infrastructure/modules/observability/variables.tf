@@ -81,10 +81,10 @@ variable "enable_aks_monitoring" {
 
 variable "azurerm_kubernetes_cluster_id" {
   type        = string
-  default     = ""
+  default     = null
   description = "AKS cluster resource id"
   validation {
-    condition     = var.enable_aks_monitoring == false || (var.enable_aks_monitoring == true && length(var.azurerm_kubernetes_cluster_id) > 0)
+    condition     = var.enable_aks_monitoring == false || (var.enable_aks_monitoring == true && var.azurerm_kubernetes_cluster_id != null)
     error_message = "You must provide a value for azurerm_kubernetes_cluster_id when enable_aks_monitoring is true."
   }
 }

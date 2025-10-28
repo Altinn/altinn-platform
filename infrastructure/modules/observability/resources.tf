@@ -28,8 +28,3 @@ resource "azurerm_application_insights" "obs" {
   lifecycle { prevent_destroy = true }
   tags = var.tags
 }
-
-# local values to simplify access to either existing or created resources
-locals {
-  # Simplified locals - no longer needed since we use try() pattern directly
-}

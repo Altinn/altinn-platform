@@ -293,16 +293,16 @@ variable "azurerm_kubernetes_cluster_id" {
 
 ### Common Issues and Solutions
 
-**Issue: Resource replacement on apply**
-```
+### Issue: Resource replacement on apply
+```hcl
 # module.observability.azurerm_key_vault.obs_kv must be replaced
 ```
 **Solution**: This has been fixed in the current version. The `try()` pattern eliminates this issue.
 
-**Issue: "known after apply" errors**
+### Issue: "known after apply" errors
 **Solution**: Ensure you're using the latest version of the module with the refactored resource management.
 
-**Issue: AKS monitoring not working**
+### Issue: AKS monitoring not working
 **Solution**: Verify that:
 - `enable_aks_monitoring = true`
 - `azurerm_kubernetes_cluster_id` is correctly set
