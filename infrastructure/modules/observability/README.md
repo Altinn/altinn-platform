@@ -84,3 +84,33 @@ No modules.
 | <a name="output_obs_client_id"></a> [obs\_client\_id](#output\_obs\_client\_id) | The client ID of the observability Azure AD application. |
 <!-- END_TF_DOCS -->
 ---
+
+## Quick Start
+
+```hcl
+module "observability" {
+  source      = "../some/path"
+
+  prefix      = "acme"
+  environment = "dev"
+  location    = "westeurope"
+
+  # Reuse existing resources in the given RG
+  azurerm_resource_group_obs_name = "shared-observability-rg"
+
+  # if not passed a new resource will be created in the RG
+  log_analytics_workspace_name = "shared-law" #reused
+  # an app_insights will be created as it is not being passed
+  monitor_workspace_name       = "shared-amw"
+
+  # Enable monitoring for an existing AKS cluster
+  enable_aks_monitoring         = true
+  azurerm_kubernetes_cluster_id = module.aks.aks_id
+  oidc_issuer_url = "https://westeurope.oic.prod-aks.azure.com/00000000/11111111"
+
+  tags = {
+    project    = "billing-api"
+    costcenter = "42"
+  }
+}
+```
