@@ -35,8 +35,9 @@ variable "log_analytics_workspace_name" {
 }
 
 variable "log_analytics_retention_days" {
-  type    = number
-  default = 30
+  type        = number
+  default     = 30
+  description = "Number of days to retain logs in Log Analytics Workspace."
 }
 
 variable "app_insights_name" {
@@ -46,8 +47,9 @@ variable "app_insights_name" {
 }
 
 variable "app_insights_app_type" {
-  type    = string
-  default = "web"
+  type        = string
+  default     = "web"
+  description = "Application type for Application Insights. Common values: web, other."
 }
 
 variable "monitor_workspace_name" {
@@ -74,6 +76,8 @@ variable "enable_aks_monitoring" {
   type        = bool
   description = "Should monitoring of a AKS cluster be enabled. If true azurerm_kubernetes_cluster_id is required."
 }
+
+
 
 variable "azurerm_kubernetes_cluster_id" {
   type        = string

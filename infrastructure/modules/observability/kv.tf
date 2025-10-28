@@ -13,8 +13,8 @@ resource "random_string" "obs_kv_postfix" {
 
 resource "azurerm_key_vault" "obs_kv" {
   name                       = substr("obs-${var.prefix}-${var.environment}-${random_string.obs_kv_postfix.result}", 0, 24)
-  location                   = local.rg.location
-  resource_group_name        = local.rg.name
+  location                   = var.location
+  resource_group_name        = try(azurerm_resource_group.obs[0].name, var.azurerm_resource_group_obs_name)
   sku_name                   = "standard"
   tenant_id                  = local.tenant_id
   tags                       = var.tags
@@ -35,7 +35,7 @@ resource "azurerm_role_assignment" "obs_kv_reader" {
 resource "azurerm_key_vault_secret" "conn_string" {
   depends_on      = [azurerm_role_assignment.ci_kv_secrets_role]
   name            = "connectionString"
-  value           = local.ai.connection_string
+  value           = try(azurerm_application_insights.obs[0].connection_string, data.azurerm_application_insights.existing[0].connection_string)
   key_vault_id    = azurerm_key_vault.obs_kv.id
   expiration_date = timeadd(timestamp(), "8760h") # 1 year
 
