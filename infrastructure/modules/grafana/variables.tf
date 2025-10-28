@@ -1,7 +1,24 @@
-variable "azurerm_resource_group_grafana_name" {
+variable "create_resource_group" {
+  type        = bool
+  default     = true
+  description = "Whether to create a new resource group. If false, will use an existing resource group specified by resource_group_name."
+}
+
+variable "resource_group_name" {
   type        = string
   default     = ""
-  description = "Optional explicit name of the grafana resource group"
+  description = "Name of the resource group. When create_resource_group is true, uses this name if provided, otherwise generates 'grafana-{prefix}-{environment}-rg'. When create_resource_group is false, this is required and must be the name of an existing resource group."
+
+  validation {
+    condition     = var.create_resource_group ? true : var.resource_group_name != ""
+    error_message = "When create_resource_group is false, resource_group_name must be provided."
+  }
+}
+
+variable "dashboard_name" {
+  type        = string
+  default     = ""
+  description = "Name of Grafana dashboard. If not provided, generates 'grafana-{prefix}-{environment}'."
 }
 
 variable "client_config_current_object_id" {

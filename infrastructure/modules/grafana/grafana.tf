@@ -1,5 +1,7 @@
+# Create resource group only if create_resource_group is true
 resource "azurerm_resource_group" "grafana" {
-  name     = var.azurerm_resource_group_grafana_name != "" ? var.azurerm_resource_group_grafana_name : "grafana-${var.prefix}-${var.environment}-rg"
+  count    = var.create_resource_group ? 1 : 0
+  name     = var.resource_group_name != "" ? var.resource_group_name : "grafana-${var.prefix}-${var.environment}-rg"
   location = var.location
   tags = merge(var.localtags, {
     submodule = "grafana"
@@ -7,9 +9,9 @@ resource "azurerm_resource_group" "grafana" {
 }
 
 resource "azurerm_dashboard_grafana" "grafana" {
-  name                              = "grafana-${var.prefix}-${var.environment}"
-  resource_group_name               = azurerm_resource_group.grafana.name
-  location                          = azurerm_resource_group.grafana.location
+  name                              = var.dashboard_name != "" ? var.dashboard_name : "grafana-${var.prefix}-${var.environment}"
+  resource_group_name               = var.create_resource_group ? azurerm_resource_group.grafana[0].name : var.resource_group_name
+  location                          = var.location
   api_key_enabled                   = true
   deterministic_outbound_ip_enabled = true
   grafana_major_version             = var.grafana_major_version
