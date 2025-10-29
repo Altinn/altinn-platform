@@ -277,4 +277,5 @@ TODO: Get an overview of what Dagfinn, Core? and other teams were doing previoul
 - Improve Dashboards experience, e.g. easy linking between resource usage (both for individual pods as nodes), tracing, logs, etc.
 - Slack and/or Github integration so teams receive feedback of their test runs.
 - It's possible to generate SLOs based on the test metrics. We can monitor production with synthetic traffic.
-- Keep iterating with teams to figure out the best way forward[Profiling](https://grafana.com/blog/2025/01/30/how-to-integrate-performance-testing-and-continuous-profiling-for-deeper-application-insights/?utm_source=grafana_news&utm_medium=rss)
+- Keep iterating with teams to figure out the best way forward
+- [Profiling](https://grafana.com/blog/2025/01/30/how-to-integrate-performance-testing-and-continuous-profiling-for-deeper-application-insights/?utm_source=grafana_news&utm_medium=rss)
