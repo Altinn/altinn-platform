@@ -1,13 +1,13 @@
 output "log_analytics_workspace_id" {
-  value = local.law.id
+  value = try(azurerm_log_analytics_workspace.obs[0].id, data.azurerm_log_analytics_workspace.existing[0].id)
 }
 
 output "monitor_workspace_id" {
-  value = local.amw.id
+  value = try(azurerm_monitor_workspace.obs[0].id, data.azurerm_monitor_workspace.existing[0].id)
 }
 
 output "application_insights_id" {
-  value = local.ai.id
+  value = try(azurerm_application_insights.obs[0].id, data.azurerm_application_insights.existing[0].id)
 }
 
 output "key_vault_uri" {

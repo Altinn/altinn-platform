@@ -1,4 +1,4 @@
-# dis-observability-module
+# Azure Observability Module
 
 A lightweight Terraform module that bootstraps a **Log Analytics Workspace, Application Insights (workspace‑based), Azure Monitor Workspace**.
 
@@ -58,34 +58,34 @@ No modules.
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_app_insights_app_type"></a> [app\_insights\_app\_type](#input\_app\_insights\_app\_type) | n/a | `string` | `"web"` | no |
+| <a name="input_app_insights_app_type"></a> [app\_insights\_app\_type](#input\_app\_insights\_app\_type) | Application type for Application Insights. Common values: web, other. | `string` | `"web"` | no |
 | <a name="input_app_insights_name"></a> [app\_insights\_name](#input\_app\_insights\_name) | Name for the Application Insights instance. | `string` | `null` | no |
-| <a name="input_azurerm_kubernetes_cluster_id"></a> [azurerm\_kubernetes\_cluster\_id](#input\_azurerm\_kubernetes\_cluster\_id) | AKS cluster resource id | `string` | `""` | no |
+| <a name="input_azurerm_kubernetes_cluster_id"></a> [azurerm\_kubernetes\_cluster\_id](#input\_azurerm\_kubernetes\_cluster\_id) | AKS cluster resource id | `string` | `null` | no |
 | <a name="input_azurerm_resource_group_obs_name"></a> [azurerm\_resource\_group\_obs\_name](#input\_azurerm\_resource\_group\_obs\_name) | Optional explicit name of the observability resource group | `string` | `null` | no |
 | <a name="input_enable_aks_monitoring"></a> [enable\_aks\_monitoring](#input\_enable\_aks\_monitoring) | Should monitoring of a AKS cluster be enabled. If true azurerm\_kubernetes\_cluster\_id is required. | `bool` | n/a | yes |
 | <a name="input_environment"></a> [environment](#input\_environment) | Environment for resources | `string` | n/a | yes |
 | <a name="input_location"></a> [location](#input\_location) | Default region for resources | `string` | `"norwayeast"` | no |
-| <a name="input_log_analytics_retention_days"></a> [log\_analytics\_retention\_days](#input\_log\_analytics\_retention\_days) | n/a | `number` | `30` | no |
+| <a name="input_log_analytics_retention_days"></a> [log\_analytics\_retention\_days](#input\_log\_analytics\_retention\_days) | Number of days to retain logs in Log Analytics Workspace. | `number` | `30` | no |
 | <a name="input_log_analytics_workspace_name"></a> [log\_analytics\_workspace\_name](#input\_log\_analytics\_workspace\_name) | Name for the Log Analytics workspace. | `string` | `null` | no |
 | <a name="input_monitor_workspace_name"></a> [monitor\_workspace\_name](#input\_monitor\_workspace\_name) | Name for the Azure Monitor workspace. | `string` | `null` | no |
 | <a name="input_oidc_issuer_url"></a> [oidc\_issuer\_url](#input\_oidc\_issuer\_url) | Oidc issuer url needed for federation | `string` | n/a | yes |
 | <a name="input_prefix"></a> [prefix](#input\_prefix) | Prefix for resource names | `string` | n/a | yes |
-| <a name="input_tags"></a> [tags](#input\_tags) | n/a | `map(string)` | `{}` | no |
+| <a name="input_tags"></a> [tags](#input\_tags) | Tags to apply to all resources. | `map(string)` | `{}` | no |
 
 ## Outputs
 
 | Name | Description |
 |------|-------------|
-| <a name="output_application_insights_id"></a> [application\_insights\_id](#output\_application\_insights\_id) | n/a |
-| <a name="output_key_vault_uri"></a> [key\_vault\_uri](#output\_key\_vault\_uri) | n/a |
-| <a name="output_lakmus_client_id"></a> [lakmus\_client\_id](#output\_lakmus\_client\_id) | n/a |
-| <a name="output_log_analytics_workspace_id"></a> [log\_analytics\_workspace\_id](#output\_log\_analytics\_workspace\_id) | n/a |
-| <a name="output_monitor_workspace_id"></a> [monitor\_workspace\_id](#output\_monitor\_workspace\_id) | n/a |
-| <a name="output_obs_client_id"></a> [obs\_client\_id](#output\_obs\_client\_id) | n/a |
+| <a name="output_application_insights_id"></a> [application\_insights\_id](#output\_application\_insights\_id) | The ID of the Application Insights resource. |
+| <a name="output_key_vault_uri"></a> [key\_vault\_uri](#output\_key\_vault\_uri) | The URI of the Key Vault for storing secrets. |
+| <a name="output_lakmus_client_id"></a> [lakmus\_client\_id](#output\_lakmus\_client\_id) | The client ID of the Lakmus Azure AD application. |
+| <a name="output_log_analytics_workspace_id"></a> [log\_analytics\_workspace\_id](#output\_log\_analytics\_workspace\_id) | The ID of the Log Analytics Workspace. |
+| <a name="output_monitor_workspace_id"></a> [monitor\_workspace\_id](#output\_monitor\_workspace\_id) | The ID of the Azure Monitor Workspace. |
+| <a name="output_obs_client_id"></a> [obs\_client\_id](#output\_obs\_client\_id) | The client ID of the observability Azure AD application. |
 <!-- END_TF_DOCS -->
 ---
 
-## Quick start
+## Quick Start
 
 ```hcl
 module "observability" {
@@ -100,17 +100,13 @@ module "observability" {
 
   # if not passed a new resource will be created in the RG
   log_analytics_workspace_name = "shared-law" #reused
-  # an app_insights will be created as it not being passed
+  # an app_insights will be created as it is not being passed
   monitor_workspace_name       = "shared-amw"
 
   # Enable monitoring for an existing AKS cluster
   enable_aks_monitoring         = true
   azurerm_kubernetes_cluster_id = module.aks.aks_id
   oidc_issuer_url = "https://westeurope.oic.prod-aks.azure.com/00000000/11111111"
-
-  # Object ID of the service principal that needs read/write access to secrets
-  # NOTE: This is the AAD objectId, not the appId/clientId.
-  pipeline_sp_object_id = "00000000-0000-0000-0000-000000000000"
 
   tags = {
     project    = "billing-api"
