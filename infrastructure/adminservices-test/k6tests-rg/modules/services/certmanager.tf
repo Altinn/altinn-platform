@@ -6,7 +6,7 @@ resource "helm_release" "certmanager" {
   create_namespace = true
   repository       = "https://charts.jetstack.io"
   chart            = "cert-manager" // jetstack/cert-manager
-  version          = "1.18.2"
+  version          = "v1.19.1"
 
   values = [
     "${templatefile("${path.module}/certmanager_values.tftpl", {})}"
