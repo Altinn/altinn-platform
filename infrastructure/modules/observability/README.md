@@ -9,7 +9,7 @@ A lightweight Terraform module that bootstraps a **Log Analytics Workspace, Ap
 
 | Name | Version |
 |------|---------|
-| <a name="requirement_azuread"></a> [azuread](#requirement\_azuread) | ~> 3.5.0 |
+| <a name="requirement_azuread"></a> [azuread](#requirement\_azuread) | >= 3.6.0 |
 | <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) | >= 4.0.0 |
 | <a name="requirement_random"></a> [random](#requirement\_random) | >= 3.7.2 |
 
@@ -17,7 +17,7 @@ A lightweight Terraform module that bootstraps a **Log Analytics Workspace, Ap
 
 | Name | Version |
 |------|---------|
-| <a name="provider_azuread"></a> [azuread](#provider\_azuread) | ~> 3.5.0 |
+| <a name="provider_azuread"></a> [azuread](#provider\_azuread) | >= 3.6.0 |
 | <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | >= 4.0.0 |
 | <a name="provider_random"></a> [random](#provider\_random) | >= 3.7.2 |
 
@@ -48,26 +48,23 @@ No modules.
 | [azurerm_role_assignment.kv_reader_lakmus](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment) | resource |
 | [azurerm_role_assignment.obs_kv_reader](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment) | resource |
 | [random_string.obs_kv_postfix](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/string) | resource |
-| [azurerm_application_insights.existing](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/application_insights) | data source |
 | [azurerm_client_config.current](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/client_config) | data source |
-| [azurerm_log_analytics_workspace.existing](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/log_analytics_workspace) | data source |
-| [azurerm_monitor_workspace.existing](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/monitor_workspace) | data source |
-| [azurerm_resource_group.existing](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/resource_group) | data source |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_app_insights_app_type"></a> [app\_insights\_app\_type](#input\_app\_insights\_app\_type) | n/a | `string` | `"web"` | no |
-| <a name="input_app_insights_name"></a> [app\_insights\_name](#input\_app\_insights\_name) | Name for the Application Insights instance. | `string` | `null` | no |
-| <a name="input_azurerm_kubernetes_cluster_id"></a> [azurerm\_kubernetes\_cluster\_id](#input\_azurerm\_kubernetes\_cluster\_id) | AKS cluster resource id | `string` | `""` | no |
-| <a name="input_azurerm_resource_group_obs_name"></a> [azurerm\_resource\_group\_obs\_name](#input\_azurerm\_resource\_group\_obs\_name) | Optional explicit name of the observability resource group | `string` | `null` | no |
+| <a name="input_app_insights_app_type"></a> [app\_insights\_app\_type](#input\_app\_insights\_app\_type) | Application type for Application Insights. Common values: web, other. | `string` | `"web"` | no |
+| <a name="input_app_insights_connection_string"></a> [app\_insights\_connection\_string](#input\_app\_insights\_connection\_string) | When reusing AI, pass its connection string (avoids lookups). | `string` | `null` | no |
+| <a name="input_azurerm_kubernetes_cluster_id"></a> [azurerm\_kubernetes\_cluster\_id](#input\_azurerm\_kubernetes\_cluster\_id) | AKS cluster resource id | `string` | `null` | no |
+| <a name="input_azurerm_resource_group_obs_name"></a> [azurerm\_resource\_group\_obs\_name](#input\_azurerm\_resource\_group\_obs\_name) | Name of the existing observability resource group. If provided, the module will use this resource instead of creating a new one. | `string` | `null` | no |
 | <a name="input_enable_aks_monitoring"></a> [enable\_aks\_monitoring](#input\_enable\_aks\_monitoring) | Should monitoring of a AKS cluster be enabled. If true azurerm\_kubernetes\_cluster\_id is required. | `bool` | n/a | yes |
 | <a name="input_environment"></a> [environment](#input\_environment) | Environment for resources | `string` | n/a | yes |
 | <a name="input_location"></a> [location](#input\_location) | Default region for resources | `string` | `"norwayeast"` | no |
-| <a name="input_log_analytics_retention_days"></a> [log\_analytics\_retention\_days](#input\_log\_analytics\_retention\_days) | n/a | `number` | `30` | no |
-| <a name="input_log_analytics_workspace_name"></a> [log\_analytics\_workspace\_name](#input\_log\_analytics\_workspace\_name) | Name for the Log Analytics workspace. | `string` | `null` | no |
-| <a name="input_monitor_workspace_name"></a> [monitor\_workspace\_name](#input\_monitor\_workspace\_name) | Name for the Azure Monitor workspace. | `string` | `null` | no |
+| <a name="input_log_analytics_retention_days"></a> [log\_analytics\_retention\_days](#input\_log\_analytics\_retention\_days) | Number of days to retain logs in Log Analytics Workspace. | `number` | `30` | no |
+| <a name="input_log_analytics_workspace_id"></a> [log\_analytics\_workspace\_id](#input\_log\_analytics\_workspace\_id) | When reusing LAW, pass its ID (avoids lookups). | `string` | `null` | no |
+| <a name="input_monitor_workspace_id"></a> [monitor\_workspace\_id](#input\_monitor\_workspace\_id) | When reusing AMW, pass its ID (avoids lookups). | `string` | `null` | no |
+| <a name="input_monitor_workspace_name"></a> [monitor\_workspace\_name](#input\_monitor\_workspace\_name) | Name of the existing Azure Monitor workspace. If provided, the module will use this resource instead of creating a new one. | `string` | `null` | no |
 | <a name="input_oidc_issuer_url"></a> [oidc\_issuer\_url](#input\_oidc\_issuer\_url) | Oidc issuer url needed for federation | `string` | n/a | yes |
 | <a name="input_prefix"></a> [prefix](#input\_prefix) | Prefix for resource names | `string` | n/a | yes |
 | <a name="input_tags"></a> [tags](#input\_tags) | n/a | `map(string)` | `{}` | no |
@@ -100,7 +97,7 @@ module "observability" {
 
   # if not passed a new resource will be created in the RG
   log_analytics_workspace_name = "shared-law" #reused
-  # an app_insights will be created as it not being passed
+  # an app_insights will be created as it is not being passed
   monitor_workspace_name       = "shared-amw"
 
   # Enable monitoring for an existing AKS cluster

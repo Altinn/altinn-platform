@@ -1,3 +1,12 @@
+# Resource Group (create if not provided)
+resource "azurerm_resource_group" "obs" {
+  count    = local.reuse_rg ? 0 : 1
+  name     = "${var.prefix}-${var.environment}-obs-rg"
+  location = var.location
+  tags     = var.tags
+}
+
+# Log Analytics Workspace (create only if not reusing)
 resource "azurerm_log_analytics_workspace" "obs" {
   count               = local.reuse_law ? 0 : 1
   name                = "${var.prefix}-${var.environment}-obs-law"
@@ -8,6 +17,7 @@ resource "azurerm_log_analytics_workspace" "obs" {
   tags = var.tags
 }
 
+# Azure Monitor Workspace (create only if not reusing)
 resource "azurerm_monitor_workspace" "obs" {
   count               = local.reuse_amw ? 0 : 1
   name                = "${var.prefix}-${var.environment}-obs-amw"
@@ -17,6 +27,7 @@ resource "azurerm_monitor_workspace" "obs" {
   tags = var.tags
 }
 
+# Application Insights (create only if not reusing)
 resource "azurerm_application_insights" "obs" {
   count               = local.reuse_ai ? 0 : 1
   name                = "${var.prefix}-${var.environment}-obs-appinsights"
@@ -27,42 +38,4 @@ resource "azurerm_application_insights" "obs" {
   retention_in_days   = 30
   lifecycle { prevent_destroy = true }
   tags = var.tags
-}
-
-# local values to simplify access to either existing or created resources
-locals {
-
-  rg = local.reuse_rg ? {
-    name     = one(data.azurerm_resource_group.existing).name
-    location = one(data.azurerm_resource_group.existing).location
-    id       = one(data.azurerm_resource_group.existing).id
-    } : {
-    name     = one(azurerm_resource_group.obs).name
-    location = one(azurerm_resource_group.obs).location
-    id       = one(azurerm_resource_group.obs).id
-  }
-
-  law = local.reuse_law ? {
-    id   = one(data.azurerm_log_analytics_workspace.existing).id
-    name = one(data.azurerm_log_analytics_workspace.existing).name
-    } : {
-    id   = one(azurerm_log_analytics_workspace.obs).id
-    name = one(azurerm_log_analytics_workspace.obs).name
-  }
-
-  ai = local.reuse_ai ? {
-    id                = one(data.azurerm_application_insights.existing).id
-    connection_string = one(data.azurerm_application_insights.existing).connection_string
-    } : {
-    id                = one(azurerm_application_insights.obs).id
-    connection_string = one(azurerm_application_insights.obs).connection_string
-  }
-
-  amw = local.reuse_amw ? {
-    id   = one(data.azurerm_monitor_workspace.existing).id
-    name = one(data.azurerm_monitor_workspace.existing).name
-    } : {
-    id   = one(azurerm_monitor_workspace.obs).id
-    name = one(azurerm_monitor_workspace.obs).name
-  }
 }
