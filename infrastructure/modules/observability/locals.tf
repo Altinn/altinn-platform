@@ -7,6 +7,14 @@ locals {
 }
 
 locals {
+  rg = local.reuse_rg ? {
+    name     = var.azurerm_resource_group_obs_name
+    location = var.location
+    } : {
+    name     = one(azurerm_resource_group.obs).name
+    location = one(azurerm_resource_group.obs).location
+  }
+
   law = local.reuse_law ? {
     name = null
     id   = var.log_analytics_workspace_id
