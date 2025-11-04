@@ -43,12 +43,12 @@ variable "log_analytics_workspace_id" {
 variable "monitor_workspace_id" {
   type        = string
   default     = null
-  description = "When reusing AI, pass its ID and Name (avoids lookups)."
+  description = "When reusing AMW, pass its ID and Name (avoids lookups)."
   validation {
     condition = (
       (var.monitor_workspace_name == null && var.monitor_workspace_id == null) ||
       (var.monitor_workspace_name != null && trimspace(var.monitor_workspace_name) != "" &&
-       var.monitor_workspace_id   != null && trimspace(var.monitor_workspace_id)   != "")
+      var.monitor_workspace_id != null && trimspace(var.monitor_workspace_id) != "")
     )
     error_message = "If you provide monitor_workspace_name you must also provide monitor_workspace_id (and vice versa)."
   }
