@@ -1,11 +1,3 @@
-# Resource Group (create if not provided)
-resource "azurerm_resource_group" "obs" {
-  count    = local.reuse_rg ? 0 : 1
-  name     = "${var.prefix}-${var.environment}-obs-rg"
-  location = var.location
-  tags     = var.tags
-}
-
 # Log Analytics Workspace (create only if not reusing)
 resource "azurerm_log_analytics_workspace" "obs" {
   count               = local.reuse_law ? 0 : 1
