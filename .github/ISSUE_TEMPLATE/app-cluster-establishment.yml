@@ -57,7 +57,7 @@ body:
           required: false
         - label: "Add DNS record for cluster"
           required: false
-        - label: "Assign CRM ticket to Team Studio"
+        - label: "Assign CRM ticket to \"Altinn servicedesk\""
           required: false
 
   - type: textarea
