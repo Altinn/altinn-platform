@@ -12,7 +12,7 @@ spec:
         kind: HelmRepository
         name: grafana
         namespace: grafana
-      version: v5.18.0
+      version: v5.20.0
   interval: 1h
   timeout: 5m
   install:
