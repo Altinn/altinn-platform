@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base/ama-metrics-prometheus-config
+  - ../base/ama-metrics-settings-configmap
+  - ../base/container-azm-ms-agentconfig
+  - ../base/metrics-server-config
