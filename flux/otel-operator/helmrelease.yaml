@@ -19,7 +19,7 @@ spec:
         kind: HelmRepository
         name: otel-oci
         namespace: monitoring
-      version: 0.98.0
+      version: 0.99.0
   values:
     manager:
       image:
