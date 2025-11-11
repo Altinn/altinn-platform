@@ -45,7 +45,7 @@ variable "environment" {
   type        = string
   description = "Environment for resources"
   validation {
-    condition     = length(var.environment) > 0
+    condition     = length(trimspace(var.environment)) > 0
     error_message = "You must provide a value for environment."
   }
 }
@@ -98,7 +98,7 @@ variable "oidc_issuer_url" {
   type        = string
   description = "Oidc issuer url needed for federation"
   validation {
-    condition     = length(var.oidc_issuer_url) > 0
+    condition     = length(trimspace(var.oidc_issuer_url)) > 0
     error_message = "You must provide a value for oidc_issuer_url."
   }
 }
@@ -107,7 +107,7 @@ variable "prefix" {
   type        = string
   description = "Prefix for resource names"
   validation {
-    condition     = length(var.prefix) > 0
+    condition     = length(trimspace(var.prefix)) > 0
     error_message = "You must provide a value for prefix for name generation."
   }
 }
