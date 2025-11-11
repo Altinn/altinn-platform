@@ -4,6 +4,9 @@ resource "azurerm_monitor_data_collection_endpoint" "amw" {
   resource_group_name = local.rg.name
   location            = local.rg.location
   kind                = "Linux"
+  tags = merge(var.localtags, {
+    submodule = "observability"
+  })
 }
 
 resource "azurerm_monitor_data_collection_rule" "amw" {
@@ -13,6 +16,9 @@ resource "azurerm_monitor_data_collection_rule" "amw" {
   location                    = local.rg.location
   data_collection_endpoint_id = azurerm_monitor_data_collection_endpoint.amw[0].id
   kind                        = "Linux"
+  tags = merge(var.localtags, {
+    submodule = "observability"
+  })
 
   destinations {
     monitor_account {

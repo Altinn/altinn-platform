@@ -58,16 +58,19 @@ No modules.
 | <a name="input_app_insights_connection_string"></a> [app\_insights\_connection\_string](#input\_app\_insights\_connection\_string) | When reusing AI, pass its connection string (avoids lookups). | `string` | `null` | no |
 | <a name="input_azurerm_kubernetes_cluster_id"></a> [azurerm\_kubernetes\_cluster\_id](#input\_azurerm\_kubernetes\_cluster\_id) | AKS cluster resource id | `string` | `null` | no |
 | <a name="input_azurerm_resource_group_obs_name"></a> [azurerm\_resource\_group\_obs\_name](#input\_azurerm\_resource\_group\_obs\_name) | Name of the existing observability resource group. If provided, the module will use this resource instead of creating a new one. | `string` | `null` | no |
+| <a name="input_ci_service_principal_object_id"></a> [ci\_service\_principal\_object\_id](#input\_ci\_service\_principal\_object\_id) | Object ID of the CI service principal used for role assignments. | `string` | n/a | yes |
 | <a name="input_enable_aks_monitoring"></a> [enable\_aks\_monitoring](#input\_enable\_aks\_monitoring) | Should monitoring of a AKS cluster be enabled. If true azurerm\_kubernetes\_cluster\_id is required. | `bool` | n/a | yes |
-| <a name="input_environment"></a> [environment](#input\_environment) | Environment for resources | `string` | n/a | yes |
-| <a name="input_location"></a> [location](#input\_location) | Default region for resources | `string` | `"norwayeast"` | no |
+| <a name="input_environment"></a> [environment](#input_environment) | Environment for resources | `string` | n/a | yes |
+| <a name="input_localtags"></a> [localtags](#input_localtags) | Additional tags merged into resources created by this module. | `map(string)` | `{}` | no |
+| <a name="input_location"></a> [location](#input_location) | Default region for resources | `string` | `"norwayeast"` | no |
 | <a name="input_log_analytics_retention_days"></a> [log\_analytics\_retention\_days](#input\_log\_analytics\_retention\_days) | Number of days to retain logs in Log Analytics Workspace. | `number` | `30` | no |
 | <a name="input_log_analytics_workspace_id"></a> [log\_analytics\_workspace\_id](#input\_log\_analytics\_workspace\_id) | When reusing LAW, pass its ID (avoids lookups). | `string` | `null` | no |
 | <a name="input_monitor_workspace_id"></a> [monitor\_workspace\_id](#input\_monitor\_workspace\_id) | When reusing AMW, pass its ID (avoids lookups). | `string` | `null` | no |
 | <a name="input_monitor_workspace_name"></a> [monitor\_workspace\_name](#input\_monitor\_workspace\_name) | Name of the existing Azure Monitor workspace. If provided, the module will use this resource instead of creating a new one. | `string` | `null` | no |
 | <a name="input_oidc_issuer_url"></a> [oidc\_issuer\_url](#input\_oidc\_issuer\_url) | Oidc issuer url needed for federation | `string` | n/a | yes |
 | <a name="input_prefix"></a> [prefix](#input\_prefix) | Prefix for resource names | `string` | n/a | yes |
-| <a name="input_tags"></a> [tags](#input\_tags) | n/a | `map(string)` | `{}` | no |
+| <a name="input_subscription_id"></a> [subscription_id](#input_subscription_id) | Azure subscription ID for resource deployments. | `string` | n/a | yes |
+| <a name="input_tenant_id"></a> [tenant_id](#input_tenant_id) | Azure AD tenant ID for resource configuration. | `string` | n/a | yes |
 
 ## Outputs
 
@@ -91,6 +94,8 @@ module "observability" {
   prefix      = "acme"
   environment = "dev"
   location    = "westeurope"
+  tenant_id        = "00000000-0000-0000-0000-000000000000"
+  subscription_id  = "11111111-1111-1111-1111-111111111111"
 
   # Reuse existing resources in the given RG
   azurerm_resource_group_obs_name = "shared-observability-rg"
@@ -107,11 +112,11 @@ module "observability" {
 
   # Object ID of the service principal that needs read/write access to secrets
   # NOTE: This is the AAD objectId, not the appId/clientId.
-  pipeline_sp_object_id = "00000000-0000-0000-0000-000000000000"
+  ci_service_principal_object_id = "00000000-0000-0000-0000-000000000000"
 
-  tags = {
-    project    = "billing-api"
-    costcenter = "42"
+  localtags = {
+    owner      = "platform"
+    visibility = "shared"
   }
 }
 ```
