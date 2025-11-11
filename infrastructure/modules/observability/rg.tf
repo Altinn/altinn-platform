@@ -3,5 +3,7 @@ resource "azurerm_resource_group" "obs" {
   name     = "${var.prefix}-${var.environment}-obs-rg"
   location = var.location
   lifecycle { prevent_destroy = true }
-  tags = var.tags
+  tags = merge(var.localtags, {
+    submodule = "observability"
+  })
 }

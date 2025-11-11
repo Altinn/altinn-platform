@@ -6,7 +6,9 @@ resource "azurerm_log_analytics_workspace" "obs" {
   location            = local.rg.location
   retention_in_days   = var.log_analytics_retention_days
   lifecycle { prevent_destroy = true }
-  tags = var.tags
+  tags = merge(var.localtags, {
+    submodule = "observability"
+  })
 }
 
 # Azure Monitor Workspace (create only if not reusing)
@@ -16,7 +18,9 @@ resource "azurerm_monitor_workspace" "obs" {
   resource_group_name = local.rg.name
   location            = local.rg.location
   lifecycle { prevent_destroy = true }
-  tags = var.tags
+  tags = merge(var.localtags, {
+    submodule = "observability"
+  })
 }
 
 # Application Insights (create only if not reusing)
@@ -29,5 +33,7 @@ resource "azurerm_application_insights" "obs" {
   application_type    = var.app_insights_app_type
   retention_in_days   = 30
   lifecycle { prevent_destroy = true }
-  tags = var.tags
+  tags = merge(var.localtags, {
+    submodule = "observability"
+  })
 }
