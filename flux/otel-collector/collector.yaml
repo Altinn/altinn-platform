@@ -10,7 +10,7 @@ spec:
         secretKeyRef:
           name: app-insights-connstring
           key: connectionString
-  image: altinncr.azurecr.io/docker.io/otel/opentelemetry-collector-contrib:0.122.0
+  image: altinncr.azurecr.io/ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.122.0
   podAnnotations:
     linkerd.io/inject: "enabled"
     config.linkerd.io/skip-outbound-ports: "443"
@@ -50,11 +50,11 @@ spec:
         metrics:
           level: basic
           readers:
-          - pull:
-              exporter:
-                prometheus:
-                  host: 0.0.0.0
-                  port: 8888
+            - pull:
+                exporter:
+                  prometheus:
+                    host: 0.0.0.0
+                    port: 8888
       pipelines:
         logs:
           receivers: [otlp]
