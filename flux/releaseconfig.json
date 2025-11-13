@@ -1,11 +1,11 @@
 {
   "grafana-operator": {
-    "at_ring1": "0.2.1",
-    "at_ring2": "0.2.1",
-    "tt_ring1": "0.2.1",
-    "tt_ring2": "0.2.1",
-    "prod_ring1": "0.2.1",
-    "prod_ring2": "0.2.1"
+    "at_ring1": "1.1.0",
+    "at_ring2": "1.1.0",
+    "tt_ring1": "1.1.0",
+    "tt_ring2": "1.1.0",
+    "prod_ring1": "1.1.0",
+    "prod_ring2": "1.1.0"
   },
   "grafana-manifests": {
     "at_ring1": "1.0.0",
@@ -24,19 +24,19 @@
     "prod_ring2": "1.2.0"
   },
   "traefik": {
-    "at_ring1": "1.2.0",
-    "at_ring2": "1.2.0",
-    "tt_ring1": "1.2.0",
-    "tt_ring2": "1.2.0",
-    "prod_ring1": "1.2.0",
-    "prod_ring2": "1.2.0"
-  },
-  "linkerd": {
     "at_ring1": "1.3.0",
     "at_ring2": "1.3.0",
     "tt_ring1": "1.3.0",
     "tt_ring2": "1.3.0",
     "prod_ring1": "1.3.0",
+    "prod_ring2": "1.2.0"
+  },
+  "linkerd": {
+    "at_ring1": "1.4.0",
+    "at_ring2": "1.4.0",
+    "tt_ring1": "1.4.0",
+    "tt_ring2": "1.4.0",
+    "prod_ring1": "1.4.0",
     "prod_ring2": "1.3.0"
   },
   "external-secrets-operator": {
@@ -48,20 +48,20 @@
     "prod_ring2": "0.1.0"
   },
   "otel-operator": {
-    "at_ring1": "0.1.0",
-    "at_ring2": "0.1.0",
-    "tt_ring1": "0.1.0",
-    "tt_ring2": "0.1.0",
-    "prod_ring1": "0.1.0",
-    "prod_ring2": "0.1.0"
+    "at_ring1": "1.0.0",
+    "at_ring2": "1.0.0",
+    "tt_ring1": "1.0.0",
+    "tt_ring2": "1.0.0",
+    "prod_ring1": "1.0.0",
+    "prod_ring2": "1.0.0"
   },
   "otel-collector": {
-    "at_ring1": "0.1.0",
-    "at_ring2": "0.1.0",
-    "tt_ring1": "0.1.0",
-    "tt_ring2": "0.1.0",
-    "prod_ring1": "0.1.0",
-    "prod_ring2": "0.1.0"
+    "at_ring1": "1.0.0",
+    "at_ring2": "1.0.0",
+    "tt_ring1": "1.0.0",
+    "tt_ring2": "1.0.0",
+    "prod_ring1": "1.0.0",
+    "prod_ring2": "1.0.0"
   },
   "whoami": {
     "at_ring1": "0.1.0",
@@ -72,20 +72,20 @@
     "prod_ring2": "0.1.0"
   },
   "container-runtime-aks-config": {
+    "at_ring1": "0.2.0",
+    "at_ring2": "0.2.0",
+    "tt_ring1": "0.2.0",
+    "tt_ring2": "0.2.0",
+    "prod_ring1": "0.2.0",
+    "prod_ring2": "0.2.0"
+  },
+  "dis-identity": {
     "at_ring1": "0.1.0",
     "at_ring2": "0.1.0",
     "tt_ring1": "0.1.0",
     "tt_ring2": "0.1.0",
     "prod_ring1": "0.1.0",
     "prod_ring2": "0.1.0"
-  },
-  "dis-identity": {
-    "at_ring1": "0.0.4",
-    "at_ring2": "0.0.4",
-    "tt_ring1": "0.0.4",
-    "tt_ring2": "0.0.4",
-    "prod_ring1": "0.0.4",
-    "prod_ring2": "0.0.4"
   },
   "azure-service-operator": {
     "at_ring1": "1.0.0",
@@ -110,5 +110,30 @@
     "tt_ring2": "1.0.2",
     "prod_ring1": "1.0.2",
     "prod_ring2": "1.0.2"
+  },
+  "dis-apim": {
+    "at_ring1": "0.1.0",
+    "at_ring2": "0.1.0",
+    "tt_ring1": "0.1.0",
+    "tt_ring2": "0.1.0",
+    "prod_ring1": "0.1.0",
+    "prod_ring2": "0.1.0"
+  },
+  "blackbox-exporter": {
+    "at_ring1": "0.2.0",
+    "at_ring2": "0.2.0",
+    "tt_ring1": "0.2.0",
+    "tt_ring2": "0.2.0",
+    "prod_ring1": "0.2.0",
+    "prod_ring2": "0.2.0"
+  },
+  "helm-uninstall-outdated-apps": {
+    "at_ring1": "1.0.0",
+    "at_ring2": "1.0.0",
+    "tt_ring1": "1.0.0",
+    "tt_ring2": "1.0.0",
+    "prod_ring1": "1.0.0",
+    "prod_ring2": "1.0.0"
+  }
   }
 }

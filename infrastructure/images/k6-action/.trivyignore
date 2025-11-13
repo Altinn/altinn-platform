@@ -10,3 +10,21 @@ CVE-2025-47907
 
 # If the PATH environment variable contains paths which are executables (rather than just directories), passing certain strings to LookPath (, ., and ..), can result in the binaries listed in the PATH being unexpectedly returned.
 CVE-2025-47906
+
+# The Parse function permits values other than IPv6 addresses to be included in square brackets within the host component of a URL
+CVE-2025-47912
+
+# tar.Reader does not set a maximum size on the number of sparse region data blocks in GNU tar pax 1.0 sparse files. A maliciously-crafted archive containing a large number of sparse regions can cause a Reader to read an unbounded amount of data from the archive into memory. When reading from a compressed source, a small compressed input can result in large allocations.
+CVE-2025-58183
+
+# Despite HTTP headers having a default limit of 1MB, the number of cookies that can be parsed does not have a limit. By sending a lot of very small cookies such as a=;, an attacker can make an HTTP server allocate a large amount of structs, causing large memory consumption.
+CVE-2025-58186
+
+# Due to the design of the name constraint checking algorithm, the processing time of some inputs scals non-linearly with respect to the size of the certificate. This affects programs which validate arbitrary certificate chains.
+CVE-2025-58187
+
+# Validating certificate chains which contain DSA public keys can cause programs to panic, due to a interface cast that assumes they implement the Equal method. This affects programs which validate arbitrary certificate chains.
+CVE-2025-58188
+
+# The Reader.ReadResponse function constructs a response string through repeated string concatenation of lines. When the number of lines in a response is large, this can cause excessive CPU consumption.
+CVE-2025-61724

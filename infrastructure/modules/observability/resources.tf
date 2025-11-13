@@ -1,28 +1,39 @@
+# Log Analytics Workspace (create only if not reusing)
 resource "azurerm_log_analytics_workspace" "obs" {
-  name                = var.log_analytics_workspace_name != "" ? var.log_analytics_workspace_name : "${var.prefix}-${var.environment}-obs-law"
-  resource_group_name = azurerm_resource_group.obs.name
-  location            = var.location
+  count               = local.reuse_law ? 0 : 1
+  name                = "${var.prefix}-${var.environment}-obs-law"
+  resource_group_name = local.rg.name
+  location            = local.rg.location
   retention_in_days   = var.log_analytics_retention_days
-
-  tags = var.tags
+  lifecycle { prevent_destroy = true }
+  tags = merge(var.localtags, {
+    submodule = "observability"
+  })
 }
 
+# Azure Monitor Workspace (create only if not reusing)
 resource "azurerm_monitor_workspace" "obs" {
-  name                = var.monitor_workspace_name != "" ? var.monitor_workspace_name : "${var.prefix}-${var.environment}-obs-amw"
-  resource_group_name = azurerm_resource_group.obs.name
-  location            = var.location
-
-  tags = var.tags
+  count               = local.reuse_amw ? 0 : 1
+  name                = "${var.prefix}-${var.environment}-obs-amw"
+  resource_group_name = local.rg.name
+  location            = local.rg.location
+  lifecycle { prevent_destroy = true }
+  tags = merge(var.localtags, {
+    submodule = "observability"
+  })
 }
 
+# Application Insights (create only if not reusing)
 resource "azurerm_application_insights" "obs" {
-
-  name                = var.app_insights_name != "" ? var.app_insights_name : "${var.prefix}-${var.environment}-obs-appinsights"
-  resource_group_name = azurerm_resource_group.obs.name
-  location            = var.location
-  workspace_id        = azurerm_log_analytics_workspace.obs.id
+  count               = local.reuse_ai ? 0 : 1
+  name                = "${var.prefix}-${var.environment}-obs-appinsights"
+  resource_group_name = local.rg.name
+  location            = local.rg.location
+  workspace_id        = local.law.id
   application_type    = var.app_insights_app_type
   retention_in_days   = 30
-
-  tags = var.tags
+  lifecycle { prevent_destroy = true }
+  tags = merge(var.localtags, {
+    submodule = "observability"
+  })
 }

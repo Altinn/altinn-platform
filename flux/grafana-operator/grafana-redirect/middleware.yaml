@@ -1,0 +1,10 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-to-azure-grafana
+  namespace: traefik
+spec:
+  redirectRegex:
+    permanent: true
+    regex: ^https?://(.*)altinn\.(no|cloud)/monitor(.*)
+    replacement: ${EXTERNAL_GRAFANA_URL}$3

@@ -1,0 +1,75 @@
+name: APP Cluster Establishment 🏗️
+description: Request establishment of a new APP cluster for a customer
+title: "APP Cluster Establishment for [CUSTOMER] - [ENVIRONMENT]"
+labels: ["kind/infrastructure", "kind/toil", "status/triage"]
+projects: Altinn/177
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This template is for requesting the establishment of a new APP cluster for a customer.
+        Please fill in all required information below.
+
+  - type: input
+    id: customer-name
+    attributes:
+      label: Customer Name
+      description: Name of the customer (e.g., VIGO)
+      placeholder: "TTD"
+    validations:
+      required: true
+
+  - type: input
+    id: crm-ticket-link
+    attributes:
+      label: CRM Ticket Link
+      description: Link to the CRM ticket for this request
+      placeholder: "https://digdir.crm4.dynamics.com/main.aspx?appid=8bb89bb1-9c24-4d6e-951b-4653560a3656"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: In which environment should the APP cluster be established?
+      options:
+        - "Produksjon (apps.altinn.no)"
+        - "Test (apps.tt02.altinn.no)"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: infrastructure-tasks
+    attributes:
+      label: Infrastructure Tasks
+      description: Check off tasks as they are completed
+      options:
+        - label: "Prepare subscription for test and production"
+          required: false
+        - label: "Create AD-groups for test and production"
+          required: false
+        - label: "Check and run RBAC scripts"
+          required: false
+        - label: "Prepare pipeline and run plan"
+          required: false
+        - label: "Run pipeline with apply"
+          required: false
+        - label: "Add DNS record for cluster"
+          required: false
+        - label: "Assign CRM ticket to \"Altinn servicedesk\""
+          required: false
+
+  - type: textarea
+    id: additional-requirements
+    attributes:
+      label: Additional Requirements
+      description: Any additional requirements or special considerations for this cluster establishment
+      placeholder: "Describe any special requirements, dependencies, or considerations..."
+
+  - type: textarea
+    id: contact-information
+    attributes:
+      label: Contact Information
+      description: Primary contact person and any relevant stakeholder information
+      placeholder: "Primary contact: @username\nStakeholders: ..."

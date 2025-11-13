@@ -25,8 +25,8 @@ type Generator interface {
 	HandleConfigFile(defaultConfigFile string, testType string) map[string]interface{}
 	HandleConfigFileOverride(base map[string]interface{}, overrideConfigFile string) map[string]interface{}
 	CallK6Archive(dirName string, testConfigFileToUse string, testFile string, k6ArchiveArgs []string)
-	CallKubectl(dirName string, uniqName string, namespace string)
-	CallJsonnet(dirName string, uniqName string, testName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte, isBrowserTest bool, testid string)
+	CallKubectl(dirName string, configMapName string, uniqName string, namespace string)
+	CallJsonnet(dirName string, configMapName string, uniqName string, testName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte, isBrowserTest bool, testid string)
 }
 
 type K8sManifestGenerator struct {
@@ -175,6 +175,24 @@ func (r K8sManifestGenerator) Generate() {
 	}
 	fmt.Printf("Wrote config file into: %s/expanded-configfile.yaml\n", r.ConfigDirectory)
 
+	cliArgs, ok := os.LookupEnv("INPUT_COMMAND_LINE_ARGS")
+	var envOptions []*Env
+	if ok {
+		args := strings.Fields(cliArgs)
+		for i, arg := range args {
+			if strings.HasPrefix(arg, "-e") || strings.HasPrefix(arg, "--env") {
+				if i < len(args)-1 {
+					keyValue := strings.Split(args[i+1], "=")
+					if len(keyValue) == 2 {
+						key := keyValue[0]
+						value := keyValue[1]
+						envOptions = append(envOptions, &Env{Name: &key, Value: &value})
+					}
+				}
+			}
+		}
+	}
+
 	for _, td := range cf.TestDefinitions {
 		var envFileSlice []*Env
 		if td.EnvFile != "" {
@@ -182,6 +200,7 @@ func (r K8sManifestGenerator) Generate() {
 		}
 		for i, c := range td.Contexts {
 			if c.TestTypeDefinition.Enabled {
+				c.TestRun.Env = append(c.TestRun.Env, envOptions...)
 				var configFile map[string]interface{}
 				if *c.TestTypeDefinition.Type != "custom" {
 					if *c.TestTypeDefinition.Type == "breakpoint" {
@@ -231,7 +250,19 @@ func (r K8sManifestGenerator) Generate() {
 					log.Fatalf("Automatic generated name is too big: %s. Provide a default name such that the generated name does not go over 51 characters", uniqName)
 				}
 
-				r.CallKubectl(dirName, uniqName, cf.Namespace)
+				var configMapName string
+				switch *c.TestTypeDefinition.Type {
+				case "breakpoint":
+					configMapName = fmt.Sprintf("%s-%s", dirName, "break")
+				case "smoke":
+					configMapName = fmt.Sprintf("%s-%s", dirName, "smoke")
+				case "soak":
+					configMapName = fmt.Sprintf("%s-%s", dirName, "soak")
+				default:
+					configMapName = dirName
+				}
+
+				r.CallKubectl(dirName, configMapName, uniqName, cf.Namespace)
 				// merge env file with overrides.
 				githubRepositoryEnvName := "GITHUB_REPOSITORY"
 				githubServerUrlEnvName := "GITHUB_SERVER_URL"
@@ -282,9 +313,9 @@ func (r K8sManifestGenerator) Generate() {
 					isBrowserTest = true
 				}
 				if c.TestRun.Id != nil {
-					r.CallJsonnet(dirName, uniqName, *c.TestRun.Name, strconv.FormatInt(manifestGenerationTimestamp, 10), cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, mergedEnvsMarshalled, resources, isBrowserTest, *c.TestRun.Id)
+					r.CallJsonnet(dirName, configMapName, uniqName, *c.TestRun.Name, strconv.FormatInt(manifestGenerationTimestamp, 10), cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, mergedEnvsMarshalled, resources, isBrowserTest, *c.TestRun.Id)
 				} else {
-					r.CallJsonnet(dirName, uniqName, *c.TestRun.Name, strconv.FormatInt(manifestGenerationTimestamp, 10), cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, mergedEnvsMarshalled, resources, isBrowserTest, "")
+					r.CallJsonnet(dirName, configMapName, uniqName, *c.TestRun.Name, strconv.FormatInt(manifestGenerationTimestamp, 10), cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, mergedEnvsMarshalled, resources, isBrowserTest, "")
 				}
 
 				grafanaDashboard, ok := os.LookupEnv("GRAFANA_DASHBOARD")
@@ -462,11 +493,11 @@ func (r K8sManifestGenerator) CallK6Archive(dirName string, testConfigFileToUse 
 	fmt.Printf("Wrote archive.tar into: %s/archive.tar\n", newpath)
 }
 
-func (r K8sManifestGenerator) CallKubectl(dirName string, uniqName string, namespace string) {
+func (r K8sManifestGenerator) CallKubectl(dirName string, configMapName string, uniqName string, namespace string) {
 	cmd := exec.Command("kubectl",
 		"create",
 		"configmap",
-		dirName,
+		configMapName,
 		fmt.Sprintf("--from-file=archive.tar=%s/%s/archive.tar", r.BuildDirectory, dirName),
 		"-o", "json",
 		"-n", namespace,
@@ -512,7 +543,7 @@ func (r K8sManifestGenerator) CallKubectl(dirName string, uniqName string, names
 	}
 }
 
-func (r K8sManifestGenerator) CallJsonnet(dirName string, uniqName string, testName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte, isBrowserTest bool, testid string) {
+func (r K8sManifestGenerator) CallJsonnet(dirName string, configMapName string, uniqName string, testName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte, isBrowserTest bool, testid string) {
 	var errb strings.Builder
 	k6ClusterConfigFile, err := os.ReadFile("/actions/generate-k6-manifests/infra/k6_cluster_conf.yaml")
 	if err != nil {
@@ -527,7 +558,7 @@ func (r K8sManifestGenerator) CallJsonnet(dirName string, uniqName string, testN
 		"--jpath", "/jsonnet/vendor",
 		"--ext-str", fmt.Sprintf("unique_name=%s", uniqName),
 		"--ext-str", fmt.Sprintf("testid=%s", testid),
-		"--ext-str", fmt.Sprintf("dir_name=%s", dirName),
+		"--ext-str", fmt.Sprintf("configmap_name=%s", configMapName),
 		"--ext-str", fmt.Sprintf("test_name=%s", testName),
 		"--ext-str", fmt.Sprintf("manifest_generation_timestamp=%s", manifestGenerationTimestamp),
 		"--ext-str", fmt.Sprintf("namespace=%s", namespace),

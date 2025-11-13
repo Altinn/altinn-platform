@@ -56,7 +56,7 @@ jobs:
       TF_VAR_subs_to_monitor: '{platform-test:"${{secrets.AZR_PLATFORM_TEST_SUB_ID}}",platform-staging:"${{secrets.AZR_PLATFORM_STAGING_SUB_ID}}",platform-prod:"${{secrets.AZR_PLATFORM_PROD_SUB_ID}}"}'
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
         # TODO: This needs a review once I'm done with the PoC
       - name: Azure login
@@ -87,7 +87,7 @@ jobs:
           fi
 
       - name: Terraform Plan
-        uses: Altinn/altinn-platform/actions/terraform/plan@92155c50cbf3083e20862d697c8b6b28316bf924 # main
+        uses: Altinn/altinn-platform/actions/terraform/plan@9986578634203a1624897e2b2319149994d894bb # main
         with:
           working_directory: ${{ env.TF_PROJECT }}
           oidc_type: environment
@@ -107,7 +107,7 @@ jobs:
       TF_VAR_subs_to_monitor: '{platform-test:"${{secrets.AZR_PLATFORM_TEST_SUB_ID}}",platform-staging:"${{secrets.AZR_PLATFORM_STAGING_SUB_ID}}",platform-prod:"${{secrets.AZR_PLATFORM_PROD_SUB_ID}}"}'
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       # TODO: This needs a review once I'm done with the PoC
       - name: Azure login
@@ -138,7 +138,7 @@ jobs:
           fi
 
       - name: Terraform Apply
-        uses: Altinn/altinn-platform/actions/terraform/apply@92155c50cbf3083e20862d697c8b6b28316bf924 # main
+        uses: Altinn/altinn-platform/actions/terraform/apply@9986578634203a1624897e2b2319149994d894bb # main
         with:
           working_directory: ${{ env.TF_PROJECT }}
           oidc_type: environment

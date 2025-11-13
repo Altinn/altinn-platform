@@ -1,0 +1,11 @@
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: external-grafana-linkerd-daemonset
+  namespace: grafana
+spec:
+  folderRef: external-grafana-linkerd
+  instanceSelector:
+    matchLabels:
+      dashboards: "external-grafana"
+  url: "https://raw.githubusercontent.com/Altinn/altinn-dashboards-grafana/${RELEASE_BRANCH:=release}/dashboards/linkerd/daemonset.json"

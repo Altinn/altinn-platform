@@ -1,0 +1,17 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: kube-prometheus-stack-grafana
+  namespace: traefik
+spec:
+  entryPoints:
+    - https
+  routes:
+    - kind: Rule
+      match: Host(`${K8S_DNS_NAME}`) && PathPrefix(`/monitor`)
+      middlewares:
+        - name: redirect-to-azure-grafana
+          namespace: traefik
+      services:
+        - kind: TraefikService
+          name: noop@internal

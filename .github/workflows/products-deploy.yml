@@ -56,10 +56,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Terraform Initialize
-        uses: Altinn/altinn-platform/actions/terraform/plan@92155c50cbf3083e20862d697c8b6b28316bf924 # main
+        uses: Altinn/altinn-platform/actions/terraform/plan@9986578634203a1624897e2b2319149994d894bb # main
         with:
           working_directory: ${{ env.TF_PROJECT }}
           oidc_type: environment
@@ -77,10 +77,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Terraform Apply
-        uses: Altinn/altinn-platform/actions/terraform/apply@92155c50cbf3083e20862d697c8b6b28316bf924 # main
+        uses: Altinn/altinn-platform/actions/terraform/apply@9986578634203a1624897e2b2319149994d894bb # main
         with:
           working_directory: ${{ env.TF_PROJECT }}
           oidc_type: environment
