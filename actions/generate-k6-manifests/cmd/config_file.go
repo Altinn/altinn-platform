@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -57,21 +58,11 @@ type Env struct {
 }
 
 func (cFile *ConfigFile) IsValidDeploymentEnvironment(environmentName string) bool {
-	for _, i := range cFile.ValidEnvironmentValues {
-		if i == environmentName {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(cFile.ValidEnvironmentValues, environmentName)
 }
 
 func (cFile *ConfigFile) IsValidTestType(testType string) bool {
-	for _, i := range cFile.ValidTestTypes {
-		if i == testType {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(cFile.ValidTestTypes, testType)
 }
 
 func (cFile *ConfigFile) HasOnlyValidTestTypes() bool {
@@ -113,7 +104,7 @@ func (cFile *ConfigFile) SetDefaults() {
 				spot := "spot"
 				c.NodeType = &spot
 			}
-			// If no test types are configured, add a smoke test definition by default.
+			// If no test types are configured, add a functional test definition by default.
 			if c.TestTypeDefinition == nil {
 				functional := "functional"
 				c.TestTypeDefinition = &TestTypeDefinition{
@@ -135,6 +126,10 @@ func (cFile *ConfigFile) SetDefaults() {
 				// Remove .js or .ts
 				tempString = strings.TrimSuffix(tempString, filepath.Ext(tempString))
 				c.TestRun.Name = &tempString
+			}
+			if c.TestRun.Id == nil {
+				emptyString := ""
+				c.TestRun.Id = &emptyString
 			}
 			if c.TestRun.Parallelism == nil || *c.TestRun.Parallelism <= 0 {
 				tempInt := 1

@@ -16,9 +16,8 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-func initGenerator(userConfigFile, confDir, distDir, buildDir string) *K8sManifestGenerator {
-	return &K8sManifestGenerator{
-		UserConfigFile:            userConfigFile,
+func initGenerator(confDir, distDir, buildDir string) K8sManifestGenerator {
+	return K8sManifestGenerator{
 		ConfigDirectory:           confDir,
 		DistDirectory:             distDir,
 		BuildDirectory:            buildDir,
@@ -154,8 +153,9 @@ func TestGenerate(t *testing.T) {
 		fmt.Printf("Testing Generation for %s\n", version)
 		testVersion := version
 		distDir, confDir, buildDir := generateTempDirectories()
-		var g Generator = initGenerator(fmt.Sprintf("./example_configfiles/%s.yaml", testVersion), confDir, distDir, buildDir)
-		g.Generate()
+		var g Generator = initGenerator(confDir, distDir, buildDir)
+		cf := g.Initialize(fmt.Sprintf("./example_configfiles/%s.yaml", testVersion))
+		g.Generate(*cf)
 
 		validateConfigFolder(confDir, testVersion, t)
 

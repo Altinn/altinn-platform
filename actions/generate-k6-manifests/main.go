@@ -12,13 +12,14 @@ func main() {
 	if !ok {
 		log.Fatal("INPUT_CONFIG_FILE is mandatory")
 	}
+
 	var g cmd.Generator = cmd.K8sManifestGenerator{
-		UserConfigFile:            userConfigFile,
 		ConfigDirectory:           ".conf",
 		DistDirectory:             ".dist",
 		BuildDirectory:            ".build",
 		DefaultScenariosDirectory: "/actions/generate-k6-manifests/default_scenarios",
 		RepoRootDirectory:         ".",
 	}
-	g.Generate()
+	cf := g.Initialize(userConfigFile)
+	g.Generate(*cf)
 }
