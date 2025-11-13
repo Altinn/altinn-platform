@@ -29,26 +29,35 @@ We are introducing a new way to manage databases for your application, which we 
 Declare your database: In your app repository, likely in a directory where you keep other Kubernetes manifests (e.g., k8s/), create a file named database.yaml. This file defines the Database resource you need.
 
 Early example of a default-sized database, the manifest will be very simple, but this is just an example to provide context:
-```
+```yaml
 apiVersion: altinn.app/v1alpha1
 kind: Database
 metadata:
-  # The name of the database resource. Should be unique within the namespace.
   name: my-app-db
 spec:
-  # The spec can be left empty to use platform defaults.
   version: 17
+  auth:
+    adminAppIdentity: my-admin-app-identity # The name of the AppIdentity that should have full admin access to the database.
+    userAppIdentity: my-app-identity # The name of the AppIdentity that should have access to the database, but need to be granted permissions.
 ```
 
-If you need a specific size for a more demanding workload, you can specify it in the spec:
+Teams that want more control can set the following parameters:
 
-```
+```yaml
 apiVersion: altinn.app/v1alpha1
 kind: Database
 metadata:
   name: my-app-db
 spec:
-  sku: "Standard_B1ms"
+  version: 17
+  auth:
+    adminAppIdentity: my-admin-app-identity # The name of the AppIdentity that should have full admin access to the database.
+    userAppIdentity: my-app-identity # The name of the AppIdentity that should have access to the database, but need to be granted permissions.
+  storageGBSize: 32 # Initial storage size in GB, AUtogrow is enabled for all so the disk will grow automatically.
+  serverSize: "DEV" # DEV, DB10, DB20. DB30 # These DIS DB-sizes maps to different combinations of machine sku_name and sku_tier
+  secretName: my-app-db-credentials # Secret in kubernetes where the connection string is stored
+  backupRetentionDays: 14
+  iops: 120 # This is at some level to the storage size: https://learn.microsoft.com/en-us/azure/virtual-machines/disks-change-performance#what-tiers-can-be-changed
 ```
 
 Once the configuration is done commit and push your code. The existing GitOps flow will then pick up this change and apply it to the teams cluster
@@ -57,7 +66,7 @@ Connect to your database: Our new Database Operator will see your request and au
 
 This feature encourages you to think of your database as just another piece of your application's configuration, managed declaratively in Git. It makes setting up new environments for testing or production trivial and ensures every app has its own isolated database, improving stability and security.
 
-Teams still are responsible for tuning and managing the database, like upgrading the major version. We just remove most of the infrastructure complexity and just make what is strictly neccessary to configure for each the configurable.
+Teams still are responsible for tuning and managing the database, like upgrading the major version. We just remove most of the infrastructure complexity and just make what is strictly neccessary to configure for each configurable.
 
 We should make it easy to discover databases that are outdated. Teams are responsible to upgrade their databses in a timely manner.
 
