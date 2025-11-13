@@ -53,7 +53,7 @@ spec:
   auth:
     adminAppIdentity: my-admin-app-identity # The name of the AppIdentity that should have full admin access to the database.
     userAppIdentity: my-app-identity # The name of the AppIdentity that should have access to the database, but need to be granted permissions.
-  storageGBSize: 32 # Initial storage size in GB, AUtogrow is enabled for all so the disk will grow automatically.
+  storageSizeGB: 32 # Initial storage size in GB, AUtogrow is enabled for all so the disk will grow automatically.
   serverSize: "DEV" # DEV, DB10, DB20. DB30 # These DIS DB-sizes maps to different combinations of machine sku_name and sku_tier
   secretName: my-app-db-credentials # Secret in kubernetes where the connection string is stored
   backupRetentionDays: 14
