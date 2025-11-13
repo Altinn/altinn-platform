@@ -249,10 +249,19 @@ func (r K8sManifestGenerator) Generate() {
 				if utf8.RuneCountInString(uniqName) > 51 {
 					log.Fatalf("Automatic generated name is too big: %s. Provide a default name such that the generated name does not go over 51 characters", uniqName)
 				}
-				configMapName := dirName
-				if *c.TestTypeDefinition.Type == "breakpoint" {
+
+				var configMapName string
+				switch *c.TestTypeDefinition.Type {
+				case "breakpoint":
 					configMapName = fmt.Sprintf("%s-%s", dirName, "break")
+				case "smoke":
+					configMapName = fmt.Sprintf("%s-%s", dirName, "smoke")
+				case "soak":
+					configMapName = fmt.Sprintf("%s-%s", dirName, "soak")
+				default:
+					configMapName = dirName
 				}
+
 				r.CallKubectl(dirName, configMapName, uniqName, cf.Namespace)
 				// merge env file with overrides.
 				githubRepositoryEnvName := "GITHUB_REPOSITORY"
