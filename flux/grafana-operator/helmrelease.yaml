@@ -12,7 +12,7 @@ spec:
         kind: HelmRepository
         name: grafana
         namespace: grafana
-      version: v5.20.0
+      version: v5.20.0 # renovate: datasource=helm registryUrl=https://grafana.github.io/helm-charts packageName=grafana-operator
   interval: 1h
   timeout: 5m
   install:
