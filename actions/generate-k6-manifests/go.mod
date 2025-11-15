@@ -7,8 +7,8 @@ toolchain go1.25.4
 require (
 	github.com/elliotchance/orderedmap/v3 v3.1.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.34.1
-	k8s.io/apimachinery v0.34.1
+	k8s.io/api v0.34.2
+	k8s.io/apimachinery v0.34.2
 )
 
 require (
