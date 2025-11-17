@@ -31,10 +31,7 @@ resource "azurerm_monitor_data_collection_rule" "k6tests" {
         "dataCollectionSettings" : {
           "interval" : "1m",
           "namespaceFilteringMode" : "Include",
-          "namespaces" : concat(
-            ["platform"],                            # This can probably be removed once we "onboard ourselves"; else the code is here for other "system namespaces" we may care about
-            [for v in var.k8s_rbac : v["namespace"]] # Team namespaces
-          ),
+          "namespaces" : [for v in var.k8s_rbac : v["namespace"]], # Team namespaces
           "enableContainerLogV2" : false
         }
       })
@@ -113,6 +110,13 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot" {
   node_taints = [
     "kubernetes.azure.com/scalesetpriority=spot:NoSchedule", # Automatically added by Azure
   ]
+
+  lifecycle {
+    ignore_changes = [
+      node_count
+    ]
+  }
+
 
   temporary_name_for_rotation = "tmpspot"
 }

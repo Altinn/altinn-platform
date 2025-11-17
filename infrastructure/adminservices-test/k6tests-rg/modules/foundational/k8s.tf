@@ -61,6 +61,13 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot" {
   node_taints = [
     "kubernetes.azure.com/scalesetpriority=spot:NoSchedule", # Automatically added by Azure
   ]
+
+  lifecycle {
+    ignore_changes = [
+      node_count
+    ]
+  }
+
   temporary_name_for_rotation = "tmpspot"
 }
 
