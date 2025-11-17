@@ -22,3 +22,14 @@ subscription_id = "a6e9ee7d-2b65-41e1-adfb-0c8c23515cf9"
 #     principal_id         = "11111111-1111-1111-1111-111111111111"
 #   }
 # ]
+
+# Key Vault Network ACLs Configuration
+# Configure network access rules for the Key Vault
+
+# List of IP addresses or CIDR ranges that are allowed to access the Key Vault
+# GitHub Actions IP ranges are included to allow runners to access the Key Vault
+keyvault_ip_rules = []
+
+# List of virtual network subnet IDs that are allowed to access the Key Vault
+# Example: keyvault_virtual_network_subnet_ids = ["/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/my-rg/providers/Microsoft.Network/virtualNetworks/my-vnet/subnets/my-subnet"]
+keyvault_virtual_network_subnet_ids = []

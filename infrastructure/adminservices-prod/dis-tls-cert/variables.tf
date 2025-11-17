@@ -49,3 +49,15 @@ variable "azure_keyvault_additional_role_assignments" {
     error_message = "Role definition name must be a valid Key Vault RBAC role."
   }
 }
+
+variable "keyvault_ip_rules" {
+  description = "List of IP addresses or CIDR ranges that are allowed to access the Key Vault"
+  type        = list(string)
+  default     = []
+}
+
+variable "keyvault_virtual_network_subnet_ids" {
+  description = "List of virtual network subnet IDs that are allowed to access the Key Vault"
+  type        = list(string)
+  default     = []
+}
