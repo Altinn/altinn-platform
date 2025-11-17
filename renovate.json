@@ -24,7 +24,7 @@
       "matchStrings": [
         "# renovate: datasource=(?<datasource>[a-z-]+?)(?: depName=(?<depName>.+?))? packageName=(?<packageName>.+?)(?: versioning=(?<versioning>[a-z-]+?))?\\s+?default: (?<currentValue>.+?)\\s",
         "# renovate: datasource=(?<datasource>[a-z-]+?)(?: depName=(?<depName>.+?))? packageName=(?<packageName>.+?)(?: versioning=(?<versioning>[a-z-]+?))?(?: extractVersion=(?<extractVersion>.+?))?\\s+?.+?_VERSION\\s?=\\s?\"?v?(?<currentValue>.+?)\"?(\\s|$)",
-        "version:\\s*['\"]?(?<currentValue>[0-9A-Za-z._+-]+)['\"]?\\s*#\\s*renovate:\\s*datasource=(?<datasource>helm)\\s+registryUrl=(?<registryUrl>(?:https://|oci://)[^\\s]+)\\s+packageName=(?<packageName>[^\\s]+)"
+        "# renovate: datasource=(?<datasource>helm) registryUrl=(?<registryUrl>(?:https://|oci://)[^\\s]+) packageName=(?<packageName>.+?)\\s+?version:\\s['\"]?(?<currentValue>[^\\s'\"#]+)['\"]?"
       ],
       "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}"
     }
