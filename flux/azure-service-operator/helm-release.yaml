@@ -14,7 +14,8 @@ spec:
   chart:
     spec:
       chart: azure-service-operator
-      version: "v2.14.0" # renovate: datasource=helm registryUrl=https://raw.githubusercontent.com/Azure/azure-service-operator/main/v2/charts packageName=azure-service-operator
+      # renovate: datasource=helm registryUrl=https://raw.githubusercontent.com/Azure/azure-service-operator/main/v2/charts packageName=azure-service-operator
+      version: "v2.14.0"
       sourceRef:
         kind: HelmRepository
         name: aso2
