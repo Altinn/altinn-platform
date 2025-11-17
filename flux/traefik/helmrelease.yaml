@@ -12,7 +12,7 @@ spec:
         kind: HelmRepository
         name: traefik
         namespace: traefik
-      version: 1.11.0
+      version: 1.11.0 # renovate: datasource=helm registryUrl=https://traefik.github.io/charts packageName=traefik-crds
   interval: 1h
   timeout: 5m
   install:
@@ -36,7 +36,7 @@ spec:
         kind: HelmRepository
         name: traefik
         namespace: traefik
-      version: 37.1.1
+      version: 37.1.1 # renovate: datasource=helm registryUrl=https://traefik.github.io/charts packageName=traefik
   interval: 1h
   timeout: 5m
   dependsOn:

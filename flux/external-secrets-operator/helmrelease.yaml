@@ -7,7 +7,7 @@ spec:
   chart:
     spec:
       chart: external-secrets
-      version: 0.16.2
+      version: 0.16.2 # renovate: datasource=helm registryUrl=oci://ghcr.io/external-secrets/charts packageName=external-secrets
       sourceRef:
         kind: HelmRepository
         name: external-secrets

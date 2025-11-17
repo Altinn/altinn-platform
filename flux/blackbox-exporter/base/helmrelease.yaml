@@ -11,7 +11,7 @@ spec:
         kind: HelmRepository
         name: prometheus-community
         namespace: monitoring
-      version: 11.4.1
+      version: 11.4.1 # renovate: datasource=helm registryUrl=https://prometheus-community.github.io/helm-charts packageName=prometheus-blackbox-exporter
   interval: 1h
   timeout: 5m
   install:
@@ -22,7 +22,7 @@ spec:
     crds: CreateReplace
     remediation:
       retries: 5
-  postRenderers: 
+  postRenderers:
     - kustomize:
         patches:
           - target:
