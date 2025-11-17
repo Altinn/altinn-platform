@@ -59,7 +59,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Terraform Initialize
-        uses: Altinn/altinn-platform/actions/terraform/plan@9986578634203a1624897e2b2319149994d894bb # main
+        uses: Altinn/altinn-platform/actions/terraform/plan@57b3d65809629aac7d4e4debd94af6d6e19f5dfe # main
         with:
           working_directory: ${{ env.TF_PROJECT }}
           oidc_type: environment
@@ -80,7 +80,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Terraform Apply
-        uses: Altinn/altinn-platform/actions/terraform/apply@9986578634203a1624897e2b2319149994d894bb # main
+        uses: Altinn/altinn-platform/actions/terraform/apply@57b3d65809629aac7d4e4debd94af6d6e19f5dfe # main
         with:
           working_directory: ${{ env.TF_PROJECT }}
           oidc_type: environment
