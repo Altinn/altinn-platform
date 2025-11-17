@@ -23,6 +23,15 @@ resource "azurerm_key_vault" "dis_tls_cert" {
   enabled_for_disk_encryption     = true
   enabled_for_template_deployment = true
   rbac_authorization_enabled      = true
+
+
+  network_acls {
+    bypass                     = "AzureServices"
+    default_action             = "Deny"
+    ip_rules                   = concat(local.github_actions_ip_ranges, var.keyvault_ip_rules)
+    virtual_network_subnet_ids = var.keyvault_virtual_network_subnet_ids
+  }
+
   tags = merge(local.localtags, {
     submodule = "dis-tls-cert"
   })
