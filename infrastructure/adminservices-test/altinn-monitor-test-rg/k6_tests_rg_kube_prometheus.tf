@@ -4,6 +4,7 @@ resource "helm_release" "prometheus_operator_crds" {
   ]
   lint       = true
   name       = "prometheus-operator-crds"
+  namespace  = "monitoring"
   repository = "https://prometheus-community.github.io/helm-charts"
   chart      = "prometheus-operator-crds"
   version    = "24.0.2"
