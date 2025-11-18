@@ -5,6 +5,7 @@ resource "helm_release" "grafana_k8s_monitoring" {
   lint             = true
   name             = "k8s-monitoring"
   namespace        = "monitoring"
+  take_ownership   = true
   create_namespace = false
   repository       = "https://grafana.github.io/helm-charts"
   chart            = "k8s-monitoring"
