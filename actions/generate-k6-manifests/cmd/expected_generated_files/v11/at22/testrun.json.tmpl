@@ -62,7 +62,9 @@
          "image": "grafana/k6:master-with-browser",
          "metadata": {
             "labels": {
-               "k6-test": "{{ .UniqueName }}"
+               "k6-test": "{{ .UniqueName }}",
+               "test_name": "{{ .TestName }}",
+               "testid": "{{ .UniqueName }}"
             }
          },
          "nodeSelector": {

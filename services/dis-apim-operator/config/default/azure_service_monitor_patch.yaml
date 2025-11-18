@@ -1,0 +1,4 @@
+# Replace monitoring.coreos.com/v1 with the azure spesific version azmonitoring.coreos.com/v1
+- op: replace
+  path: /apiVersion
+  value: azmonitoring.coreos.com/v1

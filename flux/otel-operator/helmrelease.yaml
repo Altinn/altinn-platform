@@ -19,11 +19,14 @@ spec:
         kind: HelmRepository
         name: otel-oci
         namespace: monitoring
-      version: 0.84.2
+      # renovate: datasource=helm registryUrl=oci://ghcr.io/open-telemetry/opentelemetry-helm-charts packageName=opentelemetry-operator
+      version: 0.99.0
   values:
     manager:
+      image:
+        repository: altinncr.azurecr.io/ghcr.io/open-telemetry/opentelemetry-operator/opentelemetry-operator
       collectorImage:
-        repository: otel/opentelemetry-collector-k8s
+        repository: altinncr.azurecr.io/ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-k8s
       serviceMonitor:
         enabled: false
       env:

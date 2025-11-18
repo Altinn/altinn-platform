@@ -1,69 +1,105 @@
 locals {
-  namespaces = concat(
-    ["platform"], [
-      for v
-      in var.k8s_rbac :
-      v["namespace"]
-  ])
-
-  deploy_envs = [
-    {
-      name : "at22",
-      env_type : "dev",
-      suffix : "cloud"
-    },
-    {
-      name : "at23",
-      env_type : "dev",
-      suffix : "cloud"
-    },
-    {
-      name : "at24",
-      env_type : "dev",
-      suffix : "cloud"
-    },
-    {
-      name : "yt01",
-      env_type : "perf",
-      suffix : "cloud"
-    },
-    {
-      name : "tt02",
-      env_type : "staging",
-      suffix : "no"
-    },
-    {
-      name : "prod",
-      env_type : "prod",
-      suffix : "no"
-    },
-  ]
-
-  # Hacky-ish, might be easier to deploy to a single namespace and have a controller syncing into other namespaces
-  namespaces_deployenvs = distinct(flatten(
-    [for n in local.namespaces :
-      [for d in local.deploy_envs :
-        {
-          namespace  = n
-          deploy_env = d
-        }
-      ]
-    ]
-  ))
+  namespaces = concat(["platform"], [for v in var.k8s_rbac : v["namespace"]])
 }
 
-resource "kubernetes_config_map_v1" "deploy_environments_manifests" {
+resource "kubernetes_config_map_v1" "deploy_environment_at22" {
   depends_on = [kubernetes_namespace.namespace]
-  for_each = {
-    for entry in local.namespaces_deployenvs :
-    "${entry.namespace}.${entry.deploy_env.name}"
-    => entry
-  }
+  for_each   = toset(local.namespaces)
   metadata {
-    name      = "deploy-environments-${each.value.deploy_env.name}"
-    namespace = each.value.namespace
+    name      = "deploy-environments-at22"
+    namespace = each.key
   }
   data = {
-    BASE_URL = each.value.deploy_env.name == "prod" ? "https://platform.altinn.no" : "https://platform.${each.value.deploy_env.name}.altinn.${each.value.deploy_env.suffix}"
+    BASE_URL            = "https://platform.at22.altinn.cloud"
+    ALTINN2_BASE_URL    = "https://at22.altinn.cloud"
+    ALTINN_CDN_BASE_URL = "https://altinncdn.no"
+    AM_UI_BASE_URL      = "https://am.ui.at22.altinn.cloud"
+    DEPLOY_ENV          = "at22"
+    ENV_TYPE            = "dev"
+  }
+}
+
+resource "kubernetes_config_map_v1" "deploy_environment_at23" {
+  depends_on = [kubernetes_namespace.namespace]
+  for_each   = toset(local.namespaces)
+  metadata {
+    name      = "deploy-environments-at23"
+    namespace = each.key
+  }
+  data = {
+    BASE_URL            = "https://platform.at23.altinn.cloud"
+    ALTINN2_BASE_URL    = "https://at23.altinn.cloud"
+    ALTINN_CDN_BASE_URL = "https://altinncdn.no"
+    AM_UI_BASE_URL      = "https://am.ui.at23.altinn.cloud"
+    DEPLOY_ENV          = "at23"
+    ENV_TYPE            = "dev"
+  }
+}
+
+resource "kubernetes_config_map_v1" "deploy_environment_at24" {
+  depends_on = [kubernetes_namespace.namespace]
+  for_each   = toset(local.namespaces)
+  metadata {
+    name      = "deploy-environments-at24"
+    namespace = each.key
+  }
+  data = {
+    BASE_URL            = "https://platform.at24.altinn.cloud"
+    ALTINN2_BASE_URL    = "https://at24.altinn.cloud"
+    ALTINN_CDN_BASE_URL = "https://altinncdn.no"
+    AM_UI_BASE_URL      = "https://am.ui.at24.altinn.cloud"
+    DEPLOY_ENV          = "at24"
+    ENV_TYPE            = "dev"
+  }
+}
+
+resource "kubernetes_config_map_v1" "deploy_environment_yt01" {
+  depends_on = [kubernetes_namespace.namespace]
+  for_each   = toset(local.namespaces)
+  metadata {
+    name      = "deploy-environments-yt01"
+    namespace = each.key
+  }
+  data = {
+    BASE_URL            = "https://platform.yt01.altinn.cloud"
+    ALTINN2_BASE_URL    = "https://yt01.ai.basefarm.net"
+    ALTINN_CDN_BASE_URL = "https://altinncdn.no"
+    AM_UI_BASE_URL      = "https://am.ui.yt01.altinn.cloud"
+    DEPLOY_ENV          = "yt01"
+    ENV_TYPE            = "perf"
+  }
+}
+
+resource "kubernetes_config_map_v1" "deploy_environment_tt02" {
+  depends_on = [kubernetes_namespace.namespace]
+  for_each   = toset(local.namespaces)
+  metadata {
+    name      = "deploy-environments-tt02"
+    namespace = each.key
+  }
+  data = {
+    BASE_URL            = "https://platform.tt02.altinn.no"
+    ALTINN2_BASE_URL    = "https://tt02.altinn.no"
+    ALTINN_CDN_BASE_URL = "https://altinncdn.no"
+    AM_UI_BASE_URL      = "https://am.ui.tt02.altinn.no"
+    DEPLOY_ENV          = "tt02"
+    ENV_TYPE            = "staging"
+  }
+}
+
+resource "kubernetes_config_map_v1" "deploy_environment_prod" {
+  depends_on = [kubernetes_namespace.namespace]
+  for_each   = toset(local.namespaces)
+  metadata {
+    name      = "deploy-environments-prod"
+    namespace = each.key
+  }
+  data = {
+    BASE_URL            = "https://platform.altinn.no"
+    ALTINN2_BASE_URL    = "https://altinn.no"
+    ALTINN_CDN_BASE_URL = "https://altinncdn.no"
+    AM_UI_BASE_URL      = "https://am.ui.altinn.no"
+    DEPLOY_ENV          = "prod"
+    ENV_TYPE            = "prod"
   }
 }

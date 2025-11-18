@@ -12,7 +12,8 @@ spec:
         kind: HelmRepository
         name: traefik
         namespace: traefik
-      version: 1.8.1
+      # renovate: datasource=helm registryUrl=https://traefik.github.io/charts packageName=traefik-crds
+      version: 1.11.0
   interval: 1h
   timeout: 5m
   install:
@@ -36,7 +37,8 @@ spec:
         kind: HelmRepository
         name: traefik
         namespace: traefik
-      version: 36.1.0
+      # renovate: datasource=helm registryUrl=https://traefik.github.io/charts packageName=traefik
+      version: 37.1.1
   interval: 1h
   timeout: 5m
   dependsOn:
@@ -56,9 +58,6 @@ spec:
           - target:
               kind: ServiceMonitor
             patch: |
-              - op: replace
-                path: /apiVersion
-                value: azmonitoring.coreos.com/v1
               - op: add
                 path: /spec/labelLimit
                 value: 63
@@ -77,7 +76,7 @@ spec:
         release: traefik
       podAnnotations:
         linkerd.io/inject: enabled
-        config.linkerd.io/skip-inbound-ports: 8000,8443
+        config.linkerd.io/skip-inbound-ports: 8000,8443,9100
         config.linkerd.io/proxy-cpu-request: 50m
         config.linkerd.io/proxy-memory-limit: 250Mi
         config.linkerd.io/proxy-memory-request: 40Mi
@@ -98,8 +97,11 @@ spec:
       checkNewVersion: false
       sendAnonymousUsage: false
     ports:
+      # Default Traefik ports (web:80, websecure:443) are disabled in favor of custom ports
+      # This allows for custom port configuration with specific networking requirements
       web: null
       websecure: null
+      # Custom HTTP port configuration (maps internal 8000 to external 80)
       http:
         port: 8000
         expose:
@@ -118,6 +120,10 @@ spec:
             - "${AKS_SYSP00L_IP_PREFIX_1}"
             - "${AKS_WORKPOOL_IP_PREFIX_0}"
             - "${AKS_WORKPOOL_IP_PREFIX_1}"
+      # Custom HTTPS port configuration (maps internal 8443 to external 443)
+      # This separation allows for better container security and port management
+      # Benefits: 1) Avoids running as root (ports >1024), 2) Linkerd compatibility,
+      # 3) Clear separation between internal/external port mapping
       https:
         port: 8443
         expose:
@@ -169,12 +175,13 @@ spec:
         disableAPICheck: true
         serviceMonitor:
           enabled: true
+          apiVersion: "azmonitoring.coreos.com/v1"
           metricRelabelings:
             - sourceLabels: [__name__]
               separator: ;
-              regex: ^fluentd_output_status_buffer_(oldest|newest)_.+
-              replacement: $1
-              action: drop
+              # Metrics: requests, duration, connections, config health, TLS certs
+              regex: ^(traefik_service_requests_total|traefik_entrypoint_requests_total|traefik_service_request_duration_seconds_bucket|traefik_entrypoint_open_connections|traefik_service_open_connections|traefik_config_reloads_total|traefik_config_last_reload_success|traefik_tls_certs_not_after)$
+              action: keep
           relabelings:
             - sourceLabels: [__meta_kubernetes_pod_node_name]
               separator: ;

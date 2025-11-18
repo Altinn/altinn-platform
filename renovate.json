@@ -1,45 +1,32 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "local>Altinn/renovate-config"
-  ],
-  "schedule": [
-    "* 5-7 * * 1-4"
-  ],
+  "extends": ["local>Altinn/renovate-config"],
+  "schedule": ["* 5-7 * * 1-4"],
   "timezone": "Europe/Oslo",
-  "postUpdateOptions": [
-    "gomodTidy"
-  ],
+  "postUpdateOptions": ["gomodTidy"],
   "packageRules": [
     {
-      "matchManagers": [
-        "terraform",
-        "gomod"
-      ],
+      "matchManagers": ["terraform", "gomod"],
       "groupName": "{{manager}} non-major dependencies",
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
+      "matchUpdateTypes": ["minor", "patch"],
       "groupSlug": "{{manager}}-minor-patch",
-      "matchPackageNames": [
-        "*"
-      ]
+      "matchPackageNames": ["*"]
     }
   ],
   "customManagers": [
-      {
-        "customType": "regex",
-        "managerFilePatterns": [
-          "/(^|/)(.*?/)*.*?\\.ya?ml$/",
-          "/(^|/)(.*?/)*.*?\\.sh$/",
-          "/(^|/)(.*?/)*Dockerfile$/"
-        ],
-        "matchStrings": [
-          "# renovate: datasource=(?<datasource>[a-z-]+?)(?: depName=(?<depName>.+?))? packageName=(?<packageName>.+?)(?: versioning=(?<versioning>[a-z-]+?))?\\s+?default: (?<currentValue>.+?)\\s",
-          "# renovate: datasource=(?<datasource>[a-z-]+?)(?: depName=(?<depName>.+?))? packageName=(?<packageName>.+?)(?: versioning=(?<versioning>[a-z-]+?))?(?: extractVersion=(?<extractVersion>.+?))?\\s+?.+?_VERSION\\s?=\\s?\"?v?(?<currentValue>.+?)\"?(\\s|$)"
-        ],
-        "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}"
-      }
-    ]
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/(^|/)(.*?/)*.*?\\.ya?ml$/",
+        "/(^|/)(.*?/)*.*?\\.sh$/",
+        "/(^|/)(.*?/)*Dockerfile$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[a-z-]+?)(?: depName=(?<depName>.+?))? packageName=(?<packageName>.+?)(?: versioning=(?<versioning>[a-z-]+?))?\\s+?default: (?<currentValue>.+?)\\s",
+        "# renovate: datasource=(?<datasource>[a-z-]+?)(?: depName=(?<depName>.+?))? packageName=(?<packageName>.+?)(?: versioning=(?<versioning>[a-z-]+?))?(?: extractVersion=(?<extractVersion>.+?))?\\s+?.+?_VERSION\\s?=\\s?\"?v?(?<currentValue>.+?)\"?(\\s|$)",
+        "# renovate: datasource=(?<datasource>helm) registryUrl=(?<registryUrl>(?:https://|oci://)[^\\s]+) packageName=(?<packageName>.+?)\\s+?version:\\s['\"]?(?<currentValue>[^\\s'\"#]+)['\"]?"
+      ],
+      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}"
+    }
+  ]
 }

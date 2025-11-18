@@ -31,10 +31,7 @@ resource "azurerm_monitor_data_collection_rule" "k6tests" {
         "dataCollectionSettings" : {
           "interval" : "1m",
           "namespaceFilteringMode" : "Include",
-          "namespaces" : concat(
-            ["platform"],                            # This can probably be removed once we "onboard ourselves"; else the code is here for other "system namespaces" we may care about
-            [for v in var.k8s_rbac : v["namespace"]] # Team namespaces
-          ),
+          "namespaces" : [for v in var.k8s_rbac : v["namespace"]], # Team namespaces
           "enableContainerLogV2" : false
         }
       })
@@ -98,11 +95,11 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
 resource "azurerm_kubernetes_cluster_node_pool" "spot" {
   name                  = "spot"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.k6tests.id
-  vm_size               = "Standard_DS2_v2"
+  vm_size               = "Standard_D3_v2"
   auto_scaling_enabled  = true
   node_count            = 0
   min_count             = 0
-  max_count             = 1
+  max_count             = 3
   priority              = "Spot"
   eviction_policy       = "Delete"
   spot_max_price        = -1 # (the current on-demand price for a Virtual Machine)
@@ -113,6 +110,36 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot" {
   node_taints = [
     "kubernetes.azure.com/scalesetpriority=spot:NoSchedule", # Automatically added by Azure
   ]
+
+  lifecycle {
+    ignore_changes = [
+      node_count
+    ]
+  }
+
+
+  temporary_name_for_rotation = "tmpspot"
+}
+
+resource "azurerm_kubernetes_cluster_node_pool" "spot8c28g" {
+  name                  = "spot8c28g"
+  kubernetes_cluster_id = azurerm_kubernetes_cluster.k6tests.id
+  vm_size               = "Standard_D4_v2"
+  auto_scaling_enabled  = true
+  node_count            = 0
+  min_count             = 0
+  max_count             = 3
+  priority              = "Spot"
+  eviction_policy       = "Delete"
+  spot_max_price        = -1 # (the current on-demand price for a Virtual Machine)
+  node_labels = {
+    "kubernetes.azure.com/scalesetpriority" : "spot", # Automatically added by Azure
+    spot8cpu28gbmem : true
+  }
+  node_taints = [
+    "kubernetes.azure.com/scalesetpriority=spot:NoSchedule", # Automatically added by Azure
+  ]
+  temporary_name_for_rotation = "tmpd8c28g"
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "prometheus" {
@@ -133,4 +160,5 @@ resource "azurerm_kubernetes_cluster_node_pool" "prometheus" {
     max_surge                     = "10%"
     node_soak_duration_in_minutes = 0
   }
+  temporary_name_for_rotation = "tmpprom"
 }

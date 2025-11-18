@@ -4,7 +4,7 @@ test_definitions:
     contexts:
       - environment: at22
         test_run:
-          name: "k8s-wrapper-deployments"
+          name: "get-deployments"
       - environment: yt01
         test_run:
-          name: "k8s-wrapper-deployments" # Check Grafana to see metrics for both envs
+          name: "get-deployments" # Check Grafana to see metrics for both envs

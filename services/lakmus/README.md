@@ -51,6 +51,7 @@ A simple dashboard/alert query:
 - Access to Azure if running against a real Key Vault (Workload Identity recommended)
 - curl for integration tests
 - golangci-lint for make lint
+- [cdk8s](https://cdk8s.io/) to generate manifests/yaml
 
 ---
 
@@ -122,6 +123,19 @@ make clean
 make tidy
 make lint
 make fmt
+```
+
+#### 8) Make manifests
+
+Generates Kubernetes and Flux manifests for **Lakmus** using [cdk8s](https://cdk8s.io/).  
+The output is written to `flux/lakmus/` in the monorepo.
+
+```bash
+# Generate manifests with default image (latest tag)
+make manifests
+
+# Generate manifests with a specific tag
+make manifests IMAGE_TAG=v1.0.0
 ```
 
 ---

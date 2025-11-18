@@ -1,0 +1,88 @@
+name: dis-tls-cert deploy
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ !contains(github.ref, 'refs/heads/main')}}
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/dis-tls-cert.yml
+      - actions/terraform/apply/**
+      - actions/terraform/plan/**
+      - infrastructure/adminservices-prod/dis-tls-cert/**
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/dis-tls-cert.yml
+      - actions/terraform/apply/**
+      - actions/terraform/plan/**
+      - infrastructure/adminservices-prod/dis-tls-cert/**
+  workflow_dispatch:
+    inputs:
+      log_level:
+        required: true
+        description: Terraform Log Level
+        default: INFO
+        type: choice
+        options:
+          - TRACE
+          - DEBUG
+          - INFO
+          - WARN
+          - ERROR
+
+env:
+  ENVIRONMENT: prod
+  TF_STATE_NAME: dis-tls-cert.tfstate
+  TF_PROJECT: ./infrastructure/adminservices-prod/dis-tls-cert
+  ARM_CLIENT_ID: ${{ secrets.TF_AZURE_CLIENT_ID }}
+  ARM_SUBSCRIPTION_ID: 1ce8e9af-c2d6-44e7-9c5e-099a308056fe
+
+permissions:
+  id-token: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  plan:
+    name: Plan
+    environment: reader
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Terraform Plan
+        uses: Altinn/altinn-platform/actions/terraform/plan@926ba9b8877dfb8ee8dc6ef0c75a86e998788e84 # main
+        with:
+          working_directory: ${{ env.TF_PROJECT }}
+          oidc_type: environment
+          oidc_value: ${{ env.ENVIRONMENT }}
+          arm_client_id: ${{ env.ARM_CLIENT_ID }}
+          arm_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
+          tf_state_name: ${{ env.TF_STATE_NAME }}
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy:
+    name: Deploy
+    environment: prod
+    if: github.ref == 'refs/heads/main'
+    needs: plan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Terraform Apply
+        uses: Altinn/altinn-platform/actions/terraform/apply@926ba9b8877dfb8ee8dc6ef0c75a86e998788e84 # main
+        with:
+          working_directory: ${{ env.TF_PROJECT }}
+          oidc_type: environment
+          oidc_value: ${{ env.ENVIRONMENT }}
+          arm_client_id: ${{ env.ARM_CLIENT_ID }}
+          arm_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
+          tf_state_name: ${{ env.TF_STATE_NAME }}

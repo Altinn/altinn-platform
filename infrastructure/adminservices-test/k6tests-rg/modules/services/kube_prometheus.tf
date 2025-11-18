@@ -20,9 +20,10 @@ resource "azuread_application_federated_identity_credential" "prometheus" {
 resource "helm_release" "prometheus_operator_crds" {
   lint       = true
   name       = "prometheus-operator-crds"
+  namespace  = "monitoring"
   repository = "https://prometheus-community.github.io/helm-charts"
   chart      = "prometheus-operator-crds"
-  version    = "22.0.2"
+  version    = "24.0.2"
 }
 
 resource "helm_release" "kube_prometheus_stack" {
@@ -37,7 +38,7 @@ resource "helm_release" "kube_prometheus_stack" {
   repository       = "https://prometheus-community.github.io/helm-charts"
   chart            = "kube-prometheus-stack"
   skip_crds        = true
-  version          = "75.18.1"
+  version          = "79.5.0"
 
   values = [
     "${templatefile(

@@ -20,3 +20,13 @@ variable "app_access_token" {
     error_message = "You must provide a value for app_access_token from pipeline run."
   }
 }
+
+variable "developer_entra_id_group" {
+  description = "EntraID group that should have access to grafana and kubernetes cluster"
+  type        = string
+}
+
+variable "kubernetes_version" {
+  description = "Kubernetes version to use"
+  type        = string
+}

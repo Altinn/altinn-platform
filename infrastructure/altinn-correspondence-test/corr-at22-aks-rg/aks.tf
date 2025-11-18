@@ -10,7 +10,7 @@ module "aks" {
   prefix                  = var.team_name
   environment             = var.environment
   subscription_id         = var.subscription_id
-  kubernetes_version      = "1.32"
+  kubernetes_version      = var.kubernetes_version
   vnet_address_space      = var.aks_vnet_address_spaces
   subnet_address_prefixes = var.subnet_address_prefixes
   pool_configs = {
@@ -62,4 +62,7 @@ module "infra-resources" {
   tls_cert_manager_workload_identity_client_id = module.dns-child-zone.azuread_cert_manager_client_id
   tls_cert_manager_zone_name                   = module.dns-child-zone.azurerm_dns_zone_name
   tls_cert_manager_zone_rg_name                = module.dns-child-zone.azurerm_dns_zone_resource_group_name
+  lakmus_client_id                             = module.observability.lakmus_client_id
+  developer_entra_id_group                     = var.developer_entra_id_group
+  linkerd_default_inbound_policy               = "cluster-authenticated"
 }

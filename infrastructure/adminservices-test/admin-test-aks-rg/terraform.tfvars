@@ -2,7 +2,7 @@
 name_prefix        = "admin-test"
 flux_release_tag   = "at_ring1"
 subscription_id    = "1ce8e9af-c2d6-44e7-9c5e-099a308056fe"
-kubernetes_version = "1.32"
+kubernetes_version = "1.33"
 vnet_address_space = [
   "10.90.0.0/16",
   "fdac:524d:afaf::/56"
@@ -33,4 +33,5 @@ aks_acrpull_scopes = [
 admin_group_object_ids = [
   "09599a84-645b-4217-853f-01700a17cd4a"
 ]
-grafana_endpoint = "https://altinn-grafana-test-b2b8dpdkcvfuhfd3.eno.grafana.azure.com"
+grafana_endpoint         = "https://altinn-grafana-test-b2b8dpdkcvfuhfd3.eno.grafana.azure.com"
+developer_entra_id_group = "09599a84-645b-4217-853f-01700a17cd4a"

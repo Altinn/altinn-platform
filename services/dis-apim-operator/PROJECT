@@ -8,6 +8,7 @@ layout:
 - go.kubebuilder.io/v4
 plugins:
   autoupdate.kubebuilder.io/v1-alpha: {}
+  grafana.kubebuilder.io/v1-alpha: {}
 projectName: dis-apim-operator
 repo: github.com/Altinn/altinn-platform/services/dis-apim-operator
 resources:

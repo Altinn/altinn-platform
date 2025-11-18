@@ -13,7 +13,7 @@ module "aks" {
   prefix             = local.team_name
   environment        = local.environment
   subscription_id    = var.subscription_id
-  kubernetes_version = "1.32"
+  kubernetes_version = var.kubernetes_version
   vnet_address_space = [
     "10.202.72.0/21",
     "fd0a:7204:c37f:900::/56"
@@ -65,4 +65,6 @@ module "infra-resources" {
   enable_cert_manager_tls_issuer             = false
   azurerm_dis_identity_resource_group_id     = module.aks.dis_resource_group_id
   azurerm_kubernetes_cluster_oidc_issuer_url = module.aks.aks_oidc_issuer_url
+  lakmus_client_id                           = module.observability.lakmus_client_id
+  developer_entra_id_group                   = var.developer_entra_id_group
 }

@@ -12,6 +12,7 @@ spec:
         kind: HelmRepository
         name: linkerd
         namespace: linkerd
+      # renovate: datasource=helm registryUrl=https://helm.linkerd.io/edge packageName=linkerd-crds
       version: 2025.7.6
   interval: 1h
   timeout: 5m
@@ -36,6 +37,7 @@ spec:
         kind: HelmRepository
         name: linkerd
         namespace: linkerd
+      # renovate: datasource=helm registryUrl=https://helm.linkerd.io/edge packageName=linkerd-control-plane
       version: 2025.7.6
   interval: 1h
   timeout: 10m

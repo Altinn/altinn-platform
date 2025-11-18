@@ -1,0 +1,60 @@
+kind: ConfigMap
+apiVersion: v1
+data:
+  prometheus-config: |-
+    scrape_configs:
+    - job_name: metrics_to_centralized_monitoring
+      kubernetes_sd_configs:
+        - role: endpoints
+      relabel_configs:
+        # Only the traefik namespace
+        - source_labels: [__meta_kubernetes_namespace]
+          action: keep
+          regex: traefik
+
+        # Only this Service
+        - source_labels: [__meta_kubernetes_service_name]
+          action: keep
+          regex: altinn-traefik-metrics
+
+        # Choose ONE: port name OR number. Use name "metrics":
+        - source_labels: [__meta_kubernetes_endpoint_port_name]
+          action: keep
+          regex: metrics
+        # If you prefer a number instead, comment the 3 lines above and use the two below:
+        # - source_labels: [__meta_kubernetes_endpoint_port_number]
+        #   action: keep
+        #   regex: 9100
+
+        # Use /metrics path
+        - target_label: __metrics_path__
+          replacement: /metrics
+
+        # Helpful labels
+        - source_labels: [__meta_kubernetes_namespace]
+          target_label: namespace
+        - source_labels: [__meta_kubernetes_service_name]
+          target_label: service
+        - source_labels: [__meta_kubernetes_pod_name]
+          target_label: pod
+        - source_labels: [__meta_kubernetes_pod_node_name]
+          target_label: nodename
+        - target_label: container
+          replacement: traefik
+
+        # 🔑 Route to the DCR destination (must match destinations.monitor_account.name)
+        - target_label: microsoft_metrics_account
+          replacement: CentralizedMonitoringAccount
+
+        # 🔑 Satisfy the DCR's label_include_filter
+        - target_label: microsoft_metrics_include_label
+          replacement: CentralizedMonitoringAccount
+
+      # Filter metrics to match ServiceMonitor efficiency
+      metric_relabel_configs:
+        - source_labels: [__name__]
+          regex: ^(traefik_service_requests_total|traefik_entrypoint_requests_total|traefik_service_request_duration_seconds_bucket|traefik_entrypoint_open_connections|traefik_service_open_connections|traefik_config_reloads_total|traefik_config_last_reload_success|traefik_tls_certs_not_after)$
+          action: keep
+metadata:
+  name: ama-metrics-prometheus-config
+  namespace: kube-system

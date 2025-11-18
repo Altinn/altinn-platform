@@ -1,0 +1,18 @@
+- op: add
+  path: /spec/values/serviceMonitor/targets/-
+  value: 
+    name: ${PLATFORM_URL}
+    url: https://${PLATFORM_URL}/kuberneteswrapper/api/v1/deployments
+    hostname: ${PLATFORM_URL}
+    interval: 60s
+    scrapeTimeout: 30s
+    module: http_2xx
+- op: add
+  path: /spec/values/serviceMonitor/targets/-
+  value:
+    name: ${MASKINPORTEN_URL}
+    url: https://${MASKINPORTEN_URL}
+    hostname: ${MASKINPORTEN_URL}
+    interval: 60s
+    scrapeTimeout: 30s
+    module: http_2xx

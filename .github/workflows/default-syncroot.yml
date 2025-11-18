@@ -24,13 +24,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       - name: Validate syncroot image
-        uses: Altinn/altinn-platform/actions/flux/verify-syncroot@ef7bd56ddb11f200f1c388ed3dba399c7316b7ec # main
+        uses: Altinn/altinn-platform/actions/flux/verify-syncroot@926ba9b8877dfb8ee8dc6ef0c75a86e998788e84 # main
         with:
           workdir: ./infrastructure/images/default-syncroot
       - name: Build and push latest artifact
-        uses: Altinn/altinn-platform/actions/flux/build-push-image@ef7bd56ddb11f200f1c388ed3dba399c7316b7ec # main
+        uses: Altinn/altinn-platform/actions/flux/build-push-image@926ba9b8877dfb8ee8dc6ef0c75a86e998788e84 # main
         with:
           image_name: ${{ env.ARTIFACT_NAME }}
           tag: latest
@@ -44,14 +44,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       - name: Get tag short sha
         id: get_tags
         run: |
           echo "tag=${GITHUB_REF/refs\/tags\/default-syncroot-/}" >> $GITHUB_OUTPUT
           echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
       - name: Re-tag existing image
-        uses: Altinn/altinn-platform/actions/flux/retag-image@ef7bd56ddb11f200f1c388ed3dba399c7316b7ec # main
+        uses: Altinn/altinn-platform/actions/flux/retag-image@926ba9b8877dfb8ee8dc6ef0c75a86e998788e84 # main
         with:
           image_name: ${{ env.ARTIFACT_NAME }}
           from_tag: ${{ steps.get_tags.outputs.short_sha }}

@@ -13,9 +13,33 @@ INTEG_WAIT_S    ?= 5
 GO ?= go
 CONTAINER_RUNTIME ?= podman   # override with CONTAINER_RUNTIME=docker
 
-.PHONY: all test test-integration build clean docker-build docker-run fmt lint tidy
+.PHONY: all test test-integration build clean docker-build docker-run fmt lint tidy manifests
 
 all: fmt lint tidy test test-integration
+
+ROOT_DIR_REPO := $(shell git rev-parse --show-toplevel)
+PROJECT_DIR   ?= $(ROOT_DIR_REPO)/services/lakmus
+FLUX_OUT      := $(ROOT_DIR_REPO)/flux/lakmus
+MANIFESTS_DIR := $(PROJECT_DIR)/manifests
+IMAGE_TAG  ?= latest
+
+## Generate Kubernetes and Flux manifests
+manifests:
+	@if [ ! -d "$(FLUX_OUT)" ]; then \
+	  echo "$(FLUX_OUT) does not exist. Please create the flux folder first."; \
+	  exit 1; \
+	fi
+
+	@echo ">> Cleaning old cdk8s imports"
+	rm -rf $(MANIFESTS_DIR)/imports
+
+	@echo ">> Updating cdk8s imports"
+	cd $(MANIFESTS_DIR) && npx cdk8s import
+
+	@echo ">> Synthesizing all manifests into $(FLUX_OUT)"
+	cd "$(MANIFESTS_DIR)" && npx cdk8s synth \
+	  --app "npx ts-node main.ts" \
+	  --output "$(FLUX_OUT)"
 
 ## Unit tests
 test:

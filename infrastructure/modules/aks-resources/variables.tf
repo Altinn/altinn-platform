@@ -185,3 +185,13 @@ variable "tls_cert_manager_zone_rg_name" {
     error_message = "You must provide a value for tls_cert_manager_zone_rg_name when enable_cert_manager_tls_issuer is true."
   }
 }
+
+variable "lakmus_client_id" {
+  type        = string
+  description = "Client id for Lakmus"
+}
+
+variable "developer_entra_id_group" {
+  description = "EntraID group that should have access to grafana and kubernetes cluster"
+  type        = string
+}

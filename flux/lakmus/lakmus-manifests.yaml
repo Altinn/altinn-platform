@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    azure.workload.identity/client-id: ${LAKMUS_WORKLOAD_IDENTITY_CLIENT_ID}
+  labels:
+    app: lakmus
+    owner: platform
+  name: lakmus
+  namespace: monitoring
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: lakmus
+    owner: platform
+  name: lakmus
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lakmus
+      owner: platform
+  template:
+    metadata:
+      labels:
+        app: lakmus
+        azure.workload.identity/use: "true"
+        owner: platform
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - args:
+            - --subscription-id=$(AZURE_SUBSCRIPTION_ID)
+          env:
+            - name: AZURE_SUBSCRIPTION_ID
+              value: ${AZURE_SUBSCRIPTION_ID}
+          image: altinncr.azurecr.io/ghcr.io/altinn/altinn-platform/lakmus:v1.0.0
+          name: lakmus
+          ports:
+            - containerPort: 8080
+              name: http
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: lakmus
+---
+apiVersion: azmonitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  labels:
+    app: lakmus
+    owner: platform
+  name: lakmus
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    any: true
+  podMetricsEndpoints:
+    - interval: 30s
+      path: /metrics
+      port: http
+  selector:
+    matchLabels:
+      app: lakmus
+      owner: platform
