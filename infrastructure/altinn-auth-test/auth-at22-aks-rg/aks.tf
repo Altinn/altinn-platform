@@ -13,7 +13,7 @@ module "aks" {
   prefix             = local.team_name
   environment        = local.environment
   subscription_id    = var.subscription_id
-  kubernetes_version = "1.32"
+  kubernetes_version = var.kubernetes_version
   vnet_address_space = [
     "10.202.72.0/21",
     "fd0a:7204:c37f:900::/56"

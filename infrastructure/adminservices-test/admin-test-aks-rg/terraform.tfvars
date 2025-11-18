@@ -2,7 +2,7 @@
 name_prefix        = "admin-test"
 flux_release_tag   = "at_ring1"
 subscription_id    = "1ce8e9af-c2d6-44e7-9c5e-099a308056fe"
-kubernetes_version = "1.32"
+kubernetes_version = "1.33"
 vnet_address_space = [
   "10.90.0.0/16",
   "fdac:524d:afaf::/56"

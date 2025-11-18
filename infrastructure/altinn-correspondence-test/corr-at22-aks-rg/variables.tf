@@ -51,3 +51,8 @@ variable "developer_entra_id_group" {
   description = "EntraID group that should have access to grafana and kubernetes cluster"
   type        = string
 }
+
+variable "kubernetes_version" {
+  description = "Kubernetes version to use"
+  type        = string
+}

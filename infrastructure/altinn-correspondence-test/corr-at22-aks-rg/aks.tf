@@ -10,7 +10,7 @@ module "aks" {
   prefix                  = var.team_name
   environment             = var.environment
   subscription_id         = var.subscription_id
-  kubernetes_version      = "1.32"
+  kubernetes_version      = var.kubernetes_version
   vnet_address_space      = var.aks_vnet_address_spaces
   subnet_address_prefixes = var.subnet_address_prefixes
   pool_configs = {
