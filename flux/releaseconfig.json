@@ -1,11 +1,11 @@
 {
   "grafana-operator": {
-    "at_ring1": "1.1.0",
-    "at_ring2": "1.1.0",
-    "tt_ring1": "1.1.0",
-    "tt_ring2": "1.1.0",
-    "prod_ring1": "1.1.0",
-    "prod_ring2": "1.1.0"
+    "at_ring1": "1.2.0",
+    "at_ring2": "1.2.0",
+    "tt_ring1": "1.2.0",
+    "tt_ring2": "1.2.0",
+    "prod_ring1": "1.2.0",
+    "prod_ring2": "1.2.0"
   },
   "grafana-manifests": {
     "at_ring1": "1.0.0",
