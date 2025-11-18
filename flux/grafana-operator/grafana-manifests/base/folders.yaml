@@ -8,6 +8,14 @@ spec:
     matchLabels:
       dashboards: "external-grafana"
   title: Altinn
+  permissions: |
+    {
+      "items": [
+        { "role": "Admin",  "permission": 4 },
+        { "role": "Editor", "permission": 1 },
+        { "role": "Viewer", "permission": 1 }
+      ]
+    }
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaFolder
@@ -19,6 +27,14 @@ spec:
     matchLabels:
       dashboards: "external-grafana"
   title: Fluxcd
+  permissions: |
+    {
+      "items": [
+        { "role": "Admin",  "permission": 4 },
+        { "role": "Editor", "permission": 1 },
+        { "role": "Viewer", "permission": 1 }
+      ]
+    }
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaFolder
@@ -30,3 +46,11 @@ spec:
     matchLabels:
       dashboards: "external-grafana"
   title: Linkerd
+  permissions: |
+    {
+      "items": [
+        { "role": "Admin",  "permission": 4 },
+        { "role": "Editor", "permission": 1 },
+        { "role": "Viewer", "permission": 1 }
+      ]
+    }
