@@ -29,7 +29,8 @@ variable "grafana_endpoint" {
 }
 
 variable "kubernetes_version" {
-  type = string
+  description = "Kubernetes version to use"
+  type        = string
 }
 
 variable "name_prefix" {
