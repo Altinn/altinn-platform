@@ -61,10 +61,8 @@ jobs:
 
     # Step 4: Install Kubebuilder.
     - name: Install Kubebuilder
-      env:
-        KUBEBUILDER_VERSION: ${{ inputs.kubebuilder-version }}
       run: |
-        curl -L -o kubebuilder "https://github.com/kubernetes-sigs/kubebuilder/releases/download/v${KUBEBUILDER_VERSION}/kubebuilder_$(go env GOOS)_$(go env GOARCH)"
+        curl -L -o kubebuilder "https://go.kubebuilder.io/dl/latest/$(go env GOOS)/$(go env GOARCH)"
         chmod +x kubebuilder
         sudo mv kubebuilder /usr/local/bin/
         kubebuilder version
@@ -78,6 +76,9 @@ jobs:
     # Step 6: Run the Kubebuilder alpha update command.
     # More info: https://kubebuilder.io/reference/commands/alpha_update
     - name: Run kubebuilder alpha update
+      env:
+        TARGET_VERSION: ${{ inputs.kubebuilder-version }}
+        OPERATOR_WORKDIR: ${{ inputs.workdir }}
       run: |
        # Executes the update command with specified flags.
        # --force: Completes the merge even if conflicts occur, leaving conflict markers.
@@ -90,5 +91,7 @@ jobs:
           --force \
           --push \
           --restore-path .github/workflows \
+          --to-version ${TARGET_VERSION}
+          --output-branch kubebuilder-update-${OPERATOR_WORKDIR}-to-${TARGET_VERSION}
           --open-gh-issue \
           --use-gh-models
