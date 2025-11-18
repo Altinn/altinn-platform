@@ -10,11 +10,12 @@ resource "kubernetes_config_map_v1" "deploy_environment_at22" {
     namespace = each.key
   }
   data = {
-    BASE_URL         = "https://platform.at22.altinn.cloud"
-    ALTINN2_BASE_URL = "https://at22.altinn.cloud"
-    AM_UI_BASE_URL   = "https://am.ui.at22.altinn.cloud"
-    DEPLOY_ENV       = "at22"
-    ENV_TYPE         = "dev"
+    BASE_URL            = "https://platform.at22.altinn.cloud"
+    ALTINN2_BASE_URL    = "https://at22.altinn.cloud"
+    ALTINN_CDN_BASE_URL = "https://altinncdn.no"
+    AM_UI_BASE_URL      = "https://am.ui.at22.altinn.cloud"
+    DEPLOY_ENV          = "at22"
+    ENV_TYPE            = "dev"
   }
 }
 
@@ -26,11 +27,12 @@ resource "kubernetes_config_map_v1" "deploy_environment_at23" {
     namespace = each.key
   }
   data = {
-    BASE_URL         = "https://platform.at23.altinn.cloud"
-    ALTINN2_BASE_URL = "https://at23.altinn.cloud"
-    AM_UI_BASE_URL   = "https://am.ui.at23.altinn.cloud"
-    DEPLOY_ENV       = "at23"
-    ENV_TYPE         = "dev"
+    BASE_URL            = "https://platform.at23.altinn.cloud"
+    ALTINN2_BASE_URL    = "https://at23.altinn.cloud"
+    ALTINN_CDN_BASE_URL = "https://altinncdn.no"
+    AM_UI_BASE_URL      = "https://am.ui.at23.altinn.cloud"
+    DEPLOY_ENV          = "at23"
+    ENV_TYPE            = "dev"
   }
 }
 
@@ -42,11 +44,12 @@ resource "kubernetes_config_map_v1" "deploy_environment_at24" {
     namespace = each.key
   }
   data = {
-    BASE_URL         = "https://platform.at24.altinn.cloud"
-    ALTINN2_BASE_URL = "https://at24.altinn.cloud"
-    AM_UI_BASE_URL   = "https://am.ui.at24.altinn.cloud"
-    DEPLOY_ENV       = "at24"
-    ENV_TYPE         = "dev"
+    BASE_URL            = "https://platform.at24.altinn.cloud"
+    ALTINN2_BASE_URL    = "https://at24.altinn.cloud"
+    ALTINN_CDN_BASE_URL = "https://altinncdn.no"
+    AM_UI_BASE_URL      = "https://am.ui.at24.altinn.cloud"
+    DEPLOY_ENV          = "at24"
+    ENV_TYPE            = "dev"
   }
 }
 
@@ -58,11 +61,12 @@ resource "kubernetes_config_map_v1" "deploy_environment_yt01" {
     namespace = each.key
   }
   data = {
-    BASE_URL         = "https://platform.yt01.altinn.cloud"
-    ALTINN2_BASE_URL = "https://yt01.ai.basefarm.net"
-    AM_UI_BASE_URL   = "https://am.ui.yt01.altinn.cloud"
-    DEPLOY_ENV       = "yt01"
-    ENV_TYPE         = "perf"
+    BASE_URL            = "https://platform.yt01.altinn.cloud"
+    ALTINN2_BASE_URL    = "https://yt01.ai.basefarm.net"
+    ALTINN_CDN_BASE_URL = "https://altinncdn.no"
+    AM_UI_BASE_URL      = "https://am.ui.yt01.altinn.cloud"
+    DEPLOY_ENV          = "yt01"
+    ENV_TYPE            = "perf"
   }
 }
 
@@ -74,11 +78,12 @@ resource "kubernetes_config_map_v1" "deploy_environment_tt02" {
     namespace = each.key
   }
   data = {
-    BASE_URL         = "https://platform.tt02.altinn.no"
-    ALTINN2_BASE_URL = "https://tt02.altinn.no"
-    AM_UI_BASE_URL   = "https://am.ui.tt02.altinn.no"
-    DEPLOY_ENV       = "tt02"
-    ENV_TYPE         = "staging"
+    BASE_URL            = "https://platform.tt02.altinn.no"
+    ALTINN2_BASE_URL    = "https://tt02.altinn.no"
+    ALTINN_CDN_BASE_URL = "https://altinncdn.no"
+    AM_UI_BASE_URL      = "https://am.ui.tt02.altinn.no"
+    DEPLOY_ENV          = "tt02"
+    ENV_TYPE            = "staging"
   }
 }
 
@@ -90,10 +95,11 @@ resource "kubernetes_config_map_v1" "deploy_environment_prod" {
     namespace = each.key
   }
   data = {
-    BASE_URL         = "https://platform.altinn.no"
-    ALTINN2_BASE_URL = "https://altinn.no"
-    AM_UI_BASE_URL   = "https://am.ui.altinn.no"
-    DEPLOY_ENV       = "prod"
-    ENV_TYPE         = "prod"
+    BASE_URL            = "https://platform.altinn.no"
+    ALTINN2_BASE_URL    = "https://altinn.no"
+    ALTINN_CDN_BASE_URL = "https://altinncdn.no"
+    AM_UI_BASE_URL      = "https://am.ui.altinn.no"
+    DEPLOY_ENV          = "prod"
+    ENV_TYPE            = "prod"
   }
 }
