@@ -185,10 +185,6 @@ type HttpMessageDiagnostic struct {
 
 // ApiVersionStatus defines the observed state of ApiVersion.
 type ApiVersionStatus struct {
-<<<<<<< HEAD
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	// For Kubernetes API conventions, see:
 	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
 
@@ -205,7 +201,6 @@ type ApiVersionStatus struct {
 	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
-=======
 	// ProvisioningState - The provisioning state of the API. Possible values are: Succeeded, Failed, Updating, Deleting.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:enum:=Succeeded;Failed;Updating;Deleting
@@ -222,7 +217,6 @@ type ApiVersionStatus struct {
 	// LastAppliedPolicyBase64 - The base64 of the last applied spec.
 	// +kubebuilder:validation:Optional
 	LastAppliedPolicyBase64 string `json:"lastAppliedPolicyBase64,omitempty"`
->>>>>>> tmp-original-19-11-25-19-36
 }
 
 // +kubebuilder:object:root=true

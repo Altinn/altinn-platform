@@ -76,9 +76,11 @@ spec:
             - url
             type: object
           status:
-<<<<<<< HEAD
-            description: status defines the observed state of Backend
+            description: BackendStatus defines the observed state of Backend.
             properties:
+              backendID:
+                description: BackendID - The identifier of the Backend.
+                type: string
               conditions:
                 description: |-
                   conditions represent the current state of the Backend resource.
@@ -148,12 +150,6 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
-=======
-            description: BackendStatus defines the observed state of Backend.
-            properties:
-              backendID:
-                description: BackendID - The identifier of the Backend.
-                type: string
               lastProvisioningError:
                 description: LastProvisioningError - The last error that occurred
                   during provisioning.
@@ -161,7 +157,6 @@ spec:
               provisioningState:
                 description: ProvisioningState - The provisioning state of the Backend.
                 type: string
->>>>>>> tmp-original-19-11-25-19-36
             type: object
         type: object
     served: true

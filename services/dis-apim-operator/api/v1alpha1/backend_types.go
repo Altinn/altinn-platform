@@ -50,10 +50,6 @@ type BackendSpec struct {
 
 // BackendStatus defines the observed state of Backend.
 type BackendStatus struct {
-<<<<<<< HEAD
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	// For Kubernetes API conventions, see:
 	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
 
@@ -70,7 +66,6 @@ type BackendStatus struct {
 	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
-=======
 	// BackendID - The identifier of the Backend.
 	// +kubebuilder:validation:Optional
 	BackendID string `json:"backendID,omitempty"`
@@ -81,7 +76,6 @@ type BackendStatus struct {
 	// LastProvisioningError - The last error that occurred during provisioning.
 	// +kubebuilder:validation:Optional
 	LastProvisioningError string `json:"lastProvisioningError,omitempty"`
->>>>>>> tmp-original-19-11-25-19-36
 }
 
 // BackendProvisioningState defines the provisioning state of the Backend.
