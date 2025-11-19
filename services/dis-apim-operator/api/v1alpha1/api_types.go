@@ -62,6 +62,27 @@ type ApiSpec struct {
 
 // ApiStatus defines the observed state of Api.
 type ApiStatus struct {
+<<<<<<< HEAD
+	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+	// Important: Run "make" to regenerate code after modifying this file
+
+	// For Kubernetes API conventions, see:
+	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
+
+	// conditions represent the current state of the Api resource.
+	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
+	//
+	// Standard condition types include:
+	// - "Available": the resource is fully functional
+	// - "Progressing": the resource is being created or updated
+	// - "Degraded": the resource failed to reach or maintain its desired state
+	//
+	// The status of each condition is one of True, False, or Unknown.
+	// +listType=map
+	// +listMapKey=type
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+=======
 	// ProvisioningState - The provisioning state of the API. Possible values are: Succeeded, Failed, Updating, Deleting.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:enum:=Succeeded;Failed;Updating;Deleting
@@ -72,6 +93,7 @@ type ApiStatus struct {
 	// VersionStates - A list of API Version deployed in the API Management service and the current state of the API Version.
 	// +kubebuilder:validation:Optional
 	VersionStates map[string]ApiVersionStatus `json:"versionStates,omitempty"`
+>>>>>>> tmp-original-19-11-25-19-36
 }
 
 // +kubebuilder:object:root=true
