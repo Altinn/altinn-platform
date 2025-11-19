@@ -58,6 +58,13 @@ provider "azurerm" {
   ]
 }
 
+provider "azurerm" {
+  features {}
+  subscription_id = var.parent_zone_subscription_id
+  use_oidc        = true
+  alias           = "parent_zone"
+}
+
 provider "grafana" {
   url  = module.grafana.grafana_endpoint
   auth = var.app_access_token

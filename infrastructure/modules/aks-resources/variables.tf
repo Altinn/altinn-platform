@@ -54,6 +54,17 @@ variable "grafana_endpoint" {
   }
 }
 
+variable "grafana_redirect_dns" {
+  type        = string
+  description = "External DNS name used for Grafana redirect; must resolve to the AKS cluster where the Grafana operator is deployed."
+  default     = ""
+  validation {
+    condition     = var.enable_grafana_operator == false || (var.enable_grafana_operator == true && length(var.grafana_redirect_dns) > 0)
+    error_message = "You must provide a value for grafana_redirect_dns when enable_grafana_operator is true and the DNS must point to the target cluster."
+  }
+}
+
+
 variable "linkerd_default_inbound_policy" {
   description = "Default inbound policy for Linkerd"
   type        = string

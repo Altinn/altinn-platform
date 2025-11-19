@@ -54,4 +54,5 @@ module "aks_resources" {
   subscription_id                  = var.subscription_id
   enable_cert_manager_tls_issuer   = false
   developer_entra_id_group         = var.developer_entra_id_group
+  grafana_redirect_dns             = "grafana.altinn.cloud"
 }

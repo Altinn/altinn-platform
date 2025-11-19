@@ -1,7 +1,8 @@
 module "grafana" {
+  depends_on                      = [module.observability]
   source                          = "../../modules/grafana"
-  prefix                          = local.team_name
-  environment                     = local.environment
+  prefix                          = var.team_name
+  environment                     = var.environment
   client_config_current_object_id = data.azurerm_client_config.current.object_id
   monitor_workspace_ids = {
     "default-obs-workspace" : module.observability.monitor_workspace_id
@@ -11,6 +12,8 @@ module "grafana" {
   ]
   grafana_editor_access = [
     "416302ed-fbab-41a4-8c8d-61f486fa79ca", # Altinn-30-Test-developers
+    "72c87656-e79d-4b7d-90bf-3a205b4a3412", # Altinn-30-Authentication-Test-Developers
+    "646fbdac-0125-4474-bb86-bd1acf5a1bb8", # Altinn-30-Authorization-Test-Developers
   ]
   grafana_monitor_reader_subscription_id = [
     var.subscription_id,
