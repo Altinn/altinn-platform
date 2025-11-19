@@ -1,0 +1,11 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-grafana-fqdn-to-azure-grafana
+  namespace: traefik
+spec:
+  redirectRegex:
+    permanent: true
+    # Redirect entire host preserving path and query
+    regex: ^https?://${REDIRECT_GRAFANA_FROM_FQDN}(.*)
+    replacement: https://${REDIRECT_GRAFANA_TO_FQDN}$1
