@@ -91,7 +91,7 @@ jobs:
           --force \
           --push \
           --restore-path .github/workflows \
-          --to-version ${TARGET_VERSION}
-          --output-branch kubebuilder-update-${OPERATOR_WORKDIR}-to-${TARGET_VERSION}
+          --to-version ${TARGET_VERSION} \
+          --output-branch kubebuilder-update-${OPERATOR_WORKDIR}-to-${TARGET_VERSION} \
           --open-gh-issue \
           --use-gh-models
