@@ -51,6 +51,7 @@ env:
   TF_PROJECT: ./infrastructure/altinn-auth-test/auth-at22-aks-rg
   ARM_CLIENT_ID: ${{ secrets.TF_AZURE_CLIENT_ID }}
   ARM_SUBSCRIPTION_ID: 37bac63a-b964-46b2-8de8-ba93c432ea1f
+  TF_VAR_parent_zone_subscription_id: ${{ secrets.AZURE_ALTINN_CLOUD_DNS_SUBSCRIPTION_ID }}
 
 permissions:
   id-token: write

@@ -56,3 +56,5 @@ variable "kubernetes_version" {
   description = "Kubernetes version to use"
   type        = string
 }
+
+# grafana_redirect_dns variable removed; value now sourced from dns-child-zone output when invoking infra-resources

@@ -65,4 +65,5 @@ module "infra-resources" {
   lakmus_client_id                             = module.observability.lakmus_client_id
   developer_entra_id_group                     = var.developer_entra_id_group
   linkerd_default_inbound_policy               = "cluster-authenticated"
+  grafana_redirect_dns                         = module.dns-child-zone.azurerm_dns_zone_name
 }
