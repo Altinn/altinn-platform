@@ -64,6 +64,6 @@ module "infra-resources" {
   azurerm_kubernetes_cluster_oidc_issuer_url   = module.aks.aks_oidc_issuer_url
   lakmus_client_id                             = module.observability.lakmus_client_id
   developer_entra_id_group                     = var.developer_entra_id_group
-  linkerd_default_inbound_policy               = "cluster-authenticated"
+  linkerd_default_inbound_policy               = "all-unauthenticated" # when we figure out metrics scraping policy "cluster-authenticated"
   grafana_redirect_dns                         = module.dns-child-zone.azurerm_dns_zone_name
 }
