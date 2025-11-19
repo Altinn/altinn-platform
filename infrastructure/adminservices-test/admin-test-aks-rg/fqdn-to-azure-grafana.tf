@@ -10,8 +10,8 @@ resource "azapi_resource" "fqdn_to_azure_grafana" {
           path  = "./fqdn-to-azure-grafana/"
           postBuild = {
             substitute = {
-              REDIRECT_GRAFANA_FROM_FQDN = "${var.grafana_endpoint}"
-              REDIRECT_GRAFANA_TO_FQDN   = "${var.grafana_redirect_dns}"
+              REDIRECT_GRAFANA_FROM_FQDN = "grafana.altinn.cloud"
+              REDIRECT_GRAFANA_TO_FQDN   = "altinn-grafana-test-b2b8dpdkcvfuhfd3.eno.grafana.azure.com"
             }
           }
           prune                  = true
