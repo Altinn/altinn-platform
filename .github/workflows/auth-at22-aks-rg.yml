@@ -17,6 +17,7 @@ on:
       - infrastructure/modules/azure-service-operator/**
       - infrastructure/modules/observability/**
       - infrastructure/modules/grafana/**
+      - infrastructure/modules/dns-child-zone/**
       - infrastructure/altinn-auth-test/auth-at22-aks-rg/**
   pull_request:
     branches:
@@ -30,6 +31,7 @@ on:
       - infrastructure/modules/azure-service-operator/**
       - infrastructure/modules/observability/**
       - infrastructure/modules/grafana/**
+      - infrastructure/modules/dns-child-zone/**
       - infrastructure/altinn-auth-test/auth-at22-aks-rg/**
   workflow_dispatch:
     inputs:
@@ -55,13 +57,13 @@ env:
 
 permissions:
   id-token: write
-  contents: write
+  contents: read
   pull-requests: write
 
 jobs:
   plan:
     name: Plan
-    environment: test
+    environment: reader
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
