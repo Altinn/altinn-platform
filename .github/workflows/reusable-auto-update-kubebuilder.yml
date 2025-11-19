@@ -1,4 +1,4 @@
-name: Auto Update Kubebuilder Scaffolding
+name: Reusable Auto Update Kubebuilder Scaffolding
 
 # The 'kubebuilder alpha update 'command requires write access to the repository to create a branch
 # with the update files and allow you to open a pull request using the link provided in the issue.
@@ -18,7 +18,7 @@ on:
         required: false
         type: string
         # renovate: datasource=github-releases depName=kubebuilder packageName=kubernetes-sigs/kubebuilder versioning=semver
-        default: 4.8.0
+        default: 4.9.0
       workdir:
         description: "Folder containing the Docker context"
         required: true
