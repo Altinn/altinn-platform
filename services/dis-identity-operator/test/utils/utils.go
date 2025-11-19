@@ -28,12 +28,11 @@ import (
 )
 
 const (
-	prometheusOperatorVersion = "v0.77.1"
-	prometheusOperatorURL     = "https://github.com/prometheus-operator/prometheus-operator/" +
-		"releases/download/%s/bundle.yaml"
-
-	certmanagerVersion = "v1.16.3"
+	certmanagerVersion = "v1.18.2"
 	certmanagerURLTmpl = "https://github.com/cert-manager/cert-manager/releases/download/%s/cert-manager.yaml"
+
+	defaultKindBinary  = "kind"
+	defaultKindCluster = "kind"
 )
 
 func warnError(err error) {
@@ -60,6 +59,8 @@ func Run(cmd *exec.Cmd) (string, error) {
 	return string(output), nil
 }
 
+<<<<<<< HEAD
+=======
 // InstallPrometheusOperator installs the prometheus Operator to be used to export the enabled metrics.
 func InstallPrometheusOperator() error {
 	url := fmt.Sprintf(prometheusOperatorURL, prometheusOperatorVersion)
@@ -109,6 +110,7 @@ func IsPrometheusCRDsInstalled() bool {
 	return true
 }
 
+>>>>>>> tmp-original-19-11-25-19-36
 // UninstallCertManager uninstalls the cert manager
 func UninstallCertManager() {
 	url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
@@ -185,12 +187,16 @@ func IsCertManagerCRDsInstalled() bool {
 
 // LoadImageToKindClusterWithName loads a local docker image to the kind cluster
 func LoadImageToKindClusterWithName(name string) error {
-	cluster := "kind"
+	cluster := defaultKindCluster
 	if v, ok := os.LookupEnv("KIND_CLUSTER"); ok {
 		cluster = v
 	}
 	kindOptions := []string{"load", "docker-image", name, "--name", cluster}
-	cmd := exec.Command("kind", kindOptions...)
+	kindBinary := defaultKindBinary
+	if v, ok := os.LookupEnv("KIND"); ok {
+		kindBinary = v
+	}
+	cmd := exec.Command(kindBinary, kindOptions...)
 	_, err := Run(cmd)
 	return err
 }

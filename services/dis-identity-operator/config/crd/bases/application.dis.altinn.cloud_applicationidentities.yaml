@@ -66,6 +66,19 @@ spec:
           status:
             description: status defines the observed state of ApplicationIdentity
             properties:
+<<<<<<< HEAD
+              conditions:
+                description: |-
+                  conditions represent the current state of the ApplicationIdentity resource.
+                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
+
+                  Standard condition types include:
+                  - "Available": the resource is fully functional
+                  - "Progressing": the resource is being created or updated
+                  - "Degraded": the resource failed to reach or maintain its desired state
+
+                  The status of each condition is one of True, False, or Unknown.
+=======
               azureAudiences:
                 description: AzureAudiences list of audiences that can appear in the
                   issued token from Azure.
@@ -79,6 +92,7 @@ spec:
               conditions:
                 description: Conditions is a list of conditions that apply to the
                   ApplicationIdentity.
+>>>>>>> tmp-original-19-11-25-19-36
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -134,6 +148,11 @@ spec:
                   - type
                   type: object
                 type: array
+<<<<<<< HEAD
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+=======
               managedIdentityName:
                 description: ManagedIdentityName is the name of the managed identity
                   in Azure.
@@ -141,6 +160,7 @@ spec:
               principalId:
                 description: PrincipalID is the ID of the managed identity in Azure.
                 type: string
+>>>>>>> tmp-original-19-11-25-19-36
             type: object
         required:
         - spec
