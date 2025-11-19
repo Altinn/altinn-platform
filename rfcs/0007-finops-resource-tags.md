@@ -60,7 +60,7 @@ resource "azurerm_resource_group" "example" {
   name     = "studio-${var.environment}-rg"
   location = var.location
   tags = merge(local.tags, {
-    submodule = "resource-group"
+    submodule = "my-tf-module"
   })
 }
 ```
@@ -86,7 +86,7 @@ resource rg 'Microsoft.Resources/resourceGroups@2022-09-01' = {
     env: environment
     product: product
     org: serviceOwnerCode
-    submodule: 'resource-group'
+    submodule: 'my-bicep-module'
   }
 }
 ```
