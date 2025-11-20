@@ -314,6 +314,9 @@ metadata:
     altinn.no/environment: tt02
     altinn.no/organization: ${org}
 spec:
+  labelLimit: 63
+  labelNameLengthLimit: 511
+  labelValueLengthLimit: 1023
   endpoints:
   - honorTimestamps: true
     interval: 15s
@@ -373,6 +376,9 @@ metadata:
     altinn.no/environment: tt02
     altinn.no/organization: ${org}
 spec:
+  labelLimit: 63
+  labelNameLengthLimit: 511
+  labelValueLengthLimit: 1023
   endpoints:
   - honorTimestamps: true
     interval: 15s
@@ -435,6 +441,9 @@ metadata:
     altinn.no/environment: production
     altinn.no/organization: ${org}
 spec:
+  labelLimit: 63
+  labelNameLengthLimit: 511
+  labelValueLengthLimit: 1023
   endpoints:
   - honorTimestamps: true
     interval: 15s
@@ -494,6 +503,9 @@ metadata:
     altinn.no/environment: production
     altinn.no/organization: ${org}
 spec:
+  labelLimit: 63
+  labelNameLengthLimit: 511
+  labelValueLengthLimit: 1023
   endpoints:
   - honorTimestamps: true
     interval: 15s
@@ -568,6 +580,9 @@ metadata:
     altinn.no/environment: extra
     altinn.no/organization: extra
 spec:
+  labelLimit: 63
+  labelNameLengthLimit: 511
+  labelValueLengthLimit: 1023
   endpoints:
   - honorTimestamps: true
     interval: 15s
@@ -639,6 +654,9 @@ metadata:
     altinn.no/environment: extra
     altinn.no/organization: extra
 spec:
+  labelLimit: 63
+  labelNameLengthLimit: 511
+  labelValueLengthLimit: 1023
   endpoints:
   - honorTimestamps: true
     interval: 15s
@@ -710,6 +728,9 @@ metadata:
     altinn.no/environment: extra
     altinn.no/organization: extra
 spec:
+  labelLimit: 63
+  labelNameLengthLimit: 511
+  labelValueLengthLimit: 1023
   endpoints:
   - honorTimestamps: true
     interval: 15s
