@@ -12,7 +12,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: altinn-uptime-sync
-          image: bitnami/kubectl:latest
+          image: altinncr.azurecr.io/docker.io/bitnami/kubectl:latest
           command:
             - /bin/sh
             - /scripts/generate_targets.sh
