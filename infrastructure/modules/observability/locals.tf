@@ -1,9 +1,9 @@
 # Reuse flags (null/blank name = create)
 locals {
   reuse_rg  = var.azurerm_resource_group_obs_name != null && trimspace(var.azurerm_resource_group_obs_name) != ""
-  reuse_amw = var.monitor_workspace_name != null && trimspace(var.monitor_workspace_name) != ""
+  reuse_amw = var.reuse_monitor_workspace
   reuse_law = var.reuse_log_analytics_workspace
-  reuse_ai  = var.app_insights_connection_string != null && trimspace(var.app_insights_connection_string) != ""
+  reuse_ai  = var.reuse_application_insights
 }
 
 locals {
