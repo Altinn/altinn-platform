@@ -169,7 +169,7 @@ load_configuration
 get_organizations
 
 # Initialize applied names file
-> "$TEMP_DIR/applied_names"
+: > "$TEMP_DIR/applied_names"
 
 # Safety check to prevent deleting all ServiceMonitors if data is missing
 if [ -z "$ORGANIZATIONS_JSON" ]; then
