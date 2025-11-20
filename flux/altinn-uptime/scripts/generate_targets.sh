@@ -43,7 +43,7 @@ UNIQUE_ID="${UNIQUE_ID:-altinn-uptime}"
 # Create a temporary directory for our work
 TEMP_DIR=$(mktemp -d)
 # Clean up temporary files on exit
-trap "rm -rf $TEMP_DIR" EXIT
+trap 'rm -rf "$TEMP_DIR"' EXIT
 
 # Helper function to download organizations data
 download_organizations() {
