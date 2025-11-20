@@ -33,26 +33,29 @@ module "aks" {
 }
 
 module "aks_resources" {
-  depends_on                       = [module.aks, module.observability]
-  source                           = "../../modules/aks-resources"
-  aks_node_resource_group          = module.aks.aks_node_resource_group
-  azurerm_kubernetes_cluster_id    = module.aks.azurerm_kubernetes_cluster_id
-  flux_release_tag                 = var.flux_release_tag
-  pip4_ip_address                  = module.aks.pip4_ip_address
-  pip6_ip_address                  = module.aks.pip6_ip_address
-  subnet_address_prefixes          = var.subnet_address_prefixes
-  obs_kv_uri                       = module.observability.key_vault_uri
-  obs_client_id                    = module.observability.obs_client_id
-  obs_tenant_id                    = local.tenant_id
-  environment                      = local.environment
-  syncroot_namespace               = local.team_name
-  grafana_endpoint                 = var.grafana_endpoint
-  token_grafana_operator           = var.token_grafana_operator
-  grafana_dashboard_release_branch = "main"
-  enable_grafana_operator          = true
-  lakmus_client_id                 = module.observability.lakmus_client_id
-  subscription_id                  = var.subscription_id
-  enable_cert_manager_tls_issuer   = false
-  developer_entra_id_group         = var.developer_entra_id_group
-  grafana_redirect_dns             = "grafana.altinn.cloud"
+  depends_on                                 = [module.aks, module.observability]
+  source                                     = "../../modules/aks-resources"
+  aks_node_resource_group                    = module.aks.aks_node_resource_group
+  azurerm_kubernetes_cluster_id              = module.aks.azurerm_kubernetes_cluster_id
+  flux_release_tag                           = var.flux_release_tag
+  pip4_ip_address                            = module.aks.pip4_ip_address
+  pip6_ip_address                            = module.aks.pip6_ip_address
+  subnet_address_prefixes                    = var.subnet_address_prefixes
+  obs_kv_uri                                 = module.observability.key_vault_uri
+  obs_client_id                              = module.observability.obs_client_id
+  obs_tenant_id                              = local.tenant_id
+  environment                                = local.environment
+  syncroot_namespace                         = local.team_name
+  grafana_endpoint                           = var.grafana_endpoint
+  token_grafana_operator                     = var.token_grafana_operator
+  grafana_dashboard_release_branch           = "main"
+  enable_grafana_operator                    = true
+  lakmus_client_id                           = module.observability.lakmus_client_id
+  subscription_id                            = var.subscription_id
+  enable_cert_manager_tls_issuer             = false
+  developer_entra_id_group                   = var.developer_entra_id_group
+  grafana_redirect_dns                       = "grafana.altinn.cloud"
+  enable_dis_identity_operator               = true
+  azurerm_dis_identity_resource_group_id     = module.aks.dis_resource_group_id
+  azurerm_kubernetes_cluster_oidc_issuer_url = module.aks.aks_oidc_issuer_url
 }
