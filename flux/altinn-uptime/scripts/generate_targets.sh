@@ -116,8 +116,19 @@ get_organizations() {
 
         # Filter organizations using grep if we have maintenance orgs
         if [ -n "$MAINTENANCE_ORGS" ]; then
-            ORGS_WITH_TT02=$(echo "$ORGS_WITH_TT02" | grep -v -F "$MAINTENANCE_ORGS" || echo "$ORGS_WITH_TT02")
-            ORGS_WITH_PROD=$(echo "$ORGS_WITH_PROD" | grep -v -F "$MAINTENANCE_ORGS" || echo "$ORGS_WITH_PROD")
+            # Build exclude pattern for each maintenance org (anchored to prevent partial matches)
+            exclude_pattern=""
+            while IFS= read -r maint_org; do
+                if [ -n "$maint_org" ]; then
+                    exclude_pattern="${exclude_pattern}${maint_org}$|"
+                fi
+            done <<< "$MAINTENANCE_ORGS"
+            exclude_pattern="${exclude_pattern%|}"  # Remove trailing |
+
+            if [ -n "$exclude_pattern" ]; then
+                ORGS_WITH_TT02=$(echo "$ORGS_WITH_TT02" | grep -v -E "^($exclude_pattern)$" || echo "$ORGS_WITH_TT02")
+                ORGS_WITH_PROD=$(echo "$ORGS_WITH_PROD" | grep -v -E "^($exclude_pattern)$" || echo "$ORGS_WITH_PROD")
+            fi
         fi
     fi
 }
