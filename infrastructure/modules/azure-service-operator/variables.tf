@@ -57,7 +57,7 @@ variable "aso_service_account_name" {
 variable "aso_crd_pattern" {
   description = "The pattern for the Azure Service Operator Custom Resource Definitions (CRDs)."
   type        = string
-  default     = "managedidentity.azure.com/*;authorization.azure.com/*"
+  default     = "managedidentity.azure.com/*;authorization.azure.com/*;dbforpostgresql.azure.com/*;network.azure.com/*;insights.azure.com/*"
 }
 
 variable "tags" {
