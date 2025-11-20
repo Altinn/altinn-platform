@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: monitoring
+
+resources:
+  - configmaps/extra-targets.yaml
+  - configmaps/maintenance-targets.yaml
+  - serviceaccount.yaml
+  - rbac.yaml
+  - cronjob.yaml
+
+configMapGenerator:
+  - name: altinn-uptime-generate-targets
+    files:
+      - generate_targets.sh=scripts/generate_targets.sh
+    options:
+      labels:
+        app.kubernetes.io/name: altinn-uptime
+        app.kubernetes.io/component: config
