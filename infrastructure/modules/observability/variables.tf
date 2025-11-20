@@ -4,11 +4,21 @@ variable "app_insights_app_type" {
   description = "Application type for Application Insights. Common values: web, other."
 }
 
+variable "reuse_application_insights" {
+  type        = bool
+  default     = false
+  description = "Set true to reuse an existing Application Insights instance (pass app_insights_connection_string)."
+}
+
 variable "app_insights_connection_string" {
   type        = string
   default     = null
   sensitive   = true
-  description = "When reusing AI, pass its connection string (avoids lookups)."
+  description = "Connection string of an existing Application Insights when reusing."
+  validation {
+    condition     = var.reuse_application_insights ? (var.app_insights_connection_string != null && trimspace(var.app_insights_connection_string) != "") : (var.app_insights_connection_string == null)
+    error_message = "app_insights_connection_string must be non-empty when reuse_application_insights is true, and null when false."
+  }
 }
 
 variable "azurerm_kubernetes_cluster_id" {
@@ -68,30 +78,46 @@ variable "log_analytics_retention_days" {
   description = "Number of days to retain logs in Log Analytics Workspace."
 }
 
+variable "reuse_log_analytics_workspace" {
+  type        = bool
+  default     = false
+  description = "Set true to reuse an existing Log Analytics Workspace (pass log_analytics_workspace_id)."
+}
+
 variable "log_analytics_workspace_id" {
   type        = string
   default     = null
-  description = "When reusing LAW, pass its ID (avoids lookups)."
+  description = "ID of an existing Log Analytics Workspace when reusing."
+  validation {
+    condition     = var.reuse_log_analytics_workspace ? (var.log_analytics_workspace_id != null && trimspace(var.log_analytics_workspace_id) != "") : (var.log_analytics_workspace_id == null)
+    error_message = "log_analytics_workspace_id must be non-empty when reuse_log_analytics_workspace is true, and null when false."
+  }
+}
+
+variable "reuse_monitor_workspace" {
+  type        = bool
+  default     = false
+  description = "Set true to reuse an existing Azure Monitor Workspace (pass monitor_workspace_name and monitor_workspace_id)."
 }
 
 variable "monitor_workspace_id" {
   type        = string
   default     = null
-  description = "When reusing AMW, pass its ID and Name (avoids lookups)."
+  description = "ID of an existing Azure Monitor Workspace when reusing."
   validation {
-    condition = (
-      (var.monitor_workspace_name == null && var.monitor_workspace_id == null) ||
-      (var.monitor_workspace_name != null && trimspace(var.monitor_workspace_name) != "" &&
-      var.monitor_workspace_id != null && trimspace(var.monitor_workspace_id) != "")
-    )
-    error_message = "If you provide monitor_workspace_name you must also provide monitor_workspace_id (and vice versa)."
+    condition     = var.reuse_monitor_workspace ? (var.monitor_workspace_id != null && trimspace(var.monitor_workspace_id) != "") : (var.monitor_workspace_id == null)
+    error_message = "monitor_workspace_id must be non-empty when reuse_monitor_workspace is true, and null when false."
   }
 }
 
 variable "monitor_workspace_name" {
   type        = string
   default     = null
-  description = "Name of the existing Azure Monitor workspace. If provided, the module will use this resource instead of creating a new one."
+  description = "Name of an existing Azure Monitor Workspace when reusing."
+  validation {
+    condition     = var.reuse_monitor_workspace ? (var.monitor_workspace_name != null && trimspace(var.monitor_workspace_name) != "") : (var.monitor_workspace_name == null)
+    error_message = "monitor_workspace_name must be non-empty when reuse_monitor_workspace is true, and null when false."
+  }
 }
 
 variable "oidc_issuer_url" {
