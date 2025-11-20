@@ -3,7 +3,7 @@
 - RFC PR: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/pull/2549)
 - Github Issue: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/issues/2549)
 - Product/Category: Release management
-- State: **REVIEW** (possible states are: **REVIEW**, **ACCEPTED** and **REJECTED**)
+- State: **ACCEPTED** (possible states are: **REVIEW**, **ACCEPTED** and **REJECTED**)
 
 # Summary
 [summary]: #summary
