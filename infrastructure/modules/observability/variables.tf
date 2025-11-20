@@ -68,10 +68,20 @@ variable "log_analytics_retention_days" {
   description = "Number of days to retain logs in Log Analytics Workspace."
 }
 
+variable "reuse_log_analytics_workspace" {
+  type        = bool
+  default     = false
+  description = "Set true to reuse an existing Log Analytics Workspace (pass log_analytics_workspace_id)."
+}
+
 variable "log_analytics_workspace_id" {
   type        = string
   default     = null
-  description = "When reusing LAW, pass its ID (avoids lookups)."
+  description = "ID of an existing Log Analytics Workspace when reusing."
+  validation {
+    condition     = var.reuse_log_analytics_workspace ? (var.log_analytics_workspace_id != null && trimspace(var.log_analytics_workspace_id) != "") : (var.log_analytics_workspace_id == null)
+    error_message = "log_analytics_workspace_id must be non-empty when reuse_log_analytics_workspace is true, and null when false."
+  }
 }
 
 variable "monitor_workspace_id" {

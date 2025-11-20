@@ -2,7 +2,7 @@
 locals {
   reuse_rg  = var.azurerm_resource_group_obs_name != null && trimspace(var.azurerm_resource_group_obs_name) != ""
   reuse_amw = var.monitor_workspace_name != null && trimspace(var.monitor_workspace_name) != ""
-  reuse_law = var.log_analytics_workspace_id != null && trimspace(var.log_analytics_workspace_id) != ""
+  reuse_law = var.reuse_log_analytics_workspace
   reuse_ai  = var.app_insights_connection_string != null && trimspace(var.app_insights_connection_string) != ""
 }
 
