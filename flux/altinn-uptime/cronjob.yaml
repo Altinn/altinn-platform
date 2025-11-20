@@ -15,8 +15,20 @@ spec:
         spec:
           serviceAccountName: altinn-uptime-cronjob
           restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            fsGroup: 65534
           containers:
             - name: altinn-uptime-sync
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+                runAsUser: 65534
               image: altinncr.azurecr.io/docker.io/bitnami/kubectl:latest
               command:
                 - /bin/sh
