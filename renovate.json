@@ -11,6 +11,21 @@
       "matchUpdateTypes": ["minor", "patch"],
       "groupSlug": "{{manager}}-minor-patch",
       "matchPackageNames": ["*"]
+    },
+    {
+      "matchDatasources": ["helm"],
+      "matchPackageNames": ["linkerd-crds", "linkerd-control-plane"],
+      "groupName": "linkerd core charts",
+      "groupSlug": "linkerd-core",
+      "dependencyDashboardApproval": true,
+      "prCreation": "not-pending",
+      "stabilityDays": 3,
+      "prBodyNotes": [
+        "⚠️ **Please verify the release status before merging:**",
+        "1. Check https://linkerd.io/releases/ or the GitHub release notes",
+        "2. Only deploy releases marked as **RECOMMENDED** to production",
+        "3. Review the changelog for breaking changes or known issues"
+      ]
     }
   ],
   "customManagers": [
