@@ -1,4 +1,4 @@
-FROM ghcr.io/actions/actions-runner:2.329.0@sha256:75599cd393958a52142f489a160123f5b9b21605a40609696deb13d49867d53f
+FROM ghcr.io/actions/actions-runner:v2.330.0
 # for latest release, see https://github.com/actions/runner/releases
 
 USER root
@@ -16,10 +16,10 @@ RUN chmod +x ./entrypoint.sh && \
     chmod +x ./token.sh && \
     mkdir /_work && \
     chown runner:docker \
-        ./entrypoint.sh \
-        ./app-token.sh \
-        ./token.sh \
-        /_work
+    ./entrypoint.sh \
+    ./app-token.sh \
+    ./token.sh \
+    /_work
 
 USER runner
 
