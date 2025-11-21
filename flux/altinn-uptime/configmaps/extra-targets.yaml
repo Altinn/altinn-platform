@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: altinn-uptime-extra-targets
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: altinn-uptime
+    app.kubernetes.io/component: script
+data:
+  extra-targets.json: |
+    {
+      "ipv4": [
+        "https://altinncdn.no/orgs/altinn-orgs.json",
+        "https://af.altinn.no",
+        "https://af.tt02.altinn.no",
+        "https://altinn.studio",
+        "https://grafana.altinn.cloud/whoami",
+        "https://at22.corr.altinn.cloud/whoami"
+      ],
+      "ipv6": [
+        "https://altinncdn.no/orgs/altinn-orgs.json",
+        "https://grafana.altinn.cloud/whoami",
+        "https://at22.corr.altinn.cloud/whoami"
+      ],
+      "kuberneteswrapper_ipv4": [
+        "https://platform.tt02.altinn.no/kuberneteswrapper/api/v1/deployments",
+        "https://platform.altinn.no/kuberneteswrapper/api/v1/deployments"
+      ],
+      "kuberneteswrapper_ipv6": [],
+      "metadata": {
+        "description": "Extra targets for Altinn monitoring that are not auto-generated from organizations",
+        "maintained_by": "Altinn Platform Team",
+        "last_updated": "2025-11-11",
+        "version": "1.0",
+        "notes": [
+          "These targets are manually maintained and will be preserved during automatic updates",
+          "Organization targets are auto-generated and should not be added here",
+          "IPv4 and IPv6 arrays contain targets for regular blackbox jobs",
+          "kuberneteswrapper_ipv4 and kuberneteswrapper_ipv6 arrays contain targets for kuberneteswrapper jobs",
+          "Targets are monitored using blackbox HTTP probes"
+        ]
+      }
+    }

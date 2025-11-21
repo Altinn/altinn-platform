@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: altinn-uptime-maintenance-targets
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: altinn-uptime
+    app.kubernetes.io/component: maintenance-targets
+data:
+  maintenance-targets.json: |
+    {
+      "ipv4": [
+        "https://ssikt.apps.tt02.altinn.no/kuberneteswrapper/api/v1/deployments"
+      ],
+      "ipv6": [
+        "https://ssikt.apps.tt02.altinn.no/kuberneteswrapper/api/v1/deployments"
+      ],
+      "metadata": {
+        "description": "Targets temporarily under maintenance and excluded from monitoring",
+        "maintained_by": "Altinn Platform Team",
+        "last_updated": "2025-11-11",
+        "version": "1.0",
+        "notes": ["These targets are temporarily removed from monitoring"]
+      }
+    }

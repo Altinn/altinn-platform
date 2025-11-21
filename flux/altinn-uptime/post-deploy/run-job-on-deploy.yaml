@@ -1,0 +1,74 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: altinn-uptime-sync-on-deploy
+  namespace: monitoring
+spec:
+  ttlSecondsAfterFinished: 60 # Clean up 1 minute after completion
+  activeDeadlineSeconds: 600
+  template:
+    spec:
+      serviceAccountName: altinn-uptime-cronjob
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+      containers:
+        - name: altinn-uptime-sync
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 65534
+          image: altinncr.azurecr.io/docker.io/bitnami/kubectl:latest
+          command:
+            - /bin/sh
+            - /scripts/generate_targets.sh
+          env:
+            - name: UNIQUE_ID
+              value: "altinn-uptime"
+            - name: NAMESPACE
+              value: "monitoring"
+            - name: EXTRA_TARGETS_FILE
+              value: "/config/extra-targets.json"
+            - name: MAINTENANCE_TARGETS_FILE
+              value: "/config/maintenance-targets.json"
+            - name: ORG_DATA_URL
+              value: "https://altinncdn.no/orgs/altinn-orgs.json"
+            # Uncomment to enable dry-run mode (no actual changes will be made)
+            # - name: DRY_RUN
+            #   value: "true"
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+            - name: extra-targets
+              mountPath: /config/extra-targets.json
+              subPath: extra-targets.json
+            - name: maintenance-targets
+              mountPath: /config/maintenance-targets.json
+              subPath: maintenance-targets.json
+            - name: workspace
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: script
+          configMap:
+            name: altinn-uptime-generate-targets
+            defaultMode: 0755
+        - name: extra-targets
+          configMap:
+            name: altinn-uptime-extra-targets
+        - name: maintenance-targets
+          configMap:
+            name: altinn-uptime-maintenance-targets
+        - name: workspace
+          emptyDir: {}
