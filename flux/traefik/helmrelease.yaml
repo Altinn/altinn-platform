@@ -38,7 +38,7 @@ spec:
         name: traefik
         namespace: traefik
       # renovate: datasource=helm registryUrl=https://traefik.github.io/charts packageName=traefik
-      version: 37.1.1
+      version: 37.3.0
   interval: 1h
   timeout: 5m
   dependsOn:
