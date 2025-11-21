@@ -13,7 +13,7 @@ spec:
         name: linkerd
         namespace: linkerd
       # renovate: datasource=helm registryUrl=https://helm.linkerd.io/edge packageName=linkerd-crds
-      version: 2025.11.1
+      version: 2025.8.5
   interval: 1h
   timeout: 5m
   install:
@@ -38,7 +38,7 @@ spec:
         name: linkerd
         namespace: linkerd
       # renovate: datasource=helm registryUrl=https://helm.linkerd.io/edge packageName=linkerd-control-plane
-      version: 2025.7.6
+      version: 2025.8.5
   interval: 1h
   timeout: 10m
   dependsOn:
