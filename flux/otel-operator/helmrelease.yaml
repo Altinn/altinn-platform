@@ -19,7 +19,7 @@ spec:
         kind: HelmRepository
         name: otel-oci
         namespace: monitoring
-      # renovate: datasource=helm registryUrl=oci://ghcr.io/open-telemetry/opentelemetry-helm-charts packageName=opentelemetry-operator
+      # renovate: datasource=helm registryUrl=https://open-telemetry.github.io/opentelemetry-helm-charts packageName=opentelemetry-operator
       version: 0.99.0
   values:
     manager:
