@@ -4,3 +4,6 @@ CVE-2025-22874
 
 # database/sql: Postgres Scan Race Condition https://avd.aquasec.com/nvd/cve-2025-47907
 CVE-2025-47907
+
+# CVE-2025-52881: opencontainers/selinux (HIGH) – fixed in v1.13.0
+CVE-2025-52881
