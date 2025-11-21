@@ -185,6 +185,22 @@ type HttpMessageDiagnostic struct {
 
 // ApiVersionStatus defines the observed state of ApiVersion.
 type ApiVersionStatus struct {
+	// For Kubernetes API conventions, see:
+	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
+
+	// conditions represent the current state of the ApiVersion resource.
+	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
+	//
+	// Standard condition types include:
+	// - "Available": the resource is fully functional
+	// - "Progressing": the resource is being created or updated
+	// - "Degraded": the resource failed to reach or maintain its desired state
+	//
+	// The status of each condition is one of True, False, or Unknown.
+	// +listType=map
+	// +listMapKey=type
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 	// ProvisioningState - The provisioning state of the API. Possible values are: Succeeded, Failed, Updating, Deleting.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:enum:=Succeeded;Failed;Updating;Deleting
