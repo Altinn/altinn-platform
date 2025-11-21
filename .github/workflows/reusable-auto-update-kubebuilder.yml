@@ -3,7 +3,7 @@ name: Auto Update Kubebuilder Scaffolding
 # The 'kubebuilder alpha update 'command requires write access to the repository to create a branch
 # with the update files and allow you to open a pull request using the link provided in the issue.
 # The branch created will be named in the format kubebuilder-update-from-<from-version>-to-<to-version> by default.
-# To protect your codebase, please ensure that you have branch protection rules configured for your 
+# To protect your codebase, please ensure that you have branch protection rules configured for your
 # main branches. This will guarantee that no one can bypass a review and push directly to a branch like 'main'.
 permissions:
   contents: write
@@ -17,7 +17,7 @@ on:
         description: "Kubebuilder version to update to"
         required: false
         type: string
-        # renovate: datasource=github-releases depName=kubebuilder packageName=ubernetes-sigs/kubebuilder versioning=semver
+        # renovate: datasource=github-releases depName=kubebuilder packageName=kubernetes-sigs/kubebuilder versioning=semver
         default: 4.8.0
       workdir:
         description: "Folder containing the Docker context"
@@ -28,7 +28,6 @@ on:
         description: "GitHub token"
         required: true
 
-
 jobs:
   auto-update:
     runs-on: ubuntu-latest
@@ -38,60 +37,59 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.gh-token }}
 
-
     # Step 1: Checkout the repository.
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      with:
-        token: ${{ env.GH_TOKEN }}
-        fetch-depth: 0
-    
-    # Step 2: Configure Git to create commits with the GitHub Actions bot.
-    - name: Configure Git
-      run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          token: ${{ env.GH_TOKEN }}
+          fetch-depth: 0
 
-    # Step 3: Set up Go environment.
-    - name: Set up Go
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
-      with:
-        go-version: stable
+      # Step 2: Configure Git to create commits with the GitHub Actions bot.
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-    # Step 4: Install Kubebuilder.
-    - name: Install Kubebuilder
-      run: |
-        curl -L -o kubebuilder "https://go.kubebuilder.io/dl/latest/$(go env GOOS)/$(go env GOARCH)"
-        chmod +x kubebuilder
-        sudo mv kubebuilder /usr/local/bin/
-        kubebuilder version
+      # Step 3: Set up Go environment.
+      - name: Set up Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+        with:
+          go-version: stable
 
-    # Step 5: Install Models extension for GitHub CLI
-    - name: Install/upgrade gh-models extension
-      run: |
-        gh extension install github/gh-models --force
-        gh models --help >/dev/null
+      # Step 4: Install Kubebuilder.
+      - name: Install Kubebuilder
+        run: |
+          curl -L -o kubebuilder "https://go.kubebuilder.io/dl/latest/$(go env GOOS)/$(go env GOARCH)"
+          chmod +x kubebuilder
+          sudo mv kubebuilder /usr/local/bin/
+          kubebuilder version
 
-    # Step 6: Run the Kubebuilder alpha update command.
-    # More info: https://kubebuilder.io/reference/commands/alpha_update
-    - name: Run kubebuilder alpha update
-      env:
-        TARGET_VERSION: ${{ inputs.kubebuilder-version }}
-        OPERATOR_WORKDIR: ${{ inputs.workdir }}
-      run: |
-       # Executes the update command with specified flags.
-       # --force: Completes the merge even if conflicts occur, leaving conflict markers.
-       # --push: Automatically pushes the resulting output branch to the 'origin' remote.
-       # --restore-path: Preserves specified paths (e.g., CI workflow files) when squashing.
-       # --open-gh-issue: Creates a GitHub Issue with a link for opening a PR for review.
-       # --open-gh-models: Adds an AI-generated comment to the created Issue with
-       #   a short overview of the scaffold changes and conflict-resolution guidance (If Any).
-        kubebuilder alpha update \
-          --force \
-          --push \
-          --restore-path .github/workflows \
-          --to-version ${TARGET_VERSION} \
-          --output-branch kubebuilder-update-${OPERATOR_WORKDIR}-to-${TARGET_VERSION} \
-          --open-gh-issue \
-          --use-gh-models
+      # Step 5: Install Models extension for GitHub CLI
+      - name: Install/upgrade gh-models extension
+        run: |
+          gh extension install github/gh-models --force
+          gh models --help >/dev/null
+
+      # Step 6: Run the Kubebuilder alpha update command.
+      # More info: https://kubebuilder.io/reference/commands/alpha_update
+      - name: Run kubebuilder alpha update
+        env:
+          TARGET_VERSION: ${{ inputs.kubebuilder-version }}
+          OPERATOR_WORKDIR: ${{ inputs.workdir }}
+        run: |
+          # Executes the update command with specified flags.
+          # --force: Completes the merge even if conflicts occur, leaving conflict markers.
+          # --push: Automatically pushes the resulting output branch to the 'origin' remote.
+          # --restore-path: Preserves specified paths (e.g., CI workflow files) when squashing.
+          # --open-gh-issue: Creates a GitHub Issue with a link for opening a PR for review.
+          # --open-gh-models: Adds an AI-generated comment to the created Issue with
+          #   a short overview of the scaffold changes and conflict-resolution guidance (If Any).
+          kubebuilder alpha update \
+            --force \
+            --push \
+            --restore-path .github/workflows \
+            --to-version ${TARGET_VERSION} \
+            --output-branch kubebuilder-update-${OPERATOR_WORKDIR}-to-${TARGET_VERSION} \
+            --open-gh-issue \
+            --use-gh-models
