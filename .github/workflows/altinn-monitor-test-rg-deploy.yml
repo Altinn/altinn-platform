@@ -56,7 +56,7 @@ jobs:
       TF_VAR_subs_to_monitor: '{platform-test:"${{secrets.AZR_PLATFORM_TEST_SUB_ID}}",platform-staging:"${{secrets.AZR_PLATFORM_STAGING_SUB_ID}}",platform-prod:"${{secrets.AZR_PLATFORM_PROD_SUB_ID}}"}'
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
 
         # TODO: This needs a review once I'm done with the PoC
       - name: Azure login
@@ -107,7 +107,7 @@ jobs:
       TF_VAR_subs_to_monitor: '{platform-test:"${{secrets.AZR_PLATFORM_TEST_SUB_ID}}",platform-staging:"${{secrets.AZR_PLATFORM_STAGING_SUB_ID}}",platform-prod:"${{secrets.AZR_PLATFORM_PROD_SUB_ID}}"}'
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
 
       # TODO: This needs a review once I'm done with the PoC
       - name: Azure login

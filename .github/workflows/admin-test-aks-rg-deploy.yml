@@ -65,7 +65,7 @@ jobs:
       TF_VAR_arm_enable_preflight: false
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
 
       - name: Terraform Plan
         uses: Altinn/altinn-platform/actions/terraform/plan@0ebfa4cb46a46702efd436727c681c651066766e # main
@@ -86,7 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
 
       - name: Terraform Apply
         uses: Altinn/altinn-platform/actions/terraform/apply@0ebfa4cb46a46702efd436727c681c651066766e # main
