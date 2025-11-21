@@ -11,6 +11,12 @@
       "matchUpdateTypes": ["minor", "patch"],
       "groupSlug": "{{manager}}-minor-patch",
       "matchPackageNames": ["*"]
+    },
+    {
+      "matchDatasources": ["helm"],
+      "matchPackageNames": ["traefik", "traefik-crds"],
+      "groupName": "traefik helm charts",
+      "groupSlug": "traefik-helm"
     }
   ],
   "customManagers": [
