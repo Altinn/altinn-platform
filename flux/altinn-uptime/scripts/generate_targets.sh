@@ -574,8 +574,7 @@ EOF
                 fi
                 sm_name="blackbox-exporter-${UNIQUE_ID}-extra-${name}-ipv4"
 
-                if echo "$to_add" | grep -q "^$sm_name$"; then
-                    cat > "$TEMP_DIR/servicemonitor.yaml" << EOF
+                cat > "$TEMP_DIR/servicemonitor.yaml" << EOF
 ---
 apiVersion: azmonitoring.coreos.com/v1
 kind: ServiceMonitor
@@ -630,8 +629,7 @@ spec:
       app.kubernetes.io/instance: prometheus-blackbox-exporter
       app.kubernetes.io/name: prometheus-blackbox-exporter
 EOF
-                    apply_servicemonitor "$(cat "$TEMP_DIR/servicemonitor.yaml")" "$sm_name"
-                fi
+                apply_servicemonitor "$(cat "$TEMP_DIR/servicemonitor.yaml")" "$sm_name"
             fi
         done
 
@@ -648,8 +646,7 @@ EOF
                 fi
                 sm_name="blackbox-exporter-${UNIQUE_ID}-extra-${name}-ipv6"
 
-                if echo "$to_add" | grep -q "^$sm_name$"; then
-                    cat > "$TEMP_DIR/servicemonitor.yaml" << EOF
+                cat > "$TEMP_DIR/servicemonitor.yaml" << EOF
 ---
 apiVersion: azmonitoring.coreos.com/v1
 kind: ServiceMonitor
@@ -704,8 +701,7 @@ spec:
       app.kubernetes.io/instance: prometheus-blackbox-exporter
       app.kubernetes.io/name: prometheus-blackbox-exporter
 EOF
-                    apply_servicemonitor "$(cat "$TEMP_DIR/servicemonitor.yaml")" "$sm_name"
-                fi
+                apply_servicemonitor "$(cat "$TEMP_DIR/servicemonitor.yaml")" "$sm_name"
             fi
         done
 
@@ -722,8 +718,7 @@ EOF
                 fi
                 sm_name="blackbox-exporter-${UNIQUE_ID}-extra-${name}-k8s-ipv4"
 
-                if echo "$to_add" | grep -q "^$sm_name$"; then
-                    cat > "$TEMP_DIR/servicemonitor.yaml" << EOF
+                cat > "$TEMP_DIR/servicemonitor.yaml" << EOF
 ---
 apiVersion: azmonitoring.coreos.com/v1
 kind: ServiceMonitor
@@ -780,8 +775,7 @@ spec:
       app.kubernetes.io/instance: prometheus-blackbox-exporter
       app.kubernetes.io/name: prometheus-blackbox-exporter
 EOF
-                    apply_servicemonitor "$(cat "$TEMP_DIR/servicemonitor.yaml")" "$sm_name"
-                fi
+                apply_servicemonitor "$(cat "$TEMP_DIR/servicemonitor.yaml")" "$sm_name"
             fi
         done
 
@@ -798,8 +792,7 @@ EOF
                 fi
                 sm_name="blackbox-exporter-${UNIQUE_ID}-extra-${name}-k8s-ipv6"
 
-                if echo "$to_add" | grep -q "^$sm_name$"; then
-                    cat > "$TEMP_DIR/servicemonitor.yaml" << EOF
+                cat > "$TEMP_DIR/servicemonitor.yaml" << EOF
 ---
 apiVersion: azmonitoring.coreos.com/v1
 kind: ServiceMonitor
@@ -856,8 +849,7 @@ spec:
       app.kubernetes.io/instance: prometheus-blackbox-exporter
       app.kubernetes.io/name: prometheus-blackbox-exporter
 EOF
-                    apply_servicemonitor "$(cat "$TEMP_DIR/servicemonitor.yaml")" "$sm_name"
-                fi
+                apply_servicemonitor "$(cat "$TEMP_DIR/servicemonitor.yaml")" "$sm_name"
             fi
         done
     fi
