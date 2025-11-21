@@ -13,7 +13,7 @@ spec:
         name: traefik
         namespace: traefik
       # renovate: datasource=helm registryUrl=https://traefik.github.io/charts packageName=traefik-crds
-      version: 1.11.0
+      version: 1.12.0
   interval: 1h
   timeout: 5m
   install:
