@@ -30,7 +30,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/dis-way/pgsql-operator/test/utils"
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/test/utils"
 )
 
 // namespace where the project is deployed in

@@ -1,4 +1,4 @@
-module github.com/dis-way/pgsql-operator
+module github.com/Altinn/altinn-platform/services/dis-pgsql-operator
 
 go 1.24.6
 
