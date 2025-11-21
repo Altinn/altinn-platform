@@ -7,3 +7,6 @@ CVE-2025-47907
 
 # CVE-2025-52881: opencontainers/selinux (HIGH) – fixed in v1.13.0
 CVE-2025-52881
+
+# glob CLI: Command injection via -c/--cmd executes matches with shell:true
+CVE-2025-64756
