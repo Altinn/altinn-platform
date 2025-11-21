@@ -16,12 +16,22 @@ spec:
   interval: 1h
   timeout: 5m
   install:
+    crds: CreateReplace
     remediation:
       retries: 5
   upgrade:
+    crds: CreateReplace
     remediation:
       retries: 5
   values:
+    image:
+      repository: altinncr.azurecr.io/ghcr.io/external-secrets/external-secrets
+    webhook:
+      image:
+        repository: altinncr.azurecr.io/ghcr.io/external-secrets/external-secrets
+    certController:
+      image:
+        repository: altinncr.azurecr.io/ghcr.io/external-secrets/external-secrets
     installCRDs: true
     # we run the controller **without** Azure identity;
     # actual auth is delegated via SecretStore.serviceAccountRef
