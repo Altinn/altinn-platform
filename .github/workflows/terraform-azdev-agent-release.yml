@@ -1,4 +1,4 @@
-name: Scan/Release azure devops agent Image
+name: Scan/Release tf azure devops agent Image
 
 on:
   pull_request:
