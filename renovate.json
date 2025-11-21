@@ -1,26 +1,45 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["local>Altinn/renovate-config"],
-  "schedule": ["* 5-7 * * 1-4"],
+  "extends": [
+    "local>Altinn/renovate-config"
+  ],
+  "schedule": [
+    "* 5-7 * * 1-4"
+  ],
   "timezone": "Europe/Oslo",
-  "postUpdateOptions": ["gomodTidy"],
+  "postUpdateOptions": [
+    "gomodTidy"
+  ],
   "packageRules": [
     {
-      "matchManagers": ["terraform", "gomod"],
+      "matchManagers": [
+        "terraform",
+        "gomod"
+      ],
       "groupName": "{{manager}} non-major dependencies",
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "groupSlug": "{{manager}}-minor-patch",
-      "matchPackageNames": ["*"]
+      "matchPackageNames": [
+        "*"
+      ]
     },
     {
-      "matchDatasources": ["helm"],
-      "matchPackageNames": ["linkerd-crds", "linkerd-control-plane"],
+      "matchDatasources": [
+        "helm"
+      ],
+      "matchPackageNames": [
+        "linkerd-crds",
+        "linkerd-control-plane"
+      ],
       "groupName": "linkerd core charts",
       "groupSlug": "linkerd-core",
-      "dependencyDashboardApproval": true, // Requires manual approval via Dashboard/Check
-      "prCreation": "not-pending",         // PR is not created until stabilityDays passes (3 days)
-      "stabilityDays": 3,                  // Wait 3 days after release for initial validation
-      "prBodyNotes": [                     // Adds the critical manual check notes
+      "dependencyDashboardApproval": true,
+      "prCreation": "not-pending",
+      "minimumReleaseAge": "3 days",
+      "prBodyNotes": [
         "⚠️ **Please verify the release status before merging:**",
         "1. Check https://github.com/linkerd/linkerd2/releases/ release notes",
         "2. Only deploy releases marked as **RECOMMENDED**",
@@ -28,8 +47,13 @@
       ]
     },
     {
-      "matchDatasources": ["helm"],
-      "matchPackageNames": ["traefik", "traefik-crds"],
+      "matchDatasources": [
+        "helm"
+      ],
+      "matchPackageNames": [
+        "traefik",
+        "traefik-crds"
+      ],
       "groupName": "traefik helm charts",
       "groupSlug": "traefik-helm"
     }
