@@ -133,7 +133,7 @@ jobs:
             fs.writeFileSync(releasesConfigFile, JSON.stringify(releasesConfig, null, 2));
             console.log('Updated releases config:', releasesConfig);
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
+        uses: peter-evans/create-pull-request@84ae59a2cdc2258d6fa0732dd66352dddae2a412 # v7.0.9
         id: create-pr
         with:
           title: "Update releases config for ${{ steps.update-release.outputs.release-name }} to ${{ steps.update-release.outputs.release-version }}"
