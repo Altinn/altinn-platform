@@ -1,4 +1,4 @@
-FROM ghcr.io/actions/actions-runner:2.330.0@sha256:25e5339f41c8511899dff6d9d1ee3d29d0aaca085f24b967f486e153e4368cc6
+FROM ghcr.io/actions/actions-runner:2.330.0@sha256:ee54ad8776606f29434f159196529b7b9c83c0cb9195c1ff5a7817e7e570dcfe
 # for latest release, see https://github.com/actions/runner/releases
 
 USER root
