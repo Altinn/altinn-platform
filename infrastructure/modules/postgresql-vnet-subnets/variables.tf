@@ -5,7 +5,7 @@ variable "resource_group_name" {
 
 variable "location" {
   type        = string
-  description = "Location of the PostgreSQL vnets and subnets are deployed"
+  description = "Location where the PostgreSQL vnets and subnets are deployed"
 }
 
 variable "name" {
@@ -29,3 +29,11 @@ variable "tags" {
   default     = {}
 }
 
+variable "peered_vnets" {
+  type = object({
+    name                = string
+    id                  = string
+    resource_group_name = string
+  })
+  description = "ID of the vnet this Vnet should be peered with"
+}
