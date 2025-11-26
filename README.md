@@ -5,7 +5,7 @@ To configure or add identity federation (GitHub to Azure), Azure IAM, and handle
 
 ## Release Please
 
-We have setup Release Please in our repo to automate and simplify the releasing of different artifact.
+We have setup Release Please in our repo to automate and simplify the releasing of different artifacts.
 
 Since we have a monorepo we have opted to use the Manifest Driven release-please setup.
 
