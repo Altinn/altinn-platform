@@ -5,8 +5,6 @@ ARG KUBECTL_VERSION=1.34.2
 ARG KUBESEAL_VERSION=0.33.1
 # renovate: datasource=github-releases depName=jsonnet packageName=google/jsonnet versioning=semver
 ARG JSONNET_VERSION=0.21.0
-# renovate: datasource=github-releases depName=k6 packageName=grafana/k6 versioning=semver
-ARG K6_VERSION=1.4.1
 # renovate: datasource=github-releases depName=jsonnet-bundler packageName=jsonnet-bundler/jsonnet-bundler versioning=semver extractVersion=^v(?<version>.*)$
 ARG JB_VERSION=0.6.0
 ARG K8S_LIBSONNET_VERSION=1.32
@@ -44,11 +42,6 @@ RUN curl -L "https://github.com/google/jsonnet/archive/refs/tags/v${JSONNET_VERS
 RUN curl -OL "https://github.com/jsonnet-bundler/jsonnet-bundler/releases/download/v${JB_VERSION}/jb-linux-amd64" &&\
     chmod +x jb-linux-amd64 && mv jb-linux-amd64 /usr/local/bin/jb
 
-# Install k6
-RUN curl -OL "https://github.com/grafana/k6/releases/download/v${K6_VERSION}/k6-v${K6_VERSION}-linux-amd64.tar.gz" &&\
-    tar -xvzf k6-v${K6_VERSION}-linux-amd64.tar.gz k6-v${K6_VERSION}-linux-amd64/k6 &&\
-    chmod +x k6-v${K6_VERSION}-linux-amd64/k6 && mv k6-v${K6_VERSION}-linux-amd64/k6 /usr/local/bin
-
 WORKDIR /jsonnet/vendor
 
 # Download k8s libsonnet library
@@ -62,10 +55,13 @@ RUN go build . && \
     chmod +x generate-k6-manifests && \
     mv generate-k6-manifests /usr/local/bin
 
+FROM ghcr.io/altinn/altinn-platform/k6-image:v1.4.2 AS k6image
+
 # Final image with the needed binaries and helper files
 FROM alpine:3.22.2@sha256:4b7ce07002c69e8f3d704a9c5d6fd3053be500b7f1c69fc0d80990c2ad8dd412
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /jsonnet/vendor /jsonnet/vendor
+COPY --from=k6image /usr/bin/k6 /usr/bin/k6
 COPY infrastructure/images/k6-action/default_scenarios /actions/generate-k6-manifests/default_scenarios/
 COPY infrastructure/images/k6-action/infra /actions/generate-k6-manifests/infra/
 COPY infrastructure/images/k6-action/jsonnet /actions/generate-k6-manifests/jsonnet/
