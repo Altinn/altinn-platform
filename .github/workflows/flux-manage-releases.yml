@@ -12,7 +12,7 @@ on:
       - main
     paths:
       - flux/releaseconfig.json
-      - .github/workflows/manage-flux-releases.yml
+      - .github/workflows/flux-manage-releases.yml
 permissions:
   contents: write
   issues: write
@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ISSUE_TITLE_PREFIX: "Flux OCI Promotion:"
+  ISSUE_TITLE_PREFIX: "release: flux oci promotion:"
   RELEASE_TAG_PREFIX: "flux-oci-"
   RELEASE_FILE: "flux/releaseconfig.json"
   LABEL: "flux-release"
@@ -77,7 +77,7 @@ jobs:
             console.log(`Issue created: ${response.data.html_url}`);
   create-release-pr:
     runs-on: ubuntu-latest
-    if: github.event_name == 'issues' && github.event.action == 'edited' && startsWith(github.event.issue.title, 'Flux OCI Promotion:') && github.event.issue.draft == false && github.event.issue.state == 'open'
+    if: github.event_name == 'issues' && github.event.action == 'edited' && startsWith(github.event.issue.title, 'release: flux oci promotion:') && github.event.issue.draft == false && github.event.issue.state == 'open'
     steps:
       - name: Checkout code
         uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
@@ -136,10 +136,10 @@ jobs:
         uses: peter-evans/create-pull-request@84ae59a2cdc2258d6fa0732dd66352dddae2a412 # v7.0.9
         id: create-pr
         with:
-          title: "Update releases config for ${{ steps.update-release.outputs.release-name }} to ${{ steps.update-release.outputs.release-version }}"
+          title: "chore: update releases config for ${{ steps.update-release.outputs.release-name }} to ${{ steps.update-release.outputs.release-version }}"
           body: "This pull request updates the releases config file with the new release version."
           base: main
-          commit-message: "Update flux releases config for ${{ steps.update-release.outputs.release-name }} to ${{ steps.update-release.outputs.release-version }}"
+          commit-message: "chore: update flux releases config for ${{ steps.update-release.outputs.release-name }} to ${{ steps.update-release.outputs.release-version }}"
           branch: update-releases-config-${{ steps.update-release.outputs.release-name }}-${{ steps.update-release.outputs.release-version }}
           delete-branch: true
           labels: "${{ env.LABEL }}"
