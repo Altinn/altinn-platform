@@ -1,4 +1,4 @@
-name: Auto Update Kubebuilder Scaffolding
+name: Reusable Auto Update Kubebuilder Scaffolding
 
 # The 'kubebuilder alpha update 'command requires write access to the repository to create a branch
 # with the update files and allow you to open a pull request using the link provided in the issue.
@@ -18,7 +18,7 @@ on:
         required: false
         type: string
         # renovate: datasource=github-releases depName=kubebuilder packageName=kubernetes-sigs/kubebuilder versioning=semver
-        default: 4.8.0
+        default: 4.9.0
       workdir:
         description: "Folder containing the Docker context"
         required: true
@@ -40,7 +40,7 @@ jobs:
     # Step 1: Checkout the repository.
     steps:
       - name: Checkout repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
         with:
           token: ${{ env.GH_TOKEN }}
           fetch-depth: 0
@@ -53,7 +53,7 @@ jobs:
 
       # Step 3: Set up Go environment.
       - name: Set up Go
-        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6
+        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
         with:
           go-version: stable
 
