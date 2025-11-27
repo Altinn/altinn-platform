@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ISSUE_TITLE_PREFIX: "release: flux oci promotion:"
+  ISSUE_TITLE_PREFIX: "Gitops OCI image promotion:"
   RELEASE_TAG_PREFIX: "flux-oci-"
   RELEASE_FILE: "flux/releaseconfig.json"
   LABEL: "flux-release"
@@ -77,7 +77,7 @@ jobs:
             console.log(`Issue created: ${response.data.html_url}`);
   create-release-pr:
     runs-on: ubuntu-latest
-    if: github.event_name == 'issues' && github.event.action == 'edited' && startsWith(github.event.issue.title, 'release: flux oci promotion:') && github.event.issue.draft == false && github.event.issue.state == 'open'
+    if: github.event_name == 'issues' && github.event.action == 'edited' && startsWith(github.event.issue.title, 'Gitops OCI image promotion:') && github.event.issue.draft == false && github.event.issue.state == 'open'
     steps:
       - name: Checkout code
         uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
