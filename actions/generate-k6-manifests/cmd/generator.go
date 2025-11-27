@@ -26,7 +26,7 @@ type Generator interface {
 	HandleConfigFileOverride(base map[string]interface{}, overrideConfigFile string) map[string]interface{}
 	CallK6Archive(dirName string, testConfigFileToUse string, testFile string, k6ArchiveArgs []string)
 	CallKubectl(dirName string, configMapName string, uniqName string, namespace string)
-	CallJsonnet(dirName string, configMapName string, uniqName string, testName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte, isBrowserTest bool, testid string)
+	CallJsonnet(dirName string, configMapName string, uniqName string, testName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte, imageName string, testid string)
 }
 
 type K8sManifestGenerator struct {
@@ -308,14 +308,14 @@ func (r K8sManifestGenerator) Generate() {
 				if err != nil {
 					log.Fatalf("error: %v", err)
 				}
-				isBrowserTest := false
+				imageName := "ghcr.io/altinn/altinn-platform/k6-image:latest"
 				if *c.TestTypeDefinition.Type == "browser" {
-					isBrowserTest = true
+					imageName = "grafana/k6:master-with-browser"
 				}
 				if c.TestRun.Id != nil {
-					r.CallJsonnet(dirName, configMapName, uniqName, *c.TestRun.Name, strconv.FormatInt(manifestGenerationTimestamp, 10), cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, mergedEnvsMarshalled, resources, isBrowserTest, *c.TestRun.Id)
+					r.CallJsonnet(dirName, configMapName, uniqName, *c.TestRun.Name, strconv.FormatInt(manifestGenerationTimestamp, 10), cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, mergedEnvsMarshalled, resources, imageName, *c.TestRun.Id)
 				} else {
-					r.CallJsonnet(dirName, configMapName, uniqName, *c.TestRun.Name, strconv.FormatInt(manifestGenerationTimestamp, 10), cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, mergedEnvsMarshalled, resources, isBrowserTest, "")
+					r.CallJsonnet(dirName, configMapName, uniqName, *c.TestRun.Name, strconv.FormatInt(manifestGenerationTimestamp, 10), cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, mergedEnvsMarshalled, resources, imageName, "")
 				}
 
 				grafanaDashboard, ok := os.LookupEnv("GRAFANA_DASHBOARD")
@@ -543,7 +543,7 @@ func (r K8sManifestGenerator) CallKubectl(dirName string, configMapName string, 
 	}
 }
 
-func (r K8sManifestGenerator) CallJsonnet(dirName string, configMapName string, uniqName string, testName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte, isBrowserTest bool, testid string) {
+func (r K8sManifestGenerator) CallJsonnet(dirName string, configMapName string, uniqName string, testName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte, imageName string, testid string) {
 	var errb strings.Builder
 	k6ClusterConfigFile, err := os.ReadFile("/actions/generate-k6-manifests/infra/k6_cluster_conf.yaml")
 	if err != nil {
@@ -568,7 +568,7 @@ func (r K8sManifestGenerator) CallJsonnet(dirName string, configMapName string, 
 		"--ext-str", fmt.Sprintf("secret_references=%s", secretReferences),
 		"--ext-str", fmt.Sprintf("extra_env_vars=%s", extraEnvVars),
 		"--ext-str", fmt.Sprintf("resources=%s", resources),
-		"--ext-str", fmt.Sprintf("is_browser_test=%t", isBrowserTest),
+		"--ext-str", fmt.Sprintf("image_name=%s", imageName),
 		"--ext-str", fmt.Sprintf("extra_cli_args=%s", os.Getenv("INPUT_COMMAND_LINE_ARGS")),
 		"--ext-str", fmt.Sprintf("k6clusterconfig=%s", k6ClusterConfigFile),
 		"--multi", newpath, "/actions/generate-k6-manifests/jsonnet/main.jsonnet",

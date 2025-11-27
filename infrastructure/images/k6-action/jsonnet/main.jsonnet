@@ -8,7 +8,6 @@ local manifest_generation_timestamp = std.extVar('manifest_generation_timestamp'
 local namespace = std.extVar('namespace');
 local deploy_env = std.extVar('deploy_env');
 // Testrun
-local is_browser_test = if std.asciiLower(std.extVar('is_browser_test')) == 'true' then true else false;
 local testid = if std.length(std.extVar('testid')) > 0 then std.extVar('testid') else unique_name;  // Only used in metrics
 local parallelism = std.parseInt(std.extVar('parallelism'));
 local extra_env_vars = std.parseYaml(std.extVar('extra_env_vars'));
@@ -160,10 +159,10 @@ local testrun = {
       },
     },
   },
-  withBrowserImage(): {
+  withCustomImage(customImage): {
     spec+: {
       runner+: {
-        image: 'grafana/k6:master-with-browser',
+        image: customImage,
       },
     },
   },
@@ -173,7 +172,7 @@ local testrun = {
                   + testrun.withNodeType(node_type)
                   + testrun.withExtraEnv()
                   + (if std.length(secret_references) != 0 then testrun.withEnvFromSecret(secret_references) else {})
-                  + (if is_browser_test then testrun.withBrowserImage() else {}),
+                  + (if std.length(std.extVar('image_name')) > 0 then testrun.withCustomImage(std.extVar('image_name')) else {}),
 
 
   // TODO: Disable for now since most of the things are hardcoded
