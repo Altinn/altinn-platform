@@ -1,0 +1,35 @@
+name: Scan/Release K6 Custom Image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/k6-custom-image-release.yml
+      - infrastructure/images/k6-image/**
+      - .github/workflows/reusable-image-scan-and-release-ghcr.yml
+    tags:
+      - "k6-image-*"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/k6-custom-image-release.yml
+      - infrastructure/images/k6-image/**
+      - .github/workflows/reusable-image-scan-and-release-ghcr.yml
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-release:
+    name: Build, scan and release
+    uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yml
+    with:
+      release_latest: true
+      image_name: k6-image
+      tag_prefix: k6-image-
+      workdir: .
+      file: ./infrastructure/images/k6-image/Dockerfile
+      trivyignore: ./infrastructure/images/k6-image/.trivyignore
+      platforms: linux/amd64
