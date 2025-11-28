@@ -40,13 +40,10 @@ var _ = Describe("Database controller", func() {
 					AdminAppIdentity: "my-admin-app-identity",
 					UserAppIdentity:  "my-app-identity",
 				},
-				Environment: "dev",
-				Team:        "team-a",
 			},
 		}
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
-		// Wait for status to be updated
 		var subnetCIDR string
 		Eventually(func(g Gomega) string {
 			var updated storagev1alpha1.Database
@@ -70,58 +67,57 @@ var _ = Describe("Database controller", func() {
 				Namespace: "default",
 			},
 			Spec: storagev1alpha1.DatabaseSpec{
-				Version:     17,
-				ServerType:  "dev",
-				Environment: "dev",
-				Team:        "team-a",
+				Version:    17,
+				ServerType: "dev",
 				Auth: storagev1alpha1.DatabaseAuth{
 					AdminAppIdentity: "admin1",
 					UserAppIdentity:  "user1",
 				},
 			},
 		}
+		Expect(k8sClient.Create(ctx, db1)).To(Succeed())
+
+		// Wait until db1 has a subnet assigned
+		var cidr1 string
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      "db1",
+				Namespace: "default",
+			}, &updated)).To(Succeed())
+			cidr1 = updated.Status.SubnetCIDR
+			return cidr1
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			ShouldNot(BeEmpty())
+
 		db2 := &storagev1alpha1.Database{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "db2",
 				Namespace: "default",
 			},
 			Spec: storagev1alpha1.DatabaseSpec{
-				Version:     17,
-				ServerType:  "dev",
-				Environment: "dev",
-				Team:        "team-a",
+				Version:    17,
+				ServerType: "dev",
 				Auth: storagev1alpha1.DatabaseAuth{
 					AdminAppIdentity: "admin2",
 					UserAppIdentity:  "user2",
 				},
 			},
 		}
-
-		Expect(k8sClient.Create(ctx, db1)).To(Succeed())
 		Expect(k8sClient.Create(ctx, db2)).To(Succeed())
 
-		var cidr1, cidr2 string
-
-		Eventually(func() bool {
-			var a, b storagev1alpha1.Database
-			if err := k8sClient.Get(ctx, types.NamespacedName{
-				Name: "db1", Namespace: "default",
-			}, &a); err != nil {
-				return false
-			}
-			if err := k8sClient.Get(ctx, types.NamespacedName{
-				Name: "db2", Namespace: "default",
-			}, &b); err != nil {
-				return false
-			}
-			cidr1 = a.Status.SubnetCIDR
-			cidr2 = b.Status.SubnetCIDR
-			if cidr1 == "" || cidr2 == "" {
-				return false
-			}
-			return cidr1 != cidr2
-		}).WithTimeout(15 * time.Second).WithPolling(250 * time.Millisecond).
-			Should(BeTrue())
+		// Wait until db2 has a subnet assigned
+		var cidr2 string
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      "db2",
+				Namespace: "default",
+			}, &updated)).To(Succeed())
+			cidr2 = updated.Status.SubnetCIDR
+			return cidr2
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			ShouldNot(BeEmpty())
 
 		Expect(cidr1).NotTo(BeEmpty())
 		Expect(cidr2).NotTo(BeEmpty())

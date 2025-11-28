@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7"
 )
 
 // SubnetInfo represents a single subnet with a name (e.g. Azure subnet name)
@@ -92,13 +93,16 @@ func (c *SubnetCatalog) All() []SubnetInfo {
 
 // FetchSubnetCatalog connects to Azure, lists all subnets in the given VNet,
 // and returns them as a SubnetCatalog.
-func FetchSubnetCatalog(ctx context.Context, subscriptionID, rgName, vnetName string) (*SubnetCatalog, error) {
-	cred, err := azidentity.NewDefaultAzureCredential(nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Azure credential: %w", err)
-	}
+func FetchSubnetCatalog(
+	ctx context.Context,
+	subscriptionID string,
+	rgName string,
+	vnetName string,
+	cred azcore.TokenCredential,
+	armOpts *arm.ClientOptions,
+) (*SubnetCatalog, error) {
 
-	client, err := armnetwork.NewSubnetsClient(subscriptionID, cred, nil)
+	client, err := armnetwork.NewSubnetsClient(subscriptionID, cred, armOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create subnets client: %w", err)
 	}

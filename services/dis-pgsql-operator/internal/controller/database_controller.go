@@ -35,7 +35,6 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	logger := log.FromContext(ctx).WithValues("database", req.NamespacedName.String())
 
 	if r.SubnetCatalog == nil {
-		// Misconfiguration – fail loudly so we fix wiring.
 		return ctrl.Result{}, fmt.Errorf("SubnetCatalog is not configured on DatabaseReconciler")
 	}
 
@@ -48,24 +47,15 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	// Ignore deletion for now (no deallocation logic yet).
 	if !db.DeletionTimestamp.IsZero() {
 		return ctrl.Result{}, nil
 	}
 
-	// If we don't have a subnet yet, assign one.
+	// Only allocate if we don't already have one
 	if db.Status.SubnetCIDR == "" {
 		logger.Info("allocating subnet for database")
-
-		cidr, err := r.allocateSubnetForDatabase(ctx, logger, &db)
-		if err != nil {
+		if err := r.allocateSubnetForDatabase(ctx, logger, &db); err != nil {
 			logger.Error(err, "failed to allocate subnet")
-			return ctrl.Result{}, err
-		}
-
-		db.Status.SubnetCIDR = cidr
-		if err := r.Status().Update(ctx, &db); err != nil {
-			logger.Error(err, "failed to update Database status with SubnetCIDR")
 			return ctrl.Result{}, err
 		}
 	} else {
@@ -75,18 +65,15 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	return ctrl.Result{}, nil
 }
 
-// 1. collects all SubnetCIDR values from existing Databases
-// 2. asks the catalog for the first free subnet
-// 3. returns its CIDR
 func (r *DatabaseReconciler) allocateSubnetForDatabase(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
-) (string, error) {
+) error {
 	// Collect used subnets from all Database resources.
 	var dbList storagev1alpha1.DatabaseList
 	if err := r.List(ctx, &dbList); err != nil {
-		return "", fmt.Errorf("list Databases: %w", err)
+		return fmt.Errorf("list Databases: %w", err)
 	}
 
 	var used []string
@@ -100,11 +87,18 @@ func (r *DatabaseReconciler) allocateSubnetForDatabase(
 
 	free, err := r.SubnetCatalog.FirstFreeSubnet(used)
 	if err != nil {
-		return "", fmt.Errorf("find first free subnet: %w", err)
+		return fmt.Errorf("find first free subnet: %w", err)
 	}
 
 	logger.Info("allocated subnet", "cidr", free.CIDR)
-	return free.CIDR, nil
+
+	// Write to status and persist it
+	db.Status.SubnetCIDR = free.CIDR
+	if err := r.Status().Update(ctx, db); err != nil {
+		return fmt.Errorf("update Database status with SubnetCIDR: %w", err)
+	}
+
+	return nil
 }
 
 func (r *DatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {

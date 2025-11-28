@@ -27,14 +27,6 @@ type DatabaseSpec struct {
 
 	// auth defines which AppIdentities should have access to this database.
 	Auth DatabaseAuth `json:"auth"`
-
-	// environment is an optional label describing which environment this Database belongs to (e.g. "dev", "prod").
-	// +optional
-	Environment string `json:"environment,omitempty"`
-
-	// team is an optional label describing which team owns this Database.
-	// +optional
-	Team string `json:"team,omitempty"`
 }
 
 // DatabaseStatus defines the observed state of Database.

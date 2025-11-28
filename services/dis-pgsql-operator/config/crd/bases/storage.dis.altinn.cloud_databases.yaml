@@ -57,18 +57,10 @@ spec:
                 - adminAppIdentity
                 - userAppIdentity
                 type: object
-              environment:
-                description: environment is an optional label describing which environment
-                  this Database belongs to (e.g. "dev", "prod").
-                type: string
               serverType:
                 description: serverType selects the size/profile of the database server
                   (e.g. "dev", "prod").
                 minLength: 1
-                type: string
-              team:
-                description: team is an optional label describing which team owns
-                  this Database.
                 type: string
               version:
                 description: version is the major version of PostgreSQL to run (e.g.

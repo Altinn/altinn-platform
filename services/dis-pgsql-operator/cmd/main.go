@@ -17,14 +17,20 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"os"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -37,6 +43,8 @@ import (
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/controller"
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/network"
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/test/azfakes"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -62,6 +70,12 @@ func main() {
 	var secureMetrics bool
 	var enableHTTP2 bool
 	var tlsOpts []func(*tls.Config)
+	var cred azcore.TokenCredential
+	var armOpts *arm.ClientOptions
+	var useFakes bool
+	var subscriptionID string
+	var resourceGroup string
+	var vnetName string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -79,6 +93,11 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.BoolVar(&useFakes, "use-az-fakes", false, "use Azure SDK fake servers (for local/kind)")
+	flag.StringVar(&subscriptionID, "subscription-id", os.Getenv("AZURE_SUBSCRIPTION_ID"), "Azure subscription ID (required)")
+	flag.StringVar(&resourceGroup, "resource-group", os.Getenv("AZURE_VNET_RESOURCE_GROUP"),
+		"Azure Resource Group where the VNet is located (required)")
+	flag.StringVar(&vnetName, "vnet-name", os.Getenv("AZURE_VNET_NAME"), "Azure VNet name (required)")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -178,9 +197,45 @@ func main() {
 		os.Exit(1)
 	}
 
+	if useFakes {
+		// Fake set of subnets that Terraform would have created.
+		srv := azfakes.SubnetsServerOneVNet([]string{
+			"10.100.1.0/28",
+			"10.100.1.16/28",
+			"10.100.1.32/28",
+		})
+		env := azfakes.NewNetworkEnv(srv)
+		cred = env.Cred
+		armOpts = env.ARM
+		setupLog.Info("running with Azure SDK fakes for armnetwork")
+	} else {
+		cred, err = azidentity.NewDefaultAzureCredential(nil)
+		if err != nil {
+			setupLog.Error(err, "azure credential error")
+			os.Exit(1)
+		}
+		armOpts = nil
+	}
+
+	if subscriptionID == "" || resourceGroup == "" || vnetName == "" {
+		setupLog.Error(fmt.Errorf("missing config"), "subscription-id, resource-group and vnet-name are required")
+		os.Exit(1)
+	}
+
+	// Startup context just for fetching the subnet catalog
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	subnetCatalog, err := network.FetchSubnetCatalog(ctx, subscriptionID, resourceGroup, vnetName, cred, armOpts)
+	if err != nil {
+		setupLog.Error(err, "failed to fetch subnet catalog")
+		os.Exit(1)
+	}
+
 	if err := (&controller.DatabaseReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:        mgr.GetClient(),
+		Scheme:        mgr.GetScheme(),
+		SubnetCatalog: subnetCatalog,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Database")
 		os.Exit(1)

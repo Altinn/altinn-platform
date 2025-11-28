@@ -4,5 +4,9 @@ kind: Kustomization
 resources:
   - ../default
 
-patchesStrategicMerge:
-  - manager_image_pull_policy_patch.yaml
+patches:
+  - path: manager_kind_patch.yaml
+    target:
+      kind: Deployment
+      name: dis-pgsql-operator-controller-manager
+      namespace: dis-pgsql-operator-system

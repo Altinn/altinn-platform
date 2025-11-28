@@ -1,9 +1,23 @@
 apiVersion: storage.dis.altinn.cloud/v1alpha1
 kind: Database
 metadata:
-  labels:
-    app.kubernetes.io/name: dis-pgsql-operator
-    app.kubernetes.io/managed-by: kustomize
-  name: database-sample
+  name: db1
+  namespace: default
 spec:
-  # TODO(user): Add fields here
+  version: 17
+  serverType: dev
+  auth:
+    adminAppIdentity: admin1
+    userAppIdentity: user1
+---
+apiVersion: storage.dis.altinn.cloud/v1alpha1
+kind: Database
+metadata:
+  name: db2
+  namespace: default
+spec:
+  version: 17
+  serverType: dev
+  auth:
+    adminAppIdentity: admin2
+    userAppIdentity: user2
