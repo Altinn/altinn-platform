@@ -32,7 +32,7 @@ type DatabaseReconciler struct {
 // +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=databases/status,verbs=get;update;patch
 
 func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx).WithValues("database", req.NamespacedName.String())
+	logger := log.FromContext(ctx).WithValues("database", req.NamespacedName)
 
 	if r.SubnetCatalog == nil {
 		return ctrl.Result{}, fmt.Errorf("SubnetCatalog is not configured on DatabaseReconciler")

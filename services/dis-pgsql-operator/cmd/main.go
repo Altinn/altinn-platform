@@ -94,10 +94,26 @@ func main() {
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.BoolVar(&useFakes, "use-az-fakes", false, "use Azure SDK fake servers (for local/kind)")
-	flag.StringVar(&subscriptionID, "subscription-id", os.Getenv("AZURE_SUBSCRIPTION_ID"), "Azure subscription ID (required)")
-	flag.StringVar(&resourceGroup, "resource-group", os.Getenv("AZURE_VNET_RESOURCE_GROUP"),
-		"Azure Resource Group where the VNet is located (required)")
-	flag.StringVar(&vnetName, "vnet-name", os.Getenv("AZURE_VNET_NAME"), "Azure VNet name (required)")
+	flag.StringVar(
+		&subscriptionID,
+		"subscription-id",
+		os.Getenv("AZURE_SUBSCRIPTION_ID"),
+		"Azure subscription ID (required)",
+	)
+
+	flag.StringVar(
+		&resourceGroup,
+		"resource-group",
+		os.Getenv("AZURE_VNET_RESOURCE_GROUP"),
+		"Azure Resource Group where the VNet is located (required)",
+	)
+
+	flag.StringVar(
+		&vnetName,
+		"vnet-name",
+		os.Getenv("AZURE_VNET_NAME"),
+		"Azure VNet name (required)",
+	)
 	opts := zap.Options{
 		Development: true,
 	}

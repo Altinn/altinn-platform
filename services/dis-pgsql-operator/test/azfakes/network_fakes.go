@@ -15,8 +15,11 @@ import (
 func SubnetsServerOneVNet(subnetCIDRs []string) *networkfake.SubnetsServer {
 	return &networkfake.SubnetsServer{
 		// NewListPager is the fake for SubnetsClient.NewListPager.
-		NewListPager: func(resourceGroupName string, virtualNetworkName string, options *armnetwork.SubnetsClientListOptions) (resp azfake.PagerResponder[armnetwork.SubnetsClientListResponse]) {
-			// Build the slice of fake subnets.
+		NewListPager: func(
+			resourceGroupName string,
+			virtualNetworkName string,
+			options *armnetwork.SubnetsClientListOptions,
+		) (resp azfake.PagerResponder[armnetwork.SubnetsClientListResponse]) { // Build the slice of fake subnets.
 			subnets := make([]*armnetwork.Subnet, 0, len(subnetCIDRs))
 			for i, cidr := range subnetCIDRs {
 				name := fmt.Sprintf("subnet-fake-%d", i)

@@ -2,11 +2,17 @@ package network
 
 import "testing"
 
+const (
+	cidr0  = "10.100.0.0/28"
+	cidr16 = "10.100.0.16/28"
+	cidr32 = "10.100.0.32/28"
+)
+
 func TestNewSubnetCatalog_KeepsOrderAndValidates(t *testing.T) {
 	input := []SubnetInfo{
-		{Name: "s2", CIDR: "10.100.0.16/28"},
-		{Name: "s1", CIDR: "10.100.0.0/28"},
-		{Name: "s3", CIDR: "10.100.0.32/28"},
+		{Name: "s2", CIDR: cidr16},
+		{Name: "s1", CIDR: cidr0},
+		{Name: "s3", CIDR: cidr32},
 	}
 
 	catalog, err := NewSubnetCatalog(input)
@@ -19,14 +25,14 @@ func TestNewSubnetCatalog_KeepsOrderAndValidates(t *testing.T) {
 		t.Fatalf("expected %d subnets, got %d", want, got)
 	}
 
-	if all[0].Name != "s2" || all[0].CIDR != "10.100.0.16/28" {
-		t.Errorf("all[0] = %+v, want Name=s2, CIDR=10.100.0.16/28", all[0])
+	if all[0].Name != "s2" || all[0].CIDR != cidr16 {
+		t.Errorf("all[0] = %+v, want Name=s2, CIDR=%s", all[0], cidr16)
 	}
-	if all[1].Name != "s1" || all[1].CIDR != "10.100.0.0/28" {
-		t.Errorf("all[1] = %+v, want Name=s1, CIDR=10.100.0.0/28", all[1])
+	if all[1].Name != "s1" || all[1].CIDR != cidr0 {
+		t.Errorf("all[1] = %+v, want Name=s1, CIDR=%s", all[1], cidr0)
 	}
-	if all[2].Name != "s3" || all[2].CIDR != "10.100.0.32/28" {
-		t.Errorf("all[2] = %+v, want Name=s3, CIDR=10.100.0.32/28", all[2])
+	if all[2].Name != "s3" || all[2].CIDR != cidr32 {
+		t.Errorf("all[2] = %+v, want Name=s3, CIDR=%s", all[2], cidr32)
 	}
 }
 
@@ -42,8 +48,8 @@ func TestNewSubnetCatalog_EmptyCIDR(t *testing.T) {
 
 func TestNewSubnetCatalog_DuplicateCIDR(t *testing.T) {
 	input := []SubnetInfo{
-		{Name: "s1", CIDR: "10.100.0.0/28"},
-		{Name: "s2", CIDR: "10.100.0.0/28"},
+		{Name: "s1", CIDR: cidr0},
+		{Name: "s2", CIDR: cidr0},
 	}
 
 	if _, err := NewSubnetCatalog(input); err == nil {
@@ -53,8 +59,8 @@ func TestNewSubnetCatalog_DuplicateCIDR(t *testing.T) {
 
 func TestFirstFreeSubnet_NoUsed(t *testing.T) {
 	input := []SubnetInfo{
-		{Name: "s1", CIDR: "10.100.0.0/28"},
-		{Name: "s2", CIDR: "10.100.0.16/28"},
+		{Name: "s1", CIDR: cidr0},
+		{Name: "s2", CIDR: cidr16},
 	}
 
 	catalog, err := NewSubnetCatalog(input)
@@ -68,16 +74,16 @@ func TestFirstFreeSubnet_NoUsed(t *testing.T) {
 	}
 
 	// Should pick the first entry in the list.
-	if free.Name != "s1" || free.CIDR != "10.100.0.0/28" {
-		t.Fatalf("expected first free subnet s1 (10.100.0.0/28), got %+v", free)
+	if free.Name != "s1" || free.CIDR != cidr0 {
+		t.Fatalf("expected first free subnet s1 (%s), got %+v", cidr0, free)
 	}
 }
 
 func TestFirstFreeSubnet_SomeUsed(t *testing.T) {
 	input := []SubnetInfo{
-		{Name: "s2", CIDR: "10.100.0.16/28"},
-		{Name: "s1", CIDR: "10.100.0.0/28"},
-		{Name: "s3", CIDR: "10.100.0.32/28"},
+		{Name: "s2", CIDR: cidr16},
+		{Name: "s1", CIDR: cidr0},
+		{Name: "s3", CIDR: cidr32},
 	}
 
 	catalog, err := NewSubnetCatalog(input)
@@ -85,7 +91,7 @@ func TestFirstFreeSubnet_SomeUsed(t *testing.T) {
 		t.Fatalf("NewSubnetCatalog returned error: %v", err)
 	}
 
-	used := []string{"10.100.0.16/28"} // s2 is used
+	used := []string{cidr16} // s2 is used
 
 	free, err := catalog.FirstFreeSubnet(used)
 	if err != nil {
@@ -93,15 +99,15 @@ func TestFirstFreeSubnet_SomeUsed(t *testing.T) {
 	}
 
 	// First free in catalog order: s1.
-	if free.Name != "s1" || free.CIDR != "10.100.0.0/28" {
-		t.Fatalf("expected first free subnet s1 (10.100.0.0/28), got %+v", free)
+	if free.Name != "s1" || free.CIDR != cidr0 {
+		t.Fatalf("expected first free subnet s1 (%s), got %+v", cidr0, free)
 	}
 }
 
 func TestFirstFreeSubnet_AllUsed(t *testing.T) {
 	input := []SubnetInfo{
-		{Name: "s1", CIDR: "10.100.0.0/28"},
-		{Name: "s2", CIDR: "10.100.0.16/28"},
+		{Name: "s1", CIDR: cidr0},
+		{Name: "s2", CIDR: cidr16},
 	}
 
 	catalog, err := NewSubnetCatalog(input)
@@ -109,7 +115,7 @@ func TestFirstFreeSubnet_AllUsed(t *testing.T) {
 		t.Fatalf("NewSubnetCatalog returned error: %v", err)
 	}
 
-	used := []string{"10.100.0.0/28", "10.100.0.16/28"}
+	used := []string{cidr0, cidr16}
 
 	if _, err := catalog.FirstFreeSubnet(used); err == nil {
 		t.Fatalf("expected error when all subnets are used, got nil")
