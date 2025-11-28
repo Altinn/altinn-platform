@@ -1,0 +1,11 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dis-pgsql-operator-controller-manager
+  namespace: dis-pgsql-operator-system
+spec:
+  template:
+    spec:
+      containers:
+        - name: manager
+          imagePullPolicy: Never
