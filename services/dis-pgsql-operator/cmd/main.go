@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -233,8 +234,23 @@ func main() {
 		armOpts = nil
 	}
 
-	if subscriptionID == "" || resourceGroup == "" || vnetName == "" {
-		setupLog.Error(fmt.Errorf("missing config"), "subscription-id, resource-group and vnet-name are required")
+	var missing []string
+	if subscriptionID == "" {
+		missing = append(missing, "subscription-id (AZURE_SUBSCRIPTION_ID)")
+	}
+	if resourceGroup == "" {
+		missing = append(missing, "resource-group (AZURE_VNET_RESOURCE_GROUP)")
+	}
+	if vnetName == "" {
+		missing = append(missing, "vnet-name (AZURE_VNET_NAME)")
+	}
+
+	if len(missing) > 0 {
+		setupLog.Error(
+			fmt.Errorf("missing required Azure configuration"),
+			"config validation failed",
+			"missing", strings.Join(missing, ", "),
+		)
 		os.Exit(1)
 	}
 
