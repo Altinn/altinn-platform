@@ -59,8 +59,6 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if db.Status.SubnetCIDR == "" {
 		logger.Info("allocating subnet for database")
 		if err := r.allocateSubnetForDatabase(ctx, logger, &db); err != nil {
-			logger.Info("debug", "errType", fmt.Sprintf("%T", err))
-			logger.Info("debug", "isNoFreeSubnets", errors.Is(err, network.ErrNoFreeSubnets))
 			if errors.Is(err, network.ErrNoFreeSubnets) {
 				logger.Info("no free subnets available, will retry later", "error", err.Error())
 
