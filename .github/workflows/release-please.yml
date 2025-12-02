@@ -7,6 +7,7 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  actions: write
 
 name: release-please
 
@@ -15,7 +16,46 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 #v4.4.0
+        id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+      - id: trigger-post-release-workflows
+        name: Trigger post release pipelines
+        uses: actions/github-script@v7
+        if: steps.release.outputs.releases_created
+        with:
+          script: |
+            const release_info = ${{ steps.release.outputs.release_info }};
+            const paths = JSON.parse(release_info.paths_released);
+            for (const path of paths) {
+              if(path.startsWith("flux/")) {
+                console.log(`Triggering workflows for artifact in ${path}.`);
+                const tag_name = release_info[path + '--tag_name'];
+                const release_url = release_info[path + '--html_url'];
+                const sha = release_info[path + '--sha'];
+                await github.request('POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches', {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  workflow_id: 'flux-release-artifact.yml',
+                  ref: tag_name,
+                  inputs: {
+                    tag_name: tag_name
+                  }
+                });
+                console.log("Triggered flux-release-artifact.yml");
+                await github.request('POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches', {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  workflow_id: 'flux-manage-releases.yml',
+                  ref: tag_name,
+                  inputs: {
+                    tag_name: tag_name,
+                    release_url: release_url,
+                    release_sha: sha
+                  }
+                });
+                console.log("Triggered flux-manage-releases.yml");
+              }
+            }
