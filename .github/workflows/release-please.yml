@@ -14,6 +14,11 @@ name: release-please
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    outputs:
+      releases_created: ${{ steps.release.outputs.releases_created }}
+      release_info: ${{ steps.release.outputs.releases_created && toJSON(steps.release.outputs) || '' }}
+    strategy:
+      fail-fast: true
     steps:
       - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 #v4.4.0
         id: release
@@ -21,12 +26,17 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+  trigger-post-release-workflows:
+    runs-on: ubuntu-latest
+    needs:
+      - release-please
+    steps:
       - id: trigger-post-release-workflows
         name: Trigger post release pipelines
         uses: actions/github-script@v7
-        if: ${{ steps.release.outputs.releases_created == 'true' }}
+        if: ${{ needs.release-please.outputs.releases_created == 'true' }}
         env:
-          RELEASE_INFO: ${{ steps.release.outputs }}
+          RELEASE_INFO: ${{ needs.release-please.outputs.release_info }}
         with:
           script: |
             const release_info = JSON.parse(process.env.RELEASE_INFO);
