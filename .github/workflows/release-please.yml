@@ -41,9 +41,7 @@ jobs:
                   workflow_id: 'flux-release-artifact.yml',
                   ref: tag_name,
                   inputs: {
-                    tag_name: tag_name,
-                    release_url: release_url,
-                    release_sha: sha
+                    tag_name: tag_name
                   }
                 });
                 console.log("Triggered flux-release-artifact.yml");
@@ -53,9 +51,11 @@ jobs:
                   workflow_id: 'flux-manage-releases.yml',
                   ref: tag_name,
                   inputs: {
-                    tag_name: tag_name
+                    tag_name: tag_name,
+                    release_url: release_url,
+                    release_sha: sha
                   }
                 });
-                console.log("Triggered flux-release-artifact.yml");
+                console.log("Triggered flux-manage-releases.yml");
               }
             }

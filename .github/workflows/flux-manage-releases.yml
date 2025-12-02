@@ -54,8 +54,8 @@ jobs:
             const appName = tag.replace('app-', '').replace(`-${version}`, '');
             const releaseUrl = (github.event_name == 'release' ? github.event.release.html_url : context.payload.inputs.release_url);
             const releaseCreator = context.payload.release?.author?.login;
-            const issueTitle = `${{ env.ISSUE_TITLE_PREFIX }} ${context.payload.release.tag_name}`;
-            const issueBody = `A new release has been published. Check it out [here](${context.payload.release.html_url})
+            const issueTitle = `${{ env.ISSUE_TITLE_PREFIX }} ${appName} version ${version}`;
+            const issueBody = `A new release has been published. Check it out [here](${releaseUrl})
             - App Name: ${appName}
             - Version: ${version}
             - Release Tag: ${tag}
