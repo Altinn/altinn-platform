@@ -24,10 +24,12 @@ jobs:
       - id: trigger-post-release-workflows
         name: Trigger post release pipelines
         uses: actions/github-script@v7
-        if: steps.release.outputs.releases_created
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
+        env:
+          RELEASE_INFO: ${{ steps.release.outputs.release_info }}
         with:
           script: |
-            const release_info = ${{ steps.release.outputs.release_info }};
+            const release_info = process.env.RELEASE_INFO;
             const paths = JSON.parse(release_info.paths_released);
             for (const path of paths) {
               if(path.startsWith("flux/")) {
