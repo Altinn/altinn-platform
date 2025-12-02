@@ -103,7 +103,7 @@ jobs:
         with:
           script: |
             const issueTitle = context.payload.issue.title
-            const versionRegex = /${{ env.ISSUE_TITLE_PREFIX }} ${{ env.RELEASE_TAG_PREFIX }}(.*?)-v(\d+\.\d+\.\d+)/;
+            const versionRegex = /${{ env.ISSUE_TITLE_PREFIX }} (.*?) version v(\d+\.\d+\.\d+)$/;
             const match = issueTitle.match(versionRegex);
             if (!match) {
               console.log('No version found in release tag:', issueTitle);
