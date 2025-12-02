@@ -29,7 +29,7 @@ jobs:
           RELEASE_INFO: ${{ steps.release.outputs.release_info }}
         with:
           script: |
-            const release_info = process.env.RELEASE_INFO;
+            const release_info = JSON.parse(process.env.RELEASE_INFO);
             const paths = JSON.parse(release_info.paths_released);
             for (const path of paths) {
               if(path.startsWith("flux/")) {
