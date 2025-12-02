@@ -26,7 +26,7 @@ jobs:
         uses: actions/github-script@v7
         if: ${{ steps.release.outputs.releases_created == 'true' }}
         env:
-          RELEASE_INFO: ${{ steps.release.outputs.release_info }}
+          RELEASE_INFO: ${{ steps.release.outputs }}
         with:
           script: |
             const release_info = JSON.parse(process.env.RELEASE_INFO);
