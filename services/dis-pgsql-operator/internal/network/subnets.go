@@ -2,11 +2,18 @@ package network
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7"
+)
+
+// TODO: probably move this to its own errors package later
+var (
+	ErrNoFreeSubnets = errors.New("no free subnets available")
+	ErrEmptyCatalog  = errors.New("subnet catalog is empty; no subnets defined in the VNet")
 )
 
 // SubnetInfo represents a single subnet with a name (e.g. Azure subnet name)
@@ -30,7 +37,7 @@ type SubnetCatalog struct {
 // Subnets are kept in the order they are passed in (typically the Azure API order).
 func NewSubnetCatalog(infos []SubnetInfo) (*SubnetCatalog, error) {
 	if len(infos) == 0 {
-		return &SubnetCatalog{subnets: nil}, nil
+		return nil, ErrEmptyCatalog
 	}
 	// seen helps to check duplicates
 	seen := make(map[string]struct{}, len(infos))
@@ -61,12 +68,8 @@ func NewSubnetCatalog(infos []SubnetInfo) (*SubnetCatalog, error) {
 // `used` should contain already allocated subnet CIDR strings, these
 // come from Database.status.subnetCIDR
 //
-// Returns an error if all subnets are used.
+// Returns an ErrNoFreeSubnets if all subnets are used.
 func (c *SubnetCatalog) FirstFreeSubnet(used []string) (SubnetInfo, error) {
-	if len(c.subnets) == 0 {
-		return SubnetInfo{}, fmt.Errorf("subnet catalog is empty")
-	}
-
 	usedSet := make(map[string]struct{}, len(used))
 	for _, u := range used {
 		if u == "" {
@@ -81,7 +84,7 @@ func (c *SubnetCatalog) FirstFreeSubnet(used []string) (SubnetInfo, error) {
 		}
 	}
 
-	return SubnetInfo{}, fmt.Errorf("no free subnets available")
+	return SubnetInfo{}, ErrNoFreeSubnets
 }
 
 // All returns a copy of all subnets in the catalog, in the catalog's order.

@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -260,7 +261,11 @@ func main() {
 
 	subnetCatalog, err := network.FetchSubnetCatalog(ctx, subscriptionID, resourceGroup, vnetName, cred, armOpts)
 	if err != nil {
-		setupLog.Error(err, "failed to fetch subnet catalog")
+		if errors.Is(err, network.ErrEmptyCatalog) {
+			setupLog.Error(err, "subnet catalog is empty; check VNet/subnet config for PostgreSQL")
+		} else {
+			setupLog.Error(err, "failed to fetch subnets from Azure")
+		}
 		os.Exit(1)
 	}
 

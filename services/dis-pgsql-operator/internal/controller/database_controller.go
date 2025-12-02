@@ -2,10 +2,14 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -55,9 +59,36 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if db.Status.SubnetCIDR == "" {
 		logger.Info("allocating subnet for database")
 		if err := r.allocateSubnetForDatabase(ctx, logger, &db); err != nil {
+			logger.Info("debug", "errType", fmt.Sprintf("%T", err))
+			logger.Info("debug", "isNoFreeSubnets", errors.Is(err, network.ErrNoFreeSubnets))
+			if errors.Is(err, network.ErrNoFreeSubnets) {
+				logger.Info("no free subnets available, will retry later", "error", err.Error())
+
+				meta.SetStatusCondition(&db.Status.Conditions, metav1.Condition{
+					Type:    "Ready",
+					Status:  metav1.ConditionFalse,
+					Reason:  "NoFreeSubnets",
+					Message: "No free subnet CIDRs available in the configured catalog",
+				})
+
+				if err := r.Status().Update(ctx, &db); err != nil {
+					logger.Error(err, "failed to update Database status after no free subnets")
+					return ctrl.Result{}, err
+				}
+
+				// Requeue after some delay so we can pick up newly freed subnets.
+				// e.g. if another Database is deleted and frees a CIDR.
+				// TODO: define later if 5 minutes is a good interval here.
+				return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+			}
+
+			// All other errors are real failures; let controller-runtime backoff
 			logger.Error(err, "failed to allocate subnet")
 			return ctrl.Result{}, err
 		}
+		// We don't need to requeue here, as the status update by allocating the subnet
+		// will trigger another reconciliation.
+		return ctrl.Result{}, nil
 	} else {
 		logger.Info("database already has subnetCIDR", "subnetCIDR", db.Status.SubnetCIDR)
 	}

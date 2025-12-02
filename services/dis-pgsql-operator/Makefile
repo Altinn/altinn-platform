@@ -90,9 +90,8 @@ test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expect
 	$(MAKE) cleanup-test-e2e
 
 .PHONY: test-e2e-kind
-test-e2e-kind: setup-test-e2e docker-build kind-load install deploy-kind
+test-e2e-kind: cleanup-test-e2e setup-test-e2e docker-build kind-load install deploy-kind
 	KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
-	$(MAKE) cleanup-test-e2e
 
 .PHONY: cleanup-test-e2e
 cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
