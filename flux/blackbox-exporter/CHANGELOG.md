@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/Altinn/altinn-platform/compare/flux-oci-blackbox-exporter-v0.4.0...flux-oci-blackbox-exporter-v0.4.1) (2025-12-03)
+
+
+### Dependency Updates
+
+* update helm release prometheus-blackbox-exporter to v11.5.0 ([#2656](https://github.com/Altinn/altinn-platform/issues/2656)) ([88d6f86](https://github.com/Altinn/altinn-platform/commit/88d6f86a02a4959a4283a56b024d4a1e6ffedd52))
+
 ## [0.4.0](https://github.com/Altinn/altinn-platform/compare/flux-oci-blackbox-exporter-v0.3.0...flux-oci-blackbox-exporter-v0.4.0) (2025-11-27)
 
 
