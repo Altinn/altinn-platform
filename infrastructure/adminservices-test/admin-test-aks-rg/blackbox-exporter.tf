@@ -8,7 +8,7 @@ resource "azapi_resource" "blackbox_exporter" {
       kustomizations = {
         blackbox-exporter = {
           force                  = false
-          path                   = "./base/"
+          path                   = "./altinn-uptime/"
           prune                  = true
           retryIntervalInSeconds = 300
           syncIntervalInSeconds  = 300
