@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.4](https://github.com/Altinn/altinn-platform/compare/flux-oci-blackbox-exporter-v0.4.3...flux-oci-blackbox-exporter-v0.4.4) (2025-12-03)
+
+
+### Chores
+
+* **main:** release flux-oci-altinn-uptime 1.0.1 ([#2671](https://github.com/Altinn/altinn-platform/issues/2671)) ([7de80df](https://github.com/Altinn/altinn-platform/commit/7de80dfbbc7d3bff83aa85b79cb11712c1850c38))
+
 ## [0.4.3](https://github.com/Altinn/altinn-platform/compare/flux-oci-blackbox-exporter-v0.4.2...flux-oci-blackbox-exporter-v0.4.3) (2025-12-03)
 
 
