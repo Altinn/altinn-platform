@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dis-pgsql-operator-controller-manager
+  namespace: dis-pgsql-operator-system
+spec:
+  template:
+    spec:
+      containers:
+        - name: manager
+          imagePullPolicy: Never
+          args:
+            - "--use-az-fakes"
+          env:
+            - name: AZURE_SUBSCRIPTION_ID
+              value: "fake-subscription"
+            - name: AZURE_VNET_RESOURCE_GROUP
+              value: "fake-rg"
+            - name: AZURE_VNET_NAME
+              value: "fake-vnet"

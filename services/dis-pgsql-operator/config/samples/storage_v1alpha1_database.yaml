@@ -1,0 +1,47 @@
+apiVersion: storage.dis.altinn.cloud/v1alpha1
+kind: Database
+metadata:
+  name: db1
+  namespace: default
+spec:
+  version: 17
+  serverType: dev
+  auth:
+    adminAppIdentity: admin1
+    userAppIdentity: user1
+---
+apiVersion: storage.dis.altinn.cloud/v1alpha1
+kind: Database
+metadata:
+  name: db2
+  namespace: default
+spec:
+  version: 17
+  serverType: dev
+  auth:
+    adminAppIdentity: admin2
+    userAppIdentity: user2
+---
+apiVersion: storage.dis.altinn.cloud/v1alpha1
+kind: Database
+metadata:
+  name: db4
+  namespace: default
+spec:
+  version: 17
+  serverType: dev
+  auth:
+    adminAppIdentity: admin2
+    userAppIdentity: user2
+---
+apiVersion: storage.dis.altinn.cloud/v1alpha1
+kind: Database
+metadata:
+  name: db5
+  namespace: default
+spec:
+  version: 17
+  serverType: dev
+  auth:
+    adminAppIdentity: admin1
+    userAppIdentity: user2

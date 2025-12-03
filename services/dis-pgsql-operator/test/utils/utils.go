@@ -133,17 +133,29 @@ func IsCertManagerCRDsInstalled() bool {
 	return false
 }
 
-// LoadImageToKindClusterWithName loads a local docker image to the kind cluster
+// LoadImageToKindClusterWithName loads a local image into the kind cluster.
+// If KIND_IMAGE_ARCHIVE is set, it will use `kind load image-archive`,
+// otherwise it falls back to `kind load docker-image` (Kubebuilder default).
 func LoadImageToKindClusterWithName(name string) error {
 	cluster := defaultKindCluster
 	if v, ok := os.LookupEnv("KIND_CLUSTER"); ok {
 		cluster = v
 	}
-	kindOptions := []string{"load", "docker-image", name, "--name", cluster}
+
 	kindBinary := defaultKindBinary
 	if v, ok := os.LookupEnv("KIND"); ok {
 		kindBinary = v
 	}
+
+	// New: support archive-based loading
+	if archive := os.Getenv("KIND_IMAGE_ARCHIVE"); archive != "" {
+		cmd := exec.Command(kindBinary, "load", "image-archive", "--name", cluster, archive)
+		_, err := Run(cmd)
+		return err
+	}
+
+	// Old behavior: docker-image by tag
+	kindOptions := []string{"load", "docker-image", name, "--name", cluster}
 	cmd := exec.Command(kindBinary, kindOptions...)
 	_, err := Run(cmd)
 	return err
