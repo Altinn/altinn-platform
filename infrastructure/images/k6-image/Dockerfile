@@ -8,5 +8,5 @@ RUN xk6 build \
     --with github.com/grafana/xk6-tls \
     --output /k6
 
-FROM grafana/k6:1.4.2
+FROM grafana/k6:1.4.2@sha256:3656673de3f30424e8ebcfa46acd9558d83b6a43612d0f668ffeac953950c6c7
 COPY --from=builder /k6 /usr/bin/k6
