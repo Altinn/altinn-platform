@@ -194,7 +194,7 @@
     {"type": "feat", "hidden": false, "section": "Features"},
     {"type": "fix", "hidden": false, "section": "Bug Fixes"},
     {"type": "deps", "hidden": false, "section": "Dependency Updates"},
-    {"type": "chore", "hidden": false, "section": "Chores"},
+    {"type": "chore", "hidden": true, "section": "Chores"},
     {"type": "docs", "hidden": true, "section": "Documentation"},
     {"type": "style", "hidden": true, "section": "Styles"},
     {"type": "refactor", "hidden": true, "section": "Code Refactoring"},
