@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.3](https://github.com/Altinn/altinn-platform/compare/flux-oci-blackbox-exporter-v0.4.2...flux-oci-blackbox-exporter-v0.4.3) (2025-12-03)
+
+
+### Bug Fixes
+
+* Blackbox-exporter Inline HelmRelease patch in kustomization ([#2676](https://github.com/Altinn/altinn-platform/issues/2676)) ([cecae2d](https://github.com/Altinn/altinn-platform/commit/cecae2d02c07a405b6d1f6a80858d07a0030be45))
+
 ## [0.4.2](https://github.com/Altinn/altinn-platform/compare/flux-oci-blackbox-exporter-v0.4.1...flux-oci-blackbox-exporter-v0.4.2) (2025-12-03)
 
 
