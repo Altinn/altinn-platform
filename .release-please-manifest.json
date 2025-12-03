@@ -15,5 +15,5 @@
   "flux/otel-collector": "1.0.1",
   "flux/otel-operator": "1.1.0",
   "flux/traefik": "1.5.0",
-  "flux/whoami": "0.1.0"
+  "flux/whoami": "0.1.1"
 }
