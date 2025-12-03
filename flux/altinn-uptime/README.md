@@ -2,12 +2,6 @@
 
 Auto-generates ServiceMonitors for Altinn organizations using Prometheus Blackbox Exporter.
 
-## Deploy
-
-```bash
-kubectl apply -k flux/
-```
-
 ## Configuration
 
 - **Extra targets**: Edit `configmaps/extra-targets.yaml`
