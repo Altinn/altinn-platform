@@ -33,7 +33,7 @@ jobs:
     steps:
       - id: trigger-post-release-workflows
         name: Trigger post release pipelines
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         if: ${{ needs.release-please.outputs.releases_created == 'true' }}
         env:
           RELEASE_INFO: ${{ needs.release-please.outputs.release_info }}
