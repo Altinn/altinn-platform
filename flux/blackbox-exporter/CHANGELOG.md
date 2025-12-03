@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/Altinn/altinn-platform/compare/flux-oci-blackbox-exporter-v0.4.1...flux-oci-blackbox-exporter-v0.4.2) (2025-12-03)
+
+
+### Bug Fixes
+
+* Unwrap HelmRelease patch and remove README deploy ([#2668](https://github.com/Altinn/altinn-platform/issues/2668)) ([57862a5](https://github.com/Altinn/altinn-platform/commit/57862a55aabdf86eb5b0d899d422ac8445747425))
+
 ## [0.4.1](https://github.com/Altinn/altinn-platform/compare/flux-oci-blackbox-exporter-v0.4.0...flux-oci-blackbox-exporter-v0.4.1) (2025-12-03)
 
 
