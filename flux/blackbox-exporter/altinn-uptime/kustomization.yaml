@@ -10,6 +10,7 @@ patches:
       - op: add
         path: /spec/values/config
         value:
+          replicas: 2
           modules:
             http_2xx_ipv6:
               prober: http
