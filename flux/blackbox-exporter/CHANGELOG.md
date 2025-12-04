@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.5](https://github.com/Altinn/altinn-platform/compare/flux-oci-blackbox-exporter-v0.4.4...flux-oci-blackbox-exporter-v0.4.5) (2025-12-04)
+
+
+### Bug Fixes
+
+* altinn uptime cronjob timeout ([#2727](https://github.com/Altinn/altinn-platform/issues/2727)) ([cc8bc03](https://github.com/Altinn/altinn-platform/commit/cc8bc03746487db001bdcded0f42feab557491dc))
+
 ## [0.4.4](https://github.com/Altinn/altinn-platform/compare/flux-oci-blackbox-exporter-v0.4.3...flux-oci-blackbox-exporter-v0.4.4) (2025-12-04)
 
 
