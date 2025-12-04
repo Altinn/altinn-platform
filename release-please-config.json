@@ -1,195 +1,83 @@
 {
   "packages": {
     "flux/altinn-uptime": {
-      "changelog-path": "CHANGELOG.md",
       "release-type": "simple",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
-      "draft": false,
-      "prerelease": false,
-      "component": "flux-oci-altinn-uptime",
-      "include-component-in-tag": true,
-      "include-v-in-tag": true
+      "component": "flux-oci-altinn-uptime"
     },
     "flux/azure-service-operator": {
-      "changelog-path": "CHANGELOG.md",
       "release-type": "simple",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
-      "draft": false,
-      "prerelease": false,
-      "component": "flux-oci-azure-service-operator",
-      "include-component-in-tag": true,
-      "include-v-in-tag": true
+      "component": "flux-oci-azure-service-operator"
     },
     "flux/blackbox-exporter": {
-      "changelog-path": "CHANGELOG.md",
       "release-type": "simple",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
-      "draft": false,
-      "prerelease": false,
-      "component": "flux-oci-blackbox-exporter",
-      "include-component-in-tag": true,
-      "include-v-in-tag": true
+      "component": "flux-oci-blackbox-exporter"
     },
     "flux/cert-manager": {
-      "changelog-path": "CHANGELOG.md",
       "release-type": "simple",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
-      "draft": false,
-      "prerelease": false,
-      "component": "flux-oci-cert-manager",
-      "include-component-in-tag": true,
-      "include-v-in-tag": true
+      "component": "flux-oci-cert-manager"
     },
     "flux/certm-lets-encrypt-dns-issuer": {
-      "changelog-path": "CHANGELOG.md",
       "release-type": "simple",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
-      "draft": false,
-      "prerelease": false,
-      "component": "flux-oci-certm-lets-encrypt-dns-issuer",
-      "include-component-in-tag": true,
-      "include-v-in-tag": true
+      "component": "flux-oci-certm-lets-encrypt-dns-issuer"
     },
     "flux/container-runtime-aks-config": {
-      "changelog-path": "CHANGELOG.md",
       "release-type": "simple",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
-      "draft": false,
-      "prerelease": false,
-      "component": "flux-oci-container-runtime-aks-config",
-      "include-component-in-tag": true,
-      "include-v-in-tag": true
+      "component": "flux-oci-container-runtime-aks-config"
     },
     "flux/dis-apim": {
-      "changelog-path": "CHANGELOG.md",
       "release-type": "simple",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
-      "draft": false,
-      "prerelease": false,
-      "component": "flux-oci-dis-apim",
-      "include-component-in-tag": true,
-      "include-v-in-tag": true
+      "component": "flux-oci-dis-apim"
     },
     "flux/dis-identity": {
-      "changelog-path": "CHANGELOG.md",
       "release-type": "simple",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
-      "draft": false,
-      "prerelease": false,
-      "component": "flux-oci-dis-identity",
-      "include-component-in-tag": true,
-      "include-v-in-tag": true
+      "component": "flux-oci-dis-identity"
     },
     "flux/external-secrets-operator": {
-      "changelog-path": "CHANGELOG.md",
       "release-type": "simple",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
-      "draft": false,
-      "prerelease": false,
-      "component": "flux-oci-external-secrets-operator",
-      "include-component-in-tag": true,
-      "include-v-in-tag": true
+      "component": "flux-oci-external-secrets-operator"
     },
     "flux/grafana-operator": {
-      "changelog-path": "CHANGELOG.md",
       "release-type": "simple",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
-      "draft": false,
-      "prerelease": false,
-      "component": "flux-oci-grafana-operator",
-      "include-component-in-tag": true,
-      "include-v-in-tag": true
+      "component": "flux-oci-grafana-operator"
     },
     "flux/helm-uninstall-outdated-apps": {
-      "changelog-path": "CHANGELOG.md",
       "release-type": "simple",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
-      "draft": false,
-      "prerelease": false,
-      "component": "flux-oci-helm-uninstall-outdated-apps",
-      "include-component-in-tag": true,
-      "include-v-in-tag": true
+      "component": "flux-oci-helm-uninstall-outdated-apps"
     },
     "flux/lakmus": {
-      "changelog-path": "CHANGELOG.md",
       "release-type": "simple",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
-      "draft": false,
-      "prerelease": false,
-      "component": "flux-oci-lakmus",
-      "include-component-in-tag": true,
-      "include-v-in-tag": true
+      "component": "flux-oci-lakmus"
     },
     "flux/linkerd": {
-      "changelog-path": "CHANGELOG.md",
       "release-type": "simple",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
-      "draft": false,
-      "prerelease": false,
-      "component": "flux-oci-linkerd",
-      "include-component-in-tag": true,
-      "include-v-in-tag": true
+      "component": "flux-oci-linkerd"
     },
     "flux/otel-collector": {
-      "changelog-path": "CHANGELOG.md",
       "release-type": "simple",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
-      "draft": false,
-      "prerelease": false,
-      "component": "flux-oci-otel-collector",
-      "include-component-in-tag": true,
-      "include-v-in-tag": true
+      "component": "flux-oci-otel-collector"
     },
     "flux/otel-operator": {
-      "changelog-path": "CHANGELOG.md",
       "release-type": "simple",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
-      "draft": false,
-      "prerelease": false,
-      "component": "flux-oci-otel-operator",
-      "include-component-in-tag": true,
-      "include-v-in-tag": true
+      "component": "flux-oci-otel-operator"
     },
     "flux/traefik": {
-      "changelog-path": "CHANGELOG.md",
       "release-type": "simple",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
-      "draft": false,
-      "prerelease": false,
-      "component": "flux-oci-traefik",
-      "include-component-in-tag": true,
-      "include-v-in-tag": true
+      "component": "flux-oci-traefik"
     },
     "flux/whoami": {
-      "changelog-path": "CHANGELOG.md",
       "release-type": "simple",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
-      "draft": false,
-      "prerelease": false,
-      "component": "flux-oci-whoami",
-      "include-component-in-tag": true,
-      "include-v-in-tag": true
+      "component": "flux-oci-whoami"
     }
   },
   "separate-pull-requests": true,
   "tag-separator": "-",
+  "changelog-path": "CHANGELOG.md",
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": false,
+  "draft": false,
+  "prerelease": false,
+  "include-component-in-tag": true,
+  "include-v-in-tag": true,
   "changelog-sections": [
     {"type": "feat", "hidden": false, "section": "Features"},
     {"type": "fix", "hidden": false, "section": "Bug Fixes"},
