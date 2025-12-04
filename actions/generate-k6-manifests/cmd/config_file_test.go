@@ -91,8 +91,8 @@ test_definitions:
 	if configFile.TestDefinitions[0].Contexts[0].Environment != "yt01" {
 		t.Errorf("setDefaults: expected %s, actual %s", "yt01", configFile.TestDefinitions[0].Contexts[0].Environment)
 	}
-	if *configFile.TestDefinitions[0].Contexts[0].NodeType != "spot" {
-		t.Errorf("setDefaults: expected %s, actual %s", "spot", *configFile.TestDefinitions[0].Contexts[0].NodeType)
+	if *configFile.TestDefinitions[0].Contexts[0].NodeType != "default" {
+		t.Errorf("setDefaults: expected %s, actual %s", "default", *configFile.TestDefinitions[0].Contexts[0].NodeType)
 	}
 	if *configFile.TestDefinitions[0].Contexts[0].TestTypeDefinition.Type != "functional" {
 		t.Errorf("setDefaults: expected %s, actual %s", "functional", *configFile.TestDefinitions[0].Contexts[0].TestTypeDefinition.Type)
@@ -165,8 +165,8 @@ test_definitions:
 	if configFile.TestDefinitions[0].Contexts[0].Environment != "at22" {
 		t.Errorf("setDefaults: expected %s, actual %s", "at22", configFile.TestDefinitions[0].Contexts[0].Environment)
 	}
-	if *configFile.TestDefinitions[0].Contexts[0].NodeType != "spot" {
-		t.Errorf("setDefaults: expected %s, actual %s", "spot", *configFile.TestDefinitions[0].Contexts[0].NodeType)
+	if *configFile.TestDefinitions[0].Contexts[0].NodeType != "default" {
+		t.Errorf("setDefaults: expected %s, actual %s", "default", *configFile.TestDefinitions[0].Contexts[0].NodeType)
 	}
 	if *configFile.TestDefinitions[0].Contexts[0].TestTypeDefinition.Type != "functional" {
 		t.Errorf("setDefaults: expected %s, actual %s", "functional", *configFile.TestDefinitions[0].Contexts[0].TestTypeDefinition.Type)

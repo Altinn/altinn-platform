@@ -3,13 +3,17 @@
    "kind": "TestRun",
    "metadata": {
       "labels": {
-         "generated-by": "k6-action-image"
+         "generated-by": "k6-action-image",
+         "k6-test": "get-deployments",
+         "test_name": "get-deployments",
+         "testid": "at22-get-deployments",
+         "uniq-name": "{{ .UniqName }}"
       },
-      "name": "{{ .UniqueName }}",
+      "name": "{{ .UniqName }}",
       "namespace": "platform"
    },
    "spec": {
-      "arguments": "--tag testid={{ .UniqueName }} --tag namespace=platform --tag deploy_env={{ .DeployEnv }} --tag test_name=get-deployments --out experimental-prometheus-rw",
+      "arguments": "--tag testid=at22-get-deployments --tag namespace=platform --tag deploy_env=at22 --tag test_name=get-deployments --out experimental-prometheus-rw",
       "cleanup": "post",
       "parallelism": 1,
       "runner": {
@@ -24,7 +28,7 @@
             },
             {
                "name": "ENVIRONMENT",
-               "value": "{{ .DeployEnv }}"
+               "value": "at22"
             },
             {
                "name": "FOO",
@@ -52,7 +56,7 @@
             },
             {
                "name": "TESTID",
-               "value": "{{ .UniqueName }}"
+               "value": "at22-get-deployments"
             }
          ],
          "envFrom": [
@@ -70,9 +74,11 @@
          "image": "ghcr.io/altinn/altinn-platform/k6-image:latest",
          "metadata": {
             "labels": {
-               "k6-test": "{{ .UniqueName }}",
-               "test_name": "{{ .TestName }}",
-               "testid": "{{ .UniqueName }}"
+               "generated-by": "k6-action-image",
+               "k6-test": "get-deployments",
+               "test_name": "get-deployments",
+               "testid": "at22-get-deployments",
+               "uniq-name": "{{ .UniqName }}"
             }
          },
          "nodeSelector": { },
@@ -87,7 +93,7 @@
       "script": {
          "configMap": {
             "file": "archive.tar",
-            "name": "{{ .DirName }}"
+            "name": "at22-get-deployments"
          }
       }
    }

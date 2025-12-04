@@ -4,4 +4,5 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 
 COPY actions/generate-k6-manifests /actions/generate-k6-manifests
 WORKDIR /actions/generate-k6-manifests
+RUN go mod download
 RUN go test -v ./...

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -11,26 +10,41 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
-	"unicode/utf8"
 
-	orderedmap "github.com/elliotchance/orderedmap/v3"
 	yaml "gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 )
 
+type JsonnetParameters struct {
+	dirName                     string
+	configMapName               string
+	uniqName                    string
+	testName                    string
+	manifestGenerationTimestamp string
+	namespace                   string
+	environment                 string
+	parallelism                 int
+	nodeType                    string
+	secretReferences            []byte
+	extraEnvVars                []byte
+	resources                   []byte
+	imageName                   string
+	testid                      string
+}
+
 type Generator interface {
 	Initialize(filePath string) *ConfigFile
-	Generate()
-	HandleConfigFile(defaultConfigFile string, testType string) map[string]interface{}
-	HandleConfigFileOverride(base map[string]interface{}, overrideConfigFile string) map[string]interface{}
+	Generate(cf ConfigFile)
+	HandleConfigFile(defaultConfigFile string, testType string) map[string]any
+	HandleConfigFileOverride(base map[string]any, overrideConfigFile string) map[string]any
 	CallK6Archive(dirName string, testConfigFileToUse string, testFile string, k6ArchiveArgs []string)
-	CallKubectl(dirName string, configMapName string, uniqName string, namespace string)
-	CallJsonnet(dirName string, configMapName string, uniqName string, testName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte, imageName string, testid string)
+	CallKubectl(dirName string, configMapName string, uniqName string, testId, testName, namespace string)
+	CallJsonnet(jsonnetParameters JsonnetParameters)
 }
 
 type K8sManifestGenerator struct {
-	UserConfigFile            string
 	ConfigDirectory           string
 	DistDirectory             string
 	BuildDirectory            string
@@ -75,7 +89,11 @@ func (r K8sManifestGenerator) Initialize(filePath string) *ConfigFile {
 	}
 	cf.SetDefaults()
 
-	requiredDirs := []string{".conf", ".build", ".dist"}
+	requiredDirs := []string{
+		r.ConfigDirectory,
+		r.BuildDirectory,
+		r.DistDirectory,
+	}
 
 	for _, d := range requiredDirs {
 		if _, err := os.Stat(d); os.IsNotExist(err) {
@@ -86,84 +104,6 @@ func (r K8sManifestGenerator) Initialize(filePath string) *ConfigFile {
 		}
 	}
 
-	return &cf
-}
-
-func parseEnvFile(filePath string) []*Env {
-	envFromFile := []*Env{}
-	tempFile, err := os.Open(filePath)
-
-	if err != nil {
-		log.Fatalf("error opening file: %s", err)
-	}
-	defer tempFile.Close()
-
-	scanner := bufio.NewScanner(tempFile)
-	for scanner.Scan() {
-		line := scanner.Text()
-		// Skip empty lines and comments
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		keyValue := strings.Split(line, "=")
-		if len(keyValue) != 2 {
-			log.Fatalf("expected %s to have the format KEY=VALUE", keyValue)
-		}
-		envFromFile = append(envFromFile, &Env{
-			Name:  &keyValue[0],
-			Value: &keyValue[1],
-		})
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Fatalf("error reading from file: %s", err)
-	}
-	return envFromFile
-}
-
-func handleExtraEnvVars(original []*Env, extra []*Env) []*Env {
-	newEnv := []*Env{}
-	m := orderedmap.NewOrderedMap[string, string]()
-	for _, o := range original {
-		m.Set(*o.Name, *o.Value)
-	}
-	for _, e := range extra {
-		m.Set(*e.Name, *e.Value)
-	}
-	for k, v := range m.AllFromFront() {
-		newEnv = append(newEnv, &Env{
-			Name:  &k,
-			Value: &v,
-		})
-	}
-	return newEnv
-}
-
-func chooseCorrectSlackChannel(deploy_env string) string {
-	branch, ok := os.LookupEnv("GITHUB_REF")
-
-	if ok && branch == "refs/heads/main" {
-		aux := map[string]string{
-			"at22": "slack-dev",
-			"at23": "slack-dev",
-			"at24": "slack-dev",
-			"yt01": "slack-dev",
-
-			"tt02": "slack-prod",
-			"prod": "slack-prod",
-		}
-		return aux[deploy_env]
-	}
-
-	return "slack-test"
-}
-
-func (r K8sManifestGenerator) Generate() {
-	fmt.Println("Generating K6 Manifests")
-
-	cf := r.Initialize(r.UserConfigFile)
-
 	d, err := yaml.Marshal(&cf)
 	if err != nil {
 		log.Fatalf("error: %v", err)
@@ -173,189 +113,134 @@ func (r K8sManifestGenerator) Generate() {
 		fmt.Printf("Failed to create expanded config file\n err: %s", err)
 		os.Exit(1)
 	}
-	fmt.Printf("Wrote config file into: %s/expanded-configfile.yaml\n", r.ConfigDirectory)
 
-	cliArgs, ok := os.LookupEnv("INPUT_COMMAND_LINE_ARGS")
-	var envOptions []*Env
-	if ok {
-		args := strings.Fields(cliArgs)
-		for i, arg := range args {
-			if strings.HasPrefix(arg, "-e") || strings.HasPrefix(arg, "--env") {
-				if i < len(args)-1 {
-					keyValue := strings.Split(args[i+1], "=")
-					if len(keyValue) == 2 {
-						key := keyValue[0]
-						value := keyValue[1]
-						envOptions = append(envOptions, &Env{Name: &key, Value: &value})
-					}
-				}
+	return &cf
+}
+
+func generate(td *TestDefinition, c *TestContext, r K8sManifestGenerator, cf ConfigFile, envFileSlice []*Env, envOptions []*Env) {
+	var configFile map[string]any
+	if *c.TestTypeDefinition.Type != "custom" {
+		if *c.TestTypeDefinition.Type == "breakpoint" {
+			configFile = r.HandleBreakpointConfigFile(c.TestRun.Env)
+		} else {
+			configFile = r.HandleConfigFile(td.ConfigFile, *c.TestTypeDefinition.Type)
+			if c.TestTypeDefinition.ConfigFile != "" {
+				configFile = r.HandleConfigFileOverride(configFile, c.TestTypeDefinition.ConfigFile)
 			}
 		}
 	}
 
+	manifestGenerationTimestamp := time.Now().UnixMilli()
+	uniqName := fmt.Sprintf("%s-%d-%s", c.Environment, manifestGenerationTimestamp, randomString(5))
+	dirName := fmt.Sprintf("%s", *c.TestRun.Id)
+	newpath := filepath.Join(r.ConfigDirectory, dirName)
+	testConfigFileToUse := fmt.Sprintf("%s/tweaked-testconfig.json", newpath)
+
+	marshalledConfigFile, err := json.MarshalIndent(configFile, "", "  ")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err = os.MkdirAll(newpath, os.ModePerm); err != nil {
+		log.Fatal(err)
+	}
+
+	err = os.WriteFile(testConfigFileToUse, marshalledConfigFile, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	mergedEnvs := handleExtraEnvVars(c.TestRun.Env, envFileSlice)
+	mergedEnvs = handleExtraEnvVars(mergedEnvs, getGithubRelatedVars())
+	mergedEnvs = handleExtraEnvVars(mergedEnvs, envOptions)
+
+	k6ArchiveArgs := []string{
+		"--env", fmt.Sprintf("%s=%s", "K6_NO_USAGE_REPORT", "true"),
+		"--env", fmt.Sprintf("%s=%s", "K6_PROMETHEUS_RW_SERVER_URL", "http://kube-prometheus-stack-prometheus.monitoring:9090/api/v1/write"),
+		"--env", fmt.Sprintf("%s=%s", "K6_PROMETHEUS_RW_TREND_STATS", "avg,min,med,max,count,p(95),p(99),p(99.5),p(99.9)"),
+
+		"--env", fmt.Sprintf("%s=%s", "ENVIRONMENT", c.Environment),
+		"--env", fmt.Sprintf("%s=%s", "NAMESPACE", cf.Namespace),
+		"--env", fmt.Sprintf("%s=%d", "MANIFEST_GENERATION_TIMESTAMP", manifestGenerationTimestamp),
+		"--env", fmt.Sprintf("%s=%s", "TESTID", *c.TestRun.Id),
+		"--env", fmt.Sprintf("%s=%s", "TEST_NAME", *c.TestRun.Name),
+	}
+	for _, env := range mergedEnvs {
+		k6ArchiveArgs = append(k6ArchiveArgs, "--env", fmt.Sprintf("%s=%s", *env.Name, *env.Value))
+	}
+
+	r.CallK6Archive(dirName, testConfigFileToUse, fmt.Sprintf("%s/%s", r.RepoRootDirectory, td.TestFile), k6ArchiveArgs)
+
+	configMapName := *c.TestRun.Id
+
+	r.CallKubectl(dirName, configMapName, uniqName, *c.TestRun.Id, *c.TestRun.Name, cf.Namespace)
+
+	// Jsonnet related things
+	slackChannel := chooseCorrectSlackChannel(c.Environment)
+	secretReferences, err := yaml.Marshal(append(c.TestRun.SecretReferences, &slackChannel))
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
+
+	resources, err := yaml.Marshal(c.TestRun.Resources)
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
+	imageName := "ghcr.io/altinn/altinn-platform/k6-image:latest"
+	if *c.TestTypeDefinition.Type == "browser" {
+		imageName = "grafana/k6:master-with-browser"
+	}
+
+	mergedEnvsMarshalled, err := yaml.Marshal(mergedEnvs)
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
+
+	JsonnetParameters := JsonnetParameters{
+		dirName:                     dirName,
+		configMapName:               configMapName,
+		uniqName:                    uniqName,
+		testName:                    *c.TestRun.Name,
+		manifestGenerationTimestamp: strconv.FormatInt(manifestGenerationTimestamp, 10),
+		namespace:                   cf.Namespace,
+		environment:                 c.Environment,
+		parallelism:                 *c.TestRun.Parallelism,
+		nodeType:                    *c.NodeType,
+		secretReferences:            secretReferences,
+		extraEnvVars:                mergedEnvsMarshalled,
+		resources:                   resources,
+		imageName:                   imageName,
+		testid:                      *c.TestRun.Id,
+	}
+	r.CallJsonnet(JsonnetParameters)
+}
+
+func (r K8sManifestGenerator) Generate(cf ConfigFile) {
+	// Command line args, used mainly with ad-hoc tests
+	var envOptions []*Env
+	if cliArgs, ok := os.LookupEnv("INPUT_COMMAND_LINE_ARGS"); ok {
+		envOptions = getEnvVarsFromCliArgs(cliArgs)
+	}
+
+	wg := &sync.WaitGroup{}
 	for _, td := range cf.TestDefinitions {
 		var envFileSlice []*Env
 		if td.EnvFile != "" {
 			envFileSlice = parseEnvFile(fmt.Sprintf("%s/%s", r.RepoRootDirectory, td.EnvFile))
 		}
-		for i, c := range td.Contexts {
+
+		for _, c := range td.Contexts {
 			if c.TestTypeDefinition.Enabled {
-				c.TestRun.Env = append(c.TestRun.Env, envOptions...)
-				var configFile map[string]interface{}
-				if *c.TestTypeDefinition.Type != "custom" {
-					if *c.TestTypeDefinition.Type == "breakpoint" {
-						configFile = r.HandleBreakpointConfigFile(c.TestRun.Env)
-					} else {
-						configFile = r.HandleConfigFile(td.ConfigFile, *c.TestTypeDefinition.Type)
-						if c.TestTypeDefinition.ConfigFile != "" {
-							configFile = r.HandleConfigFileOverride(configFile, c.TestTypeDefinition.ConfigFile)
-						}
-					}
-				}
-
-				manifestGenerationTimestamp := time.Now().UnixMilli()
-				uniqName := fmt.Sprintf("%s-%s-%d-%d", c.Environment, *c.TestRun.Name, manifestGenerationTimestamp, i)
-
-				marshalledConfigFile, err := json.MarshalIndent(configFile, "", "  ")
-				if err != nil {
-					log.Fatal(err)
-				}
-				// TODO: I'm still not sure what the best way to do this is. But I guess this approach is a bit less noisy than the previous.
-				// Will keep revisiting as we start adding more tests over time.
-				dirName := fmt.Sprintf("%s-%s", c.Environment, *c.TestRun.Name)
-				newpath := filepath.Join(r.ConfigDirectory, dirName)
-				err = os.MkdirAll(newpath, os.ModePerm)
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				testConfigFileToUse := fmt.Sprintf("%s/tweaked-testconfig.json", newpath)
-				err = os.WriteFile(testConfigFileToUse, marshalledConfigFile, 0644)
-				if err != nil {
-					log.Fatal(err)
-				}
-				fmt.Printf("Wrote k6 test config file into: %s\n", testConfigFileToUse)
-
-				// Add Env Vars to archive
-				mergedEnvs := handleExtraEnvVars(envFileSlice, c.TestRun.Env)
-				k6ArchiveArgs := []string{"--env", fmt.Sprintf("%s=%s", "ENVIRONMENT", c.Environment)}
-				for _, env := range mergedEnvs {
-					// --env MY_USER_AGENT="hello"
-					k6ArchiveArgs = append(k6ArchiveArgs, "--env", fmt.Sprintf("%s=%s", *env.Name, *env.Value))
-				}
-
-				r.CallK6Archive(dirName, testConfigFileToUse, fmt.Sprintf("%s/%s", r.RepoRootDirectory, td.TestFile), k6ArchiveArgs)
-
-				if utf8.RuneCountInString(uniqName) > 51 {
-					log.Fatalf("Automatic generated name is too big: %s. Provide a default name such that the generated name does not go over 51 characters", uniqName)
-				}
-
-				var configMapName string
-				switch *c.TestTypeDefinition.Type {
-				case "breakpoint":
-					configMapName = fmt.Sprintf("%s-%s", dirName, "break")
-				case "smoke":
-					configMapName = fmt.Sprintf("%s-%s", dirName, "smoke")
-				case "soak":
-					configMapName = fmt.Sprintf("%s-%s", dirName, "soak")
-				default:
-					configMapName = dirName
-				}
-
-				r.CallKubectl(dirName, configMapName, uniqName, cf.Namespace)
-				// merge env file with overrides.
-				githubRepositoryEnvName := "GITHUB_REPOSITORY"
-				githubServerUrlEnvName := "GITHUB_SERVER_URL"
-				githubRunIdEnvName := "GITHUB_RUN_ID"
-
-				var githubRelatedEnvVars []*Env
-
-				githubRepositoryEnvValue, ok := os.LookupEnv(githubRepositoryEnvName)
-				if ok {
-					githubRelatedEnvVars = append(githubRelatedEnvVars, &Env{
-						Name:  &githubRepositoryEnvName,
-						Value: &githubRepositoryEnvValue,
-					})
-				}
-				githubServerUrlEnvValue, ok := os.LookupEnv(githubServerUrlEnvName)
-				if ok {
-					githubRelatedEnvVars = append(githubRelatedEnvVars, &Env{
-						Name:  &githubServerUrlEnvName,
-						Value: &githubServerUrlEnvValue,
-					})
-				}
-				githubRunIdEnvValue, ok := os.LookupEnv(githubRunIdEnvName)
-				if ok {
-					githubRelatedEnvVars = append(githubRelatedEnvVars, &Env{
-						Name:  &githubRunIdEnvName,
-						Value: &githubRunIdEnvValue,
-					})
-				}
-
-				mergedEnvs = handleExtraEnvVars(mergedEnvs, githubRelatedEnvVars)
-				mergedEnvsMarshalled, err := yaml.Marshal(mergedEnvs)
-				if err != nil {
-					log.Fatalf("error: %v", err)
-				}
-
-				slackChannel := chooseCorrectSlackChannel(c.Environment)
-				secretReferences, err := yaml.Marshal(append(c.TestRun.SecretReferences, &slackChannel))
-				if err != nil {
-					log.Fatalf("error: %v", err)
-				}
-
-				resources, err := yaml.Marshal(c.TestRun.Resources)
-				if err != nil {
-					log.Fatalf("error: %v", err)
-				}
-				imageName := "ghcr.io/altinn/altinn-platform/k6-image:latest"
-				if *c.TestTypeDefinition.Type == "browser" {
-					imageName = "grafana/k6:master-with-browser"
-				}
-				if c.TestRun.Id != nil {
-					r.CallJsonnet(dirName, configMapName, uniqName, *c.TestRun.Name, strconv.FormatInt(manifestGenerationTimestamp, 10), cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, mergedEnvsMarshalled, resources, imageName, *c.TestRun.Id)
-				} else {
-					r.CallJsonnet(dirName, configMapName, uniqName, *c.TestRun.Name, strconv.FormatInt(manifestGenerationTimestamp, 10), cf.Namespace, c.Environment, *c.TestRun.Parallelism, *c.NodeType, secretReferences, mergedEnvsMarshalled, resources, imageName, "")
-				}
-
-				grafanaDashboard, ok := os.LookupEnv("GRAFANA_DASHBOARD")
-				if !ok {
-					grafanaDashboard = "d/ccbb2351-2ae2-462f-ae0e-f2c893ad1028/k6-prometheus"
-				}
-
-				fmt.Printf("\nTo run the test '%s' in '%s' run\n\tkubectl --context k6tests-cluster apply --server-side -f %s", *c.TestRun.Name, c.Environment, filepath.Join(r.DistDirectory, dirName))
-				fmt.Printf("\nTo check the logs run\n\tkubectl --context k6tests-cluster -n %s logs -f --tail=-1 -l \"k6-test=%s,runner=true\"", cf.Namespace, uniqName)
-				fmt.Printf("\nGrafana URL: \n\t%s/%s?orgId=1&var-DS_PROMETHEUS=%s&var-namespace=%s&var-testid=%s&from=%s&to=now&refresh=1m\n\n",
-					"https://grafana.altinn.cloud",
-					grafanaDashboard,
-					"k6tests-amw",
-					cf.Namespace,
-					uniqName,
-					strconv.FormatInt(manifestGenerationTimestamp, 10),
-				)
-
-				if githubOutputFilePath, ok := os.LookupEnv("GITHUB_OUTPUT"); ok {
-					f, err := os.OpenFile(githubOutputFilePath, os.O_APPEND|os.O_WRONLY, 0644)
-					if err != nil {
-						log.Fatal(err)
-					}
-					if _, err := f.Write([]byte(fmt.Sprintf("%s-%s=%s\n", c.Environment, *c.TestRun.Name, uniqName))); err != nil {
-						log.Fatal(err)
-					}
-					fmt.Printf("You can interact with k8s resources using the unique id, e.g.\n\tkubectl get pods -l \"k6-test=${{ steps.<step_id>.outputs.%s-%s }}\" -o name\n", c.Environment, *c.TestRun.Name)
-					if err := f.Close(); err != nil {
-						log.Fatal(err)
-					}
-				}
+				wg.Go(func() { generate(td, c, r, cf, envFileSlice, envOptions) })
 			}
 		}
+
 	}
-	fmt.Printf("\nTo run all tests run:\n\tkubectl --context k6tests-cluster apply --server-side -f .dist/ -R\n")
-	fmt.Printf("\nTo abort all tests run:\n\tkubectl --context k6tests-cluster delete -f .dist/ -R\n")
+	wg.Wait()
 }
 
-func (r K8sManifestGenerator) HandleConfigFileOverride(base map[string]interface{}, overrideConfigFile string) map[string]interface{} {
-	override := map[string]interface{}{}
+func (r K8sManifestGenerator) HandleConfigFileOverride(base map[string]any, overrideConfigFile string) map[string]any {
+	override := map[string]any{}
 
 	overrideConfig, err := os.ReadFile(fmt.Sprintf("%s/%s", r.RepoRootDirectory, overrideConfigFile))
 	if err != nil {
@@ -371,7 +256,7 @@ func (r K8sManifestGenerator) HandleConfigFileOverride(base map[string]interface
 	return base
 }
 
-func (r K8sManifestGenerator) HandleBreakpointConfigFile(envSlice []*Env) map[string]interface{} {
+func (r K8sManifestGenerator) HandleBreakpointConfigFile(envSlice []*Env) map[string]any {
 	env := map[string]string{}
 	for _, e := range envSlice {
 		if strings.HasPrefix(*e.Name, "BREAKPOINT_") {
@@ -418,7 +303,7 @@ func (r K8sManifestGenerator) HandleBreakpointConfigFile(envSlice []*Env) map[st
 	}
 
 	// TODO: Hacky, make a better interface as we are likely to do something similar with smoke tests, etc.
-	var gInterface map[string]interface{}
+	var gInterface map[string]any
 	breakPointConfMarshalled, err := json.Marshal(breakPointConf)
 	if err != nil {
 		log.Fatal(err)
@@ -431,8 +316,8 @@ func (r K8sManifestGenerator) HandleBreakpointConfigFile(envSlice []*Env) map[st
 	return gInterface
 }
 
-func (r K8sManifestGenerator) HandleConfigFile(defaultConfigFile string, testType string) map[string]interface{} {
-	mergedOut := map[string]interface{}{}
+func (r K8sManifestGenerator) HandleConfigFile(defaultConfigFile string, testType string) map[string]any {
+	mergedOut := map[string]any{}
 
 	if defaultConfigFile != "" {
 		testConfig, err := os.ReadFile(fmt.Sprintf("%s/%s", r.RepoRootDirectory, defaultConfigFile))
@@ -453,7 +338,7 @@ func (r K8sManifestGenerator) HandleConfigFile(defaultConfigFile string, testTyp
 		if err != nil {
 			log.Fatal(err)
 		}
-		temp := map[string]interface{}{}
+		temp := map[string]any{}
 		err = json.Unmarshal([]byte(defaultScenario), &temp)
 		if err != nil {
 			log.Fatal(err)
@@ -490,10 +375,9 @@ func (r K8sManifestGenerator) CallK6Archive(dirName string, testConfigFileToUse 
 		fmt.Printf("Failed to call %s\nerr: %s", cmd.String(), errb.String())
 		os.Exit(1)
 	}
-	fmt.Printf("Wrote archive.tar into: %s/archive.tar\n", newpath)
 }
 
-func (r K8sManifestGenerator) CallKubectl(dirName string, configMapName string, uniqName string, namespace string) {
+func (r K8sManifestGenerator) CallKubectl(dirName string, configMapName string, uniqName string, testId, testName, namespace string) {
 	cmd := exec.Command("kubectl",
 		"create",
 		"configmap",
@@ -519,10 +403,11 @@ func (r K8sManifestGenerator) CallKubectl(dirName string, configMapName string, 
 		log.Fatal(err)
 	}
 	temp.SetLabels(map[string]string{
-		"testid":            uniqName,
-		"k6-test":           uniqName,
-		"k6-test-configmap": "true",
-		"generated-by":      "k6-action-image",
+		"generated-by": "k6-action-image",
+		"k6-test":      testName,
+		"test_name":    testName,
+		"testid":       testId,
+		"uniq-name":    uniqName,
 	})
 
 	tempMarshalled, err := json.MarshalIndent(temp, "", "  ")
@@ -543,32 +428,32 @@ func (r K8sManifestGenerator) CallKubectl(dirName string, configMapName string, 
 	}
 }
 
-func (r K8sManifestGenerator) CallJsonnet(dirName string, configMapName string, uniqName string, testName string, manifestGenerationTimestamp string, namespace string, environment string, parallelism int, nodeType string, secretReferences []byte, extraEnvVars []byte, resources []byte, imageName string, testid string) {
+func (r K8sManifestGenerator) CallJsonnet(jp JsonnetParameters) {
 	var errb strings.Builder
 	k6ClusterConfigFile, err := os.ReadFile("/actions/generate-k6-manifests/infra/k6_cluster_conf.yaml")
 	if err != nil {
 		log.Fatal(err)
 	}
-	newpath := filepath.Join(r.DistDirectory, dirName)
+	newpath := filepath.Join(r.DistDirectory, jp.dirName)
 	err = os.MkdirAll(newpath, os.ModePerm)
 	if err != nil {
 		log.Fatal(err)
 	}
 	cmd := exec.Command("jsonnet",
 		"--jpath", "/jsonnet/vendor",
-		"--ext-str", fmt.Sprintf("unique_name=%s", uniqName),
-		"--ext-str", fmt.Sprintf("testid=%s", testid),
-		"--ext-str", fmt.Sprintf("configmap_name=%s", configMapName),
-		"--ext-str", fmt.Sprintf("test_name=%s", testName),
-		"--ext-str", fmt.Sprintf("manifest_generation_timestamp=%s", manifestGenerationTimestamp),
-		"--ext-str", fmt.Sprintf("namespace=%s", namespace),
-		"--ext-str", fmt.Sprintf("deploy_env=%s", environment),
-		"--ext-str", fmt.Sprintf("parallelism=%d", parallelism),
-		"--ext-str", fmt.Sprintf("node_type=%s", nodeType),
-		"--ext-str", fmt.Sprintf("secret_references=%s", secretReferences),
-		"--ext-str", fmt.Sprintf("extra_env_vars=%s", extraEnvVars),
-		"--ext-str", fmt.Sprintf("resources=%s", resources),
-		"--ext-str", fmt.Sprintf("image_name=%s", imageName),
+		"--ext-str", fmt.Sprintf("unique_name=%s", jp.uniqName),
+		"--ext-str", fmt.Sprintf("testid=%s", jp.testid),
+		"--ext-str", fmt.Sprintf("configmap_name=%s", jp.configMapName),
+		"--ext-str", fmt.Sprintf("test_name=%s", jp.testName),
+		"--ext-str", fmt.Sprintf("manifest_generation_timestamp=%s", jp.manifestGenerationTimestamp),
+		"--ext-str", fmt.Sprintf("namespace=%s", jp.namespace),
+		"--ext-str", fmt.Sprintf("deploy_env=%s", jp.environment),
+		"--ext-str", fmt.Sprintf("parallelism=%d", jp.parallelism),
+		"--ext-str", fmt.Sprintf("node_type=%s", jp.nodeType),
+		"--ext-str", fmt.Sprintf("extra_env_vars=%s", jp.extraEnvVars),
+		"--ext-str", fmt.Sprintf("secret_references=%s", jp.secretReferences),
+		"--ext-str", fmt.Sprintf("resources=%s", jp.resources),
+		"--ext-str", fmt.Sprintf("image_name=%s", jp.imageName),
 		"--ext-str", fmt.Sprintf("extra_cli_args=%s", os.Getenv("INPUT_COMMAND_LINE_ARGS")),
 		"--ext-str", fmt.Sprintf("k6clusterconfig=%s", k6ClusterConfigFile),
 		"--multi", newpath, "/actions/generate-k6-manifests/jsonnet/main.jsonnet",

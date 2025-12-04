@@ -2,8 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"path/filepath"
-	"strings"
+	"slices"
 )
 
 type ConfigFile struct {
@@ -57,21 +56,11 @@ type Env struct {
 }
 
 func (cFile *ConfigFile) IsValidDeploymentEnvironment(environmentName string) bool {
-	for _, i := range cFile.ValidEnvironmentValues {
-		if i == environmentName {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(cFile.ValidEnvironmentValues, environmentName)
 }
 
 func (cFile *ConfigFile) IsValidTestType(testType string) bool {
-	for _, i := range cFile.ValidTestTypes {
-		if i == testType {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(cFile.ValidTestTypes, testType)
 }
 
 func (cFile *ConfigFile) HasOnlyValidTestTypes() bool {
@@ -108,12 +97,7 @@ func (cFile *ConfigFile) IsValid() bool {
 func (cFile *ConfigFile) SetDefaults() {
 	for _, td := range cFile.TestDefinitions {
 		for _, c := range td.Contexts {
-			// Use Spot nodes by default.
-			if c.NodeType == nil || *c.NodeType == "" {
-				spot := "spot"
-				c.NodeType = &spot
-			}
-			// If no test types are configured, add a smoke test definition by default.
+			// If no test types are configured, add a functional test definition by default.
 			if c.TestTypeDefinition == nil {
 				functional := "functional"
 				c.TestTypeDefinition = &TestTypeDefinition{
@@ -121,20 +105,24 @@ func (cFile *ConfigFile) SetDefaults() {
 					Enabled: true,
 				}
 			}
-
-			// If TestRun Name isn't passed, default to path to file.
-			// TODO: Append test type eventually
 			if c.TestRun == nil {
 				c.TestRun = &TestRun{}
 			}
 			if c.TestRun.Name == nil || *c.TestRun.Name == "" {
-				//tempString := strings.ReplaceAll(td.TestFile, "/", "-")
+				c.TestRun.Name = sanitizeNameFromTestFileName(td.TestFile)
+			}
+			if c.TestRun.Id == nil || *c.TestRun.Id == "" {
+				suffix := ""
+				switch *c.TestTypeDefinition.Type {
+				case "breakpoint":
+					suffix = "-break"
+				case "smoke":
+					suffix = "-smoke"
+				}
 
-				tempString := filepath.Base(td.TestFile)
-				tempString = strings.ReplaceAll(tempString, "_", "-")
-				// Remove .js or .ts
-				tempString = strings.TrimSuffix(tempString, filepath.Ext(tempString))
-				c.TestRun.Name = &tempString
+				tempString := sanitizeNameFromTestFileName(td.TestFile)
+				defaultId := fmt.Sprintf("%s-%s%s", c.Environment, *tempString, suffix)
+				c.TestRun.Id = &defaultId
 			}
 			if c.TestRun.Parallelism == nil || *c.TestRun.Parallelism <= 0 {
 				tempInt := 1
@@ -147,11 +135,25 @@ func (cFile *ConfigFile) SetDefaults() {
 			}
 			if c.TestRun.Resources.Requests.Memory == nil || *c.TestRun.Resources.Requests.Memory == "" {
 				defaultMemoryRequests := "200Mi"
+				if *c.TestTypeDefinition.Type == "breakpoint" {
+					defaultMemoryRequests = "4Gi"
+				}
 				c.TestRun.Resources.Requests.Memory = &defaultMemoryRequests
 			}
 			if c.TestRun.Resources.Requests.Cpu == nil || *c.TestRun.Resources.Requests.Cpu == "" {
 				defaultCpuRequests := "250m"
+				if *c.TestTypeDefinition.Type == "breakpoint" {
+					defaultCpuRequests = "2"
+				}
 				c.TestRun.Resources.Requests.Cpu = &defaultCpuRequests
+			}
+			if c.NodeType == nil || *c.NodeType == "" {
+				// As of now we have enough capacity in the default node pool to run functional and smoke tests there.
+				nodeType := "default"
+				if *c.TestTypeDefinition.Type == "breakpoint" {
+					nodeType = "spot"
+				}
+				c.NodeType = &nodeType
 			}
 		}
 	}
