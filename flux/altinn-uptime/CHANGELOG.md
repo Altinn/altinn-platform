@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/Altinn/altinn-platform/compare/flux-oci-altinn-uptime-v1.0.1...flux-oci-altinn-uptime-v1.0.2) (2025-12-04)
+
+
+### Bug Fixes
+
+* altinn uptime cronjob timeout ([#2727](https://github.com/Altinn/altinn-platform/issues/2727)) ([cc8bc03](https://github.com/Altinn/altinn-platform/commit/cc8bc03746487db001bdcded0f42feab557491dc))
+
 ## [1.0.1](https://github.com/Altinn/altinn-platform/compare/flux-oci-altinn-uptime-v1.0.0...flux-oci-altinn-uptime-v1.0.1) (2025-12-03)
 
 
