@@ -51,6 +51,7 @@ RUN jb init && \
 # Build Generator code
 WORKDIR /actions/generate-k6-manifests
 COPY actions/generate-k6-manifests .
+RUN go mod download
 RUN go build . && \
     chmod +x generate-k6-manifests && \
     mv generate-k6-manifests /usr/local/bin

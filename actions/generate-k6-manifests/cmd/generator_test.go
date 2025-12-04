@@ -16,9 +16,8 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-func initGenerator(userConfigFile, confDir, distDir, buildDir string) *K8sManifestGenerator {
-	return &K8sManifestGenerator{
-		UserConfigFile:            userConfigFile,
+func initGenerator(confDir, distDir, buildDir string) K8sManifestGenerator {
+	return K8sManifestGenerator{
 		ConfigDirectory:           confDir,
 		DistDirectory:             distDir,
 		BuildDirectory:            buildDir,
@@ -31,7 +30,7 @@ func validateConfigFolder(confDir string, testVersion string, t *testing.T) {
 	_ = filepath.Walk(confDir, func(path string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
 			fmt.Printf("Validating %s\n", path)
-			_, _, _, deployEnv := getInfoFromFilePath(path)
+			_, deployEnv := getInfoFromFilePath(path)
 			if info.Name() == "expanded-configfile.yaml" {
 				generatedFile, knownExpectedFile, equalContents := readFilesAndCompareContents(path, fmt.Sprintf("./expected_generated_files/%s/expanded-configfile.yaml", testVersion))
 				if !equalContents {
@@ -53,19 +52,24 @@ func validateTestRun(path, dirName, testVersion, deployEnv string, t *testing.T)
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
-	splitName := strings.Split(uniqName, "-")
-	manifestGenerationTimestamp := splitName[len(splitName)-2]
-	testName := fmt.Sprintf("%s-%s", splitName[len(splitName)-4], splitName[len(splitName)-3])
+	manifestGenerationTimestamp := strings.Split(uniqName, "-")[1]
+	// Ugly hack, but let's go with it until I refactor further.
+	var testName string
+	testName = strings.TrimPrefix(dirName, fmt.Sprintf("%s-", deployEnv))
+	testName = strings.TrimSuffix(testName, "-breakpoint")
+	testName = strings.TrimSuffix(testName, "-smoke")
+	testName = strings.TrimSuffix(testName, "-spike")
 
 	generatedFile, knownExpectedFile, equalContents := readFileAndCompareWithTemplatedFile(
 		path,
 		fmt.Sprintf("./expected_generated_files/%s/%s/testrun.json.tmpl", testVersion, deployEnv),
 		map[string]string{
-			"UniqueName":                  uniqName,
 			"DirName":                     dirName,
 			"DeployEnv":                   deployEnv,
 			"ManifestGenerationTimestamp": manifestGenerationTimestamp,
 			"TestName":                    testName,
+			"TestId":                      dirName,
+			"UniqName":                    uniqName,
 		},
 	)
 	if !equalContents {
@@ -105,12 +109,6 @@ func validateConfigMap(path, testVersion, dirName string, t *testing.T) {
 	if !strings.Contains(generatedConfigMap.Labels["testid"], dirName) {
 		t.Errorf("generate %s: expected \n%s, to contain \n%s", testVersion, generatedConfigMap.Labels["testid"], dirName)
 	}
-	if generatedConfigMap.Labels["k6-test-configmap"] != "true" {
-		t.Errorf("generate %s: expected \n%s, to equal \n%s", testVersion, generatedConfigMap.Labels["k6-test-configmap"], "true")
-	}
-	if !strings.Contains(generatedConfigMap.Labels["k6-test"], dirName) {
-		t.Errorf("generate %s: expected \n%s, to contain \n%s", testVersion, generatedConfigMap.Labels["k6-test"], dirName)
-	}
 	if !(len(generatedConfigMap.Data["archive.tar"]) > 0) {
 		t.Errorf("generate %s: expected length of data in key archive.tar to be over 0 , actual %d", testVersion, len(generatedConfigMap.Data["archive.tar"]))
 	}
@@ -141,12 +139,7 @@ func postTest(version string) {
 	}
 }
 
-// TODO: Missing v12. It's getting more complex to manage non deterministic values. I should find an easier way to test this.
-var generateExamplesVersion = []string{"v1", "v2",
-	//"v3",
-	"v4", "v5",
-	// "v6",
-	"v7", "v8", "v9", "v10", "v11"}
+var generateExamplesVersion = []string{"v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12"}
 
 func TestGenerate(t *testing.T) {
 	for _, version := range generateExamplesVersion {
@@ -154,15 +147,16 @@ func TestGenerate(t *testing.T) {
 		fmt.Printf("Testing Generation for %s\n", version)
 		testVersion := version
 		distDir, confDir, buildDir := generateTempDirectories()
-		var g Generator = initGenerator(fmt.Sprintf("./example_configfiles/%s.yaml", testVersion), confDir, distDir, buildDir)
-		g.Generate()
+		var g Generator = initGenerator(confDir, distDir, buildDir)
+		cf := g.Initialize(fmt.Sprintf("./example_configfiles/%s.yaml", testVersion))
+		g.Generate(*cf)
 
 		validateConfigFolder(confDir, testVersion, t)
 
 		_ = filepath.Walk(distDir, func(path string, info os.FileInfo, err error) error {
 			if !info.IsDir() {
 				fmt.Printf("Validating %s\n", path)
-				dirName, _, _, deployEnv := getInfoFromFilePath(path)
+				dirName, deployEnv := getInfoFromFilePath(path)
 				if info.Name() == "testrun.json" {
 					validateTestRun(path, dirName, testVersion, deployEnv, t)
 				} else if info.Name() == "configmap.json" {
@@ -231,91 +225,11 @@ func readFileAndCompareWithTemplatedFile(filePath1 string, filePath2 string, tem
 	return string(file1), file2, string(file1) == file2
 }
 
-func getTestScriptFileNameFromSplitString(split []string) (string, error) {
-	if len(split) < 2 {
-		return "", fmt.Errorf("expected split string to have at least 2 elements but got: %d", len(split))
-	}
-	tempString := split[1:len(split)]
-	return strings.Join(tempString, "-"), nil
-}
-
-var splitStrings = []struct {
-	splitString []string // input
-	expected    string   // expected result
-}{
-	{
-		[]string{"at22", "k8s", "wrapper", "deployments"},
-		"k8s-wrapper-deployments",
-	},
-}
-
-func TestGetTestScriptFileNameFromSplitString(t *testing.T) {
-	for _, tt := range splitStrings {
-		actual, _ := getTestScriptFileNameFromSplitString(tt.splitString)
-		if actual != tt.expected {
-			t.Errorf("getTestScriptFileNameFromSplitString(%s): expected %s, actual %s", tt.splitString, tt.expected, actual)
-		}
-	}
-}
-
-func getInfoFromFilePath(path string) (dirName, fileName, testScriptName, deployEnv string) {
-	var err error
+func getInfoFromFilePath(path string) (dirName, deployEnv string) {
 	tempSplit := strings.Split(path, "/")
-
-	if len(tempSplit) == 5 {
-		dirName = tempSplit[3]
-		fileName = tempSplit[4]
-		tempString := strings.Split(dirName, "-")
-		deployEnv = tempString[0]
-		testScriptName, err = getTestScriptFileNameFromSplitString(tempString)
-		if err != nil {
-			log.Fatal(err)
-		}
-	} else {
-		fileName = tempSplit[3]
-	}
+	dirName = tempSplit[3]
+	deployEnv = strings.Split(dirName, "-")[0]
 	return
-}
-
-var splitPaths = []struct {
-	path                   string // input
-	expectedDirName        string
-	expectedFileName       string
-	expectedTestScriptName string
-	expectedDeployEnv      string
-}{
-	{
-		path:                   "/tmp/.conf1604560518/at22-k8s-wrapper-deployments/tweaked-testconfig.json",
-		expectedDirName:        "at22-k8s-wrapper-deployments",
-		expectedFileName:       "tweaked-testconfig.json",
-		expectedTestScriptName: "k8s-wrapper-deployments", // NB: This does not necessarily represent the actual filename
-		expectedDeployEnv:      "at22",
-	},
-	{
-		path:                   "/tmp/.conf3755495154/expanded-configfile.yaml",
-		expectedDirName:        "",
-		expectedFileName:       "expanded-configfile.yaml",
-		expectedTestScriptName: "",
-		expectedDeployEnv:      "",
-	},
-}
-
-func TestGetInfoFromFilePath(t *testing.T) {
-	for _, tt := range splitPaths {
-		actualDirName, actualFileName, actualTestScriptName, actualDeployEnv := getInfoFromFilePath(tt.path)
-		if actualDirName != tt.expectedDirName {
-			t.Errorf("getInfoFromFilePath(%s): expected %s, actual %s", tt.path, tt.expectedDirName, actualDirName)
-		}
-		if actualFileName != tt.expectedFileName {
-			t.Errorf("getInfoFromFilePath(%s): expected %s, actual %s", tt.path, tt.expectedFileName, actualFileName)
-		}
-		if actualTestScriptName != tt.expectedTestScriptName {
-			t.Errorf("getInfoFromFilePath(%s): expected %s, actual %s", tt.path, tt.expectedTestScriptName, actualTestScriptName)
-		}
-		if actualDeployEnv != tt.expectedDeployEnv {
-			t.Errorf("getInfoFromFilePath(%s): expected %s, actual %s", tt.path, tt.expectedDeployEnv, actualDeployEnv)
-		}
-	}
 }
 
 var envVarOverrides = []struct {

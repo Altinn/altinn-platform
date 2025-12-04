@@ -12,6 +12,7 @@ test_definitions:
             config_file: ""
           test_run:
             name: get-deployments
+            id: at22-get-deployments
             parallelism: 1
             resources:
                 requests:

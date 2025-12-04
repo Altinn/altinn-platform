@@ -3,13 +3,17 @@
    "kind": "TestRun",
    "metadata": {
       "labels": {
-         "generated-by": "k6-action-image"
+         "generated-by": "k6-action-image",
+         "k6-test": "get-daemonsets",
+         "test_name": "get-daemonsets",
+         "testid": "yt01-get-daemonsets",
+         "uniq-name": "{{ .UniqName }}"
       },
-      "name": "{{ .UniqueName }}",
+      "name": "{{ .UniqName }}",
       "namespace": "platform"
    },
    "spec": {
-      "arguments": "--tag testid={{ .UniqueName }} --tag namespace=platform --tag deploy_env=yt01 --tag test_name=get-daemonsets --out experimental-prometheus-rw",
+      "arguments": "--tag testid=yt01-get-daemonsets --tag namespace=platform --tag deploy_env=yt01 --tag test_name=get-daemonsets --out experimental-prometheus-rw",
       "cleanup": "post",
       "parallelism": 1,
       "runner": {
@@ -20,7 +24,7 @@
             },
             {
                "name": "ENVIRONMENT",
-               "value": "{{ .DeployEnv }}"
+               "value": "yt01"
             },
             {
                "name": "FEATURE_FLAG1",
@@ -48,7 +52,7 @@
             },
             {
                "name": "TESTID",
-               "value": "{{ .UniqueName }}"
+               "value": "yt01-get-daemonsets"
             }
          ],
          "envFrom": [
@@ -66,9 +70,11 @@
          "image": "ghcr.io/altinn/altinn-platform/k6-image:latest",
          "metadata": {
             "labels": {
-               "k6-test": "{{ .UniqueName }}",
-               "test_name": "{{ .TestName }}",
-               "testid": "{{ .UniqueName }}"
+               "generated-by": "k6-action-image",
+               "k6-test": "get-daemonsets",
+               "test_name": "get-daemonsets",
+               "testid": "yt01-get-daemonsets",
+               "uniq-name": "{{ .UniqName }}"
             }
          },
          "nodeSelector": { },
@@ -83,7 +89,7 @@
       "script": {
          "configMap": {
             "file": "archive.tar",
-            "name": "{{ .DirName }}"
+            "name": "yt01-get-daemonsets"
          }
       }
    }

@@ -5,14 +5,14 @@ test_definitions:
       env_file: ""
       contexts:
         - environment: at22
-          node_type: spot
+          node_type: default
           test_type:
             type: functional
             enabled: true
             config_file: ""
           test_run:
             name: get-deployments
-            id: pre_determined
+            id: at22-pre-determined
             parallelism: 1
             resources:
                 requests:

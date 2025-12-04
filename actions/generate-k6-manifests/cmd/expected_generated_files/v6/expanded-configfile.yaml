@@ -5,13 +5,14 @@ test_definitions:
       env_file: ""
       contexts:
         - environment: at22
-          node_type: spot
+          node_type: default
           test_type:
             type: functional
             enabled: true
             config_file: ""
           test_run:
             name: get-deployments
+            id: at22-get-deployments
             parallelism: 1
             resources:
                 requests:
@@ -31,6 +32,7 @@ test_definitions:
             config_file: actions/generate-k6-manifests/test_service/test_configs/yt01_config.json
           test_run:
             name: get-daemonsets
+            id: yt01-get-daemonsets
             parallelism: 1
             resources:
                 requests:

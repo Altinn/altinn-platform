@@ -1,6 +1,6 @@
 module github.com/Altinn/altinn-platform/actions/generate-k6-manifests
 
-go 1.24.0
+go 1.25
 
 toolchain go1.25.4
 

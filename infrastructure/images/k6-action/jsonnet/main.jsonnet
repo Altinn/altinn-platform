@@ -39,13 +39,21 @@ local default_env = [
   },
   {
     name: 'TESTID',
-    value: unique_name,
+    value: testid,
   },
   {
     name: 'ENVIRONMENT',
     value: deploy_env,
   },
 ];
+
+local common_labels = {
+  'k6-test': test_name,
+  testid: testid,
+  test_name: test_name,
+  'uniq-name': unique_name,
+  'generated-by': 'k6-action-image',
+};
 
 local slo = {
   new(slo_name, team, application, url): {
@@ -89,9 +97,7 @@ local testrun = {
     metadata: {
       name: unique_name,
       namespace: namespace,
-      labels: {
-        'generated-by': 'k6-action-image',
-      },
+      labels: common_labels,
     },
     spec: {
       cleanup: 'post',
@@ -109,11 +115,7 @@ local testrun = {
       runner: {
         env: default_env,
         metadata: {
-          labels: {
-            'k6-test': unique_name,
-            testid: testid,
-            test_name: test_name,
-          },
+          labels: common_labels,
         },
         resources: resources,
         envFrom+: [{

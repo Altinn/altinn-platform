@@ -12,6 +12,7 @@ test_definitions:
             config_file: actions/generate-k6-manifests/test_service/test_configs/at_config.json
           test_run:
             name: get-deployments
+            id: at22-get-deployments-smoke
             parallelism: 1
             resources:
                 requests:
