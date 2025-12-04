@@ -178,7 +178,7 @@ locals {
     local.dialogporten_developers,
     local.dialogporten_developers_prod,
     local.product_auth_developers_dev,
-    local.product_auth_developers_prod,
+    local.product_auth_developers_prod
   ]
   grafana_viewer = [
     local.ai-aas-dev
