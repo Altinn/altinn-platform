@@ -165,6 +165,7 @@ locals {
   dialogporten_developers_prod            = "415cfc7b-40f6-4540-9aef-cb9c9050aada"
   product_auth_developers_dev             = "6d54df21-3547-41a2-8d0d-529fad054807"
   product_auth_developers_prod            = "c410f062-def4-44f5-9a45-b23ddcdd57c3"
+  ai-aas-dev                              = "d21cda08-aa70-49c3-84ea-f7c2081125d5"
 
   grafana_editor = [
     local.altinn_30_appmigration_test_developers,
@@ -177,7 +178,8 @@ locals {
     local.dialogporten_developers,
     local.dialogporten_developers_prod,
     local.product_auth_developers_dev,
-    local.product_auth_developers_prod
+    local.product_auth_developers_prod,
+    local.ai-aas-dev
   ]
   grafana_admin = [local.altinn_30_operations, local.altinn_30_operations_prod]
 
