@@ -10,7 +10,7 @@ spec:
   failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
-      activeDeadlineSeconds: 600
+      activeDeadlineSeconds: 1800
       template:
         spec:
           serviceAccountName: altinn-uptime-cronjob
