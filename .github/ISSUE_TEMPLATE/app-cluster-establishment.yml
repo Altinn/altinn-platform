@@ -2,7 +2,7 @@ name: APP Cluster Establishment 🏗️
 description: Request establishment of a new APP cluster for a customer
 title: "APP Cluster Establishment for [CUSTOMER] - [ENVIRONMENT]"
 labels: ["kind/infrastructure", "kind/toil", "status/triage"]
-projects: Altinn/177
+projects: Altinn/117
 body:
   - type: markdown
     attributes:
