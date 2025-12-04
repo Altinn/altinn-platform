@@ -152,10 +152,10 @@ jobs:
         uses: peter-evans/create-pull-request@84ae59a2cdc2258d6fa0732dd66352dddae2a412 # v7.0.9
         id: create-pr
         with:
-          title: "chore: update releases config for ${{ steps.update-release.outputs.release-name }} to ${{ steps.update-release.outputs.release-version }}"
-          body: "This pull request updates the releases config file with the new release version."
+          title: "release: deploy version ${{ steps.update-release.outputs.release-version }} for the ${{ steps.update-release.outputs.release-name }} config"
+          body: "This pull request updates the releases config file with the new release version.\nOnce this is merged the changes will be deployed to the selected environments."
           base: main
-          commit-message: "chore: update flux releases config for ${{ steps.update-release.outputs.release-name }} to ${{ steps.update-release.outputs.release-version }}"
+          commit-message: "release: deploy version ${{ steps.update-release.outputs.release-version }} for the ${{ steps.update-release.outputs.release-name }} config"
           branch: update-releases-config-${{ steps.update-release.outputs.release-name }}-${{ steps.update-release.outputs.release-version }}
           delete-branch: true
           labels: "${{ env.LABEL }}"
