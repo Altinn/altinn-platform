@@ -21,10 +21,10 @@
     "tt_ring1": "1.5.0",
     "tt_ring2": "1.5.0",
     "prod_ring1": "1.5.0",
-    "prod_ring2": "1.3.0"
+    "prod_ring2": "1.5.0"
   },
   "linkerd": {
-    "at_ring1": "1.4.0",
+    "at_ring1": "1.6.0",
     "at_ring2": "1.4.0",
     "tt_ring1": "1.4.0",
     "tt_ring2": "1.4.0",
@@ -37,7 +37,7 @@
     "tt_ring1": "1.1.0",
     "tt_ring2": "1.1.0",
     "prod_ring1": "1.1.0",
-    "prod_ring2": "0.1.0"
+    "prod_ring2": "1.1.0"
   },
   "otel-operator": {
     "at_ring1": "1.0.0",
@@ -112,12 +112,12 @@
     "prod_ring2": "0.1.0"
   },
   "blackbox-exporter": {
-    "at_ring1": "0.4.3",
-    "at_ring2": "0.4.3",
-    "tt_ring1": "0.4.3",
-    "tt_ring2": "0.4.3",
-    "prod_ring1": "0.4.3",
-    "prod_ring2": "0.4.3"
+    "at_ring1": "0.4.4",
+    "at_ring2": "0.4.4",
+    "tt_ring1": "0.4.4",
+    "tt_ring2": "0.4.4",
+    "prod_ring1": "0.4.4",
+    "prod_ring2": "0.4.4"
   },
   "helm-uninstall-outdated-apps": {
     "at_ring1": "1.0.0",

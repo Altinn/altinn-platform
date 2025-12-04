@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM docker.io/golang:1.25.4@sha256:698183780de28062f4ef46f82a79ec0ae69d2d22f7b160cf69f71ea8d98bf25d AS builder
+FROM docker.io/golang:1.25.5@sha256:20b91eda7a9627c127c0225b0d4e8ec927b476fa4130c6760928b849d769c149 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -11,10 +11,8 @@ COPY go.sum go.sum
 # and so that source changes don't invalidate our downloaded layer
 RUN go mod download
 
-# Copy the go source
-COPY cmd/main.go cmd/main.go
-COPY api/ api/
-COPY internal/ internal/
+# Copy the Go source (relies on .dockerignore to filter)
+COPY . .
 
 # Build
 # the GOARCH has no default value to allow the binary to be built according to the host where the command
