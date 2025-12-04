@@ -179,6 +179,8 @@ locals {
     local.dialogporten_developers_prod,
     local.product_auth_developers_dev,
     local.product_auth_developers_prod,
+  ]
+  grafana_viewer = [
     local.ai-aas-dev
   ]
   grafana_admin = [local.altinn_30_operations, local.altinn_30_operations_prod]
@@ -204,10 +206,19 @@ resource "azurerm_role_assignment" "grafana_editors" {
   skip_service_principal_aad_check = true
 }
 
+resource "azurerm_role_assignment" "grafana_viewers" {
+  for_each                         = { for value in local.grafana_viewer : value => value if value != null }
+  scope                            = azurerm_dashboard_grafana.grafana.id
+  role_definition_name             = "Grafana Viewer"
+  principal_id                     = each.value
+  principal_type                   = "Group"
+  skip_service_principal_aad_check = true
+}
+
 resource "azurerm_role_assignment" "grafna_monitors_viewer" {
   scope                = azurerm_dashboard_grafana.grafana.id
   role_definition_name = "Grafana Viewer"
-  principal_id         = "07a416db-8783-459b-a469-1e17ae37000d"
+  principal_id         = "07a416db-8783-459b-a469-1e17ae37000d" #aas-grafanaskjerm@ai-dev.no
   principal_type       = "User"
 }
 
