@@ -1,7 +1,7 @@
 name: Enhancement ✨
 description: Request a new feature or enhancement
 labels: ["kind/feature-request", "status/triage"]
-projects: Altinn/177
+projects: Altinn/117
 body:
   - type: markdown
     attributes:
