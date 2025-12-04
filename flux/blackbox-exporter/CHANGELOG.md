@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.4](https://github.com/Altinn/altinn-platform/compare/flux-oci-blackbox-exporter-v0.4.3...flux-oci-blackbox-exporter-v0.4.4) (2025-12-04)
+
+
+### Bug Fixes
+
+* Increase blackbox-exporter timeouts to 10s ([#2698](https://github.com/Altinn/altinn-platform/issues/2698)) ([3b7da0c](https://github.com/Altinn/altinn-platform/commit/3b7da0c9f179cb4965a6068fb7e3a54bbb3faf90))
+
 ## [0.4.3](https://github.com/Altinn/altinn-platform/compare/flux-oci-blackbox-exporter-v0.4.2...flux-oci-blackbox-exporter-v0.4.3) (2025-12-03)
 
 
