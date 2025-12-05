@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.0](https://github.com/Altinn/altinn-platform/compare/flux-oci-altinn-uptime-v1.1.0...flux-oci-altinn-uptime-v1.2.0) (2025-12-05)
+
+
+### Features
+
+* Reduce CronJob deadline and disable Linkerd ([#2744](https://github.com/Altinn/altinn-platform/issues/2744)) ([94614cd](https://github.com/Altinn/altinn-platform/commit/94614cd2e6607011746d8aa1936e32582de5254a))
+
+
+### Bug Fixes
+
+* altinn uptime cronjob timeout ([#2727](https://github.com/Altinn/altinn-platform/issues/2727)) ([cc8bc03](https://github.com/Altinn/altinn-platform/commit/cc8bc03746487db001bdcded0f42feab557491dc))
+* Unwrap HelmRelease patch and remove README deploy ([#2668](https://github.com/Altinn/altinn-platform/issues/2668)) ([57862a5](https://github.com/Altinn/altinn-platform/commit/57862a55aabdf86eb5b0d899d422ac8445747425))
+
 ## [1.1.0](https://github.com/Altinn/altinn-platform/compare/flux-oci-altinn-uptime-v1.0.2...flux-oci-altinn-uptime-v1.1.0) (2025-12-05)
 
 
