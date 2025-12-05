@@ -16,7 +16,7 @@ module "foundational" {
 
   suffix = local.suffix
 }
-
+/*
 module "services" {
   depends_on = [module.foundational]
   source     = "./modules/services"
@@ -35,3 +35,4 @@ module "services" {
 
   suffix = local.suffix
 }
+*/
