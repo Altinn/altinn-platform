@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/Altinn/altinn-platform/compare/flux-oci-linkerd-v1.6.0...flux-oci-linkerd-v1.7.0) (2025-12-05)
+
+
+### Features
+
+* update linkerd core charts to v2025.11.3 ([#2760](https://github.com/Altinn/altinn-platform/issues/2760)) ([22d7abb](https://github.com/Altinn/altinn-platform/commit/22d7abbeb8ea166f57890525f3e4b55f8d8d5904))
+
 ## [1.6.0](https://github.com/Altinn/altinn-platform/compare/flux-oci-linkerd-v1.5.0...flux-oci-linkerd-v1.6.0) (2025-12-04)
 
 
