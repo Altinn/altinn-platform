@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/Altinn/altinn-platform/compare/flux-oci-altinn-uptime-v1.0.2...flux-oci-altinn-uptime-v1.1.0) (2025-12-05)
+
+
+### Features
+
+* Reduce CronJob deadline and disable Linkerd ([#2744](https://github.com/Altinn/altinn-platform/issues/2744)) ([94614cd](https://github.com/Altinn/altinn-platform/commit/94614cd2e6607011746d8aa1936e32582de5254a))
+
 ## [1.0.2](https://github.com/Altinn/altinn-platform/compare/flux-oci-altinn-uptime-v1.0.1...flux-oci-altinn-uptime-v1.0.2) (2025-12-04)
 
 
