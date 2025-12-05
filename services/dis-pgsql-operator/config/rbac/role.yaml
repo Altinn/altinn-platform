@@ -5,6 +5,28 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - network.azure.com
+  resources:
+  - privatednszones
+  - privatednszonesvirtualnetworklinks
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - network.azure.com
+  resources:
+  - privatednszones/status
+  - privatednszonesvirtualnetworklinks/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - storage.dis.altinn.cloud
   resources:
   - databases
