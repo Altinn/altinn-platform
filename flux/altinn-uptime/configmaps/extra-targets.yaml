@@ -15,12 +15,16 @@ data:
         "https://af.tt02.altinn.no",
         "https://altinn.studio",
         "https://grafana.altinn.cloud/whoami",
-        "https://at22.corr.altinn.cloud/whoami"
+        "https://at22.corr.altinn.cloud/whoami",
+        "https://altinn.no",
+        "https://info.altinn.no"
       ],
       "ipv6": [
         "https://altinncdn.no/orgs/altinn-orgs.json",
         "https://grafana.altinn.cloud/whoami",
-        "https://at22.corr.altinn.cloud/whoami"
+        "https://at22.corr.altinn.cloud/whoami",
+        "https://altinn.no",
+        "https://info.altinn.no"
       ],
       "kuberneteswrapper_ipv4": [
         "https://platform.tt02.altinn.no/kuberneteswrapper/api/v1/deployments",
