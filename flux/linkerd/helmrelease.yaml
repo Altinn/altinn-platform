@@ -94,7 +94,7 @@ spec:
         name: altinncr.azurecr.io/ghcr.io/linkerd/policy-controller
     proxy:
       image:
-        name: altinncr.azurecr.io/linkerd/proxy
+        name: altinncr.azurecr.io/ghcr.io/linkerd/proxy
       defaultInboundPolicy: "${DEFAULT_INBOUND_POLICY:=all-unauthenticated}"
     podMonitor:
       enabled: true
