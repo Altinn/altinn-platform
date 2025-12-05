@@ -16,14 +16,12 @@ data:
         "https://altinn.studio",
         "https://grafana.altinn.cloud/whoami",
         "https://at22.corr.altinn.cloud/whoami",
-        "https://altinn.no",
         "https://info.altinn.no"
       ],
       "ipv6": [
         "https://altinncdn.no/orgs/altinn-orgs.json",
         "https://grafana.altinn.cloud/whoami",
         "https://at22.corr.altinn.cloud/whoami",
-        "https://altinn.no",
         "https://info.altinn.no"
       ],
       "kuberneteswrapper_ipv4": [
@@ -31,6 +29,12 @@ data:
         "https://platform.altinn.no/kuberneteswrapper/api/v1/deployments"
       ],
       "kuberneteswrapper_ipv6": [],
+      "tls_ipv4": [
+        "https://altinn.no"
+      ],
+      "tls_ipv6": [
+        "https://altinn.no"
+      ],
       "metadata": {
         "description": "Extra targets for Altinn monitoring that are not auto-generated from organizations",
         "maintained_by": "Altinn Platform Team",
@@ -41,6 +45,7 @@ data:
           "Organization targets are auto-generated and should not be added here",
           "IPv4 and IPv6 arrays contain targets for regular blackbox jobs",
           "kuberneteswrapper_ipv4 and kuberneteswrapper_ipv6 arrays contain targets for kuberneteswrapper jobs",
+          "tls_ipv4 and tls_ipv6 arrays contain targets that require TLS verification, but not 2xx",
           "Targets are monitored using blackbox HTTP probes"
         ]
       }

@@ -80,9 +80,13 @@ load_configuration() {
     if [ -n "$MAINTENANCE_TARGETS_JSON" ]; then
         MAINTENANCE_IPV4=$(echo "$MAINTENANCE_TARGETS_JSON" | jq -r '.ipv4[]?' 2>/dev/null)
         MAINTENANCE_IPV6=$(echo "$MAINTENANCE_TARGETS_JSON" | jq -r '.ipv6[]?' 2>/dev/null)
+        MAINTENANCE_TLS_IPV4=$(echo "$MAINTENANCE_TARGETS_JSON" | jq -r '.tls_ipv4[]?' 2>/dev/null)
+        MAINTENANCE_TLS_IPV6=$(echo "$MAINTENANCE_TARGETS_JSON" | jq -r '.tls_ipv6[]?' 2>/dev/null)
     else
         MAINTENANCE_IPV4=""
         MAINTENANCE_IPV6=""
+        MAINTENANCE_TLS_IPV4=""
+        MAINTENANCE_TLS_IPV6=""
     fi
 }
 
@@ -262,6 +266,36 @@ generate_expected_names() {
                     name="${name:0:$max_name_len}"
                 fi
                 expected_names="$expected_names blackbox-exporter-${UNIQUE_ID}-extra-${name}-k8s-ipv6"
+            fi
+        done
+
+        # Process TLS IPv4 extra targets
+        TLS_IPV4_TARGETS=$(echo "$EXTRA_TARGETS_JSON" | jq -r '.tls_ipv4[]?' 2>/dev/null)
+        for target in $TLS_IPV4_TARGETS; do
+            if ! echo "$MAINTENANCE_TLS_IPV4" | grep -q "^$target$"; then
+                hostname=$(echo "$target" | sed -E 's|https?://([^/]+).*|\1|')
+                name=$(echo "$hostname" | sed 's/[^a-zA-Z0-9-]/-/g' | tr '[:upper:]' '[:lower:]')
+                # Ensure name doesn't exceed k8s limits (253 chars total)
+                max_name_len=$((253 - ${#UNIQUE_ID} - 40))  # Reserve space for prefix/suffix
+                if [ ${#name} -gt $max_name_len ]; then
+                    name="${name:0:$max_name_len}"
+                fi
+                expected_names="$expected_names blackbox-exporter-${UNIQUE_ID}-extra-${name}-tls-ipv4"
+            fi
+        done
+
+        # Process TLS IPv6 extra targets
+        TLS_IPV6_TARGETS=$(echo "$EXTRA_TARGETS_JSON" | jq -r '.tls_ipv6[]?' 2>/dev/null)
+        for target in $TLS_IPV6_TARGETS; do
+            if ! echo "$MAINTENANCE_TLS_IPV6" | grep -q "^$target$"; then
+                hostname=$(echo "$target" | sed -E 's|https?://([^/]+).*|\1|')
+                name=$(echo "$hostname" | sed 's/[^a-zA-Z0-9-]/-/g' | tr '[:upper:]' '[:lower:]')
+                # Ensure name doesn't exceed k8s limits (253 chars total)
+                max_name_len=$((253 - ${#UNIQUE_ID} - 40))  # Reserve space for prefix/suffix
+                if [ ${#name} -gt $max_name_len ]; then
+                    name="${name:0:$max_name_len}"
+                fi
+                expected_names="$expected_names blackbox-exporter-${UNIQUE_ID}-extra-${name}-tls-ipv6"
             fi
         done
     fi
@@ -841,6 +875,150 @@ spec:
     port: http
     scheme: http
   jobLabel: blackbox-http-ipv6-kuberneteswrapper
+  namespaceSelector:
+    matchNames:
+    - $NAMESPACE
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: monitoring-prometheus-blackbox-exporter
+      app.kubernetes.io/name: prometheus-blackbox-exporter
+EOF
+                apply_servicemonitor "$(cat "$TEMP_DIR/servicemonitor.yaml")" "$sm_name"
+            fi
+        done
+
+        # TLS IPv4 extra targets
+        TLS_IPV4_TARGETS=$(echo "$EXTRA_TARGETS_JSON" | jq -r '.tls_ipv4[]?' 2>/dev/null)
+        for target in $TLS_IPV4_TARGETS; do
+            if ! echo "$MAINTENANCE_TLS_IPV4" | grep -q "^$target$"; then
+                hostname=$(echo "$target" | sed -E 's|https?://([^/]+).*|\1|')
+                name=$(echo "$hostname" | sed 's/[^a-zA-Z0-9-]/-/g' | tr '[:upper:]' '[:lower:]')
+                # Ensure name doesn't exceed k8s limits (253 chars total)
+                max_name_len=$((253 - ${#UNIQUE_ID} - 40))  # Reserve space for prefix/suffix
+                if [ ${#name} -gt $max_name_len ]; then
+                    name="${name:0:$max_name_len}"
+                fi
+                sm_name="blackbox-exporter-${UNIQUE_ID}-extra-${name}-tls-ipv4"
+
+                cat > "$TEMP_DIR/servicemonitor.yaml" << EOF
+---
+apiVersion: azmonitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: $sm_name
+  namespace: $NAMESPACE
+  labels:
+    app: prometheus-blackbox-exporter
+    release: monitor
+    app.kubernetes.io/name: altinn-uptime
+    app.kubernetes.io/managed-by: altinn-uptime-sync
+    app.kubernetes.io/component: monitoring
+    altinn.no/environment: extra
+    altinn.no/organization: extra
+spec:
+  labelLimit: 63
+  labelNameLengthLimit: 511
+  labelValueLengthLimit: 1023
+  endpoints:
+  - honorTimestamps: true
+    interval: 15s
+    scrapeTimeout: 15s
+    metricRelabelings:
+    - action: replace
+      replacement: blackbox-http-ipv4-tls
+      targetLabel: job
+    - action: replace
+      replacement: $hostname
+      targetLabel: instance
+    - action: replace
+      replacement: extra-${name}-tls
+      sourceLabels:
+      - target
+      targetLabel: target
+    - action: replace
+      replacement: v4
+      targetLabel: ip_family
+    params:
+      module:
+      - http_alive_tls_ipv4
+      target:
+      - $target
+    path: /probe
+    port: http
+    scheme: http
+  jobLabel: blackbox-http-ipv4-tls
+  namespaceSelector:
+    matchNames:
+    - $NAMESPACE
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: monitoring-prometheus-blackbox-exporter
+      app.kubernetes.io/name: prometheus-blackbox-exporter
+EOF
+                apply_servicemonitor "$(cat "$TEMP_DIR/servicemonitor.yaml")" "$sm_name"
+            fi
+        done
+
+        # TLS IPv6 extra targets
+        TLS_IPV6_TARGETS=$(echo "$EXTRA_TARGETS_JSON" | jq -r '.tls_ipv6[]?' 2>/dev/null)
+        for target in $TLS_IPV6_TARGETS; do
+            if ! echo "$MAINTENANCE_TLS_IPV6" | grep -q "^$target$"; then
+                hostname=$(echo "$target" | sed -E 's|https?://([^/]+).*|\1|')
+                name=$(echo "$hostname" | sed 's/[^a-zA-Z0-9-]/-/g' | tr '[:upper:]' '[:lower:]')
+                # Ensure name doesn't exceed k8s limits (253 chars total)
+                max_name_len=$((253 - ${#UNIQUE_ID} - 40))  # Reserve space for prefix/suffix
+                if [ ${#name} -gt $max_name_len ]; then
+                    name="${name:0:$max_name_len}"
+                fi
+                sm_name="blackbox-exporter-${UNIQUE_ID}-extra-${name}-tls-ipv6"
+
+                cat > "$TEMP_DIR/servicemonitor.yaml" << EOF
+---
+apiVersion: azmonitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: $sm_name
+  namespace: $NAMESPACE
+  labels:
+    app: prometheus-blackbox-exporter
+    release: monitor
+    app.kubernetes.io/name: altinn-uptime
+    app.kubernetes.io/managed-by: altinn-uptime-sync
+    app.kubernetes.io/component: monitoring
+    altinn.no/environment: extra
+    altinn.no/organization: extra
+spec:
+  labelLimit: 63
+  labelNameLengthLimit: 511
+  labelValueLengthLimit: 1023
+  endpoints:
+  - honorTimestamps: true
+    interval: 15s
+    scrapeTimeout: 15s
+    metricRelabelings:
+    - action: replace
+      replacement: blackbox-http-ipv6-tls
+      targetLabel: job
+    - action: replace
+      replacement: $hostname
+      targetLabel: instance
+    - action: replace
+      replacement: extra-${name}-tls
+      sourceLabels:
+      - target
+      targetLabel: target
+    - action: replace
+      replacement: v6
+      targetLabel: ip_family
+    params:
+      module:
+      - http_alive_tls_ipv6
+      target:
+      - $target
+    path: /probe
+    port: http
+    scheme: http
+  jobLabel: blackbox-http-ipv6-tls
   namespaceSelector:
     matchNames:
     - $NAMESPACE
