@@ -17,4 +17,8 @@ spec:
             - name: AZURE_VNET_RESOURCE_GROUP
               value: "fake-rg"
             - name: AZURE_VNET_NAME
-              value: "fake-vnet"
+              value: "fake-db-vnet"
+            - name: AKS_VNET_NAME
+              value: "fake-aks-vnet"
+            - name: WRITE_NAMESPACE
+              value: "default"

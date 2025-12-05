@@ -9,7 +9,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -18,7 +18,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/network"
+	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
 )
 
 var (
@@ -39,16 +41,22 @@ var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	ctx, cancel = context.WithCancel(context.TODO())
-
+	scheme := runtime.NewScheme()
 	var err error
-	err = storagev1alpha1.AddToScheme(scheme.Scheme)
+	err = storagev1alpha1.AddToScheme(scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = networkv1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:scheme
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
+		CRDDirectoryPaths: []string{
+			filepath.Join("..", "..", "config", "crd", "bases"),
+			filepath.Join("..", "..", "bin", "aso-crds"),
+		},
+		Scheme:                scheme,
 		ErrorIfCRDPathMissing: true,
 	}
 
@@ -62,7 +70,7 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).NotTo(BeNil())
 
 	k8sManager, err = ctrl.NewManager(cfg, ctrl.Options{
-		Scheme: scheme.Scheme,
+		Scheme: scheme,
 	})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sManager).NotTo(BeNil())
@@ -72,13 +80,25 @@ var _ = BeforeSuite(func() {
 		{Name: "s1", CIDR: "10.100.1.0/28"},
 		{Name: "s2", CIDR: "10.100.1.16/28"},
 		{Name: "s3", CIDR: "10.100.1.32/28"},
+		{Name: "s4", CIDR: "10.100.1.48/28"},
+		{Name: "s5", CIDR: "10.100.1.64/28"},
 	})
+
 	Expect(err).NotTo(HaveOccurred())
 
+	// Operator config for tests
+	config := config.OperatorConfig{
+		WriteNs:        "default",
+		ResourceGroup:  "rg-dis-dev-network",
+		DBVNetName:     "vnet-dis-dev-001",
+		AKSVNetName:    "aks-vnet-dis-dev-001",
+		SubscriptionId: "my-subscription-id",
+	}
 	err = (&DatabaseReconciler{
 		Client:        k8sManager.GetClient(),
 		Scheme:        k8sManager.GetScheme(),
 		SubnetCatalog: testCatalog,
+		Config:        config,
 	}).SetupWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())
 

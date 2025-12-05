@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/network"
 )
 
@@ -30,10 +31,16 @@ type DatabaseReconciler struct {
 	// It is loaded once at startup (from Azure via FetchSubnetCatalog) and injected
 	// into the reconciler.
 	SubnetCatalog *network.SubnetCatalog
+
+	Config config.OperatorConfig
 }
 
 // +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=databases,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=databases/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=network.azure.com,resources=privatednszones,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=network.azure.com,resources=privatednszones/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=network.azure.com,resources=privatednszonesvirtualnetworklinks,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=network.azure.com,resources=privatednszonesvirtualnetworklinks/status,verbs=get;update;patch
 
 func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("database", req.NamespacedName)
@@ -91,7 +98,46 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		logger.Info("database already has subnetCIDR", "subnetCIDR", db.Status.SubnetCIDR)
 	}
 
+	// Private Dns zone
+	if err := r.ensurePrivateDNSZone(ctx, logger, &db); err != nil {
+		logger.Error(err, "failed to ensure private DNS zone")
+		return ctrl.Result{}, err
+	}
+
+	// DB VNet link
+	if err := r.ensurePrivateDNSVNetLink(
+		ctx, logger, &db,
+		zoneNameForDatabase(&db),
+		vnetLinkNameForDB(&db),
+		r.Config.DBVNetName,
+	); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// AKS VNet link
+	if err := r.ensurePrivateDNSVNetLink(
+		ctx, logger, &db,
+		zoneNameForDatabase(&db),
+		vnetLinkNameForAKS(&db),
+		r.Config.AKSVNetName,
+	); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
+}
+
+func (r *DatabaseReconciler) vnetARMID(vnetName string) (string, error) {
+	if vnetName == "" {
+		return "", fmt.Errorf("vnet name is empty")
+	}
+
+	return fmt.Sprintf(
+		"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/virtualNetworks/%s",
+		r.Config.SubscriptionId,
+		r.Config.ResourceGroup,
+		vnetName,
+	), nil
 }
 
 func (r *DatabaseReconciler) allocateSubnetForDatabase(

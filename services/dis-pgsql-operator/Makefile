@@ -2,7 +2,17 @@
 IMG ?= localhost/dis-pgsql-operator:e2e
 KIND_IMAGE_ARCHIVE := bin/dis-pgsql-operator_image.tar
 
+# Operator config test defaults
+WRITE_NAMESPACE ?= default
 
+AZURE_SUBSCRIPTION_ID ?= 00000000-0000-0000-0000-000000000000
+AZURE_VNET_RESOURCE_GROUP ?= rg-dis-dev-network
+AZURE_VNET_NAME ?= dis-dev-vnet
+
+DB_VNET_NAME ?= dis-dev-vnet
+AKS_VNET_NAME ?= dis-dev-aks-vnet
+
+USE_AZ_FAKES ?= true
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -46,7 +56,7 @@ help: ## Display this help.
 
 .PHONY: manifests
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	"$(CONTROLLER_GEN)" rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -90,12 +100,24 @@ test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expect
 	$(MAKE) cleanup-test-e2e
 
 .PHONY: test-e2e-kind
-test-e2e-kind: cleanup-test-e2e setup-test-e2e docker-build kind-load install deploy-kind
-	KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
+test-e2e-kind: cleanup-test-e2e setup-test-e2e docker-build kind-load install install-aso-crds-kind deploy-kind
+	kubectl apply -f config/samples/storage_v1alpha1_database.yaml
 
 .PHONY: cleanup-test-e2e
 cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
 	@$(KIND) delete cluster --name $(KIND_CLUSTER)
+
+.PHONY: install-aso-crds-kind
+install-aso-crds-kind:
+	kubectl apply --server-side -f bin/aso-crds/
+
+	kubectl patch crd privatednszones.network.azure.com \
+	--type='json' \
+	-p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'
+
+	kubectl patch crd privatednszonesvirtualnetworklinks.network.azure.com \
+	--type='json' \
+	-p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
@@ -230,7 +252,7 @@ $(CONTROLLER_GEN): $(LOCALBIN)
 	$(call go-install-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen,$(CONTROLLER_TOOLS_VERSION))
 
 .PHONY: setup-envtest
-setup-envtest: envtest ## Download the binaries required for ENVTEST in the local bin directory.
+setup-envtest: aso-crds envtest ## Download the binaries required for ENVTEST in the local bin directory.
 	@echo "Setting up envtest binaries for Kubernetes version $(ENVTEST_K8S_VERSION)..."
 	@"$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path || { \
 		echo "Error: Failed to set up envtest binaries for version $(ENVTEST_K8S_VERSION)."; \
@@ -266,3 +288,10 @@ endef
 define gomodver
 $(shell go list -m -f '{{if .Replace}}{{.Replace.Version}}{{else}}{{.Version}}{{end}}' $(1) 2>/dev/null)
 endef
+
+ASO_CRD_VERSION ?= v2.16.0
+
+.PHONY: aso-crds
+aso-crds: ## Download the ASO CRDs locally if necessary.
+	@mkdir -p $(LOCALBIN)/aso-crds
+	curl -sSL https://github.com/Azure/azure-service-operator/releases/download/$(ASO_CRD_VERSION)/azureserviceoperator_customresourcedefinitions_$(ASO_CRD_VERSION).yaml -o $(LOCALBIN)/aso-crds/azureserviceoperator_customresourcedefinitions_$(ASO_CRD_VERSION).yaml
