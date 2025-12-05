@@ -85,20 +85,17 @@ spec:
       issuer:
         scheme: kubernetes.io/tls
     disableHeartBeat: true
-    controllerImage: altinncr.azurecr.io/linkerd/controller
+    controllerImage: altinncr.azurecr.io/ghcr.io/linkerd/controller
     debugContainer:
       image:
-        name: altinncr.azurecr.io/linkerd/debug
+        name: altinncr.azurecr.io/ghcr.io/linkerd/debug
     policyController:
       image:
-        name: altinncr.azurecr.io/linkerd/policy-controller
+        name: altinncr.azurecr.io/ghcr.io/linkerd/policy-controller
     proxy:
       image:
         name: altinncr.azurecr.io/linkerd/proxy
       defaultInboundPolicy: "${DEFAULT_INBOUND_POLICY:=all-unauthenticated}"
-    proxyInit:
-      image:
-        name: altinncr.azurecr.io/linkerd/proxy-init
     podMonitor:
       enabled: true
     disableIPv6: "${DISABLE_IPV6:=false}"
