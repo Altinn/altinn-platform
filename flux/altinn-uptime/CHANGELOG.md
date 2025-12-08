@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/Altinn/altinn-platform/compare/flux-oci-altinn-uptime-v1.3.0...flux-oci-altinn-uptime-v1.4.0) (2025-12-08)
+
+
+### Features
+
+* Add TLS probe support for extra targets altinn-uptime ([#2768](https://github.com/Altinn/altinn-platform/issues/2768)) ([ab241e8](https://github.com/Altinn/altinn-platform/commit/ab241e8dd29e52fb3c449677a114a83f32047cf0))
+
 ## [1.3.0](https://github.com/Altinn/altinn-platform/compare/flux-oci-altinn-uptime-v1.2.0...flux-oci-altinn-uptime-v1.3.0) (2025-12-05)
 
 
