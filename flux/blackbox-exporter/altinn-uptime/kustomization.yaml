@@ -7,142 +7,169 @@ patches:
       kind: HelmRelease
       name: prometheus-blackbox-exporter
     patch: |-
-      - op: add
-        path: /spec/values/config
-        value:
-          replicas: 2
-          modules:
-            http_2xx_ipv6:
-              prober: http
-              timeout: 10s
-              http:
-                valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
-                valid_status_codes: []
-                method: GET
-                follow_redirects: false
-                fail_if_ssl: false
-                fail_if_not_ssl: false
-                preferred_ip_protocol: ip6
-                ip_protocol_fallback: false
-            http_2xx_ipv4:
-              prober: http
-              timeout: 10s
-              http:
-                valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
-                valid_status_codes: []
-                method: GET
-                follow_redirects: false
-                fail_if_ssl: false
-                fail_if_not_ssl: false
-                preferred_ip_protocol: ip4
-                ip_protocol_fallback: false
-            tcp_connect_ipv4:
-              prober: tcp
-              timeout: 10s
-              tcp:
-                preferred_ip_protocol: ip4
-                ip_protocol_fallback: false
-            tcp_connect_ipv6:
-              prober: tcp
-              timeout: 10s
-              tcp:
-                preferred_ip_protocol: ip6
-                ip_protocol_fallback: false
-            icmp_ipv4:
-              prober: icmp
-              timeout: 10s
-              icmp:
-                preferred_ip_protocol: ip4
-                ip_protocol_fallback: false
-            icmp_ipv6:
-              prober: icmp
-              timeout: 10s
-              icmp:
-                preferred_ip_protocol: ip6
-                ip_protocol_fallback: false
-            http_2xx_ipv6_kuberneteswrapper:
-              prober: http
-              timeout: 10s
-              http:
-                valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
-                valid_status_codes: []
-                method: GET
-                follow_redirects: false
-                fail_if_ssl: false
-                fail_if_not_ssl: false
-                preferred_ip_protocol: ip6
-                ip_protocol_fallback: false
-                fail_if_body_not_matches_regexp:
-                  - "kuberneteswrapper"
-            http_2xx_ipv4_kuberneteswrapper:
-              prober: http
-              timeout: 10s
-              http:
-                valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
-                valid_status_codes: []
-                method: GET
-                follow_redirects: false
-                fail_if_ssl: false
-                fail_if_not_ssl: false
-                preferred_ip_protocol: ip4
-                ip_protocol_fallback: false
-                fail_if_body_not_matches_regexp:
-                  - "kuberneteswrapper"
-            http_alive_tls_ipv4:
-              prober: http
-              timeout: 10s
-              http:
-                method: GET
-                follow_redirects: false
-                preferred_ip_protocol: ip4
-                ip_protocol_fallback: false
-                tls_config:
-                  insecure_skip_verify: false
-                valid_status_codes:
-                  - 200
-                  - 201
-                  - 202
-                  - 203
-                  - 204
-                  - 205
-                  - 206
-                  - 300
-                  - 301
-                  - 302
-                  - 303
-                  - 304
-                  - 307
-                  - 308
-                  - 400
-                  - 401
-                  - 403
-                  - 404
-            http_alive_tls_ipv6:
-              prober: http
-              timeout: 10s
-              http:
-                method: GET
-                follow_redirects: false
-                preferred_ip_protocol: ip6
-                ip_protocol_fallback: false
-                tls_config:
-                  insecure_skip_verify: false
-                valid_status_codes:
-                  - 200
-                  - 201
-                  - 202
-                  - 203
-                  - 204
-                  - 205
-                  - 206
-                  - 300
-                  - 301
-                  - 302
-                  - 303
-                  - 304
-                  - 307
-                  - 308
-                  - 400
-                  - 401
-                  - 403
-                  - 404
+      apiVersion: helm.toolkit.fluxcd.io/v2
+      kind: HelmRelease
+      metadata:
+        name: prometheus-blackbox-exporter
+      spec:
+        values:
+          replicas: 3
+          podDisruptionBudget:
+            enabled: true
+            minAvailable: 1
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          config:
+            modules:
+              http_2xx_ipv6:
+                prober: http
+                timeout: 10s
+                http:
+                  valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+                  valid_status_codes: []
+                  method: GET
+                  follow_redirects: false
+                  fail_if_ssl: false
+                  fail_if_not_ssl: false
+                  preferred_ip_protocol: ip6
+                  ip_protocol_fallback: false
+              http_2xx_ipv4:
+                prober: http
+                timeout: 10s
+                http:
+                  valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+                  valid_status_codes: []
+                  method: GET
+                  follow_redirects: false
+                  fail_if_ssl: false
+                  fail_if_not_ssl: false
+                  preferred_ip_protocol: ip4
+                  ip_protocol_fallback: false
+              tcp_connect_ipv4:
+                prober: tcp
+                timeout: 10s
+                tcp:
+                  preferred_ip_protocol: ip4
+                  ip_protocol_fallback: false
+              tcp_connect_ipv6:
+                prober: tcp
+                timeout: 10s
+                tcp:
+                  preferred_ip_protocol: ip6
+                  ip_protocol_fallback: false
+              icmp_ipv4:
+                prober: icmp
+                timeout: 10s
+                icmp:
+                  preferred_ip_protocol: ip4
+                  ip_protocol_fallback: false
+              icmp_ipv6:
+                prober: icmp
+                timeout: 10s
+                icmp:
+                  preferred_ip_protocol: ip6
+                  ip_protocol_fallback: false
+              http_2xx_ipv6_kuberneteswrapper:
+                prober: http
+                timeout: 10s
+                http:
+                  valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+                  valid_status_codes: []
+                  method: GET
+                  follow_redirects: false
+                  fail_if_ssl: false
+                  fail_if_not_ssl: false
+                  preferred_ip_protocol: ip6
+                  ip_protocol_fallback: false
+                  fail_if_body_not_matches_regexp:
+                    - "kuberneteswrapper"
+              http_2xx_ipv4_kuberneteswrapper:
+                prober: http
+                timeout: 10s
+                http:
+                  valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+                  valid_status_codes: []
+                  method: GET
+                  follow_redirects: false
+                  fail_if_ssl: false
+                  fail_if_not_ssl: false
+                  preferred_ip_protocol: ip4
+                  ip_protocol_fallback: false
+                  fail_if_body_not_matches_regexp:
+                    - "kuberneteswrapper"
+              http_alive_tls_ipv4:
+                prober: http
+                timeout: 10s
+                http:
+                  method: GET
+                  follow_redirects: false
+                  preferred_ip_protocol: ip4
+                  ip_protocol_fallback: false
+                  tls_config:
+                    insecure_skip_verify: false
+                  valid_status_codes:
+                    - 200
+                    - 201
+                    - 202
+                    - 203
+                    - 204
+                    - 205
+                    - 206
+                    - 300
+                    - 301
+                    - 302
+                    - 303
+                    - 304
+                    - 307
+                    - 308
+                    - 400
+                    - 401
+                    - 403
+                    - 404
+              http_alive_tls_ipv6:
+                prober: http
+                timeout: 10s
+                http:
+                  method: GET
+                  follow_redirects: false
+                  preferred_ip_protocol: ip6
+                  ip_protocol_fallback: false
+                  tls_config:
+                    insecure_skip_verify: false
+                  valid_status_codes:
+                    - 200
+                    - 201
+                    - 202
+                    - 203
+                    - 204
+                    - 205
+                    - 206
+                    - 300
+                    - 301
+                    - 302
+                    - 303
+                    - 304
+                    - 307
+                    - 308
+                    - 400
+                    - 401
+                    - 403
+                    - 404
