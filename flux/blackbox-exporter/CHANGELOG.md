@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/Altinn/altinn-platform/compare/flux-oci-blackbox-exporter-v0.4.5...flux-oci-blackbox-exporter-v0.5.0) (2025-12-08)
+
+
+### Features
+
+* Add TLS probe support for extra targets altinn-uptime ([#2768](https://github.com/Altinn/altinn-platform/issues/2768)) ([ab241e8](https://github.com/Altinn/altinn-platform/commit/ab241e8dd29e52fb3c449677a114a83f32047cf0))
+
 ## [0.4.5](https://github.com/Altinn/altinn-platform/compare/flux-oci-blackbox-exporter-v0.4.4...flux-oci-blackbox-exporter-v0.4.5) (2025-12-04)
 
 
