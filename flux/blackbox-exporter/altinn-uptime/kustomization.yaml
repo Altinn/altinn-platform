@@ -8,9 +8,40 @@ patches:
       name: prometheus-blackbox-exporter
     patch: |-
       - op: add
-        path: /spec/values/config
+        path: /spec/values
         value:
-          replicas: 2
+          replicas: 3
+      - op: add
+        path: /spec/values/podDisruptionBudget
+        value:
+          enabled: true
+          minAvailable: 1
+      - op: add
+        path: /spec/values/livenessProbe
+        value:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      - op: add
+        path: /spec/values/readinessProbe
+        value:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      - op: add
+        path: /spec/values/resources
+        value:
+          requests:
+            cpu: 100m
+            memory: 128Mi
           modules:
             http_2xx_ipv6:
               prober: http
