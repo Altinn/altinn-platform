@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/Altinn/altinn-platform/compare/flux-oci-blackbox-exporter-v0.5.0...flux-oci-blackbox-exporter-v0.5.1) (2025-12-08)
+
+
+### Bug Fixes
+
+* Add probes, PDB and resources to blackbox-exporter ([#2780](https://github.com/Altinn/altinn-platform/issues/2780)) ([a83b6b2](https://github.com/Altinn/altinn-platform/commit/a83b6b27b0676801eeae589bdf685463305c2a99))
+
 ## [0.5.0](https://github.com/Altinn/altinn-platform/compare/flux-oci-blackbox-exporter-v0.4.5...flux-oci-blackbox-exporter-v0.5.0) (2025-12-08)
 
 
