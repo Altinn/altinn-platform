@@ -30,10 +30,12 @@ data:
       ],
       "kuberneteswrapper_ipv6": [],
       "tls_ipv4": [
-        "https://altinn.no"
+        "https://altinn.no",
+        "https://grafana.altinn.cloud"
       ],
       "tls_ipv6": [
-        "https://altinn.no"
+        "https://altinn.no",
+        "https://grafana.altinn.cloud"
       ],
       "metadata": {
         "description": "Extra targets for Altinn monitoring that are not auto-generated from organizations",
