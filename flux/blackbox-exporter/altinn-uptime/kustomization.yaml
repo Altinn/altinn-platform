@@ -89,60 +89,60 @@ patches:
                 fail_if_body_not_matches_regexp:
                   - "kuberneteswrapper"
             http_alive_tls_ipv4:
-                prober: http
-                timeout: 10s
-                http:
-                  method: GET
-                  follow_redirects: false
-                  preferred_ip_protocol: ip4
-                  ip_protocol_fallback: false
-                  tls_config:
-                    insecure_skip_verify: false
-                  valid_status_codes:
-                    - 200
-                    - 201
-                    - 202
-                    - 203
-                    - 204
-                    - 205
-                    - 206
-                    - 300
-                    - 301
-                    - 302
-                    - 303
-                    - 304
-                    - 307
-                    - 308
-                    - 400
-                    - 401
-                    - 403
-                    - 404
-              http_alive_tls_ipv6:
-                prober: http
-                timeout: 10s
-                http:
-                  method: GET
-                  follow_redirects: false
-                  preferred_ip_protocol: ip6
-                  ip_protocol_fallback: false
-                  tls_config:
-                    insecure_skip_verify: false
-                  valid_status_codes:
-                    - 200
-                    - 201
-                    - 202
-                    - 203
-                    - 204
-                    - 205
-                    - 206
-                    - 300
-                    - 301
-                    - 302
-                    - 303
-                    - 304
-                    - 307
-                    - 308
-                    - 400
-                    - 401
-                    - 403
-                    - 404
+              prober: http
+              timeout: 10s
+              http:
+                method: GET
+                follow_redirects: false
+                preferred_ip_protocol: ip4
+                ip_protocol_fallback: false
+                tls_config:
+                  insecure_skip_verify: false
+                valid_status_codes:
+                  - 200
+                  - 201
+                  - 202
+                  - 203
+                  - 204
+                  - 205
+                  - 206
+                  - 300
+                  - 301
+                  - 302
+                  - 303
+                  - 304
+                  - 307
+                  - 308
+                  - 400
+                  - 401
+                  - 403
+                  - 404
+            http_alive_tls_ipv6:
+              prober: http
+              timeout: 10s
+              http:
+                method: GET
+                follow_redirects: false
+                preferred_ip_protocol: ip6
+                ip_protocol_fallback: false
+                tls_config:
+                  insecure_skip_verify: false
+                valid_status_codes:
+                  - 200
+                  - 201
+                  - 202
+                  - 203
+                  - 204
+                  - 205
+                  - 206
+                  - 300
+                  - 301
+                  - 302
+                  - 303
+                  - 304
+                  - 307
+                  - 308
+                  - 400
+                  - 401
+                  - 403
+                  - 404
