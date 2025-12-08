@@ -15,11 +15,16 @@ data:
       "ipv6": [
         "https://ssikt.apps.tt02.altinn.no/kuberneteswrapper/api/v1/deployments"
       ],
+      "tls_ipv4": [],
+      "tls_ipv6": [],
       "metadata": {
         "description": "Targets temporarily under maintenance and excluded from monitoring",
         "maintained_by": "Altinn Platform Team",
         "last_updated": "2025-11-11",
         "version": "1.0",
-        "notes": ["These targets are temporarily removed from monitoring"]
+        "notes": [
+          "These targets are temporarily removed from monitoring",
+          "tls_ipv4 and tls_ipv6 arrays contain TLS targets that are under maintenance"
+        ]
       }
     }
