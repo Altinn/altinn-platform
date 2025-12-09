@@ -26,4 +26,9 @@ go.work
 *.swo
 *~
 
+<<<<<<< HEAD
+# Kubeconfig might contain secrets
+*.kubeconfig
+=======
 dis-identity-config.toml
+>>>>>>> tmp-original-09-12-25-00-15
