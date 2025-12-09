@@ -7,6 +7,7 @@ resource "azurerm_virtual_network" "postgresql" {
 }
 
 resource "azurerm_virtual_network_peering" "postgresql_to_peered_vnet" {
+  depends_on                   = [azurerm_subnet.postgresql_subnets]
   name                         = "${azurerm_virtual_network.postgresql.name}-to-${var.peered_vnets.name}"
   resource_group_name          = var.resource_group_name
   virtual_network_name         = azurerm_virtual_network.postgresql.name
@@ -18,6 +19,7 @@ resource "azurerm_virtual_network_peering" "postgresql_to_peered_vnet" {
 }
 
 resource "azurerm_virtual_network_peering" "peered_vnet_to_postgresql" {
+  depends_on                   = [azurerm_subnet.postgresql_subnets]
   name                         = "${var.peered_vnets.name}-to-${azurerm_virtual_network.postgresql.name}"
   resource_group_name          = var.peered_vnets.resource_group_name
   virtual_network_name         = var.peered_vnets.name

@@ -17,6 +17,7 @@ on:
       - infrastructure/modules/aks-resources/**
       - infrastructure/modules/dis-apim-operator/**
       - infrastructure/modules/observability/**
+      - infrastructure/modules/postgresql-vnet-subnets/**
   pull_request:
     branches:
       - main
@@ -29,6 +30,7 @@ on:
       - infrastructure/modules/aks-resources/**
       - infrastructure/modules/dis-apim-operator/**
       - infrastructure/modules/observability/**
+      - infrastructure/modules/postgresql-vnet-subnets/**
   workflow_dispatch:
     inputs:
       log_level:
