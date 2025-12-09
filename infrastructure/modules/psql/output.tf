@@ -21,7 +21,7 @@ output "psql_identity_id" {
 
 output "psql_admin_group_object_ids" {
   description = "The object IDs of the Azure AD groups used as administrators"
-  value       = [for group in data.azuread_group.psql_admin_groups : group.object_id]
+  value       = values(data.azuread_group.psql_admin_groups)[*].object_id
   sensitive   = false
 }
 
@@ -36,7 +36,7 @@ output "psql_private_dns_zone_name" {
 }
 
 output "psql_effective_private_dns_zone_id" {
-  description = "Effective private DNS zone ID (created or supplied). Null hvis private DNS ikke brukes."
+  description = "Effective private DNS zone ID (created or supplied). Null if private DNS is not in use."
   value       = var.psql_enable_private_access ? coalesce(
     var.existing_private_dns_zone_id,
     try(azurerm_private_dns_zone.psql[0].id, null)

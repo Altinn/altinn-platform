@@ -29,7 +29,7 @@ resource "azurerm_private_dns_zone" "psql" {
     ]
   }
   count               = local.create_private_dns_zone ? 1 : 0
-  name                = "${var.psql_server_name}.private.postgres.database.azure.com"
+  name                = "${var.psql_private_dns_zone_name}"
   resource_group_name = var.psql_resource_group
 
   tags = {
@@ -82,7 +82,8 @@ resource "azurerm_user_assigned_identity" "psql_identity" {
 }
 resource "azurerm_postgresql_flexible_server" "psql" {
   lifecycle {
-    ignore_changes = [
+    prevent_destroy = true
+    ignore_changes  = [
       tags["costcenter"],
       tags["solution"],
       zone,
@@ -104,7 +105,7 @@ resource "azurerm_postgresql_flexible_server" "psql" {
   auto_grow_enabled               = var.psql_storage_auto_grow
 
   sku_name                        = var.psql_compute_size
-  storage_tier                    = var.psql_storage_tier == null ? null : var.psql_storage_tier
+  storage_tier                    = coalesce(var.psql_storage_tier, null)
   depends_on                      = [azurerm_private_dns_zone_virtual_network_link.psql]
 
   authentication {
@@ -126,9 +127,9 @@ resource "azurerm_postgresql_flexible_server" "psql" {
   }
 
   maintenance_window {
-    day_of_week  = tostring(var.psql_maintenance_day_of_week)
-    start_hour   = tostring(var.psql_maintenance_start_hour)
-    start_minute = tostring(var.psql_maintenance_start_minute)
+    day_of_week  = var.psql_maintenance_day_of_week
+    start_hour   = var.psql_maintenance_start_hour
+    start_minute = var.psql_maintenance_start_minute
   }
 
   tags = {
@@ -140,10 +141,9 @@ resource "azurerm_postgresql_flexible_server" "psql" {
 }
 
 resource "azurerm_postgresql_flexible_server_configuration" "pgbouncer_enabled" {
-  count     = var.psql_pgbouncer_enabled ? 1 : 0
   name      = "pgbouncer.enabled"
   server_id = azurerm_postgresql_flexible_server.psql.id
-  value     = "true"
+  value     = var.psql_pgbouncer_enabled ? "true" : "false"
 }
 
 resource "azurerm_postgresql_flexible_server_configuration" "pgbouncer_pool_mode" {
@@ -161,8 +161,8 @@ resource "azurerm_postgresql_flexible_server_active_directory_administrator" "ps
   resource_group_name = azurerm_postgresql_flexible_server.psql.resource_group_name
   server_name         = azurerm_postgresql_flexible_server.psql.name
   tenant_id           = data.azurerm_client_config.current.tenant_id
-  object_id           = "641fc568-3e2f-4174-a7ce-d91f50c8e6d6"
-  principal_name      = "altinn-platform-terraform"
+  object_id           = data.azuread_service_principal.terraform.object_id
+  principal_name      = data.azuread_service_principal.terraform.display_name
   principal_type      = "ServicePrincipal"
 }
 resource "azurerm_postgresql_flexible_server_active_directory_administrator" "psql_admin" {
@@ -191,6 +191,9 @@ resource "azurerm_management_lock" "flexible_server" {
 }
 
 resource "azurerm_postgresql_flexible_server_database" "psql" {
+  lifecycle {
+  prevent_destroy = true
+}
   name      = var.psql_database_name
   server_id = azurerm_postgresql_flexible_server.psql.id
   collation = var.psql_database_collation

@@ -62,8 +62,17 @@ variable "psql_admin_group_ids" {
 }
 
 variable "psql_storage_size" {
-  description = "PostgreSQL storage size in MB"
+  description = "PostgreSQL storage size in MB, if auto grow is enabled this will be the initial storage size"
   type        = number
+  default     = 32768 // 32 GB
+  validation {
+    condition = (
+      var.psql_storage_size >= 20480 &&        // min 20 GB
+      var.psql_storage_size <= 16777216 &&     // max 16 TB
+      var.psql_storage_size % 1024 == 0        // multiple of 1024 MB
+    )
+    error_message = "psql_storage_size must be between 20480 (20 GB) and 16777216 (16 TB), and a multiple of 1024 MB."
+  }
 }
 
 variable "psql_database_name" {
@@ -307,4 +316,16 @@ variable "existing_private_dns_zone_id" {
   type        = string
   default     = null
   description = "Set if zone already exists; module will not create zone or link."
+}
+
+variable "psql_private_dns_zone_name" {
+  description = "The name of the private DNS zone to create for PostgreSQL VNet integration."
+  type        = string
+  default     = "privatelink.postgres.database.azure.com"
+} 
+
+variable terraform_sp_object_id {
+  description = "The object ID of the Service Principal used by Terraform"
+  type        = string
+  default     = "641fc568-3e2f-4174-a7ce-d91f50c8e6d6"
 }
