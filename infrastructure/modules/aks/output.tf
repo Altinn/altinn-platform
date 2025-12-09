@@ -13,9 +13,29 @@ output "aks_name" {
   description = "The name of the managed Kubernetes Cluster"
 }
 
+output "aks_workpool_vnet_id" {
+  value       = azurerm_virtual_network.aks.id
+  description = "ID of the vnets where the workpool nodes are located"
+}
+
+output "aks_workpool_vnet_name" {
+  value       = azurerm_virtual_network.aks.name
+  description = "Name of the vnets where the workpool nodes are located"
+}
+
+output "aks_workpool_vnet_resource_group_name" {
+  value       = azurerm_virtual_network.aks.resource_group_name
+  description = "Name of the resource group where the aks vnet is deployed"
+}
+
 output "dis_resource_group_id" {
   value       = azurerm_resource_group.dis.id
-  description = "ID of the resource group where the DIS operator creates its resources"
+  description = "ID of the resource group where the DIS operators creates their resources"
+}
+
+output "dis_resource_group_name" {
+  value = azurerm_resource_group.dis.name
+  description = "Name of the resource group where the DIS operators creates their resources"
 }
 
 output "aks_node_resource_group" {

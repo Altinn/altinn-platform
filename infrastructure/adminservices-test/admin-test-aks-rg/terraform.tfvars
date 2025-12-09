@@ -35,3 +35,4 @@ admin_group_object_ids = [
 ]
 grafana_endpoint         = "https://altinn-grafana-test-b2b8dpdkcvfuhfd3.eno.grafana.azure.com"
 developer_entra_id_group = "09599a84-645b-4217-853f-01700a17cd4a"
+pgsql_vnet_address_space = "10.100.10.0/24"

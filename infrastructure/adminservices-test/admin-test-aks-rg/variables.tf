@@ -75,3 +75,8 @@ variable "developer_entra_id_group" {
   description = "EntraID group that should have access to grafana and kubernetes cluster"
   type        = string
 }
+
+variable "pgsql_vnet_address_space" {
+  description = "/24 Vnet where the pgsql operator can deploy databaseservers"
+  type = string
+}
