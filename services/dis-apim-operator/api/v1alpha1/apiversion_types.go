@@ -229,10 +229,24 @@ type ApiVersion struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
+<<<<<<< HEAD
+	// metadata is a standard object metadata
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitzero"`
+
+	// spec defines the desired state of ApiVersion
+	// +required
+	Spec ApiVersionSpec `json:"spec"`
+
+	// status defines the observed state of ApiVersion
+	// +optional
+	Status ApiVersionStatus `json:"status,omitzero"`
+=======
 	// Spec defines the desired state of ApiVersion
 	Spec ApiVersionSpec `json:"spec,omitempty"`
 	// Status defines the observed state of ApiVersion
 	Status ApiVersionStatus `json:"status,omitempty"`
+>>>>>>> tmp-original-09-12-25-00-15
 }
 
 // +kubebuilder:object:root=true
@@ -240,7 +254,7 @@ type ApiVersion struct {
 // ApiVersionList contains a list of ApiVersion
 type ApiVersionList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
+	metav1.ListMeta `json:"metadata,omitzero"`
 	Items           []ApiVersion `json:"items"`
 }
 

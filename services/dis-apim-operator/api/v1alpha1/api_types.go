@@ -100,8 +100,22 @@ type Api struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
+<<<<<<< HEAD
+	// metadata is a standard object metadata
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitzero"`
+
+	// spec defines the desired state of Api
+	// +required
+	Spec ApiSpec `json:"spec"`
+
+	// status defines the observed state of Api
+	// +optional
+	Status ApiStatus `json:"status,omitzero"`
+=======
 	Spec   ApiSpec   `json:"spec,omitempty"`
 	Status ApiStatus `json:"status,omitempty"`
+>>>>>>> tmp-original-09-12-25-00-15
 }
 
 // +kubebuilder:object:root=true
@@ -109,7 +123,7 @@ type Api struct {
 // ApiList contains a list of Api
 type ApiList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
+	metav1.ListMeta `json:"metadata,omitzero"`
 	Items           []Api `json:"items"`
 }
 
