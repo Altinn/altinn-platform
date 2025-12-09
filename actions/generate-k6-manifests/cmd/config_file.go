@@ -147,6 +147,16 @@ func (cFile *ConfigFile) SetDefaults() {
 				}
 				c.TestRun.Resources.Requests.Cpu = &defaultCpuRequests
 			}
+			found := false
+			tokenGeneratorCreds := "token-generator-creds"
+			for i := range c.TestRun.SecretReferences {
+				if *c.TestRun.SecretReferences[i] == tokenGeneratorCreds {
+					found = true
+				}
+			}
+			if !found {
+				c.TestRun.SecretReferences = append(c.TestRun.SecretReferences, &tokenGeneratorCreds)
+			}
 			if c.NodeType == nil || *c.NodeType == "" {
 				// As of now we have enough capacity in the default node pool to run functional and smoke tests there.
 				nodeType := "default"

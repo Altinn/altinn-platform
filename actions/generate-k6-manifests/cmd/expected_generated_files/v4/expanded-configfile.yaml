@@ -19,4 +19,5 @@ test_definitions:
                     memory: 200Mi
                     cpu: 250m
             env: []
-            secrets: []
+            secrets:
+                - token-generator-creds

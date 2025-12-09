@@ -21,4 +21,5 @@ test_definitions:
             env:
                 - name: FOO
                   value: BAR
-            secrets: []
+            secrets:
+                - token-generator-creds

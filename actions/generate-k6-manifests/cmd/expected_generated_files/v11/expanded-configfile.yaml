@@ -23,4 +23,5 @@ test_definitions:
                   value: Something
                 - name: K6_PROMETHEUS_RW_TREND_STATS
                   value: avg,count,min,med,max,p(75),p(95)
-            secrets: []
+            secrets:
+                - token-generator-creds

@@ -22,3 +22,4 @@ test_definitions:
             secrets:
                 - super-secret-1
                 - super-secret-2
+                - token-generator-creds

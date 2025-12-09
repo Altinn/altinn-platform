@@ -19,7 +19,8 @@ test_definitions:
                     memory: 200Mi
                     cpu: 250m
             env: []
-            secrets: []
+            secrets:
+                - token-generator-creds
         - environment: yt01
           node_type: default
           test_type:
@@ -35,7 +36,8 @@ test_definitions:
                     memory: 200Mi
                     cpu: 250m
             env: []
-            secrets: []
+            secrets:
+                - token-generator-creds
         - environment: tt02
           node_type: default
           test_type:
@@ -51,7 +53,8 @@ test_definitions:
                     memory: 200Mi
                     cpu: 250m
             env: []
-            secrets: []
+            secrets:
+                - token-generator-creds
         - environment: prod
           node_type: default
           test_type:
@@ -67,4 +70,5 @@ test_definitions:
                     memory: 200Mi
                     cpu: 250m
             env: []
-            secrets: []
+            secrets:
+                - token-generator-creds

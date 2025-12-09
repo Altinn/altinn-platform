@@ -19,7 +19,8 @@ test_definitions:
                     memory: 1000Mi
                     cpu: "1"
             env: []
-            secrets: []
+            secrets:
+                - token-generator-creds
     - test_file: actions/generate-k6-manifests/test_service/k8s_wrapper/get_daemonsets.js
       config_file: ""
       env_file: ""
@@ -43,4 +44,5 @@ test_definitions:
                   value: "3"
                 - name: FEATURE_FLAG1
                   value: enabled
-            secrets: []
+            secrets:
+                - token-generator-creds
