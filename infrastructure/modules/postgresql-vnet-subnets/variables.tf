@@ -18,8 +18,8 @@ variable "vnet_address_space" {
   description = "IPv4 address space of the PostgreSQL vnet, must be a valid CIDR notation of size 24"
 
   validation {
-    condition     = can(regex("^1\\.100\\.[0-9]{1,3}\\.[0-9]{1,3}/24$", var.vnet_address_space))
-    error_message = "The vnet_address_space must be a valid IPv4 CIDR starting with 1.100 and must be a /24 block (e.g., 1.100.0.0/24)."
+    condition     = can(regex("^10\\.100\\.[0-9]{1,3}\\.[0-9]{1,3}\\/24$", var.vnet_address_space))
+    error_message = "The vnet_address_space must be a valid IPv4 CIDR starting with 10.100 and must be a /24 block (e.g., 10.100.0.0/24)."
   }
 }
 
