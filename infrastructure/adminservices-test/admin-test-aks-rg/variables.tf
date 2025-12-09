@@ -78,5 +78,5 @@ variable "developer_entra_id_group" {
 
 variable "pgsql_vnet_address_space" {
   description = "/24 Vnet where the pgsql operator can deploy databaseservers"
-  type = string
+  type        = string
 }

@@ -34,7 +34,7 @@ output "dis_resource_group_id" {
 }
 
 output "dis_resource_group_name" {
-  value = azurerm_resource_group.dis.name
+  value       = azurerm_resource_group.dis.name
   description = "Name of the resource group where the DIS operators creates their resources"
 }
 
