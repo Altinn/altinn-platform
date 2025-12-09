@@ -182,7 +182,7 @@ locals {
     local.product_auth_developers_prod
   ]
   grafana_viewer = [
-    local.ai-aas-dev
+    local.ai-aas-dev,
     local.altinn_admin_reader
   ]
   grafana_admin = [local.altinn_30_operations, local.altinn_30_operations_prod]
