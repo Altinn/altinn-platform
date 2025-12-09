@@ -118,37 +118,7 @@ func (r K8sManifestGenerator) Initialize(filePath string) *ConfigFile {
 }
 
 func generate(td *TestDefinition, c *TestContext, r K8sManifestGenerator, cf ConfigFile, envFileSlice []*Env, envOptions []*Env) {
-	var configFile map[string]any
-	if *c.TestTypeDefinition.Type != "custom" {
-		if *c.TestTypeDefinition.Type == "breakpoint" {
-			configFile = r.HandleBreakpointConfigFile(c.TestRun.Env)
-		} else {
-			configFile = r.HandleConfigFile(td.ConfigFile, *c.TestTypeDefinition.Type)
-			if c.TestTypeDefinition.ConfigFile != "" {
-				configFile = r.HandleConfigFileOverride(configFile, c.TestTypeDefinition.ConfigFile)
-			}
-		}
-	}
-
 	manifestGenerationTimestamp := time.Now().UnixMilli()
-	uniqName := fmt.Sprintf("%s-%d-%s", c.Environment, manifestGenerationTimestamp, randomString(5))
-	dirName := fmt.Sprintf("%s", *c.TestRun.Id)
-	newpath := filepath.Join(r.ConfigDirectory, dirName)
-	testConfigFileToUse := fmt.Sprintf("%s/tweaked-testconfig.json", newpath)
-
-	marshalledConfigFile, err := json.MarshalIndent(configFile, "", "  ")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if err = os.MkdirAll(newpath, os.ModePerm); err != nil {
-		log.Fatal(err)
-	}
-
-	err = os.WriteFile(testConfigFileToUse, marshalledConfigFile, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	mergedEnvs := handleExtraEnvVars(c.TestRun.Env, envFileSlice)
 	mergedEnvs = handleExtraEnvVars(mergedEnvs, getGithubRelatedVars())
@@ -167,6 +137,37 @@ func generate(td *TestDefinition, c *TestContext, r K8sManifestGenerator, cf Con
 	}
 	for _, env := range mergedEnvs {
 		k6ArchiveArgs = append(k6ArchiveArgs, "--env", fmt.Sprintf("%s=%s", *env.Name, *env.Value))
+	}
+
+	var configFile map[string]any
+	if *c.TestTypeDefinition.Type != "custom" {
+		if *c.TestTypeDefinition.Type == "breakpoint" {
+			configFile = r.HandleBreakpointConfigFile(mergedEnvs)
+		} else {
+			configFile = r.HandleConfigFile(td.ConfigFile, *c.TestTypeDefinition.Type)
+			if c.TestTypeDefinition.ConfigFile != "" {
+				configFile = r.HandleConfigFileOverride(configFile, c.TestTypeDefinition.ConfigFile)
+			}
+		}
+	}
+
+	uniqName := fmt.Sprintf("%s-%d-%s", c.Environment, manifestGenerationTimestamp, randomString(5))
+	dirName := fmt.Sprintf("%s", *c.TestRun.Id)
+	newpath := filepath.Join(r.ConfigDirectory, dirName)
+	testConfigFileToUse := fmt.Sprintf("%s/tweaked-testconfig.json", newpath)
+
+	marshalledConfigFile, err := json.MarshalIndent(configFile, "", "  ")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err = os.MkdirAll(newpath, os.ModePerm); err != nil {
+		log.Fatal(err)
+	}
+
+	err = os.WriteFile(testConfigFileToUse, marshalledConfigFile, 0644)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	r.CallK6Archive(dirName, testConfigFileToUse, fmt.Sprintf("%s/%s", r.RepoRootDirectory, td.TestFile), k6ArchiveArgs)
