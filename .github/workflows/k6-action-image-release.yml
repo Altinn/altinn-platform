@@ -43,7 +43,7 @@ jobs:
     name: Build, scan and release
     uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yml
     with:
-      release_latest: false
+      release_latest: true
       image_name: k6-action-image
       tag_prefix: k6-action-image-
       workdir: .
