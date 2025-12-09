@@ -1,5 +1,5 @@
 locals {
-  subnet_indices = range(16) # Creates a list of numbers from 0 to 15
+  subnet_indices = toset(range(16)) # Creates a set of numbers from 0 to 15
 }
 
 resource "azurerm_subnet" "postgresql_subnets" {
