@@ -112,6 +112,11 @@ variable "k8s_rbac" {
       dev_group = "975d2ed6-f3dc-48a3-b014-8d876cb96e25"
       sp_group  = "122986e4-eb3d-4d9e-ab7d-8aec6174f332"
     }
+    portaler = {
+      namespace = "portaler",
+      dev_group = "01505bd1-7216-419d-ae24-bdad763d7e06"
+      sp_group  = "3b2529e7-8fa6-48d8-a4ce-eb4683d79c0c"
+    }
   }
 }
 
