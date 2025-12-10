@@ -21,9 +21,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"flag"
-	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -33,6 +31,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -44,6 +43,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/controller"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/network"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/test/azfakes"
@@ -59,6 +59,9 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(storagev1alpha1.AddToScheme(scheme))
+
+	utilruntime.Must(networkv1.AddToScheme(scheme))
+
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -78,6 +81,7 @@ func main() {
 	var subscriptionID string
 	var resourceGroup string
 	var vnetName string
+	var aksVnetName string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -102,19 +106,23 @@ func main() {
 		os.Getenv("AZURE_SUBSCRIPTION_ID"),
 		"Azure subscription ID (required)",
 	)
-
 	flag.StringVar(
 		&resourceGroup,
 		"resource-group",
 		os.Getenv("AZURE_VNET_RESOURCE_GROUP"),
 		"Azure Resource Group where the VNet is located (required)",
 	)
-
 	flag.StringVar(
 		&vnetName,
 		"vnet-name",
 		os.Getenv("AZURE_VNET_NAME"),
 		"Azure VNet name (required)",
+	)
+	flag.StringVar(
+		&aksVnetName,
+		"aks-vnet",
+		os.Getenv("AKS_VNET_NAME"),
+		"Azure VNet name where the AKS cluster is located (required)",
 	)
 	opts := zap.Options{
 		Development: true,
@@ -235,23 +243,9 @@ func main() {
 		armOpts = nil
 	}
 
-	var missing []string
-	if subscriptionID == "" {
-		missing = append(missing, "subscription-id (AZURE_SUBSCRIPTION_ID)")
-	}
-	if resourceGroup == "" {
-		missing = append(missing, "resource-group (AZURE_VNET_RESOURCE_GROUP)")
-	}
-	if vnetName == "" {
-		missing = append(missing, "vnet-name (AZURE_VNET_NAME)")
-	}
-
-	if len(missing) > 0 {
-		setupLog.Error(
-			fmt.Errorf("missing required Azure configuration"),
-			"config validation failed",
-			"missing", strings.Join(missing, ", "),
-		)
+	opCfg, err := config.NewOperatorConfig(resourceGroup, vnetName, aksVnetName, subscriptionID)
+	if err != nil {
+		setupLog.Error(err, "invalid operator configuration")
 		os.Exit(1)
 	}
 
@@ -259,7 +253,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	subnetCatalog, err := network.FetchSubnetCatalog(ctx, subscriptionID, resourceGroup, vnetName, cred, armOpts)
+	subnetCatalog, err := network.FetchSubnetCatalog(ctx, opCfg, cred, armOpts)
 	if err != nil {
 		if errors.Is(err, network.ErrEmptyCatalog) {
 			setupLog.Error(err, "subnet catalog is empty; check VNet/subnet config for PostgreSQL")
@@ -273,6 +267,7 @@ func main() {
 		Client:        mgr.GetClient(),
 		Scheme:        mgr.GetScheme(),
 		SubnetCatalog: subnetCatalog,
+		Config:        *opCfg,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Database")
 		os.Exit(1)
