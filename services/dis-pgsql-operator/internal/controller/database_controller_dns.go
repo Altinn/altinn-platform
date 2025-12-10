@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
@@ -39,11 +40,11 @@ func (r *DatabaseReconciler) ensurePrivateDNSZone(
 	if r.Config.ResourceGroup == "" {
 		return fmt.Errorf("ResourceGroup is not configured on DatabaseReconciler")
 	}
-
+	ns := db.Namespace
 	zoneName := zoneNameForDatabase(db)
 	key := types.NamespacedName{
 		Name:      zoneName,
-		Namespace: r.Config.WriteNs,
+		Namespace: ns,
 	}
 
 	var existing networkv1.PrivateDnsZone
@@ -51,7 +52,7 @@ func (r *DatabaseReconciler) ensurePrivateDNSZone(
 	if err == nil {
 		logger.Info("private DNS zone already exists for database",
 			"zoneName", zoneName,
-			"asoNamespace", r.Config.WriteNs)
+			"asoNamespace", ns)
 		return nil
 	}
 	if err != nil && !errors.IsNotFound(err) {
@@ -60,14 +61,14 @@ func (r *DatabaseReconciler) ensurePrivateDNSZone(
 
 	logger.Info("creating private DNS zone for database",
 		"zoneName", zoneName,
-		"asoNamespace", r.Config.WriteNs)
+		"asoNamespace", ns)
 
 	loc := "global" // Private DNS zones use 'global' for Location in Azure.
 
 	zone := &networkv1.PrivateDnsZone{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      zoneName,
-			Namespace: r.Config.WriteNs,
+			Namespace: ns,
 			Labels: map[string]string{
 				"dis.altinn.cloud/database-name": db.Name,
 			},
@@ -84,11 +85,15 @@ func (r *DatabaseReconciler) ensurePrivateDNSZone(
 		},
 	}
 
+	if err := controllerutil.SetControllerReference(db, zone, r.Scheme); err != nil {
+		return fmt.Errorf("set controller reference on PrivateDnsZone: %w", err)
+	}
+
 	if err := r.Create(ctx, zone); err != nil {
 		if errors.IsAlreadyExists(err) {
 			logger.Info("private DNS zone already created by another reconcile",
 				"zoneName", zoneName,
-				"asoNamespace", r.Config.WriteNs)
+				"asoNamespace", ns)
 			return nil
 		}
 		return fmt.Errorf("create PrivateDnsZone %s/%s: %w", zone.Namespace, zone.Name, err)
@@ -107,7 +112,7 @@ func (r *DatabaseReconciler) ensurePrivateDNSVNetLink(
 	linkName string,
 	targetVNetName string,
 ) error {
-	ns := r.Config.WriteNs
+	ns := db.Namespace
 
 	vnetID, err := r.vnetARMID(targetVNetName)
 	if err != nil {
@@ -166,6 +171,10 @@ func (r *DatabaseReconciler) ensurePrivateDNSVNetLink(
 		"vnetName", targetVNetName,
 		"vnetID", vnetID,
 	)
+
+	if err := controllerutil.SetControllerReference(db, link, r.Scheme); err != nil {
+		return fmt.Errorf("set controller reference on VNetLink: %w", err)
+	}
 
 	if err := r.Create(ctx, link); err != nil {
 		if errors.IsAlreadyExists(err) {

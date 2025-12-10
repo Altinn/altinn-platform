@@ -88,7 +88,6 @@ var _ = BeforeSuite(func() {
 
 	// Operator config for tests
 	config := config.OperatorConfig{
-		WriteNs:        "default",
 		ResourceGroup:  "rg-dis-dev-network",
 		DBVNetName:     "vnet-dis-dev-001",
 		AKSVNetName:    "aks-vnet-dis-dev-001",

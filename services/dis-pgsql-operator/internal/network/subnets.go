@@ -8,6 +8,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7"
+
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
 )
 
 // TODO: probably move this to its own errors package later
@@ -98,19 +100,21 @@ func (c *SubnetCatalog) All() []SubnetInfo {
 // and returns them as a SubnetCatalog.
 func FetchSubnetCatalog(
 	ctx context.Context,
-	subscriptionID string,
-	rgName string,
-	vnetName string,
+	cfg *config.OperatorConfig,
 	cred azcore.TokenCredential,
 	armOpts *arm.ClientOptions,
 ) (*SubnetCatalog, error) {
 
-	client, err := armnetwork.NewSubnetsClient(subscriptionID, cred, armOpts)
+	if cfg == nil {
+		return nil, fmt.Errorf("operator config is nil")
+	}
+
+	client, err := armnetwork.NewSubnetsClient(cfg.SubscriptionId, cred, armOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create subnets client: %w", err)
 	}
 
-	pager := client.NewListPager(rgName, vnetName, nil)
+	pager := client.NewListPager(cfg.ResourceGroup, cfg.DBVNetName, nil)
 
 	var infos []SubnetInfo
 

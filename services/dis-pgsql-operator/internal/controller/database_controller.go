@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -179,6 +180,8 @@ func (r *DatabaseReconciler) allocateSubnetForDatabase(
 func (r *DatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&storagev1alpha1.Database{}).
+		Owns(&networkv1.PrivateDnsZone{}).
+		Owns(&networkv1.PrivateDnsZonesVirtualNetworkLink{}).
 		WithOptions(controller.Options{
 			// Force single-threaded reconciliation
 			MaxConcurrentReconciles: 1,

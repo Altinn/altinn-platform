@@ -21,9 +21,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"flag"
-	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -83,7 +81,6 @@ func main() {
 	var subscriptionID string
 	var resourceGroup string
 	var vnetName string
-	var writeNs string
 	var aksVnetName string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -120,12 +117,6 @@ func main() {
 		"vnet-name",
 		os.Getenv("AZURE_VNET_NAME"),
 		"Azure VNet name (required)",
-	)
-	flag.StringVar(
-		&writeNs,
-		"write-namespace",
-		os.Getenv("WRITE_NAMESPACE"),
-		"Namespace where the ASO resources should be written to",
 	)
 	flag.StringVar(
 		&aksVnetName,
@@ -252,23 +243,9 @@ func main() {
 		armOpts = nil
 	}
 
-	var missing []string
-	if subscriptionID == "" {
-		missing = append(missing, "subscription-id (AZURE_SUBSCRIPTION_ID)")
-	}
-	if resourceGroup == "" {
-		missing = append(missing, "resource-group (AZURE_VNET_RESOURCE_GROUP)")
-	}
-	if vnetName == "" {
-		missing = append(missing, "vnet-name (AZURE_VNET_NAME)")
-	}
-
-	if len(missing) > 0 {
-		setupLog.Error(
-			fmt.Errorf("missing required Azure configuration"),
-			"config validation failed",
-			"missing", strings.Join(missing, ", "),
-		)
+	opCfg, err := config.NewOperatorConfig(resourceGroup, vnetName, aksVnetName, subscriptionID)
+	if err != nil {
+		setupLog.Error(err, "invalid operator configuration")
 		os.Exit(1)
 	}
 
@@ -276,7 +253,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	subnetCatalog, err := network.FetchSubnetCatalog(ctx, subscriptionID, resourceGroup, vnetName, cred, armOpts)
+	subnetCatalog, err := network.FetchSubnetCatalog(ctx, opCfg, cred, armOpts)
 	if err != nil {
 		if errors.Is(err, network.ErrEmptyCatalog) {
 			setupLog.Error(err, "subnet catalog is empty; check VNet/subnet config for PostgreSQL")
@@ -286,17 +263,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	opCfg, err := config.NewOperatorConfig(writeNs, resourceGroup, vnetName, aksVnetName, subscriptionID)
-	if err != nil {
-		setupLog.Error(err, "invalid operator configuration")
-		os.Exit(1)
-	}
-
 	if err := (&controller.DatabaseReconciler{
 		Client:        mgr.GetClient(),
 		Scheme:        mgr.GetScheme(),
 		SubnetCatalog: subnetCatalog,
-		Config:        opCfg,
+		Config:        *opCfg,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Database")
 		os.Exit(1)
