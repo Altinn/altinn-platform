@@ -32,6 +32,12 @@ locals {
       dev_group = "c403060d-5c8a-41b0-8c19-84fa60d0ce18"
       sp_group  = "b22b612d-9dc5-4f8b-8816-e551749bd19c"
     }
+
+    portaler = {
+      namespace = "portaler",
+      dev_group = "01505bd1-7216-419d-ae24-bdad763d7e06"
+      sp_group  = "3b2529e7-8fa6-48d8-a4ce-eb4683d79c0c"
+    }
   }
   namespaces                      = toset([for v in local.k8s_rbac : v["namespace"]])
   k6tests_cluster_name            = module.foundational.k6tests_cluster_name
