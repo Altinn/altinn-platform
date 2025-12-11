@@ -1,6 +1,7 @@
 namespace: platform
 test_definitions:
-    - test_file: actions/generate-k6-manifests/test_service/k8s_wrapper/get_deployments.js
+    - test_scope: k8s-wrapper
+      test_file: actions/generate-k6-manifests/test_service/k8s_wrapper/get_deployments.js
       config_file: actions/generate-k6-manifests/test_service/test_configs/default.json
       env_file: ""
       contexts:

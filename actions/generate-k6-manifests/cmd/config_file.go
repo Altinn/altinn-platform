@@ -101,6 +101,7 @@ func (cFile *ConfigFile) SetDefaults() {
 		if td.TestScope == "" {
 			td.TestScope = strings.Split(td.TestFile, "/")[len(strings.Split(td.TestFile, "/"))-2]
 		}
+		td.TestScope = strings.ReplaceAll(td.TestScope, "_", "-")
 		for _, c := range td.Contexts {
 			// If no test types are configured, add a functional test definition by default.
 			if c.TestTypeDefinition == nil {
