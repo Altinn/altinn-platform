@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"slices"
+	"strings"
 )
 
 type ConfigFile struct {
@@ -13,6 +14,7 @@ type ConfigFile struct {
 }
 
 type TestDefinition struct {
+	TestScope  string         `yaml:"test_scope"`
 	TestFile   string         `yaml:"test_file"`
 	ConfigFile string         `yaml:"config_file"`
 	EnvFile    string         `yaml:"env_file"`
@@ -33,7 +35,7 @@ type TestTypeDefinition struct {
 }
 
 type TestRun struct {
-	Name             *string    `yaml:"name"` // Use the path to the file by default?
+	Name             *string    `yaml:"name"`
 	Id               *string    `yaml:"id,omitempty"`
 	Parallelism      *int       `yaml:"parallelism"`
 	Resources        *Resources `yaml:"resources"`
@@ -96,6 +98,9 @@ func (cFile *ConfigFile) IsValid() bool {
 // Sets defaults for things that the user did not configure.
 func (cFile *ConfigFile) SetDefaults() {
 	for _, td := range cFile.TestDefinitions {
+		if td.TestScope == "" {
+			td.TestScope = strings.Split(td.TestFile, "/")[len(strings.Split(td.TestFile, "/"))-2]
+		}
 		for _, c := range td.Contexts {
 			// If no test types are configured, add a functional test definition by default.
 			if c.TestTypeDefinition == nil {

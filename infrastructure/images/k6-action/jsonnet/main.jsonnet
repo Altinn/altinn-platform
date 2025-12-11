@@ -4,6 +4,7 @@ local k6ClusterYamlConf = std.parseYaml(std.extVar('k6clusterconfig'));
 local unique_name = std.extVar('unique_name');
 local configmap_name = std.extVar('configmap_name');
 local test_name = std.extVar('test_name');
+local test_scope = std.extVar('test_scope');
 local manifest_generation_timestamp = std.extVar('manifest_generation_timestamp');
 local namespace = std.extVar('namespace');
 local deploy_env = std.extVar('deploy_env');
@@ -51,6 +52,7 @@ local common_labels = {
   'k6-test': test_name,
   testid: testid,
   test_name: test_name,
+  test_scope: test_scope,
   'uniq-name': unique_name,
   'generated-by': 'k6-action-image',
 };
@@ -102,8 +104,8 @@ local testrun = {
     spec: {
       cleanup: 'post',
       arguments: std.stripChars(
-        std.format('--tag testid=%s --tag namespace=%s --tag deploy_env=%s --tag test_name=%s --out experimental-prometheus-rw %s',
-                   [testid, namespace, deploy_env, test_name, extra_cli_args]), ' '
+        std.format('--tag testid=%s --tag namespace=%s --tag deploy_env=%s --tag test_name=%s --tag test_scope=%s --out experimental-prometheus-rw %s',
+                   [testid, namespace, deploy_env, test_name, test_scope, extra_cli_args]), ' '
       ),
       parallelism: parallelism,
       script: {
@@ -178,5 +180,5 @@ local testrun = {
 
 
   // TODO: Disable for now since most of the things are hardcoded
-  'slo.json': if false then slo.new('k8-wrapper-deployments-query', 'platform', 'k8s-wrapper', '.*/kuberneteswrapper/api/v1/Deployments') else null,
+  //'slo.json': if false then slo.new('k8-wrapper-deployments-query', 'platform', 'k8s-wrapper', '.*/kuberneteswrapper/api/v1/Deployments') else null,
 }

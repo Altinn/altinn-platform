@@ -32,6 +32,7 @@ type JsonnetParameters struct {
 	resources                   []byte
 	imageName                   string
 	testid                      string
+	testScope                   string
 }
 
 type Generator interface {
@@ -40,7 +41,7 @@ type Generator interface {
 	HandleConfigFile(defaultConfigFile string, testType string) map[string]any
 	HandleConfigFileOverride(base map[string]any, overrideConfigFile string) map[string]any
 	CallK6Archive(dirName string, testConfigFileToUse string, testFile string, k6ArchiveArgs []string)
-	CallKubectl(dirName string, configMapName string, uniqName string, testId, testName, namespace string)
+	CallKubectl(dirName string, configMapName string, uniqName string, testId, testName, testScope, namespace string)
 	CallJsonnet(jsonnetParameters JsonnetParameters)
 }
 
@@ -152,6 +153,7 @@ func generate(td *TestDefinition, c *TestContext, r K8sManifestGenerator, cf Con
 	}
 
 	uniqName := fmt.Sprintf("%s-%d-%s", c.Environment, manifestGenerationTimestamp, randomString(5))
+	testScope := td.TestScope
 	dirName := fmt.Sprintf("%s", *c.TestRun.Id)
 	newpath := filepath.Join(r.ConfigDirectory, dirName)
 	testConfigFileToUse := fmt.Sprintf("%s/tweaked-testconfig.json", newpath)
@@ -172,9 +174,9 @@ func generate(td *TestDefinition, c *TestContext, r K8sManifestGenerator, cf Con
 
 	r.CallK6Archive(dirName, testConfigFileToUse, fmt.Sprintf("%s/%s", r.RepoRootDirectory, td.TestFile), k6ArchiveArgs)
 
-	configMapName := *c.TestRun.Id
+	configMapName := fmt.Sprintf("%s-%s", td.TestScope, *c.TestRun.Id)
 
-	r.CallKubectl(dirName, configMapName, uniqName, *c.TestRun.Id, *c.TestRun.Name, cf.Namespace)
+	r.CallKubectl(dirName, configMapName, uniqName, *c.TestRun.Id, *c.TestRun.Name, testScope, cf.Namespace)
 
 	// Jsonnet related things
 	slackChannel := chooseCorrectSlackChannel(c.Environment)
@@ -212,6 +214,7 @@ func generate(td *TestDefinition, c *TestContext, r K8sManifestGenerator, cf Con
 		resources:                   resources,
 		imageName:                   imageName,
 		testid:                      *c.TestRun.Id,
+		testScope:                   testScope,
 	}
 	r.CallJsonnet(JsonnetParameters)
 }
@@ -378,7 +381,7 @@ func (r K8sManifestGenerator) CallK6Archive(dirName string, testConfigFileToUse 
 	}
 }
 
-func (r K8sManifestGenerator) CallKubectl(dirName string, configMapName string, uniqName string, testId, testName, namespace string) {
+func (r K8sManifestGenerator) CallKubectl(dirName string, configMapName string, uniqName string, testId, testName, testScope, namespace string) {
 	cmd := exec.Command("kubectl",
 		"create",
 		"configmap",
@@ -407,6 +410,7 @@ func (r K8sManifestGenerator) CallKubectl(dirName string, configMapName string, 
 		"generated-by": "k6-action-image",
 		"k6-test":      testName,
 		"test_name":    testName,
+		"test_scope":   testScope,
 		"testid":       testId,
 		"uniq-name":    uniqName,
 	})
@@ -444,6 +448,7 @@ func (r K8sManifestGenerator) CallJsonnet(jp JsonnetParameters) {
 		"--jpath", "/jsonnet/vendor",
 		"--ext-str", fmt.Sprintf("unique_name=%s", jp.uniqName),
 		"--ext-str", fmt.Sprintf("testid=%s", jp.testid),
+		"--ext-str", fmt.Sprintf("test_scope=%s", jp.testScope),
 		"--ext-str", fmt.Sprintf("configmap_name=%s", jp.configMapName),
 		"--ext-str", fmt.Sprintf("test_name=%s", jp.testName),
 		"--ext-str", fmt.Sprintf("manifest_generation_timestamp=%s", jp.manifestGenerationTimestamp),
