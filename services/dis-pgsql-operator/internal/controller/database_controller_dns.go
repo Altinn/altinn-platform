@@ -77,7 +77,11 @@ func (r *DatabaseReconciler) ensurePrivateDNSZone(
 			AzureName: zoneName,
 			Location:  &loc,
 			Owner: &genruntime.KnownResourceReference{
-				Name: r.Config.ResourceGroup,
+				ARMID: fmt.Sprintf(
+					"/subscriptions/%s/resourceGroups/%s",
+					r.Config.SubscriptionId,
+					r.Config.ResourceGroup,
+				),
 			},
 			Tags: map[string]string{
 				"dis-database": db.Name,
