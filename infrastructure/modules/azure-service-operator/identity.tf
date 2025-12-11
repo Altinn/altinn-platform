@@ -52,6 +52,7 @@ resource "azurerm_role_definition" "user_assigned_identity_role" {
       "Microsoft.Network/privateDnsZones/virtualNetworkLinks/read",
       "Microsoft.Network/privateDnsZones/virtualNetworkLinks/write",
       "Microsoft.Network/privateDnsZones/virtualNetworkLinks/delete",
+      "Microsoft.Network/virtualNetworks/join/action",
       "Microsoft.Insights/diagnosticSettings/read",
       "Microsoft.Insights/diagnosticSettings/write",
       "Microsoft.Insights/diagnosticSettings/delete",

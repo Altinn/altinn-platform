@@ -15,6 +15,7 @@ on:
       - infrastructure/adminservices-test/admin-test-aks-rg/**
       - infrastructure/modules/aks/**
       - infrastructure/modules/aks-resources/**
+      - infrastructure/modules/azure-service-operator/**
       - infrastructure/modules/dis-apim-operator/**
       - infrastructure/modules/observability/**
       - infrastructure/modules/postgresql-vnet-subnets/**
@@ -28,6 +29,7 @@ on:
       - infrastructure/adminservices-test/admin-test-aks-rg/**
       - infrastructure/modules/aks/**
       - infrastructure/modules/aks-resources/**
+      - infrastructure/modules/azure-service-operator/**
       - infrastructure/modules/dis-apim-operator/**
       - infrastructure/modules/observability/**
       - infrastructure/modules/postgresql-vnet-subnets/**
