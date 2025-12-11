@@ -6,6 +6,7 @@
          "generated-by": "k6-action-image",
          "k6-test": "get-daemonsets",
          "test_name": "get-daemonsets",
+         "test_scope": "k8s-wrapper",
          "testid": "yt01-get-daemonsets",
          "uniq-name": "{{ .UniqName }}"
       },
@@ -13,7 +14,7 @@
       "namespace": "platform"
    },
    "spec": {
-      "arguments": "--tag testid=yt01-get-daemonsets --tag namespace=platform --tag deploy_env=yt01 --tag test_name=get-daemonsets --out experimental-prometheus-rw",
+      "arguments": "--tag testid=yt01-get-daemonsets --tag namespace=platform --tag deploy_env=yt01 --tag test_name=get-daemonsets --tag test_scope=k8s-wrapper --out experimental-prometheus-rw",
       "cleanup": "post",
       "parallelism": 1,
       "runner": {
@@ -78,6 +79,7 @@
                "generated-by": "k6-action-image",
                "k6-test": "get-daemonsets",
                "test_name": "get-daemonsets",
+               "test_scope": "k8s-wrapper",
                "testid": "yt01-get-daemonsets",
                "uniq-name": "{{ .UniqName }}"
             }
@@ -94,7 +96,7 @@
       "script": {
          "configMap": {
             "file": "archive.tar",
-            "name": "yt01-get-daemonsets"
+            "name": "k8s-wrapper-yt01-get-daemonsets"
          }
       }
    }
