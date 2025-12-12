@@ -42,6 +42,11 @@ variable "azurerm_kubernetes_cluster_oidc_issuer_url" {
   type        = string
 }
 
+variable "azurerm_kubernetes_workpool_vnet_id" {
+  description = "The ID of the vnet where the aks workpools nodes are deployed. Needed to grant aso permissions"
+  type        = string
+}
+
 variable "aso_namespace" {
   description = "The namespace where the Azure Service Operator will be deployed."
   type        = string
