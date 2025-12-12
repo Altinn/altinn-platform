@@ -92,7 +92,7 @@ resource "azurerm_role_definition" "user_assigned_identity_role_dis_aks_vnet" {
 
 }
 
-resource "azurerm_role_assignment" "aso_contrib_role_assignment" {
+resource "azurerm_role_assignment" "aso_aks_vnet_role_assignment" {
   scope              = var.azurerm_kubernetes_workpool_vnet_id
   role_definition_id = azurerm_role_definition.user_assigned_identity_role_dis_aks_vnet.role_definition_resource_id
   principal_id       = azurerm_user_assigned_identity.aso_identity.principal_id
