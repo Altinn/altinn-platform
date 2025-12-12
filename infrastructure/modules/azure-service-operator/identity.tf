@@ -20,8 +20,8 @@ resource "azurerm_federated_identity_credential" "aso_fic" {
   parent_id           = azurerm_user_assigned_identity.aso_identity.id
 }
 
-resource "azurerm_role_definition" "user_assigned_identity_role" {
-  name        = "dis-identity-admin-${var.prefix}-${var.environment}"
+resource "azurerm_role_definition" "user_assigned_identity_role_dis_rg" {
+  name        = "dis-aso-rg-admin-${var.prefix}-${var.environment}"
   scope       = var.dis_resource_group_id
   description = "Role for Dis deployed Azure Service Operator to manage resources in the specified resource group."
 
@@ -69,6 +69,31 @@ resource "azurerm_role_definition" "user_assigned_identity_role" {
 
 resource "azurerm_role_assignment" "aso_contrib_role_assignment" {
   scope              = var.dis_resource_group_id
-  role_definition_id = azurerm_role_definition.user_assigned_identity_role.role_definition_resource_id
+  role_definition_id = azurerm_role_definition.user_assigned_identity_role_dis_rg.role_definition_resource_id
+  principal_id       = azurerm_user_assigned_identity.aso_identity.principal_id
+}
+
+resource "azurerm_role_definition" "user_assigned_identity_role_dis_aks_vnet" {
+  name        = "dis-aso-vnet-join-${var.prefix}-${var.environment}"
+  scope       = var.azurerm_kubernetes_workpool_vnet_id
+  description = "Role for Dis deployed Azure Service Operator to manage aks vnet."
+
+  permissions {
+    actions = [
+      "Microsoft.Network/virtualNetworks/join/action",
+      "Microsoft.Authorization/*/read",
+    ]
+    not_actions = []
+  }
+
+  assignable_scopes = [
+    var.azurerm_kubernetes_workpool_vnet_id
+  ]
+
+}
+
+resource "azurerm_role_assignment" "aso_contrib_role_assignment" {
+  scope              = var.azurerm_kubernetes_workpool_vnet_id
+  role_definition_id = azurerm_role_definition.user_assigned_identity_role_dis_aks_vnet.role_definition_resource_id
   principal_id       = azurerm_user_assigned_identity.aso_identity.principal_id
 }
