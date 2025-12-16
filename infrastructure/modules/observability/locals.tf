@@ -40,4 +40,11 @@ locals {
     id                = one(azurerm_application_insights.obs).id
     connection_string = one(azurerm_application_insights.obs).connection_string
   }
+
+  # Extract cluster name from AKS resource ID
+  # Azure resource ID format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.ContainerService/managedClusters/{clusterName}
+  cluster_name = var.enable_aks_monitoring ? element(
+    split("/", var.azurerm_kubernetes_cluster_id),
+    length(split("/", var.azurerm_kubernetes_cluster_id)) - 1
+  ) : null
 }
