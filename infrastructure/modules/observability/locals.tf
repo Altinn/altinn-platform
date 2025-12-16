@@ -43,8 +43,6 @@ locals {
 
   # Extract cluster name from AKS resource ID
   # Azure resource ID format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.ContainerService/managedClusters/{clusterName}
-  cluster_name = var.enable_aks_monitoring ? element(
-    split("/", var.azurerm_kubernetes_cluster_id),
-    length(split("/", var.azurerm_kubernetes_cluster_id)) - 1
-  ) : null
+  _cluster_id_parts = var.enable_aks_monitoring && var.azurerm_kubernetes_cluster_id != null ? split("/", var.azurerm_kubernetes_cluster_id) : []
+  cluster_name      = length(local._cluster_id_parts) > 0 ? element(local._cluster_id_parts, length(local._cluster_id_parts) - 1) : null
 }

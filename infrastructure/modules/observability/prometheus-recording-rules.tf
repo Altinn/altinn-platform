@@ -131,7 +131,6 @@ resource "azurerm_monitor_alert_prometheus_rule_group" "node_recording_rules_lin
 }
 
 # Kubernetes Recording Rules for Linux
-# Kubernetes Recording Rules for Linux
 # Note: These rules are Linux-specific. Windows nodes would require separate rule groups.
 resource "azurerm_monitor_alert_prometheus_rule_group" "kubernetes_recording_rules_linux" {
   count = var.enable_aks_monitoring ? 1 : 0
@@ -415,7 +414,6 @@ resource "azurerm_monitor_alert_prometheus_rule_group" "kubernetes_recording_rul
   }
 }
 
-# UX Recording Rules for Azure Portal Integration
 # UX Recording Rules for Linux
 # Note: These rules are Linux-specific and enable Azure Portal monitoring blade integration.
 resource "azurerm_monitor_alert_prometheus_rule_group" "ux_recording_rules_linux" {
