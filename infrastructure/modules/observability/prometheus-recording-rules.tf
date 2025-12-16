@@ -509,7 +509,7 @@ resource "azurerm_monitor_alert_prometheus_rule_group" "ux_recording_rules_linux
     expression = <<-EOT
       max by (node, created_by_name, created_by_kind, namespace, cluster, pod, microsoft_resourceid) (
         (max by (container, pod, namespace, cluster, microsoft_resourceid) (kube_pod_container_status_restarts_total{container != "", pod != "", job = "kube-state-metrics"})
-        or sum by (container, pod, namespace, cluster, microsoft_resourceid) (kube_pod_init_status_restarts_total{container != "", pod != "", job = "kube-state-metrics"}))
+        or sum by (container, pod, namespace, cluster, microsoft_resourceid) (kube_pod_init_container_status_restarts_total{container != "", pod != "", job = "kube-state-metrics"}))
         * on (pod, namespace, cluster, microsoft_resourceid) group_left (node, created_by_name, created_by_kind)
         (max by (node, created_by_name, created_by_kind, pod, namespace, cluster, microsoft_resourceid) (kube_pod_info{pod != "", job = "kube-state-metrics"}))
       )
