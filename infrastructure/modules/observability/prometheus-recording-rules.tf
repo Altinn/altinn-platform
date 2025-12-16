@@ -572,7 +572,7 @@ resource "azurerm_monitor_alert_prometheus_rule_group" "ux_recording_rules_linux
     record     = "ux:node_memory_usage:sum"
     expression = <<-EOT
       sum by (instance, cluster, microsoft_resourceid) (
-        (node_memory_MemTotal_bytes{job = "node"} - node_memory_MemFree_bytes{job = "node"} - node_memory_cached_bytes{job = "node"} - node_memory_buffers_bytes{job = "node"})
+        (node_memory_MemTotal_bytes{job = "node"} - node_memory_MemFree_bytes{job = "node"} - node_memory_Cached_bytes{job = "node"} - node_memory_Buffers_bytes{job = "node"})
       )
     EOT
   }
