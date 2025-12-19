@@ -92,28 +92,6 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot8c28g" {
   temporary_name_for_rotation = "tmpd8c28g"
 }
 
-
-resource "azurerm_kubernetes_cluster_node_pool" "spot1c3g" {
-  name                  = "spot1c3g"
-  kubernetes_cluster_id = azurerm_kubernetes_cluster.k6tests.id
-  vm_size               = "Standard_D1_v2"
-  auto_scaling_enabled  = true
-  node_count            = 0
-  min_count             = 0
-  max_count             = 40
-  priority              = "Spot"
-  eviction_policy       = "Delete"
-  spot_max_price        = -1 # (the current on-demand price for a Virtual Machine)
-  node_labels = {
-    "kubernetes.azure.com/scalesetpriority" : "spot", # Automatically added by Azure
-    spot1cpu3gbmem : true
-  }
-  node_taints = [
-    "kubernetes.azure.com/scalesetpriority=spot:NoSchedule", # Automatically added by Azure
-  ]
-  temporary_name_for_rotation = "tmpd1c3g"
-}
-
 resource "azurerm_kubernetes_cluster_node_pool" "spot2c7g" {
   name                  = "spot2c7g"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.k6tests.id
