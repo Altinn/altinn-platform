@@ -22,6 +22,28 @@ node_types:
         operator: "Equal"
         value: "spot"
         effect: "NoSchedule"
+  spot1cpu3gbmem:
+    nodeSelector:
+      - label: "kubernetes.azure.com/scalesetpriority"
+        value: "spot"
+      - label: spot1cpu3gbmem
+        value: true
+    tolerations:
+      - key: "kubernetes.azure.com/scalesetpriority"
+        operator: "Equal"
+        value: "spot"
+        effect: "NoSchedule"
+  spot2cpu7gbmem:
+    nodeSelector:
+      - label: "kubernetes.azure.com/scalesetpriority"
+        value: "spot"
+      - label: spot2cpu7gbmem
+        value: true
+    tolerations:
+      - key: "kubernetes.azure.com/scalesetpriority"
+        operator: "Equal"
+        value: "spot"
+        effect: "NoSchedule"
   default:
     nodeSelector: []
     tolerations: []
