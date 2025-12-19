@@ -90,7 +90,7 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
   }
 
   network_profile {
-    network_plugin = "azure"
+    network_plugin = "kubenet"
     load_balancer_profile {
       outbound_ports_allocated = 5000 # https://learn.microsoft.com/en-us/azure/aks/configure-load-balancer-standard?tabs=create-cluster-ip-based%2Cupdate-cluster-managed-outbound-ips%2Ccreate-cluster-custom-ips%2Ccreate-cluster-custom-ip-prefixes%2Ccreate-cluster-outbound-ports-ips%2Ccreate-cluster-idle-timeout#configure-the-allocated-outbound-ports
     }
