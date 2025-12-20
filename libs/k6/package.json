@@ -4,7 +4,7 @@
     "version": "0.0.1",
     "description": "Library with functionality reusable across tests",
     "devDependencies": {
-        "esbuild": "0.27.0",
+        "esbuild": "0.27.2",
         "eslint": "8.57.1",
         "eslint-config-prettier": "8.10.2",
         "eslint-plugin-prettier": "4.2.5",
