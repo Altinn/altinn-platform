@@ -1,6 +1,6 @@
 FROM golang:1.25-alpine@sha256:ac09a5f469f307e5da71e766b0bd59c9c49ea460a528cc3e6686513d64a6f1fb AS builder
 # renovate: datasource=github-tags depName=kubectl packageName=kubernetes/kubectl versioning=semver extractVersion=^kubernetes-(?<version>.*)$
-ARG KUBECTL_VERSION=1.34.2
+ARG KUBECTL_VERSION=1.35.0
 # renovate: datasource=github-releases depName=kubeseal packageName=bitnami-labs/sealed-secrets versioning=semver extractVersion=^sealed-secrets-(?<version>.*)$
 ARG KUBESEAL_VERSION=0.33.1
 # renovate: datasource=github-releases depName=jsonnet packageName=google/jsonnet versioning=semver
