@@ -56,3 +56,10 @@ resource "azurerm_monitor_data_collection_rule_association" "amw" {
     azurerm_monitor_data_collection_rule.amw
   ]
 }
+
+resource "azurerm_role_assignment" "otel_collector_metrics_publisher" {
+  count                = var.enable_aks_monitoring ? 1 : 0
+  scope                = azurerm_monitor_data_collection_rule.amw[0].id
+  principal_id         = azuread_service_principal.sp.object_id
+  role_definition_name = "Monitoring Metrics Publisher"
+}

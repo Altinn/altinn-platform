@@ -48,6 +48,7 @@ resource "azapi_resource" "otel_collector" {
               KV_URI : "${var.obs_kv_uri}"
               CLIENT_ID : "${var.obs_client_id}"
               TENANT_ID : "${var.obs_tenant_id}"
+              AMW_WRITE_ENDPOINT : "${var.obs_amw_write_endpoint}"
             }
           }
           prune                  = false

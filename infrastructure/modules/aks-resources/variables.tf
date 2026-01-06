@@ -100,6 +100,11 @@ variable "obs_tenant_id" {
   description = "Tenant id for the obs app"
 }
 
+variable "obs_amw_write_endpoint" {
+  type        = string
+  description = "Azure Monitor Workspaces write endpoint to write prometheus metrics to via prometheus exporter"
+}
+
 variable "pip4_ip_address" {
   type        = string
   description = "AKS ipv4 public ip"

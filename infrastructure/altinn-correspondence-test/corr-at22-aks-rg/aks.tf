@@ -66,4 +66,5 @@ module "infra-resources" {
   developer_entra_id_group                     = var.developer_entra_id_group
   linkerd_default_inbound_policy               = "all-unauthenticated" # when we figure out metrics scraping policy "cluster-authenticated"
   grafana_redirect_dns                         = module.dns-child-zone.azurerm_dns_zone_name
+  obs_amw_write_endpoint                       = module.observability.monitor_workspace_write_endpoint
 }

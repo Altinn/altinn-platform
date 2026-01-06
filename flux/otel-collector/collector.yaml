@@ -3,6 +3,8 @@ kind: OpenTelemetryCollector
 metadata:
   name: otel
   namespace: monitoring
+  labels:
+    azure.workload.identity/use: "true"
 spec:
   env:
     - name: APPLICATIONINSIGHTS_CONNECTION_STRING
@@ -35,17 +37,176 @@ spec:
             endpoint: 0.0.0.0:4317
           http:
             endpoint: 0.0.0.0:4318
+
     processors:
       batch: {}
-      probabilistic_sampler:
-        # We should decrease this later as more apps use
-        # the collector
-        sampling_percentage: 50
+      # Extract aks cluster name
+      resourcedetection/aks:
+        detectors: [aks]
+        timeout: 2s
+        override: false
+        aks:
+          resource_attributes:
+            k8s.cluster.name:
+              enabled: true
+      # Extract k8s attributes
+      k8sattributes:
+        auth_type: 'serviceAccount'
+        wait_for_metadata: true
+        wait_for_metadata_timeout: 10s
+        extract:
+          metadata: # extracted from the pod
+            - k8s.namespace.name
+            - k8s.pod.name
+            - k8s.pod.start_time
+            - k8s.pod.uid
+            - k8s.deployment.name
+            - k8s.job.name
+            - k8s.cronjob.name
+            - k8s.daemonset.name
+            - k8s.node.name
+            - service.name
+          labels:
+            - tag_name: app.lable.name
+              key: app.kubernetes.io/name
+              from: pod
+        pod_association:
+          - sources:
+              # This rule associates all resources containing the 'k8s.pod.ip' attribute with the matching pods. If this attribute is not present in the resource, this rule will not be able to find the matching pod.
+              - from: resource_attribute
+                name: k8s.pod.ip
+          - sources:
+              # This rule associates all resources containing the 'k8s.pod.uid' attribute with the matching pods. If this attribute is not present in the resource, this rule will not be able to find the matching pod.
+              - from: resource_attribute
+                name: k8s.pod.uid
+          - sources:
+              - from: connection
+      # Remove process.command_args
+      transform/drop:
+        metric_statements:
+          - context: datapoint
+            statements:
+              - delete_key(attributes, "process.command_args")
+              - delete_key(resource.attributes, "process.command_args")
+        trace_statements:
+          - context: span
+            statements:
+              - delete_key(attributes, "process.command_args")
+              - delete_key(resource.attributes, "process.command_args")
+          - context: spanevent
+            statements:
+              - delete_key(attributes, "process.command_args")
+              - delete_key(resource.attributes, "process.command_args")
+      # Hack to make azure application insights display traces somewhat correctly
+      transform/azuremonitor:
+        error_mode: ignore
+        trace_statements:
+          - context: span
+            statements:
+            # http.host fix
+            - set(attributes["http.host"], attributes["server.address"]) where attributes["server.address"] != nil
+            # http.method fix
+            - set(attributes["http.method"], attributes["http.request.method"]) where attributes["http.request.method"] != nil
+            # http.scheme fix
+            - set(attributes["http.scheme"], attributes["url.scheme"]) where attributes["url.scheme"] != nil
+            # http.target fix
+            - set(attributes["http.target"], attributes["url.path"]) where attributes["url.path"] != nil and (attributes["url.query"] == nil or attributes["url.query"] == "")
+            - set(attributes["http.target"], Concat([attributes["url.path"], attributes["url.query"]], "?")) where attributes["url.path"] != nil and (attributes["url.query"] != nil and attributes["url.query"] != "")
+            # http.url fix
+            - set(attributes["http.url"], attributes["url.full"]) where attributes["url.full"] != nil and attributes["http.url"] == nil
+            # http.status_code fix
+            - set(attributes["http.status_code"], attributes["http.response.status_code"]) where attributes["http.response.status_code"] != nil
+            # http.client_ip fix
+            - set(attributes["http.client_ip"], attributes["client.address"]) where attributes["client.address"] != nil
+            # db.statement fix
+            - set(attributes["db.statement"], attributes["sql.query.text"]) where attributes["sql.query.text"] != nil
+            # db.system fix
+            - set(attributes["db.system"], attributes["db.system.name"]) where attributes["db.system.name"] != nil
+            # set http.route to url.path if deployment traefik and url.full not set
+            - set(attributes["http.route"], attributes["url.path"]) where attributes["url.path"] != nil and attributes["http.route"] == nil
+            - replace_pattern(attributes["http.route"], "/(.*?)/(.*?)?/(.*?)?$","/$$1/$$2") where resource.attributes["k8s.deployment.name"] == "traefik" and attributes["http.route"] != nil
+            # The "Internal Identity" (Service Mesh Fix)
+            - set(attributes["http.host"], resource.attributes["service.name"]) where resource.attributes["linkerd.io/proxy-deployment"] != nil
+            - set(attributes["http.target"], resource.attributes["service.name"]) where resource.attributes["linkerd.io/proxy-deployment"] != nil
+            - set(attributes["server.address"], resource.attributes["service.name"]) where resource.attributes["linkerd.io/proxy-deployment"] != nil
+      # map metric attributes and remove a set of attributes
+      transform/metrics:
+        metric_statements:
+          - context: datapoint
+            statements:
+              - merge_maps(attributes, resource.attributes, "insert")
+              # Remove the specific attributes with litt value
+              - delete_key(attributes, "telemetry.sdk.language")
+              - delete_key(attributes, "telemetry.sdk.name")
+              - delete_key(attributes, "process.command_args")
+              - delete_key(attributes, "os.type")
+              - delete_key(attributes, "os.description")
+      #Tail based sampling rules. Currently sample all, except http.route in [/metrics, /health] (sample only 0.1%), all spans with error are sampled
+      tail_sampling:
+        decision_wait: 10s
+        num_traces: 1000
+        policies:
+          - name: default-sample-all
+            type: and
+            and:
+              and_sub_policy:
+                - name: route-live-ready-policy
+                  type: string_attribute
+                  string_attribute:
+                    key: http.route
+                    values: [/metrics, /health]
+                    invert_match: true
+                - name: probabilistic-policy
+                  type: probabilistic
+                  probabilistic:
+                    sampling_percentage: 100
+          - name: heavy-sampling
+            type: and
+            and:
+              and_sub_policy:
+                - name: route-live-ready-policy
+                  type: string_attribute
+                  string_attribute:
+                    key: http.route
+                    values: [/metrics, /health]
+                    enabled_regex_matching: true
+                  # apply probabilistic sampling
+                - name: probabilistic-policy
+                  type: probabilistic
+                  probabilistic:
+                    sampling_percentage: 0.1
+          - name: always-sample-errors
+            type: and
+            and:
+              and_sub_policy:
+                - name: trace-status-policy
+                  type: status_code
+                  status_code:
+                    status_codes:
+                      - ERROR
+      filter/logs-sev:
+        error_mode: ignore
+        logs:
+          log_record:
+          - 'severity_number < SEVERITY_NUMBER_WARN' #Drop all Info, debug, trace and unspecified logs
+      # Memory limiter to mitigate out of memory situations
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 75
+        spike_limit_percentage: 15
+
     exporters:
       azuremonitor: {}
       debug: {}
+      prometheusremotewrite:
+        endpoint: ${AMW_WRITE_ENDPOINT}
+        resource_to_telemetry_conversion:
+          enabled: false
+        auth:
+          authenticator: azureauth
 
     service:
+      extensions: [azureauth]
       telemetry:
         metrics:
           level: basic
@@ -56,11 +217,15 @@ spec:
                     host: 0.0.0.0
                     port: 8888
       pipelines:
-        logs:
-          receivers: [otlp]
-          processors: [batch]
-          exporters: [azuremonitor, debug]
         traces:
           receivers: [otlp]
-          processors: [probabilistic_sampler, batch]
-          exporters: [azuremonitor, debug]
+          processors: [memory_limiter, resourcedetection/aks, k8sattributes, transform/azuremonitor, transform/drop, tail_sampling, batch]
+          exporters: [azuremonitor]
+        logs:
+          receivers: [otlp]
+          processors: [filter/logs-sev, memory_limiter, resourcedetection/aks, k8sattributes,batch]
+          exporters: [azuremonitor]
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter, resourcedetection/aks, k8sattributes, transform/metrics, transform/drop, batch]
+          exporters: [prometheusremotewrite]
