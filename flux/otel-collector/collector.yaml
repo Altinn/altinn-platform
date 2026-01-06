@@ -12,7 +12,7 @@ spec:
         secretKeyRef:
           name: app-insights-connstring
           key: connectionString
-  image: altinncr.azurecr.io/ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.122.0
+  image: altinncr.azurecr.io/ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.140.1
   podAnnotations:
     linkerd.io/inject: "enabled"
     config.linkerd.io/skip-outbound-ports: "443"
@@ -67,7 +67,7 @@ spec:
             - k8s.node.name
             - service.name
           labels:
-            - tag_name: app.lable.name
+            - tag_name: app.label.name
               key: app.kubernetes.io/name
               from: pod
         pod_association:
