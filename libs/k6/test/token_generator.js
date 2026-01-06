@@ -1,4 +1,19 @@
-import { PersonalTokenGenerator, EnterpriseTokenGenerator } from "../src/index.js"
+import { PersonalTokenGenerator, EnterpriseTokenGenerator, PlatformTokenGenerator } from "../src/index.js"
+
+function assertTokenReturned(token, context) {
+    if (!(token && typeof token === "string" && token.length > 0)) {
+        throw new Error(`Unexpected token value${context ? ` (${context})` : ""}`)
+    }
+}
+
+function testPlatformTokenReturnedForEnv(env) {
+    const options = new Map();
+    options.set("env", env)
+
+    const tokenGenerator = new PlatformTokenGenerator(options)
+    const token = tokenGenerator.getToken()
+    assertTokenReturned(token, `PlatformTokenGenerator env=${env}`)
+}
 
 function testGetPersonalToken() {
     // Valid options for a single user token
@@ -11,9 +26,7 @@ function testGetPersonalToken() {
     const tokenGenerator = new PersonalTokenGenerator(options)
 
     const token = tokenGenerator.getToken()
-    if (!(token && typeof token === "string" && token.length > 0)) {
-        throw new Error("Unexpected token value")
-    }
+    assertTokenReturned(token, "testGetPersonalToken")
 }
 
 function testGetPersonalTokenBulk() {
@@ -47,9 +60,7 @@ function testGetEnterpriseToken() {
     options.set("orgNo", "713431400");
     const tokenGenerator = new EnterpriseTokenGenerator(options)
     const token = tokenGenerator.getToken()
-    if (!(token && typeof token === "string" && token.length > 0)) {
-        throw new Error("Unexpected token value")
-    }
+    assertTokenReturned(token, "testGetEnterpriseToken")
 }
 
 function testSetTokenGeneratorOptions() {
@@ -144,4 +155,7 @@ export default function testTokenGenerator() {
     testGetPersonalTokenBulk()
     testGetEnterpriseTokenBulk()
     testSetTokenGeneratorOptions()
+
+    testPlatformTokenReturnedForEnv("yt01")
+    testPlatformTokenReturnedForEnv("at22")
 }

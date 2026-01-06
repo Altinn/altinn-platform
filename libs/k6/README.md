@@ -5,6 +5,7 @@ Import the library
 import {
     PersonalTokenGenerator,
     EnterpriseTokenGenerator,
+    PlatformTokenGenerator,
     MaskinportenAccessTokenGenerator
 } from "https://github.com/Altinn/altinn-platform/releases/download/altinn-k6-lib-0.0.4/index.js"
 ```
@@ -45,6 +46,24 @@ Expected environmental variables for EnterpriseTokenGenerator. Otherwise pass th
 
     const tokenGenerator = new EnterpriseTokenGenerator(options);
     // const tokenGenerator = new EnterpriseTokenGenerator(options, username, password);
+```
+
+## PlatformTokenGenerator
+
+Expected environmental variables for PlatformTokenGenerator. Otherwise pass the values explicitly in the constructor.
+- TOKEN_GENERATOR_USERNAME
+- TOKEN_GENERATOR_PASSWORD
+
+`app` defaults to `k6-e2e-tests` (for logging purposes) but can be overridden. `ttl` defaults to `60000` but can be overridden.
+
+```javascript
+    const options = new Map();
+    options.set("env", __ENV.ENVIRONMENT);
+    // options.set("ttl", 60000);
+    // options.set("app", "k6-e2e-tests");
+
+    const tokenGenerator = new PlatformTokenGenerator(options);
+    // const tokenGenerator = new PlatformTokenGenerator(options, username, password);
 ```
 
 ## MaskinportenAccessTokenGenerator
