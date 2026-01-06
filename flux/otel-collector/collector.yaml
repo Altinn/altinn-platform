@@ -142,7 +142,7 @@ spec:
           - context: datapoint
             statements:
               - merge_maps(attributes, resource.attributes, "insert")
-              # Remove the specific attributes with litt value
+              # Remove the specific attributes with little value
               - delete_key(attributes, "telemetry.sdk.language")
               - delete_key(attributes, "telemetry.sdk.name")
               - delete_key(attributes, "process.command_args")

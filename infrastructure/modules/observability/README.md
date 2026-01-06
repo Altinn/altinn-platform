@@ -89,7 +89,7 @@ No modules.
 | <a name="output_lakmus_client_id"></a> [lakmus\_client\_id](#output\_lakmus\_client\_id) | n/a |
 | <a name="output_log_analytics_workspace_id"></a> [log\_analytics\_workspace\_id](#output\_log\_analytics\_workspace\_id) | n/a |
 | <a name="output_monitor_workspace_id"></a> [monitor\_workspace\_id](#output\_monitor\_workspace\_id) | n/a |
-| <a name="output_monitor_workspace_write_endpoint"></a> [monitor\_workspace\_write\_endpoint](#output\_monitor\_workspace\_write\_endpoint) | Metrics ingestion endpoint url. If enable\_aks\_monitor is set to false this will return an empty string |
+| <a name="output_monitor_workspace_write_endpoint"></a> [monitor\_workspace\_write\_endpoint](#output\_monitor\_workspace\_write\_endpoint) | Metrics ingestion endpoint url. If enable\_aks\_monitoring is set to false this will return an empty string |
 | <a name="output_node_recording_rules_id"></a> [node\_recording\_rules\_id](#output\_node\_recording\_rules\_id) | ID of the Node Recording Rules rule group |
 | <a name="output_obs_client_id"></a> [obs\_client\_id](#output\_obs\_client\_id) | n/a |
 | <a name="output_ux_recording_rules_id"></a> [ux\_recording\_rules\_id](#output\_ux\_recording\_rules\_id) | ID of the UX Recording Rules rule group |
