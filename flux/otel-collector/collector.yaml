@@ -37,7 +37,14 @@ spec:
             endpoint: 0.0.0.0:4317
           http:
             endpoint: 0.0.0.0:4318
-
+    extensions:
+      azureauth:
+        scopes:
+          - https://monitor.azure.com/.default
+        workload_identity:
+          tenant_id: "${env:AZURE_TENANT_ID}"
+          client_id: "${env:AZURE_CLIENT_ID}"
+          federated_token_file: "${env:AZURE_FEDERATED_TOKEN_FILE}"
     processors:
       batch: {}
       # Extract aks cluster name
