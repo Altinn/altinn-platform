@@ -262,10 +262,16 @@ class PlatformTokenGenerator {
 
   #applyDefaultOptions() {
     if (!this.tokenGeneratorOptions.has('app')) {
-      this.tokenGeneratorOptions.set('app', PlatformTokenGenerator.#platformApp);
+      this.tokenGeneratorOptions.set(
+        'app',
+        PlatformTokenGenerator.#platformApp,
+      );
     }
     if (!this.tokenGeneratorOptions.has('ttl')) {
-      this.tokenGeneratorOptions.set('ttl', PlatformTokenGenerator.#defaultTtl);
+      this.tokenGeneratorOptions.set(
+        'ttl',
+        PlatformTokenGenerator.#defaultTtl,
+      );
     }
   }
 
