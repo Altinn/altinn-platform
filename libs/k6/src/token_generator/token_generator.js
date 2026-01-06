@@ -268,10 +268,7 @@ class PlatformTokenGenerator {
       );
     }
     if (!this.tokenGeneratorOptions.has('ttl')) {
-      this.tokenGeneratorOptions.set(
-        'ttl',
-        PlatformTokenGenerator.#defaultTtl,
-      );
+      this.tokenGeneratorOptions.set('ttl', PlatformTokenGenerator.#defaultTtl);
     }
   }
 
@@ -332,4 +329,8 @@ class PlatformTokenGeneratorOptions extends Map {
   }
 }
 
-export { PersonalTokenGenerator, EnterpriseTokenGenerator, PlatformTokenGenerator };
+export {
+  PersonalTokenGenerator,
+  EnterpriseTokenGenerator,
+  PlatformTokenGenerator,
+};
