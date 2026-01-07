@@ -1,0 +1,4 @@
+# CVE-2025-61729: False positive for helm binary
+# Verified with govulncheck against helm source - no vulnerability reported
+# https://avd.aquasec.com/nvd/cve-2025-61729
+CVE-2025-61729
