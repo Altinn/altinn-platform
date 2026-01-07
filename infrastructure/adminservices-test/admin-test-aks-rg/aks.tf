@@ -58,4 +58,5 @@ module "aks_resources" {
   enable_dis_identity_operator               = true
   azurerm_dis_identity_resource_group_id     = module.aks.dis_resource_group_id
   azurerm_kubernetes_cluster_oidc_issuer_url = module.aks.aks_oidc_issuer_url
+  obs_amw_write_endpoint                     = module.observability.monitor_workspace_write_endpoint
 }
