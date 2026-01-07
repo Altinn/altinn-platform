@@ -218,4 +218,119 @@ class EnterpriseTokenGeneratorOptions extends Map {
   }
 }
 
-export { PersonalTokenGenerator, EnterpriseTokenGenerator };
+class PlatformTokenGenerator {
+  #username;
+  #password;
+  #credentials;
+  #encodedCredentials;
+
+  static #platformApp = 'k6-e2e-tests';
+  static #defaultTtl = 60000;
+  constructor(
+    tokenGeneratorOptions,
+    username = __ENV.TOKEN_GENERATOR_USERNAME,
+    password = __ENV.TOKEN_GENERATOR_PASSWORD,
+  ) {
+    if (username === undefined || password === undefined) {
+      throw Error('TokenGenerator requires a username and password');
+    }
+    this.#username = username;
+    this.#password = password;
+
+    this.#credentials = `${this.#username}:${this.#password}`;
+    this.#encodedCredentials = encoding.b64encode(this.#credentials);
+
+    this.tokenRequestOptions = {
+      headers: {
+        Authorization: `Basic ${this.#encodedCredentials}`,
+      },
+      tags: { name: 'Platform Token Generator' },
+    };
+
+    this.tokenGeneratorOptions = new PlatformTokenGeneratorOptions(
+      tokenGeneratorOptions,
+    );
+    this.#applyDefaultOptions();
+  }
+
+  setTokenGeneratorOptions(tokenGeneratorOptions) {
+    this.tokenGeneratorOptions = new PlatformTokenGeneratorOptions(
+      tokenGeneratorOptions,
+    );
+    this.#applyDefaultOptions();
+  }
+
+  #applyDefaultOptions() {
+    if (!this.tokenGeneratorOptions.has('app')) {
+      this.tokenGeneratorOptions.set(
+        'app',
+        PlatformTokenGenerator.#platformApp,
+      );
+    }
+    if (!this.tokenGeneratorOptions.has('ttl')) {
+      this.tokenGeneratorOptions.set('ttl', PlatformTokenGenerator.#defaultTtl);
+    }
+  }
+
+  #getPlatformAccessToken() {
+    const url = new URL(config.getPlatformAccessTokenUrl);
+    for (let [k, v] of this.tokenGeneratorOptions) {
+      url.searchParams.append(k, v);
+    }
+    const response = http.get(url.toString(), this.tokenRequestOptions);
+    if (response.status != 200) {
+      throw new Error(
+        `getPlatformAccessToken: failed to get token from ${url}, got: ${response.status_text}`,
+      );
+    }
+    return response.body;
+  }
+
+  #memoize(f) {
+    const cache = new Map();
+    return function () {
+      let key = '';
+      for (let [k, v] of this.tokenGeneratorOptions) {
+        key = key.concat(`${k}=${v}&`);
+      }
+      if (cache.has(key)) {
+        return cache.get(key);
+      } else {
+        let result = f.apply(this);
+        cache.set(key, result);
+        return result;
+      }
+    };
+  }
+
+  getToken = this.#memoize(this.#getPlatformAccessToken);
+}
+
+class PlatformTokenGeneratorOptions extends Map {
+  static getPlatformAccessTokenValidOptions = ['env', 'app', 'ttl'];
+
+  constructor(options) {
+    if (options) {
+      for (let [k, v] of options) {
+        if (!PlatformTokenGeneratorOptions.isValidTokenOption(k)) {
+          throw Error(`TokenGeneratorOptions: "${k}" is not a valid option`);
+        }
+      }
+      super(options);
+    } else {
+      super();
+    }
+  }
+
+  static isValidTokenOption(key) {
+    return PlatformTokenGeneratorOptions.getPlatformAccessTokenValidOptions.includes(
+      key,
+    );
+  }
+}
+
+export {
+  PersonalTokenGenerator,
+  EnterpriseTokenGenerator,
+  PlatformTokenGenerator,
+};
