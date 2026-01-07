@@ -67,6 +67,31 @@
     "flux/whoami": {
       "release-type": "simple",
       "component": "flux-oci-whoami"
+    },
+    "infrastructure/images/azure-devops-agent": {
+      "release-type": "simple",
+      "component": "azdevops-agent",
+      "include-v-in-tag": false
+    },
+    "infrastructure/images/gh-runner": {
+      "release-type": "simple",
+      "component": "ghrunner",
+      "include-v-in-tag": false
+    },
+    "infrastructure/images/k6-action": {
+      "release-type": "simple",
+      "component": "k6-action-image",
+      "include-v-in-tag": false
+    },
+    "infrastructure/images/k6-image": {
+      "release-type": "simple",
+      "component": "k6-image",
+      "include-v-in-tag": false
+    },
+    "infrastructure/images/terraform-azure-devops-agent": {
+      "release-type": "simple",
+      "component": "tf-azdev-agent",
+      "include-v-in-tag": false
     }
   },
   "separate-pull-requests": true,
