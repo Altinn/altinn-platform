@@ -1,9 +1,4 @@
-# Checkd against kubectl with govulncheck and kubectl is not affected (false positiv)
-# CVE with status needs evaluation in ubuntu 24.04
-CVE-2025-47907
-CVE-2025-47906
-CVE-2024-25621
-CVE-2025-58183
-CVE-2025-58186
-CVE-2025-58187
-CVE-2025-58188
+# CVE-2025-61729: False positive for helm binary
+# Verified with govulncheck against helm source - no vulnerability reported
+# https://avd.aquasec.com/nvd/cve-2025-61729
+CVE-2025-61729
