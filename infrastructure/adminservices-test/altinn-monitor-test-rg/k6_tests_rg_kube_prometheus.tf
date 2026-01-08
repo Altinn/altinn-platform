@@ -7,7 +7,7 @@ resource "helm_release" "prometheus_operator_crds" {
   namespace  = "monitoring"
   repository = "https://prometheus-community.github.io/helm-charts"
   chart      = "prometheus-operator-crds"
-  version    = "25.0.0"
+  version    = "25.0.1"
 }
 
 data "azurerm_monitor_data_collection_rule" "prometheus" {
@@ -28,7 +28,7 @@ resource "helm_release" "kube_prometheus_stack" {
   repository       = "https://prometheus-community.github.io/helm-charts"
   chart            = "kube-prometheus-stack"
   skip_crds        = true
-  version          = "79.6.1"
+  version          = "79.12.0"
 
   values = [
     "${templatefile(
