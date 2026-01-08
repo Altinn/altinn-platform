@@ -110,6 +110,16 @@ variable "monitor_workspace_id" {
   }
 }
 
+variable "monitor_workspace_data_collection_rule_id" {
+  type        = string
+  default     = null
+  description = "ID of an existing Azure Monitor Workspace Data Collection Rule when reusing."
+  validation {
+    condition     = var.enable_aks_monitoring ? (var.monitor_workspace_data_collection_rule_id == null) : (var.monitor_workspace_data_collection_rule_id != null && trimspace(var.monitor_workspace_data_collection_rule_id) != "") 
+    error_message = "monitor_workspace_data_collection_rule_id must be non-empty when enable_aks_monitoring is false, and null when true."
+  }
+}
+
 variable "monitor_workspace_name" {
   type        = string
   default     = null
