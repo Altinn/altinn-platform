@@ -408,11 +408,12 @@ func (r K8sManifestGenerator) CallKubectl(dirName string, configMapName string, 
 	}
 	temp.SetLabels(map[string]string{
 		"generated-by": "k6-action-image",
-		"k6-test":      testName,
-		"test_name":    testName,
-		"test_scope":   testScope,
-		"testid":       testId,
-		"uniq-name":    uniqName,
+		"uniq_name":    uniqName,
+	})
+	temp.SetAnnotations(map[string]string{
+		"k6-action-image/test_name":  testName,
+		"k6-action-image/test_scope": testScope,
+		"k6-action-image/testid":     testId,
 	})
 
 	tempMarshalled, err := json.MarshalIndent(temp, "", "  ")

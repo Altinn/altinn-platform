@@ -106,8 +106,8 @@ func validateConfigMap(path, testVersion, dirName string, t *testing.T) {
 	if !strings.Contains(generatedConfigMap.Name, dirName) {
 		t.Errorf("generate %s: expected \n%s to contain \n%s", testVersion, generatedConfigMap.Name, dirName)
 	}
-	if !strings.Contains(generatedConfigMap.Labels["testid"], dirName) {
-		t.Errorf("generate %s: expected \n%s, to contain \n%s", testVersion, generatedConfigMap.Labels["testid"], dirName)
+	if !strings.Contains(generatedConfigMap.Annotations["k6-action-image/testid"], dirName) {
+		t.Errorf("generate %s: expected \n%s, to contain \n%s", testVersion, generatedConfigMap.Annotations["k6-action-image/testid"], dirName)
 	}
 	if !(len(generatedConfigMap.Data["archive.tar"]) > 0) {
 		t.Errorf("generate %s: expected length of data in key archive.tar to be over 0 , actual %d", testVersion, len(generatedConfigMap.Data["archive.tar"]))

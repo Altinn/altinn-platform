@@ -33,6 +33,10 @@ podLogs:
     app_kubernetes_io_name: app.kubernetes.io/name
     testid: testid
     test_name: test_name
+  annotations:
+    testid: "k6-action-image/testid"
+    test_scope: "k6-action-image/test_scope"
+    test_name: "k6-action-image/test_name"
   labelsToKeep:
     - app.kubernetes.io/name
     - container
@@ -53,7 +57,9 @@ podLogs:
     - k8s.node.name
     # custom
     - testid
+    - test_scope
     - test_name
+
 
 # Collectors
 alloy-singleton:
