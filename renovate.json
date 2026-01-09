@@ -5,20 +5,37 @@
     ":semanticCommitTypeAll(deps)",
     ":semanticCommitScopeDisabled"
   ],
-  "schedule": ["* 5-7 * * 1-4"],
+  "schedule": [
+    "* 5-7 * * 1-4"
+  ],
   "timezone": "Europe/Oslo",
-  "postUpdateOptions": ["gomodTidy"],
+  "postUpdateOptions": [
+    "gomodTidy"
+  ],
   "packageRules": [
     {
-      "matchManagers": ["terraform", "gomod"],
+      "matchManagers": [
+        "terraform",
+        "gomod"
+      ],
       "groupName": "{{manager}} non-major dependencies",
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "groupSlug": "{{manager}}-minor-patch",
-      "matchPackageNames": ["*"]
+      "matchPackageNames": [
+        "*"
+      ]
     },
     {
-      "matchDatasources": ["helm"],
-      "matchPackageNames": ["linkerd-crds", "linkerd-control-plane"],
+      "matchDatasources": [
+        "helm"
+      ],
+      "matchPackageNames": [
+        "linkerd-crds",
+        "linkerd-control-plane"
+      ],
       "groupName": "linkerd core charts",
       "groupSlug": "linkerd-core",
       "dependencyDashboardApproval": true,
@@ -32,9 +49,16 @@
       ]
     },
     {
-      "matchManagers": ["regex"],
-      "matchDatasources": ["helm"],
-      "matchPackageNames": ["traefik", "traefik-crds"],
+      "matchManagers": [
+        "regex"
+      ],
+      "matchDatasources": [
+        "helm"
+      ],
+      "matchPackageNames": [
+        "traefik",
+        "traefik-crds"
+      ],
       "groupName": "traefik helm charts",
       "groupSlug": "traefik-helm"
     }
