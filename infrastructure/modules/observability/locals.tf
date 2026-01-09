@@ -4,6 +4,7 @@ locals {
   reuse_amw = var.reuse_monitor_workspace
   reuse_law = var.reuse_log_analytics_workspace
   reuse_ai  = var.reuse_application_insights
+  reuse_dcr = !var.enable_aks_monitoring 
 }
 
 locals {
@@ -30,6 +31,8 @@ locals {
     name = one(azurerm_monitor_workspace.obs).name
     id   = one(azurerm_monitor_workspace.obs).id
   }
+
+  dcr_id = local.reuse_dcr ? var.monitor_workspace_data_collection_rule_id : one(azurerm_monitor_data_collection_rule.amw).id
 
   ai = local.reuse_ai ? {
     name              = null
