@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/Altinn/altinn-platform/compare/flux-oci-otel-collector-v1.1.1...flux-oci-otel-collector-v1.1.2) (2026-01-09)
+
+
+### Bug Fixes
+
+* add missing file sa-rbac.yaml to kustomization.yaml ([#2886](https://github.com/Altinn/altinn-platform/issues/2886)) ([cca844a](https://github.com/Altinn/altinn-platform/commit/cca844aa1198904c71c93a38ac49edb7f7d76d8c))
+
 ## [1.1.1](https://github.com/Altinn/altinn-platform/compare/flux-oci-otel-collector-v1.1.0...flux-oci-otel-collector-v1.1.1) (2026-01-09)
 
 
