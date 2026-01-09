@@ -5,3 +5,4 @@ resources:
   - external-secrets.yaml
   - collector.yaml
   - sa.yaml
+  - sa-rbac.yaml
