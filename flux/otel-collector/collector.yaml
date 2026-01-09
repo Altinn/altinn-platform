@@ -42,9 +42,9 @@ spec:
         scopes:
           - https://monitor.azure.com/.default
         workload_identity:
-          tenant_id: "${env:AZURE_TENANT_ID}"
-          client_id: "${env:AZURE_CLIENT_ID}"
-          federated_token_file: "${env:AZURE_FEDERATED_TOKEN_FILE}"
+          tenant_id: "$${env:AZURE_TENANT_ID}"
+          client_id: "$${env:AZURE_CLIENT_ID}"
+          federated_token_file: "$${env:AZURE_FEDERATED_TOKEN_FILE}"
     processors:
       batch: {}
       # Extract aks cluster name
