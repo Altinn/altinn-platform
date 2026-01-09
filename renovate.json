@@ -49,6 +49,9 @@
       ]
     },
     {
+      "matchManagers": [
+        "custom.regex"
+      ],
       "matchDatasources": [
         "helm"
       ],
