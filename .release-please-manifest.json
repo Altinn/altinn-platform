@@ -13,7 +13,7 @@
   "flux/lakmus": "1.0.2",
   "flux/linkerd": "1.7.0",
   "flux/otel-collector": "1.0.1",
-  "flux/otel-operator": "1.2.1",
+  "flux/otel-operator": "1.2.0",
   "flux/traefik": "2.0.0",
   "flux/whoami": "0.1.0",
   "infrastructure/images/azure-devops-agent": "1.2.5",
