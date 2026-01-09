@@ -2,13 +2,14 @@
    "apiVersion": "k6.io/v1alpha1",
    "kind": "TestRun",
    "metadata": {
+      "annotations": {
+         "k6-action-image/test_name": "get-deployments",
+         "k6-action-image/test_scope": "k8s-wrapper",
+         "k6-action-image/testid": "at22-get-deployments"
+      },
       "labels": {
          "generated-by": "k6-action-image",
-         "k6-test": "get-deployments",
-         "test_name": "get-deployments",
-         "test_scope": "k8s-wrapper",
-         "testid": "at22-get-deployments",
-         "uniq-name": "{{ .UniqName }}"
+         "uniq_name": "{{ .UniqName }}"
       },
       "name": "{{ .UniqName }}",
       "namespace": "platform"
@@ -71,13 +72,14 @@
          ],
          "image": "grafana/k6:master-with-browser",
          "metadata": {
+            "annotations": {
+               "k6-action-image/test_name": "get-deployments",
+               "k6-action-image/test_scope": "k8s-wrapper",
+               "k6-action-image/testid": "at22-get-deployments"
+            },
             "labels": {
                "generated-by": "k6-action-image",
-               "k6-test": "get-deployments",
-               "test_name": "get-deployments",
-               "test_scope": "k8s-wrapper",
-               "testid": "at22-get-deployments",
-               "uniq-name": "{{ .UniqName }}"
+               "uniq_name": "{{ .UniqName }}"
             }
          },
          "nodeSelector": { },

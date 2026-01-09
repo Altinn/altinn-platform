@@ -2,13 +2,14 @@
    "apiVersion": "k6.io/v1alpha1",
    "kind": "TestRun",
    "metadata": {
+      "annotations": {
+         "k6-action-image/test_name": "get-daemonsets",
+         "k6-action-image/test_scope": "k8s-wrapper",
+         "k6-action-image/testid": "yt01-get-daemonsets"
+      },
       "labels": {
          "generated-by": "k6-action-image",
-         "k6-test": "get-daemonsets",
-         "test_name": "get-daemonsets",
-         "test_scope": "k8s-wrapper",
-         "testid": "yt01-get-daemonsets",
-         "uniq-name": "{{ .UniqName }}"
+         "uniq_name": "{{ .UniqName }}"
       },
       "name": "{{ .UniqName }}",
       "namespace": "platform"
@@ -75,13 +76,14 @@
          ],
          "image": "ghcr.io/altinn/altinn-platform/k6-image:latest",
          "metadata": {
+            "annotations": {
+               "k6-action-image/test_name": "get-daemonsets",
+               "k6-action-image/test_scope": "k8s-wrapper",
+               "k6-action-image/testid": "yt01-get-daemonsets"
+            },
             "labels": {
                "generated-by": "k6-action-image",
-               "k6-test": "get-daemonsets",
-               "test_name": "get-daemonsets",
-               "test_scope": "k8s-wrapper",
-               "testid": "yt01-get-daemonsets",
-               "uniq-name": "{{ .UniqName }}"
+               "uniq_name": "{{ .UniqName }}"
             }
          },
          "nodeSelector": { },

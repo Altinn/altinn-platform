@@ -49,12 +49,13 @@ local default_env = [
 ];
 
 local common_labels = {
-  'k6-test': test_name,
-  testid: testid,
-  test_name: test_name,
-  test_scope: test_scope,
-  'uniq-name': unique_name,
+  uniq_name: unique_name,
   'generated-by': 'k6-action-image',
+};
+local common_annotations = {
+  'k6-action-image/test_name': test_name,
+  'k6-action-image/test_scope': test_scope,
+  'k6-action-image/testid': testid,
 };
 
 local slo = {
@@ -100,7 +101,9 @@ local testrun = {
       name: unique_name,
       namespace: namespace,
       labels: common_labels,
+      annotations: common_annotations,
     },
+
     spec: {
       cleanup: 'post',
       arguments: std.stripChars(
@@ -118,6 +121,7 @@ local testrun = {
         env: default_env,
         metadata: {
           labels: common_labels,
+          annotations: common_annotations,
         },
         resources: resources,
         envFrom+: [{
