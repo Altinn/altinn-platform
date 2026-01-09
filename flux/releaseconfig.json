@@ -41,7 +41,7 @@
   },
   "otel-operator": {
     "at_ring1": "1.2.0",
-    "at_ring2": "1.1.1",
+    "at_ring2": "1.2.0",
     "tt_ring1": "1.1.1",
     "tt_ring2": "1.1.1",
     "prod_ring1": "1.1.1",
