@@ -50,7 +50,7 @@
     },
     {
       "matchManagers": [
-        "regex"
+        "custom.regex"
       ],
       "matchDatasources": [
         "helm"
