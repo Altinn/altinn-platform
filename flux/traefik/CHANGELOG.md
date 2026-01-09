@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.5.1](https://github.com/Altinn/altinn-platform/compare/flux-oci-traefik-v1.5.0...flux-oci-traefik-v1.5.1) (2026-01-09)
+## [2.0.0](https://github.com/Altinn/altinn-platform/compare/flux-oci-traefik-v1.5.0...flux-oci-traefik-v2.0.0) (2026-01-09)
 
 
 ### Dependency Updates
