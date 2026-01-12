@@ -1,10 +1,10 @@
 namespace: platform
-base_dir: ""
+base_dir: actions/generate-k6-manifests/test_service/k8s_wrapper
 test_definitions:
     - test_scope: k8s-wrapper
       test_file: actions/generate-k6-manifests/test_service/k8s_wrapper/get_deployments.js
       config_file: ""
-      env_file: actions/generate-k6-manifests/test_service/env_file.env
+      env_file: ""
       contexts:
         - environment: at22
           node_type: default
@@ -20,8 +20,6 @@ test_definitions:
                 requests:
                     memory: 200Mi
                     cpu: 250m
-            env:
-                - name: FOO
-                  value: BAR
+            env: []
             secrets:
                 - token-generator-creds

@@ -1,7 +1,8 @@
 namespace: platform
+base_dir: "actions/generate-k6-manifests/test_service"
 test_definitions:
-  - test_file: actions/generate-k6-manifests/test_service/k8s_wrapper/get_deployments.js
-    env_file: actions/generate-k6-manifests/test_service/env_file.env
+  - test_file: k8s_wrapper/get_deployments.js
+    env_file: env_file.env
     contexts:
       - environment: at22
         node_type: "default"
