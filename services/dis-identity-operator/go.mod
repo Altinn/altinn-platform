@@ -3,12 +3,6 @@ module github.com/Altinn/altinn-platform/services/dis-identity-operator
 go 1.24.6
 
 require (
-<<<<<<< HEAD
-	github.com/onsi/ginkgo/v2 v2.22.0
-	github.com/onsi/gomega v1.36.1
-	k8s.io/apimachinery v0.34.1
-	k8s.io/client-go v0.34.1
-=======
 	github.com/Azure/azure-service-operator/v2 v2.16.0
 	github.com/knadh/koanf/parsers/toml/v2 v2.2.0
 	github.com/knadh/koanf/providers/env/v2 v2.0.0
@@ -21,7 +15,6 @@ require (
 	k8s.io/api v0.34.2
 	k8s.io/apimachinery v0.34.2
 	k8s.io/client-go v0.34.2
->>>>>>> tmp-original-09-12-25-00-15
 	sigs.k8s.io/controller-runtime v0.22.4
 )
 
@@ -113,10 +106,6 @@ require (
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-<<<<<<< HEAD
-	k8s.io/api v0.34.1 // indirect
-=======
->>>>>>> tmp-original-09-12-25-00-15
 	k8s.io/apiextensions-apiserver v0.34.1 // indirect
 	k8s.io/apiserver v0.34.1 // indirect
 	k8s.io/component-base v0.34.1 // indirect
