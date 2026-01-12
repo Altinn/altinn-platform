@@ -75,7 +75,7 @@ type ApplicationIdentity struct {
 
 	// metadata is a standard object metadata
 	// +optional
-	metav1.ObjectMeta `json:"metadata,omitempty,omitzero"`
+	metav1.ObjectMeta `json:"metadata,omitzero"`
 
 	// spec defines the desired state of ApplicationIdentity
 	// +required
@@ -83,7 +83,7 @@ type ApplicationIdentity struct {
 
 	// status defines the observed state of ApplicationIdentity
 	// +optional
-	Status ApplicationIdentityStatus `json:"status,omitempty,omitzero"`
+	Status ApplicationIdentityStatus `json:"status,omitzero"`
 }
 
 // +kubebuilder:object:root=true
@@ -91,7 +91,7 @@ type ApplicationIdentity struct {
 // ApplicationIdentityList contains a list of ApplicationIdentity
 type ApplicationIdentityList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
+	metav1.ListMeta `json:"metadata,omitzero"`
 	Items           []ApplicationIdentity `json:"items"`
 }
 

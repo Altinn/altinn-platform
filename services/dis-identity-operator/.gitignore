@@ -26,4 +26,7 @@ go.work
 *.swo
 *~
 
+# Kubeconfig might contain secrets
+*.kubeconfig
+
 dis-identity-config.toml
