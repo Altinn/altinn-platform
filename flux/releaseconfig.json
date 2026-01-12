@@ -29,7 +29,7 @@
     "tt_ring1": "1.7.0",
     "tt_ring2": "1.7.0",
     "prod_ring1": "1.7.0",
-    "prod_ring2": "1.4.0"
+    "prod_ring2": "1.7.0"
   },
   "external-secrets-operator": {
     "at_ring1": "1.1.0",
