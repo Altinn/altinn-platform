@@ -1,6 +1,6 @@
 module github.com/Altinn/altinn-platform/services/dis-apim-operator
 
-go 1.24.5
+go 1.24.6
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.20.0
@@ -17,7 +17,7 @@ require (
 	k8s.io/api v0.34.2
 	k8s.io/apimachinery v0.34.2
 	k8s.io/client-go v0.34.2
-	k8s.io/utils v0.0.0-20251222233032-718f0e51e6d2
+	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/controller-runtime v0.22.4
 )
 

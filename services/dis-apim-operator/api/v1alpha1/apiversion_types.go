@@ -226,13 +226,19 @@ type ApiVersionStatus struct {
 
 // ApiVersion is the Schema for the apiversions API.
 type ApiVersion struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.TypeMeta `json:",inline"`
 
-	// Spec defines the desired state of ApiVersion
-	Spec ApiVersionSpec `json:"spec,omitempty"`
-	// Status defines the observed state of ApiVersion
-	Status ApiVersionStatus `json:"status,omitempty"`
+	// metadata is a standard object metadata
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitzero"`
+
+	// spec defines the desired state of ApiVersion
+	// +required
+	Spec ApiVersionSpec `json:"spec"`
+
+	// status defines the observed state of ApiVersion
+	// +optional
+	Status ApiVersionStatus `json:"status,omitzero"`
 }
 
 // +kubebuilder:object:root=true
@@ -240,7 +246,7 @@ type ApiVersion struct {
 // ApiVersionList contains a list of ApiVersion
 type ApiVersionList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
+	metav1.ListMeta `json:"metadata,omitzero"`
 	Items           []ApiVersion `json:"items"`
 }
 

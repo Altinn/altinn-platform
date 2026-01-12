@@ -26,6 +26,8 @@ go.work
 *.swo
 *~
 
+# Kubeconfig might contain secrets
+*.kubeconfig
 *.ignore.*
 
 #Ignore config files for DisAPIM

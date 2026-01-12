@@ -44,7 +44,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: Spec defines the desired state of ApiVersion
+            description: spec defines the desired state of ApiVersion
             properties:
               apiType:
                 default: http
@@ -281,7 +281,7 @@ spec:
             - path
             type: object
           status:
-            description: Status defines the observed state of ApiVersion
+            description: status defines the observed state of ApiVersion
             properties:
               conditions:
                 description: |-
@@ -371,6 +371,8 @@ spec:
                 description: ResumeToken - The token used to track long-running operations.
                 type: string
             type: object
+        required:
+        - spec
         type: object
     served: true
     storage: true
