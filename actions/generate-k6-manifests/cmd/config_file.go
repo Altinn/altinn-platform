@@ -2,12 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 )
 
 type ConfigFile struct {
 	Namespace              string            `yaml:"namespace"`
+	BaseDir                string            `yaml:"base_dir"`
 	TestDefinitions        []*TestDefinition `yaml:"test_definitions"`
 	ValidEnvironmentValues []string          `yaml:"-"`
 	ValidTestTypes         []string          `yaml:"-"`
@@ -98,10 +100,24 @@ func (cFile *ConfigFile) IsValid() bool {
 // Sets defaults for things that the user did not configure.
 func (cFile *ConfigFile) SetDefaults() {
 	for _, td := range cFile.TestDefinitions {
+
+		if cFile.BaseDir != "" {
+			if !strings.HasPrefix(td.TestFile, cFile.BaseDir) {
+				td.TestFile = filepath.Join(cFile.BaseDir, td.TestFile)
+			}
+			if td.ConfigFile != "" && !strings.HasPrefix(td.ConfigFile, cFile.BaseDir) {
+				td.ConfigFile = filepath.Join(cFile.BaseDir, td.ConfigFile)
+			}
+			if td.EnvFile != "" && !strings.HasPrefix(td.EnvFile, cFile.BaseDir) {
+				td.EnvFile = filepath.Join(cFile.BaseDir, td.EnvFile)
+			}
+		}
+
 		if td.TestScope == "" {
 			td.TestScope = strings.Split(td.TestFile, "/")[len(strings.Split(td.TestFile, "/"))-2]
 		}
 		td.TestScope = strings.ReplaceAll(td.TestScope, "_", "-")
+
 		for _, c := range td.Contexts {
 			// If no test types are configured, add a functional test definition by default.
 			if c.TestTypeDefinition == nil {

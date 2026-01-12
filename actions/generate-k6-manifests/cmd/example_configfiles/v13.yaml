@@ -1,0 +1,6 @@
+namespace: platform
+base_dir: "actions/generate-k6-manifests/test_service/k8s_wrapper"
+test_definitions:
+  - test_file: get_deployments.js
+    contexts:
+      - environment: at22
