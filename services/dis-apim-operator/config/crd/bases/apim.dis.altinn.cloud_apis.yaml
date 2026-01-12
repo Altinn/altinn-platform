@@ -44,7 +44,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: ApiSpec defines the desired state of Api.
+            description: spec defines the desired state of Api
             properties:
               apiType:
                 default: http
@@ -310,7 +310,7 @@ spec:
             - versions
             type: object
           status:
-            description: ApiStatus defines the observed state of Api.
+            description: status defines the observed state of Api
             properties:
               apiVersionSetID:
                 description: ApiVersionSetID - The identifier of the API Version Set.
@@ -488,6 +488,8 @@ spec:
                   API Management service and the current state of the API Version.
                 type: object
             type: object
+        required:
+        - spec
         type: object
     served: true
     storage: true

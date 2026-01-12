@@ -44,7 +44,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: BackendSpec defines the desired state of Backend.
+            description: spec defines the desired state of Backend
             properties:
               azureResourceUidPrefix:
                 description: AzureResourceUidPrefix - The prefix to use for the Azure
@@ -76,7 +76,7 @@ spec:
             - url
             type: object
           status:
-            description: BackendStatus defines the observed state of Backend.
+            description: status defines the observed state of Backend
             properties:
               backendID:
                 description: BackendID - The identifier of the Backend.
@@ -158,6 +158,8 @@ spec:
                 description: ProvisioningState - The provisioning state of the Backend.
                 type: string
             type: object
+        required:
+        - spec
         type: object
     served: true
     storage: true

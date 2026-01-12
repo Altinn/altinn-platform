@@ -95,8 +95,7 @@ const (
 
 // Backend is the Schema for the backends API.
 type Backend struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.TypeMeta `json:",inline"`
 
 	// metadata is a standard object metadata
 	// +optional

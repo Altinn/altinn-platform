@@ -97,7 +97,7 @@ type ApiStatus struct {
 
 // Api is the Schema for the apis API.
 type Api struct {
-	metav1.TypeMeta   `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
 
 	// metadata is a standard object metadata
 	// +optional

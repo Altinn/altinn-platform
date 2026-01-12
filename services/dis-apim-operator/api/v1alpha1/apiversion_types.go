@@ -226,7 +226,7 @@ type ApiVersionStatus struct {
 
 // ApiVersion is the Schema for the apiversions API.
 type ApiVersion struct {
-	metav1.TypeMeta   `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
 
 	// metadata is a standard object metadata
 	// +optional
