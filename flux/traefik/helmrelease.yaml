@@ -189,7 +189,7 @@ spec:
           insecure: true
     logs:
       general:
-        level: "WARN"
+        level: "ERROR"
         otlp:
           enabled: true
           grpc:
