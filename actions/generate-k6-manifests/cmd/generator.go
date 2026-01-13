@@ -336,8 +336,11 @@ func (r K8sManifestGenerator) HandleConfigFile(defaultConfigFile string, testTyp
 
 	_, okst := mergedOut["stages"]
 	_, oksc := mergedOut["scenarios"]
+	_, okit := mergedOut["iterations"]
+	_, okvus := mergedOut["vus"]
+	_, okduration := mergedOut["duration"]
 	// Don't override if users configured it.
-	if !(okst || oksc) {
+	if !(okst || oksc || okit || okvus || okduration) {
 		defaultScenario, err := os.ReadFile(fmt.Sprintf("%s/%s.json", r.DefaultScenariosDirectory, testType))
 		if err != nil {
 			log.Fatal(err)
