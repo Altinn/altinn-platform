@@ -64,10 +64,6 @@
       "release-type": "simple",
       "component": "flux-oci-traefik"
     },
-    "flux/whoami": {
-      "release-type": "simple",
-      "component": "flux-oci-whoami"
-    },
     "infrastructure/images/azure-devops-agent": {
       "release-type": "simple",
       "component": "azdevops-agent",
@@ -104,17 +100,17 @@
   "include-component-in-tag": true,
   "include-v-in-tag": true,
   "changelog-sections": [
-    {"type": "feat", "hidden": false, "section": "Features"},
-    {"type": "fix", "hidden": false, "section": "Bug Fixes"},
-    {"type": "deps", "hidden": false, "section": "Dependency Updates"},
-    {"type": "chore", "hidden": true, "section": "Chores"},
-    {"type": "docs", "hidden": true, "section": "Documentation"},
-    {"type": "style", "hidden": true, "section": "Styles"},
-    {"type": "refactor", "hidden": true, "section": "Code Refactoring"},
-    {"type": "build", "hidden": true, "section": "Builds"},
-    {"type": "ci", "hidden": true, "section": "Continuous Integration"},
-    {"type": "revert", "hidden": true, "section": "Reverts"},
-    {"type": "test", "hidden": true, "section": "Tests"}
+    { "type": "feat", "hidden": false, "section": "Features" },
+    { "type": "fix", "hidden": false, "section": "Bug Fixes" },
+    { "type": "deps", "hidden": false, "section": "Dependency Updates" },
+    { "type": "chore", "hidden": true, "section": "Chores" },
+    { "type": "docs", "hidden": true, "section": "Documentation" },
+    { "type": "style", "hidden": true, "section": "Styles" },
+    { "type": "refactor", "hidden": true, "section": "Code Refactoring" },
+    { "type": "build", "hidden": true, "section": "Builds" },
+    { "type": "ci", "hidden": true, "section": "Continuous Integration" },
+    { "type": "revert", "hidden": true, "section": "Reverts" },
+    { "type": "test", "hidden": true, "section": "Tests" }
   ],
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
 }
