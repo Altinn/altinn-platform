@@ -54,7 +54,7 @@ func desiredStorage(db *storagev1alpha1.Database) *dbforpostgresqlv1.Storage {
 }
 
 // subnetARMID builds the ARM ID for a subnet in the DB VNet.
-func (r *DatabaseReconciler) subnetARMIDResourceReference(subnetName string) (*genruntime.ResourceReference, error) {
+func (r *DatabaseReconciler) subnetARMIDResourceReference(subnetName string) *genruntime.ResourceReference {
 
 	return &genruntime.ResourceReference{
 		ARMID: fmt.Sprintf(
@@ -64,7 +64,7 @@ func (r *DatabaseReconciler) subnetARMIDResourceReference(subnetName string) (*g
 			r.Config.DBVNetName,
 			subnetName,
 		),
-	}, nil
+	}
 }
 
 // ensurePostgresServer ensures a PostgreSQL Flexible Server ASO resource exists
@@ -114,15 +114,9 @@ func (r *DatabaseReconciler) ensurePostgresServer(
 		return fmt.Errorf("no subnet in catalog matching CIDR %q", db.Status.SubnetCIDR)
 	}
 
-	subnetID, err := r.subnetARMIDResourceReference(subnetInfo.Name)
-	if err != nil {
-		return fmt.Errorf("build subnet ARM ID: %w", err)
-	}
+	subnetID := r.subnetARMIDResourceReference(subnetInfo.Name)
 
-	zoneID, err := r.privateZoneARMIDResourceReference(zoneName)
-	if err != nil {
-		return fmt.Errorf("build private DNS zone ARM ID: %w", err)
-	}
+	zoneID := r.privateZoneARMIDResourceReference(zoneName)
 
 	network := &dbforpostgresqlv1.Network{
 		DelegatedSubnetResourceReference:   subnetID,

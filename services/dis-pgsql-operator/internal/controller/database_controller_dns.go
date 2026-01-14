@@ -191,10 +191,10 @@ func (r *DatabaseReconciler) ensurePrivateDNSVNetLink(
 }
 
 // privateZoneARMID builds the ARM ID for the per-DB Private DNS zone.
-func (r *DatabaseReconciler) privateZoneARMIDResourceReference(zoneName string) (*genruntime.ResourceReference, error) {
+func (r *DatabaseReconciler) privateZoneARMIDResourceReference(zoneName string) *genruntime.ResourceReference {
 	return &genruntime.ResourceReference{
 		Group: "network.azure.com",
 		Kind:  "PrivateDnsZone",
 		Name:  zoneName,
-	}, nil
+	}
 }
