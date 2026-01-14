@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.8.1...tf-azdev-agent-0.8.2) (2026-01-14)
+
+
+### Bug Fixes
+
+* add missing ignore to upstream cve, remove fixed cve from ignore ([#2917](https://github.com/Altinn/altinn-platform/issues/2917)) ([2ad2f88](https://github.com/Altinn/altinn-platform/commit/2ad2f8891494303f4ea9b3d24678606284d9e6d0))
+
 ## [0.8.1](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.8.0...tf-azdev-agent-0.8.1) (2026-01-14)
 
 
