@@ -13,7 +13,6 @@ type OperatorConfig struct {
 	AKSVNetName    string
 	SubscriptionId string
 	TenantId       string
-	DBLocation     string
 }
 
 // NewOperatorConfig builds and validates the OperatorConfig from already-parsed
