@@ -20,5 +20,5 @@
   "infrastructure/images/gh-runner": "0.1.2",
   "infrastructure/images/k6-action": "0.0.23",
   "infrastructure/images/k6-image": "1.5.0",
-  "infrastructure/images/terraform-azure-devops-agent": "0.8.0"
+  "infrastructure/images/terraform-azure-devops-agent": "0.8.1"
 }
