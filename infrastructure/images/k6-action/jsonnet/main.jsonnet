@@ -46,6 +46,10 @@ local default_env = [
     name: 'ENVIRONMENT',
     value: deploy_env,
   },
+  {
+    name: 'RUNNING_IN_K8S',
+    value: 'true',
+  },
 ];
 
 local common_labels = {
