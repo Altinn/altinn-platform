@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,6 +39,16 @@ type DatabaseReconciler struct {
 
 // +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=databases,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=databases/status,verbs=get;update;patch
+
+// ASO: PostgreSQL Flexible Server
+// +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleservers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleservers/status,verbs=get;update;patch
+
+// ASO: Flexible Server AAD administrator
+// +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversadministrators,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversadministrators/status,verbs=get;update;patch
+
+// ASO: Private DNS zone + vnet links
 // +kubebuilder:rbac:groups=network.azure.com,resources=privatednszones,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=network.azure.com,resources=privatednszones/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=network.azure.com,resources=privatednszonesvirtualnetworklinks,verbs=get;list;watch;create;update;patch;delete
@@ -112,6 +123,7 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		vnetLinkNameForDB(&db),
 		r.Config.DBVNetName,
 	); err != nil {
+		logger.Error(err, "failed to ensure private DNS vnet link for DB VNet")
 		return ctrl.Result{}, err
 	}
 
@@ -122,6 +134,19 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		vnetLinkNameForAKS(&db),
 		r.Config.AKSVNetName,
 	); err != nil {
+		logger.Error(err, "failed to ensure private DNS vnet link for AKS VNet")
+		return ctrl.Result{}, err
+	}
+
+	// PostgreSQL Flexible Server
+	if err := r.ensurePostgresServer(ctx, logger, &db, zoneNameForDatabase(&db)); err != nil {
+		logger.Error(err, "failed to ensure PostgreSQLFlexibleServer for database")
+		return ctrl.Result{}, err
+	}
+
+	// Flexible Server admin
+	if err := r.ensureFlexibleServerAdministrator(ctx, logger, &db); err != nil {
+		logger.Error(err, "failed to ensure FlexibleServerAdministrator for database")
 		return ctrl.Result{}, err
 	}
 
@@ -182,6 +207,8 @@ func (r *DatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&storagev1alpha1.Database{}).
 		Owns(&networkv1.PrivateDnsZone{}).
 		Owns(&networkv1.PrivateDnsZonesVirtualNetworkLink{}).
+		Owns(&dbforpostgresqlv1.FlexibleServer{}).
+		Owns(&dbforpostgresqlv1.FlexibleServersAdministrator{}).
 		WithOptions(controller.Options{
 			// Force single-threaded reconciliation
 			MaxConcurrentReconciles: 1,

@@ -31,6 +31,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -62,6 +63,8 @@ func init() {
 
 	utilruntime.Must(networkv1.AddToScheme(scheme))
 
+	utilruntime.Must(dbforpostgresqlv1.AddToScheme(scheme))
+
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -82,6 +85,7 @@ func main() {
 	var resourceGroup string
 	var vnetName string
 	var aksVnetName string
+	var tenantID string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -123,6 +127,12 @@ func main() {
 		"aks-vnet",
 		os.Getenv("AKS_VNET_NAME"),
 		"Azure VNet name where the AKS cluster is located (required)",
+	)
+	flag.StringVar(
+		&tenantID,
+		"tenant-id",
+		os.Getenv("AZURE_TENANT_ID"),
+		"Azure Tenant ID (required)",
 	)
 	opts := zap.Options{
 		Development: true,
@@ -243,7 +253,7 @@ func main() {
 		armOpts = nil
 	}
 
-	opCfg, err := config.NewOperatorConfig(resourceGroup, vnetName, aksVnetName, subscriptionID)
+	opCfg, err := config.NewOperatorConfig(resourceGroup, vnetName, aksVnetName, subscriptionID, tenantID)
 	if err != nil {
 		setupLog.Error(err, "invalid operator configuration")
 		os.Exit(1)

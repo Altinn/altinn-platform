@@ -6,6 +6,7 @@ KIND_IMAGE_ARCHIVE := bin/dis-pgsql-operator_image.tar
 WRITE_NAMESPACE ?= default
 
 AZURE_SUBSCRIPTION_ID ?= 00000000-0000-0000-0000-000000000000
+AZURE_TENANT_ID ?= 00000000-0000-0000-0000-000000000000
 AZURE_VNET_RESOURCE_GROUP ?= rg-dis-dev-network
 AZURE_VNET_NAME ?= dis-dev-vnet
 
@@ -111,6 +112,7 @@ cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
 install-aso-crds-kind:
 	kubectl apply --server-side -f bin/aso-crds/
 
+	# Patch ASO CRDs to disable conversion webhooks for Kind e2e tests
 	kubectl patch crd privatednszones.network.azure.com \
 	--type='json' \
 	-p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'
@@ -119,6 +121,13 @@ install-aso-crds-kind:
 	--type='json' \
 	-p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'
 
+	kubectl patch crd flexibleservers.dbforpostgresql.azure.com \
+	--type='json' \
+	-p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'
+
+	kubectl patch crd flexibleserversadministrators.dbforpostgresql.azure.com \
+	--type='json' \
+	-p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
 	"$(GOLANGCI_LINT)" run
@@ -289,7 +298,7 @@ define gomodver
 $(shell go list -m -f '{{if .Replace}}{{.Replace.Version}}{{else}}{{.Version}}{{end}}' $(1) 2>/dev/null)
 endef
 
-ASO_CRD_VERSION ?= v2.16.0
+ASO_CRD_VERSION ?= v2.17.0
 
 .PHONY: aso-crds
 aso-crds: ## Download the ASO CRDs locally if necessary.

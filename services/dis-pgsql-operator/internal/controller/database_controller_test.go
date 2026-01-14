@@ -10,6 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
+	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -93,6 +94,17 @@ var _ = Describe("Database controller", func() {
 			return cidr1
 		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
 			ShouldNot(BeEmpty())
+
+		Eventually(func(g Gomega) bool {
+			var list storagev1alpha1.DatabaseList
+			g.Expect(k8sClient.List(ctx, &list)).To(Succeed())
+			for _, item := range list.Items {
+				if item.Name == db1.Name && item.Status.SubnetCIDR == cidr1 {
+					return true
+				}
+			}
+			return false
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).Should(BeTrue())
 
 		db2 := &storagev1alpha1.Database{
 			ObjectMeta: metav1.ObjectMeta{
@@ -233,6 +245,104 @@ var _ = Describe("Database controller", func() {
 			Namespace: ns,
 		}, &dbLink)).To(Succeed())
 		Expect(dbLink.Namespace).To(Equal(ns))
+	})
+
+	// Database testing
+	It("creates a FlexibleServer for the Database", func() {
+		db := &storagev1alpha1.Database{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-app-db-psql",
+				Namespace: "default",
+			},
+			Spec: storagev1alpha1.DatabaseSpec{
+				Version:    17,
+				ServerType: "dev",
+				Auth: storagev1alpha1.DatabaseAuth{
+					AdminAppIdentity: "admin-mi",
+					UserAppIdentity:  "user-mi",
+				},
+			},
+		}
+
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		expectedServerName := db.Name
+
+		Eventually(func(g Gomega) error {
+			var s dbforpostgresqlv1.FlexibleServer
+			return k8sClient.Get(ctx, types.NamespacedName{
+				Name:      expectedServerName,
+				Namespace: db.Namespace,
+			}, &s)
+		}).WithTimeout(30*time.Second).WithPolling(500*time.Millisecond).
+			Should(Succeed(), "expected FlexibleServer ASO resource to be created for Database")
+
+		var s dbforpostgresqlv1.FlexibleServer
+		Expect(k8sClient.Get(ctx, types.NamespacedName{
+			Name:      expectedServerName,
+			Namespace: db.Namespace,
+		}, &s)).To(Succeed())
+
+		Expect(s.Name).To(Equal(expectedServerName))
+		Expect(s.Namespace).To(Equal(db.Namespace))
+		Expect(s.Labels["dis.altinn.cloud/database-name"]).To(Equal(db.Name))
+
+		// Storage defaults
+		Expect(s.Spec.Storage).NotTo(BeNil())
+		Expect(s.Spec.Storage.StorageSizeGB).NotTo(BeNil())
+		Expect(*s.Spec.Storage.StorageSizeGB).To(Equal(32))
+
+		Expect(s.Spec.Storage.AutoGrow).NotTo(BeNil())
+		Expect(*s.Spec.Storage.AutoGrow).To(Equal(dbforpostgresqlv1.Storage_AutoGrow_Enabled))
+
+		Expect(s.Spec.Storage.Tier).NotTo(BeNil())
+		Expect(string(*s.Spec.Storage.Tier)).To(Equal("P10"))
+
+	})
+
+	It("creates a FlexibleServersAdministrator for the Database", func() {
+		db := &storagev1alpha1.Database{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-app-db-admin",
+				Namespace: "default",
+			},
+			Spec: storagev1alpha1.DatabaseSpec{
+				Version:    17,
+				ServerType: "dev",
+				Auth: storagev1alpha1.DatabaseAuth{
+					AdminAppIdentity: "admin",
+					UserAppIdentity:  "user",
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		adminName := fmt.Sprintf("%s-admin", db.Name)
+
+		Eventually(func(g Gomega) error {
+			var a dbforpostgresqlv1.FlexibleServersAdministrator
+			return k8sClient.Get(ctx, types.NamespacedName{
+				Name:      adminName,
+				Namespace: db.Namespace,
+			}, &a)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		var a dbforpostgresqlv1.FlexibleServersAdministrator
+		Expect(k8sClient.Get(ctx, types.NamespacedName{
+			Name:      adminName,
+			Namespace: db.Namespace,
+		}, &a)).To(Succeed())
+
+		Expect(a.Spec.Owner).NotTo(BeNil())
+		Expect(a.Spec.Owner.Name).To(Equal(db.Name))
+
+		// PrincipalType sanity check
+		Expect(a.Spec.PrincipalType).NotTo(BeNil())
+		Expect(string(*a.Spec.PrincipalType)).To(Equal("ServicePrincipal"))
+
+		// And that we used config refs
+		Expect(a.Spec.PrincipalName).NotTo(BeNil())
+		Expect(a.Spec.TenantId).NotTo(BeNil())
 	})
 
 })

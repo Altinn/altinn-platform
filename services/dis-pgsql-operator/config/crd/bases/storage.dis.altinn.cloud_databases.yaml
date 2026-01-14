@@ -62,6 +62,20 @@ spec:
                   (e.g. "dev", "prod").
                 minLength: 1
                 type: string
+              storage:
+                properties:
+                  sizeGB:
+                    description: |-
+                      sizeGB is the initial storage size in GB.
+                      If omitted, the operator will default it.
+                    format: int32
+                    type: integer
+                  tier:
+                    description: |-
+                      tier is the storage performance tier (e.g. P10).
+                      If omitted, the operator will default it.
+                    type: string
+                type: object
               version:
                 description: version is the major version of PostgreSQL to run (e.g.
                   17).

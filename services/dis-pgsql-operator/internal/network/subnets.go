@@ -143,3 +143,13 @@ func FetchSubnetCatalog(
 
 	return NewSubnetCatalog(infos)
 }
+
+// FindByCIDR returns the SubnetInfo with the given CIDR, if any.
+func (c *SubnetCatalog) FindByCIDR(cidr string) (SubnetInfo, bool) {
+	for _, s := range c.subnets {
+		if s.CIDR == cidr {
+			return s, true
+		}
+	}
+	return SubnetInfo{}, false
+}
