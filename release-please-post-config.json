@@ -3,7 +3,7 @@
     "flux/.*": {
       "dispatch-pipelines": [
         {
-          "filename": "flux-manage-releases.yml",
+          "filename": "flux-release-artifact.yml",
           "inputs": {
             "tag_name": "{{tag_name}}"
           }
