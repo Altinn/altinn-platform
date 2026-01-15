@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.3](https://github.com/Altinn/altinn-platform/compare/flux-oci-otel-collector-v1.1.2...flux-oci-otel-collector-v1.1.3) (2026-01-15)
+
+
+### Bug Fixes
+
+* add kuberneteswrapper to heavy sampling rule ([#2939](https://github.com/Altinn/altinn-platform/issues/2939)) ([29a037e](https://github.com/Altinn/altinn-platform/commit/29a037e042764e8201be4e0e7baa81388af6bc49))
+
 ## [1.1.2](https://github.com/Altinn/altinn-platform/compare/flux-oci-otel-collector-v1.1.1...flux-oci-otel-collector-v1.1.2) (2026-01-09)
 
 
