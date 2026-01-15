@@ -28,10 +28,6 @@
       "release-type": "simple",
       "component": "flux-oci-external-secrets-operator"
     },
-    "flux/grafana-operator": {
-      "release-type": "simple",
-      "component": "flux-oci-grafana-operator"
-    },
     "flux/helm-uninstall-outdated-apps": {
       "release-type": "simple",
       "component": "flux-oci-helm-uninstall-outdated-apps"
