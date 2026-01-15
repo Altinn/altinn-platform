@@ -161,8 +161,12 @@ spec:
                   type: string_attribute
                   string_attribute:
                     key: http.route
-                    values: [/metrics, /health]
+                    values: 
+                      - "^/metrics"
+                      - "^/health"
+                      - "^/kuberneteswrapper/.*"
                     invert_match: true
+                    enabled_regex_matching: true
                 - name: probabilistic-policy
                   type: probabilistic
                   probabilistic:
