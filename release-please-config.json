@@ -1,9 +1,5 @@
 {
   "packages": {
-    "flux/altinn-uptime": {
-      "release-type": "simple",
-      "component": "flux-oci-altinn-uptime"
-    },
     "flux/azure-service-operator": {
       "release-type": "simple",
       "component": "flux-oci-azure-service-operator"
