@@ -103,14 +103,6 @@
     "prod_ring1": "0.1.0",
     "prod_ring2": "0.1.0"
   },
-  "blackbox-exporter": {
-    "at_ring1": "0.5.1",
-    "at_ring2": "0.5.1",
-    "tt_ring1": "0.5.1",
-    "tt_ring2": "0.5.1",
-    "prod_ring1": "0.5.1",
-    "prod_ring2": "0.5.1"
-  },
   "helm-uninstall-outdated-apps": {
     "at_ring1": "1.0.0",
     "at_ring2": "1.0.0",
