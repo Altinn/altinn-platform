@@ -27,6 +27,21 @@ type DatabaseSpec struct {
 
 	// auth defines which AppIdentities should have access to this database.
 	Auth DatabaseAuth `json:"auth"`
+
+	// +optional
+	Storage *DatabaseStorageSpec `json:"storage,omitempty"`
+}
+
+type DatabaseStorageSpec struct {
+	// sizeGB is the initial storage size in GB.
+	// If omitted, the operator will default it.
+	// +optional
+	SizeGB *int32 `json:"sizeGB,omitempty"`
+
+	// tier is the storage performance tier (e.g. P10).
+	// If omitted, the operator will default it.
+	// +optional
+	Tier *string `json:"tier,omitempty"`
 }
 
 // DatabaseStatus defines the observed state of Database.

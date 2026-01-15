@@ -20,5 +20,5 @@ spec:
               value: "fake-db-vnet"
             - name: AKS_VNET_NAME
               value: "fake-aks-vnet"
-            - name: WRITE_NAMESPACE
-              value: "default"
+            - name: AZURE_TENANT_ID
+              value: "fake-tenant"

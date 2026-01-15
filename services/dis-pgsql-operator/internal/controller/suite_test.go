@@ -20,6 +20,7 @@ import (
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/network"
+	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
 )
 
@@ -46,6 +47,8 @@ var _ = BeforeSuite(func() {
 	err = storagev1alpha1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = networkv1.AddToScheme(scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = dbforpostgresqlv1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:scheme
@@ -82,6 +85,8 @@ var _ = BeforeSuite(func() {
 		{Name: "s3", CIDR: "10.100.1.32/28"},
 		{Name: "s4", CIDR: "10.100.1.48/28"},
 		{Name: "s5", CIDR: "10.100.1.64/28"},
+		{Name: "s6", CIDR: "10.100.1.80/28"},
+		{Name: "s7", CIDR: "10.100.1.96/28"},
 	})
 
 	Expect(err).NotTo(HaveOccurred())
@@ -92,6 +97,7 @@ var _ = BeforeSuite(func() {
 		DBVNetName:     "vnet-dis-dev-001",
 		AKSVNetName:    "aks-vnet-dis-dev-001",
 		SubscriptionId: "my-subscription-id",
+		TenantId:       "my-tenant-id",
 	}
 	err = (&DatabaseReconciler{
 		Client:        k8sManager.GetClient(),

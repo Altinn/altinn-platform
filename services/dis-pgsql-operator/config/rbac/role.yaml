@@ -5,6 +5,28 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - dbforpostgresql.azure.com
+  resources:
+  - flexibleservers
+  - flexibleserversadministrators
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - dbforpostgresql.azure.com
+  resources:
+  - flexibleservers/status
+  - flexibleserversadministrators/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - network.azure.com
   resources:
   - privatednszones
