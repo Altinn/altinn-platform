@@ -9,7 +9,7 @@
   "flux/helm-uninstall-outdated-apps": "1.0.0",
   "flux/lakmus": "1.0.2",
   "flux/linkerd": "1.7.0",
-  "flux/otel-collector": "1.1.2",
+  "flux/otel-collector": "1.1.3",
   "flux/otel-operator": "1.2.0",
   "flux/traefik": "2.1.0",
   "infrastructure/images/azure-devops-agent": "1.2.5",
