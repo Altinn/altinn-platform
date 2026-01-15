@@ -53,7 +53,7 @@
     "tt_ring1": "1.1.2",
     "tt_ring2": "1.1.2",
     "prod_ring1": "1.1.2",
-    "prod_ring2": "1.0.0"
+    "prod_ring2": "1.1.2"
   },
   "container-runtime-aks-config": {
     "at_ring1": "0.2.0",
