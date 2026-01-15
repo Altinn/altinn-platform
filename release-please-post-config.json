@@ -1,0 +1,22 @@
+{
+  "post-release-hooks": {
+    "flux/.*": {
+      "dispatch-pipelines": [
+        {
+          "filename": "flux-manage-releases.yml",
+          "inputs": {
+            "tag_name": "{{tag_name}}"
+          }
+        },
+        {
+          "filename": "flux-manage-releases.yml",
+          "inputs": {
+            "tag_name": "{{tag_name}}",
+            "release_url": "{{release_url}}",
+            "release_sha": "{{release_sha}}"
+          }
+        }
+      ]
+    }
+  }
+}

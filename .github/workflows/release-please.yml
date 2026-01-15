@@ -31,6 +31,7 @@ jobs:
     needs:
       - release-please
     steps:
+      - uses: actions/checkout@v4
       - id: trigger-post-release-workflows
         name: Trigger post release pipelines
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
@@ -41,33 +42,63 @@ jobs:
           script: |
             const release_info = JSON.parse(process.env.RELEASE_INFO);
             const paths = JSON.parse(release_info.paths_released);
+            const fs = require('fs').promises;
+
+            let postReleaseConfig;
+            try {
+              postReleaseConfig = JSON.parse(await fs.readFile('./release-please-post-config.json', 'utf8'));
+            } catch (error) {
+              console.log('No release-please-post-config.json found or invalid JSON. Skipping post-release workflows.');
+              return;
+            }
+
+            const hooks = postReleaseConfig['post-release-hooks'];
+            if (!hooks) {
+              console.log('No post-release-hooks defined.');
+              return;
+            }
+
             for (const path of paths) {
-              if(path.startsWith("flux/")) {
-                console.log(`Triggering workflows for artifact in ${path}.`);
-                const tag_name = release_info[path + '--tag_name'];
-                const release_url = release_info[path + '--html_url'];
-                const sha = release_info[path + '--sha'];
-                await github.request('POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches', {
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  workflow_id: 'flux-release-artifact.yml',
-                  ref: tag_name,
-                  inputs: {
-                    tag_name: tag_name
+              console.log(`Processing release for path: ${path}`);
+              const releaseData = {
+                tag_name: release_info[`${path}--tag_name`],
+                release_url: release_info[`${path}--html_url`],
+                release_sha: release_info[`${path}--sha`],
+                path: path
+              };
+
+              for (const [pattern, config] of Object.entries(hooks)) {
+                try {
+                  if (new RegExp(pattern).test(path)) {
+                    console.log(`Path ${path} matches pattern ${pattern}`);
+                    if (config['dispatch-pipelines']) {
+                      for (const pipeline of config['dispatch-pipelines']) {
+                        const workflowId = pipeline.filename;
+                        const inputs = {};
+                        
+                        if (pipeline.inputs) {
+                          for (const [key, value] of Object.entries(pipeline.inputs)) {
+                            let resolvedValue = value;
+                            for (const [varName, varValue] of Object.entries(releaseData)) {
+                               resolvedValue = resolvedValue.replace(new RegExp(`{{${varName}}}`, 'g'), varValue);
+                            }
+                            inputs[key] = resolvedValue;
+                          }
+                        }
+                        
+                        console.log(`Dispatching workflow ${workflowId} for ${path} with inputs:`, JSON.stringify(inputs));
+                        await github.rest.actions.createWorkflowDispatch({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          workflow_id: workflowId,
+                          ref: releaseData.tag_name,
+                          inputs: inputs
+                        });
+                      }
+                    }
                   }
-                });
-                console.log("Triggered flux-release-artifact.yml");
-                await github.request('POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches', {
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  workflow_id: 'flux-manage-releases.yml',
-                  ref: tag_name,
-                  inputs: {
-                    tag_name: tag_name,
-                    release_url: release_url,
-                    release_sha: sha
-                  }
-                });
-                console.log("Triggered flux-manage-releases.yml");
+                } catch (e) {
+                  console.error(`Error processing pattern ${pattern} for path ${path}:`, e);
+                }
               }
             }
