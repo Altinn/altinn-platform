@@ -31,7 +31,7 @@ jobs:
     needs:
       - release-please
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - id: trigger-post-release-workflows
         name: Trigger post release pipelines
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
