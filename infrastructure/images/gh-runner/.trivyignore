@@ -10,3 +10,11 @@ CVE-2025-52881
 
 # glob CLI: Command injection via -c/--cmd executes matches with shell:true
 CVE-2025-64756
+
+# Image used by build agents internally, waiting for upstream fix
+# https://avd.aquasec.com/nvd/2025/cve-2025-61729/
+CVE-2025-61729
+
+# Image used by build agents internally, waiting for upstream fix
+# https://avd.aquasec.com/nvd/2025/cve-2025-68973/
+CVE-2025-68973
