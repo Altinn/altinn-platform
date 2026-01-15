@@ -17,6 +17,7 @@ on:
       - .github/workflows/terraform-azdev-agent-release.yml
       - infrastructure/images/terraform-azure-devops-agent/**
       - .github/workflows/reusable-image-scan-and-release-ghcr.yml
+  workflow_dispatch: {}
 permissions:
   contents: read
   packages: write
