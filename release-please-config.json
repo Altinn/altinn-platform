@@ -4,10 +4,6 @@
       "release-type": "simple",
       "component": "flux-oci-azure-service-operator"
     },
-    "flux/blackbox-exporter": {
-      "release-type": "simple",
-      "component": "flux-oci-blackbox-exporter"
-    },
     "flux/cert-manager": {
       "release-type": "simple",
       "component": "flux-oci-cert-manager"
