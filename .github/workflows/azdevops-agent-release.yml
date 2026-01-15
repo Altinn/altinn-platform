@@ -17,6 +17,8 @@ on:
       - .github/workflows/azdevops-agent-release.yml
       - infrastructure/images/azure-devops-agent/**
       - .github/workflows/reusable-image-scan-and-release-ghcr.yml
+  workflow_dispatch: {}
+
 permissions:
   contents: read
   packages: write

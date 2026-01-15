@@ -17,6 +17,31 @@
           }
         }
       ]
+    },
+    "infrastructure/images/azure-devops-agent": {
+      "dispatch-pipelines": [
+        {"filename": "azdevops-agent-release.yml"}
+      ]
+    },
+    "infrastructure/images/gh-runner": {
+      "dispatch-pipelines": [
+        {"filename": "gh-runner-release.yml"}
+      ]
+    },
+    "infrastructure/images/k6-action": {
+      "dispatch-pipelines": [
+        {"filename": "k6-action-image-release.yml"}
+      ]
+    },
+    "infrastructure/images/k6-image": {
+      "dispatch-pipelines": [
+        {"filename": "k6-custom-image-release.yml"}
+      ]
+    },
+    "infrastructure/images/terraform-azure-devops-agent": {
+      "dispatch-pipelines": [
+        {"filename": "terraform-azdev-agent-release.yml"}
+      ]
     }
   }
 }

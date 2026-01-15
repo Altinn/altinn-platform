@@ -17,6 +17,7 @@ on:
       - .github/workflows/reusable-image-scan-and-release-ghcr.yml
     tags:
       - "ghrunner-*"
+  workflow_dispatch: {}
 
 permissions:
   contents: read

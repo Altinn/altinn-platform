@@ -17,6 +17,8 @@ on:
       - .github/workflows/k6-action-image-release.yml
       - infrastructure/images/k6-action/**
       - .github/workflows/reusable-image-scan-and-release-ghcr.yml
+  workflow_dispatch: {}
+
 permissions:
   contents: read
   packages: write
