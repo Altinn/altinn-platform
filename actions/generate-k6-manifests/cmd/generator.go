@@ -136,6 +136,7 @@ func generate(td *TestDefinition, c *TestContext, r K8sManifestGenerator, cf Con
 		"--env", fmt.Sprintf("%s=%s", "ENVIRONMENT", c.Environment),
 		"--env", fmt.Sprintf("%s=%s", "NAMESPACE", cf.Namespace),
 		"--env", fmt.Sprintf("%s=%d", "MANIFEST_GENERATION_TIMESTAMP", manifestGenerationTimestamp),
+		"--env", fmt.Sprintf("%s=%s", "TEST_SCOPE", td.TestScope),
 		"--env", fmt.Sprintf("%s=%s", "TESTID", *c.TestRun.Id),
 		"--env", fmt.Sprintf("%s=%s", "TEST_NAME", *c.TestRun.Name),
 		"--env", fmt.Sprintf("%s=%s", "TESTFILENAME", testFilename),
