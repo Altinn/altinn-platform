@@ -33,6 +33,7 @@ type JsonnetParameters struct {
 	imageName                   string
 	testid                      string
 	testScope                   string
+	testFilename                string
 }
 
 type Generator interface {
@@ -41,7 +42,7 @@ type Generator interface {
 	HandleConfigFile(defaultConfigFile string, testType string) map[string]any
 	HandleConfigFileOverride(base map[string]any, overrideConfigFile string) map[string]any
 	CallK6Archive(dirName string, testConfigFileToUse string, testFile string, k6ArchiveArgs []string)
-	CallKubectl(dirName string, configMapName string, uniqName string, testId, testName, testScope, namespace string)
+	CallKubectl(dirName string, configMapName string, uniqName string, testId, testName, testScope, namespace string, testFilename string)
 	CallJsonnet(jsonnetParameters JsonnetParameters)
 }
 
@@ -125,6 +126,8 @@ func generate(td *TestDefinition, c *TestContext, r K8sManifestGenerator, cf Con
 	mergedEnvs = handleExtraEnvVars(mergedEnvs, getGithubRelatedVars())
 	mergedEnvs = handleExtraEnvVars(mergedEnvs, envOptions)
 
+	testFilename := td.TestFile
+
 	k6ArchiveArgs := []string{
 		"--env", fmt.Sprintf("%s=%s", "K6_NO_USAGE_REPORT", "true"),
 		"--env", fmt.Sprintf("%s=%s", "K6_PROMETHEUS_RW_SERVER_URL", "http://kube-prometheus-stack-prometheus.monitoring:9090/api/v1/write"),
@@ -135,6 +138,7 @@ func generate(td *TestDefinition, c *TestContext, r K8sManifestGenerator, cf Con
 		"--env", fmt.Sprintf("%s=%d", "MANIFEST_GENERATION_TIMESTAMP", manifestGenerationTimestamp),
 		"--env", fmt.Sprintf("%s=%s", "TESTID", *c.TestRun.Id),
 		"--env", fmt.Sprintf("%s=%s", "TEST_NAME", *c.TestRun.Name),
+		"--env", fmt.Sprintf("%s=%s", "TESTFILENAME", testFilename),
 	}
 	for _, env := range mergedEnvs {
 		k6ArchiveArgs = append(k6ArchiveArgs, "--env", fmt.Sprintf("%s=%s", *env.Name, *env.Value))
@@ -176,7 +180,7 @@ func generate(td *TestDefinition, c *TestContext, r K8sManifestGenerator, cf Con
 
 	configMapName := fmt.Sprintf("%s-%s", td.TestScope, *c.TestRun.Id)
 
-	r.CallKubectl(dirName, configMapName, uniqName, *c.TestRun.Id, *c.TestRun.Name, testScope, cf.Namespace)
+	r.CallKubectl(dirName, configMapName, uniqName, *c.TestRun.Id, *c.TestRun.Name, testScope, cf.Namespace, testFilename)
 
 	// Jsonnet related things
 	slackChannel := chooseCorrectSlackChannel(c.Environment)
@@ -215,6 +219,7 @@ func generate(td *TestDefinition, c *TestContext, r K8sManifestGenerator, cf Con
 		imageName:                   imageName,
 		testid:                      *c.TestRun.Id,
 		testScope:                   testScope,
+		testFilename:                testFilename,
 	}
 	r.CallJsonnet(JsonnetParameters)
 }
@@ -384,7 +389,7 @@ func (r K8sManifestGenerator) CallK6Archive(dirName string, testConfigFileToUse 
 	}
 }
 
-func (r K8sManifestGenerator) CallKubectl(dirName string, configMapName string, uniqName string, testId, testName, testScope, namespace string) {
+func (r K8sManifestGenerator) CallKubectl(dirName string, configMapName string, uniqName string, testId, testName, testScope, namespace string, testFilename string) {
 	cmd := exec.Command("kubectl",
 		"create",
 		"configmap",
@@ -414,9 +419,10 @@ func (r K8sManifestGenerator) CallKubectl(dirName string, configMapName string, 
 		"uniq_name":    uniqName,
 	})
 	temp.SetAnnotations(map[string]string{
-		"k6-action-image/test_name":  testName,
-		"k6-action-image/test_scope": testScope,
-		"k6-action-image/testid":     testId,
+		"k6-action-image/test_name":    testName,
+		"k6-action-image/test_scope":   testScope,
+		"k6-action-image/testid":       testId,
+		"k6-action-image/testfilename": testFilename,
 	})
 
 	tempMarshalled, err := json.MarshalIndent(temp, "", "  ")
@@ -455,6 +461,7 @@ func (r K8sManifestGenerator) CallJsonnet(jp JsonnetParameters) {
 		"--ext-str", fmt.Sprintf("test_scope=%s", jp.testScope),
 		"--ext-str", fmt.Sprintf("configmap_name=%s", jp.configMapName),
 		"--ext-str", fmt.Sprintf("test_name=%s", jp.testName),
+		"--ext-str", fmt.Sprintf("testfilename=%s", jp.testFilename),
 		"--ext-str", fmt.Sprintf("manifest_generation_timestamp=%s", jp.manifestGenerationTimestamp),
 		"--ext-str", fmt.Sprintf("namespace=%s", jp.namespace),
 		"--ext-str", fmt.Sprintf("deploy_env=%s", jp.environment),

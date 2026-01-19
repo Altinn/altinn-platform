@@ -5,6 +5,7 @@
       "annotations": {
          "k6-action-image/test_name": "get-deployments",
          "k6-action-image/test_scope": "k8s-wrapper",
+         "k6-action-image/testfilename": "actions/generate-k6-manifests/test_service/k8s_wrapper/get_deployments.js",
          "k6-action-image/testid": "prod-get-deployments"
       },
       "labels": {
@@ -65,6 +66,10 @@
                "value": "true"
             },
             {
+               "name": "TESTFILENAME",
+               "value": "actions/generate-k6-manifests/test_service/k8s_wrapper/get_deployments.js"
+            },
+            {
                "name": "TESTID",
                "value": "prod-get-deployments"
             }
@@ -91,6 +96,7 @@
             "annotations": {
                "k6-action-image/test_name": "get-deployments",
                "k6-action-image/test_scope": "k8s-wrapper",
+               "k6-action-image/testfilename": "actions/generate-k6-manifests/test_service/k8s_wrapper/get_deployments.js",
                "k6-action-image/testid": "prod-get-deployments"
             },
             "labels": {
