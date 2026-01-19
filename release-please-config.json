@@ -36,10 +36,6 @@
       "release-type": "simple",
       "component": "flux-oci-lakmus"
     },
-    "flux/linkerd": {
-      "release-type": "simple",
-      "component": "flux-oci-linkerd"
-    },
     "flux/otel-collector": {
       "release-type": "simple",
       "component": "flux-oci-otel-collector"
