@@ -55,6 +55,10 @@ local default_env = [
     name: 'TESTFILENAME',
     value: testfilename,
   },
+  {
+    name: 'TEST_SCOPE',
+    value: test_scope,
+  },
 ];
 
 local common_labels = {
