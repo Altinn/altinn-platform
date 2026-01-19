@@ -1,6 +1,5 @@
 {
   "flux/azure-service-operator": "1.1.0",
-  "flux/cert-manager": "1.4.1",
   "flux/certm-lets-encrypt-dns-issuer": "0.3.0",
   "flux/container-runtime-aks-config": "0.2.0",
   "flux/dis-apim": "0.1.0",
