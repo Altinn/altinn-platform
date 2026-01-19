@@ -5,6 +5,7 @@ local unique_name = std.extVar('unique_name');
 local configmap_name = std.extVar('configmap_name');
 local test_name = std.extVar('test_name');
 local test_scope = std.extVar('test_scope');
+local testfilename = std.extVar('testfilename');
 local manifest_generation_timestamp = std.extVar('manifest_generation_timestamp');
 local namespace = std.extVar('namespace');
 local deploy_env = std.extVar('deploy_env');
@@ -50,6 +51,10 @@ local default_env = [
     name: 'RUNNING_IN_K8S',
     value: 'true',
   },
+  {
+    name: 'TESTFILENAME',
+    value: testfilename,
+  },
 ];
 
 local common_labels = {
@@ -60,6 +65,7 @@ local common_annotations = {
   'k6-action-image/test_name': test_name,
   'k6-action-image/test_scope': test_scope,
   'k6-action-image/testid': testid,
+  'k6-action-image/testfilename': testfilename,
 };
 
 local slo = {
