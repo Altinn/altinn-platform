@@ -1,0 +1,12 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: dis-pgsql-operator
+  namespace: flux-system
+spec:
+  interval: 5m0s
+  provider: azure
+  ref:
+    tag: v0.0.1
+  timeout: 5m0s
+  url: oci://altinncr.azurecr.io/dis/kustomize/dis-pgsql-operator
