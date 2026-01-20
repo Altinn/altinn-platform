@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.2.0...ghrunner-0.3.0) (2026-01-20)
+
+
+### Features
+
+* Install Azure CLI, Node.js 20, and GitHub CLI ([#2963](https://github.com/Altinn/altinn-platform/issues/2963)) ([7a69f7f](https://github.com/Altinn/altinn-platform/commit/7a69f7f41babc86cd464b20a343096b5bb295288))
+
 ## [0.2.0](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.1.2...ghrunner-0.2.0) (2026-01-20)
 
 
