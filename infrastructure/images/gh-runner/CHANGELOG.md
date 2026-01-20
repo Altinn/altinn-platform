@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.3.0...ghrunner-0.4.0) (2026-01-20)
+
+
+### Features
+
+* Add uuid-runtime to GH runner image ([#2966](https://github.com/Altinn/altinn-platform/issues/2966)) ([bc68f89](https://github.com/Altinn/altinn-platform/commit/bc68f8931b4fb23fc9c67913398ff8919dafd00a))
+
 ## [0.3.0](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.2.0...ghrunner-0.3.0) (2026-01-20)
 
 
