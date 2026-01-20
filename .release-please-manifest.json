@@ -11,7 +11,7 @@
   "flux/otel-operator": "1.2.0",
   "flux/traefik": "2.1.0",
   "infrastructure/images/azure-devops-agent": "1.2.5",
-  "infrastructure/images/gh-runner": "0.2.0",
+  "infrastructure/images/gh-runner": "0.3.0",
   "infrastructure/images/k6-action": "0.0.23",
   "infrastructure/images/k6-image": "1.5.0",
   "infrastructure/images/terraform-azure-devops-agent": "0.8.2"
