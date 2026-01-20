@@ -4,7 +4,7 @@ FROM ghcr.io/actions/actions-runner:2.330.0@sha256:ee54ad8776606f29434f159196529
 USER root
 
 # install additional utilities (curl, jq, unzip, git already in base image)
-RUN apt-get update && apt-get install -y wget apt-utils
+RUN apt-get update && apt-get install -y --no-install-recommends wget
 
 # Install Azure CLI
 RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
