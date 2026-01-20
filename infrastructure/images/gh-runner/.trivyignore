@@ -18,3 +18,7 @@ CVE-2025-61729
 # Image used by build agents internally, waiting for upstream fix
 # https://avd.aquasec.com/nvd/2025/cve-2025-68973/
 CVE-2025-68973
+
+# Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')
+# https://avd.aquasec.com/nvd/cve-2026-23745
+CVE-2026-23745
