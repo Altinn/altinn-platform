@@ -11,7 +11,10 @@ RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
 # Install Node.js 20 (required for many GitHub Actions)
 # TODO: Upgrade to Node.js 24 before March 2026 (Node 20 EOL: April 2026)
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+RUN mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list && \
+    apt-get update && \
     apt-get install -y nodejs
 
 # Install GitHub CLI
