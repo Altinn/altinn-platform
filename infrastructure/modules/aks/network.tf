@@ -11,6 +11,7 @@ resource "azurerm_subnet" "aks" {
   resource_group_name  = azurerm_resource_group.aks.name
   virtual_network_name = azurerm_virtual_network.aks.name
   address_prefixes     = each.value
+  service_endpoints    = var.subnet_service_endpoints
 }
 
 resource "azurerm_public_ip" "pip4" {

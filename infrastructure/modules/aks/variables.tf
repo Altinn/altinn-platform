@@ -95,6 +95,12 @@ variable "subnet_address_prefixes" {
   }
 }
 
+variable "subnet_service_endpoints" {
+  type        = list(string)
+  default     = []
+  description = "List of service endpoints to associate with the AKS subnets"
+}
+
 variable "vnet_address_space" {
   type        = list(string)
   description = "VNet address space"
