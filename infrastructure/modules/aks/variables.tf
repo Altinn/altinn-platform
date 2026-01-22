@@ -110,6 +110,12 @@ variable "vnet_address_space" {
   }
 }
 
+variable "enable_multi_tenancy" {
+  type        = bool
+  default     = false
+  description = "Enable multi tenancy in the cluster"
+}
+
 # Optional explicit variables to override values derived from prefix and environment
 variable "azurerm_kubernetes_cluster_aks_dns_service_ip" {
   type        = string
