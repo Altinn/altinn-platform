@@ -10,6 +10,10 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
     type = "SystemAssigned"
   }
 
+  key_vault_secrets_provider {
+    secret_rotation_enabled = true
+  }
+
   local_account_disabled            = true
   role_based_access_control_enabled = true
   azure_active_directory_role_based_access_control {
