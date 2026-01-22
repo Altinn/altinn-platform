@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.3](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.8.2...tf-azdev-agent-0.8.3) (2026-01-22)
+
+
+### Dependency Updates
+
+* update dockerfile non-major dependencies ([#2989](https://github.com/Altinn/altinn-platform/issues/2989)) ([2989b2b](https://github.com/Altinn/altinn-platform/commit/2989b2bca852ea641a8b6c4a97d4e9b565c67316))
+
 ## [0.8.2](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.8.1...tf-azdev-agent-0.8.2) (2026-01-14)
 
 
