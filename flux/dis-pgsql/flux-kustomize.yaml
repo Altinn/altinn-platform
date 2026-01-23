@@ -1,0 +1,29 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: dis-pgsql-operator
+  namespace: flux-system
+spec:
+  force: false
+  interval: 5m0s
+  path: ./default
+  postBuild:
+    substitute:
+      AZURE_SUBSCRIPTION_ID: ${AZURE_SUBSCRIPTION_ID}
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID}
+      AZURE_VNET_RESOURCE_GROUP: ${AZURE_VNET_RESOURCE_GROUP}
+      AZURE_VNET_NAME: ${AZURE_VNET_NAME}
+      AKS_VNET_NAME: ${AKS_VNET_NAME}
+  prune: false
+  retryInterval: 5m0s
+  images:
+    - name: controller
+      newName: altinncr.azurecr.io/ghcr.io/altinn/altinn-platform/dis-pgsql-operator
+      newTag: v0.0.1
+  sourceRef:
+    kind: OCIRepository
+    name: dis-pgsql-operator
+    namespace: flux-system
+  targetNamespace: dis-pgsql-operator-system
+  timeout: 5m0s
+  wait: true

@@ -21,6 +21,10 @@
       "release-type": "simple",
       "component": "flux-oci-dis-identity"
     },
+    "flux/dis-pgsql": {
+      "release-type": "simple",
+      "component": "flux-oci-dis-pgsql"
+    },
     "flux/external-secrets-operator": {
       "release-type": "simple",
       "component": "flux-oci-external-secrets-operator"
