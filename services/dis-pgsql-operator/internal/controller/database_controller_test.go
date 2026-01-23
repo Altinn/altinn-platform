@@ -286,6 +286,10 @@ var _ = Describe("Database controller", func() {
 		Expect(s.Namespace).To(Equal(db.Namespace))
 		Expect(s.Labels["dis.altinn.cloud/database-name"]).To(Equal(db.Name))
 
+		// Owner should be set and should use ARMID
+		Expect(s.Spec.Owner).NotTo(BeNil())
+		Expect(s.Spec.Owner.ARMID).NotTo(BeEmpty())
+
 		// Storage defaults
 		Expect(s.Spec.Storage).NotTo(BeNil())
 		Expect(s.Spec.Storage.StorageSizeGB).NotTo(BeNil())
@@ -296,7 +300,6 @@ var _ = Describe("Database controller", func() {
 
 		Expect(s.Spec.Storage.Tier).NotTo(BeNil())
 		Expect(string(*s.Spec.Storage.Tier)).To(Equal("P10"))
-
 	})
 
 	It("creates a FlexibleServersAdministrator for the Database", func() {

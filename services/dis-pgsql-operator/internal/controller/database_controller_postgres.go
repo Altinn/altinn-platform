@@ -148,7 +148,7 @@ func (r *DatabaseReconciler) ensurePostgresServer(
 			Location:  to.Ptr(loc),
 
 			Owner: &genruntime.KnownResourceReference{
-				Name: r.Config.ResourceGroup,
+				ARMID: fmt.Sprintf("/subscriptions/%s/resourceGroups/%s", r.Config.SubscriptionId, r.Config.ResourceGroup),
 			},
 
 			Version: &version,
