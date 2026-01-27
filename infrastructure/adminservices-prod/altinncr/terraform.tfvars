@@ -93,7 +93,22 @@ acr_push_object_ids = [
 
 acr_pull_object_ids = [
   {
-    object_id = "416302ed-fbab-41a4-8c8d-61f486fa79ca" # Group: Altinn-30-Test-Developers 
+    object_id = "416302ed-fbab-41a4-8c8d-61f486fa79ca" # Group: Altinn-30-Test-Developers
     type      = "Group"
+  }
+]
+
+user_access_admin_acr_pull_object_ids = [
+  {
+    object_id = "4da564b5-c526-42f2-aa01-108c5b4932f2" # uami: github-core_dis-core-test
+    type      = "ServicePrincipal"
+  },
+  {
+    object_id = "476e7604-4701-48da-953e-e6616cfedd15" # uami: github-core_dis-core-staging
+    type      = "ServicePrincipal"
+  },
+  {
+    object_id = "9bfd0ad4-9f59-4ad5-b8e5-a9664ec375fd" # uami: github-core_dis-core-prod
+    type      = "ServicePrincipal"
   }
 ]

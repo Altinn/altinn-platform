@@ -32,3 +32,14 @@ resource "azurerm_role_assignment" "altinncr_acrpush_altinn_platform" {
   scope                            = azurerm_container_registry.acr.id
   skip_service_principal_aad_check = true
 }
+
+resource "azurerm_role_assignment" "altinncr_user_access_admin_acr_pull" {
+  for_each                         = { for assignee in var.user_access_admin_acr_pull_object_ids : assignee.object_id => assignee }
+  principal_id                     = each.value.object_id
+  role_definition_name             = "User Access Administrator"
+  principal_type                   = each.value.type
+  scope                            = azurerm_container_registry.acr.id
+  skip_service_principal_aad_check = true
+  condition                        = "@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {7f951dda-4ed3-4680-a7ca-43fe172d538d}"
+  condition_version                = "2.0"
+}
