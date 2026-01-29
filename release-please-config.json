@@ -33,14 +33,6 @@
       "release-type": "simple",
       "component": "flux-oci-lakmus"
     },
-    "flux/otel-collector": {
-      "release-type": "simple",
-      "component": "flux-oci-otel-collector"
-    },
-    "flux/otel-operator": {
-      "release-type": "simple",
-      "component": "flux-oci-otel-operator"
-    },
     "flux/traefik": {
       "release-type": "simple",
       "component": "flux-oci-traefik"
