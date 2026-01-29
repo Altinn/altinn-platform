@@ -146,6 +146,33 @@ variable "enable_dis_identity_operator" {
 
 }
 
+variable "enable_dis_pgsql_operator" {
+  type        = bool
+  default     = false
+  description = "Enable the dis-pgsql-operator to manage Databases in the cluster."
+
+}
+
+variable "dis_pgsql_uami_client_id" {
+  type        = string
+  description = "The client ID of the User Assigned Managed Identity managed by dis-pgsql-operator."
+  default     = ""
+  validation {
+    condition     = var.enable_dis_pgsql_operator == false || (var.enable_dis_pgsql_operator == true && length(var.dis_pgsql_uami_client_id) > 0)
+    error_message = "You must provide a value for dis_pgsql_uami_client_id when enable_dis_pgsql_operator is true."
+  }
+}
+
+variable "dis_pgsql_resource_group_id" {
+  type        = string
+  description = "The resource group ID where the User Assigned Managed Identity managed by dis-pgsql-operator is created."
+  default     = ""
+  validation {
+    condition     = var.enable_dis_pgsql_operator == false || (var.enable_dis_pgsql_operator == true && length(var.dis_pgsql_resource_group_id) > 0)
+    error_message = "You must provide a value for dis_pgsql_resource_group_id when enable_dis_pgsql_operator is true."
+  }
+}
+
 variable "azurerm_kubernetes_cluster_oidc_issuer_url" {
   type        = string
   description = "The OIDC issuer URL of the AKS cluster."
