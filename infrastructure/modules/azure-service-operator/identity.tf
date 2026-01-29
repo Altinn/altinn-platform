@@ -81,6 +81,7 @@ resource "azurerm_role_definition" "user_assigned_identity_role_dis_aks_vnet" {
   permissions {
     actions = [
       "Microsoft.Network/virtualNetworks/join/action",
+      "Microsoft.NEtwork/virtualNetworks/read",
       "Microsoft.Authorization/*/read",
     ]
     not_actions = []

@@ -93,11 +93,12 @@ var _ = BeforeSuite(func() {
 
 	// Operator config for tests
 	config := config.OperatorConfig{
-		ResourceGroup:  "rg-dis-dev-network",
-		DBVNetName:     "vnet-dis-dev-001",
-		AKSVNetName:    "aks-vnet-dis-dev-001",
-		SubscriptionId: "my-subscription-id",
-		TenantId:       "my-tenant-id",
+		ResourceGroup:    "rg-dis-dev-network",
+		DBVNetName:       "vnet-dis-dev-001",
+		AKSVNetName:      "aks-vnet-dis-dev-001",
+		SubscriptionId:   "my-subscription-id",
+		TenantId:         "my-tenant-id",
+		AKSResourceGroup: "aks-vnet-rg",
 	}
 	err = (&DatabaseReconciler{
 		Client:        k8sManager.GetClient(),

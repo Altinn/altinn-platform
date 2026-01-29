@@ -13,6 +13,24 @@ variable "name" {
   description = "Name of the PostgreSQL vnet and subnets"
 }
 
+variable "environment" {
+  type        = string
+  description = "Environment for resources"
+  validation {
+    condition     = length(trimspace(var.environment)) > 0
+    error_message = "You must provide a value for environment."
+  }
+}
+
+variable "oidc_issuer_url" {
+  type        = string
+  description = "Oidc issuer url needed for federation"
+  validation {
+    condition     = length(trimspace(var.oidc_issuer_url)) > 0
+    error_message = "You must provide a value for oidc_issuer_url."
+  }
+}
+
 variable "vnet_address_space" {
   type        = string
   description = "IPv4 address space of the PostgreSQL vnet, must be a valid CIDR notation of size 24"
@@ -36,4 +54,9 @@ variable "peered_vnets" {
     resource_group_name = string
   })
   description = "ID of the vnet this Vnet should be peered with"
+}
+
+variable "user_assigned_identity_name" {
+  type    = string
+  default = ""
 }
