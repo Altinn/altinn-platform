@@ -85,6 +85,7 @@ func main() {
 	var resourceGroup string
 	var vnetName string
 	var aksVnetName string
+	var aksResourceGroup string
 	var tenantID string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -134,6 +135,8 @@ func main() {
 		os.Getenv("AZURE_TENANT_ID"),
 		"Azure Tenant ID (required)",
 	)
+	flag.StringVar(&aksResourceGroup, "aks-resource-group", os.Getenv("AKS_RESOURCE_GROUP"), "Azure RG for AKS VNet (required)")
+
 	opts := zap.Options{
 		Development: true,
 	}
@@ -253,7 +256,7 @@ func main() {
 		armOpts = nil
 	}
 
-	opCfg, err := config.NewOperatorConfig(resourceGroup, vnetName, aksVnetName, subscriptionID, tenantID)
+	opCfg, err := config.NewOperatorConfig(resourceGroup, vnetName, aksVnetName, subscriptionID, tenantID, aksResourceGroup)
 	if err != nil {
 		setupLog.Error(err, "invalid operator configuration")
 		os.Exit(1)

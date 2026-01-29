@@ -22,3 +22,5 @@ spec:
               value: "fake-aks-vnet"
             - name: AZURE_TENANT_ID
               value: "fake-tenant"
+            - name: AKS_RESOURCE_GROUP
+              value: "fake-aks-rg"
