@@ -2,13 +2,13 @@ module github.com/altinn/altinn-platform/disctl
 
 go 1.25.0
 
-toolchain go1.25.4
+toolchain go1.25.6
 
 require (
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/google/go-cmp v0.7.0
-	github.com/spf13/cobra v1.10.1
+	github.com/spf13/cobra v1.10.2
 )
 
 require (
