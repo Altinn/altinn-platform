@@ -1,10 +1,5 @@
 {
   "packages": {
-    "flux/azure-service-operator": {
-      "release-type": "simple",
-      "component": "flux-oci-azure-service-operator"
-    },
-
     "flux/certm-lets-encrypt-dns-issuer": {
       "release-type": "simple",
       "component": "flux-oci-certm-lets-encrypt-dns-issuer"
