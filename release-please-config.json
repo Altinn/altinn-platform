@@ -1,9 +1,5 @@
 {
   "packages": {
-    "flux/certm-lets-encrypt-dns-issuer": {
-      "release-type": "simple",
-      "component": "flux-oci-certm-lets-encrypt-dns-issuer"
-    },
     "flux/container-runtime-aks-config": {
       "release-type": "simple",
       "component": "flux-oci-container-runtime-aks-config"
