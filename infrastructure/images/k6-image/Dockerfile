@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine@sha256:d9b2e14101f27ec8d09674cd01186798d227bb0daec90e032aeb1cd22ac0f029 AS builder
+FROM golang:1.25-alpine@sha256:98e6cffc31ccc44c7c15d83df1d69891efee8115a5bb7ede2bf30a38af3e3c92 AS builder
 RUN apk update && apk upgrade && apk add git
 
 RUN go install go.k6.io/xk6/cmd/xk6@latest
