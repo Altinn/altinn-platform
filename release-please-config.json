@@ -4,10 +4,6 @@
       "release-type": "simple",
       "component": "flux-oci-container-runtime-aks-config"
     },
-    "flux/dis-apim": {
-      "release-type": "simple",
-      "component": "flux-oci-dis-apim"
-    },
     "flux/dis-identity": {
       "release-type": "simple",
       "component": "flux-oci-dis-identity"
