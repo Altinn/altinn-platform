@@ -1,6 +1,5 @@
 {
   "flux/container-runtime-aks-config": "0.2.0",
-  "flux/dis-identity": "0.1.0",
   "flux/helm-uninstall-outdated-apps": "1.0.0",
   "flux/lakmus": "1.0.2",
   "flux/traefik": "2.1.0",
