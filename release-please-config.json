@@ -4,10 +4,6 @@
       "release-type": "simple",
       "component": "flux-oci-container-runtime-aks-config"
     },
-    "flux/dis-identity": {
-      "release-type": "simple",
-      "component": "flux-oci-dis-identity"
-    },
     "flux/dis-pgsql": {
       "release-type": "simple",
       "component": "flux-oci-dis-pgsql"
