@@ -1,3 +1,4 @@
+/*
 data "azurerm_kubernetes_cluster" "k6tests" {
   depends_on          = [module.foundational]
   name                = module.foundational.k6tests_cluster_name
@@ -17,5 +18,5 @@ data "azurerm_monitor_data_collection_rule" "k6tests" {
   name                = "k6tests-dcr${local.suffix}"
   resource_group_name = module.foundational.k6tests_resource_group_name
 }
-
+*/
 data "azurerm_client_config" "current" {}

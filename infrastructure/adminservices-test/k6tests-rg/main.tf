@@ -2,7 +2,7 @@ resource "random_string" "suffix" {
   length  = 4
   special = false
 }
-
+/*
 module "foundational" {
   source     = "./modules/foundational"
   tenant_id  = local.tenant_id

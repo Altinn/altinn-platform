@@ -1,3 +1,4 @@
+/*
 locals {
   tenant_id = data.azurerm_client_config.current.tenant_id
 
@@ -54,3 +55,4 @@ locals {
 
   data_collection_rule_id = data.azurerm_monitor_data_collection_endpoint.k6tests.id
 }
+*/
