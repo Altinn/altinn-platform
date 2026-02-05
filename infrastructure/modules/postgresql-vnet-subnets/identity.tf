@@ -12,7 +12,7 @@ resource "azurerm_federated_identity_credential" "dispgsql_fic" {
 
   audience = ["api://AzureADTokenExchange"]
   issuer   = var.oidc_issuer_url
-  subject  = "system:serviceaccount:dis-pgsql-operator-system:dis-pgsql-operator"
+  subject  = "system:serviceaccount:dis-pgsql-operator-system:dis-pgsql-operator-controller-manager"
 }
 
 resource "azurerm_role_assignment" "dispgsql_network_reader" {
