@@ -87,17 +87,27 @@ var _ = BeforeSuite(func() {
 		{Name: "s5", CIDR: "10.100.1.64/28"},
 		{Name: "s6", CIDR: "10.100.1.80/28"},
 		{Name: "s7", CIDR: "10.100.1.96/28"},
+		{Name: "s8", CIDR: "10.100.1.112/28"},
+		{Name: "s9", CIDR: "10.100.1.128/28"},
+		{Name: "s10", CIDR: "10.100.1.144/28"},
+		{Name: "s11", CIDR: "10.100.1.160/28"},
+		{Name: "s12", CIDR: "10.100.1.176/28"},
+		{Name: "s13", CIDR: "10.100.1.192/28"},
+		{Name: "s14", CIDR: "10.100.1.208/28"},
+		{Name: "s15", CIDR: "10.100.1.224/28"},
+		{Name: "s16", CIDR: "10.100.1.240/28"},
 	})
 
 	Expect(err).NotTo(HaveOccurred())
 
 	// Operator config for tests
 	config := config.OperatorConfig{
-		ResourceGroup:  "rg-dis-dev-network",
-		DBVNetName:     "vnet-dis-dev-001",
-		AKSVNetName:    "aks-vnet-dis-dev-001",
-		SubscriptionId: "my-subscription-id",
-		TenantId:       "my-tenant-id",
+		ResourceGroup:    "rg-dis-dev-network",
+		DBVNetName:       "vnet-dis-dev-001",
+		AKSVNetName:      "aks-vnet-dis-dev-001",
+		SubscriptionId:   "my-subscription-id",
+		TenantId:         "my-tenant-id",
+		AKSResourceGroup: "aks-vnet-rg",
 	}
 	err = (&DatabaseReconciler{
 		Client:        k8sManager.GetClient(),

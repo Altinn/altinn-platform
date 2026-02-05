@@ -115,13 +115,9 @@ func (r *DatabaseReconciler) ensurePrivateDNSVNetLink(
 	zoneName string,
 	linkName string,
 	targetVNetName string,
+	vnetID string,
 ) error {
 	ns := db.Namespace
-
-	vnetID, err := r.vnetARMID(targetVNetName)
-	if err != nil {
-		return fmt.Errorf("build VNet ARM ID: %w", err)
-	}
 
 	key := types.NamespacedName{
 		Name:      linkName,

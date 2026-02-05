@@ -302,6 +302,82 @@ var _ = Describe("Database controller", func() {
 		Expect(string(*s.Spec.Storage.Tier)).To(Equal("P10"))
 	})
 
+	It("updates the FlexibleServer when Database storage spec changes", func() {
+		initialSize := int32(32)
+		initialTier := "P10"
+		updatedSize := int32(64)
+		updatedTier := "P15"
+
+		db := &storagev1alpha1.Database{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-app-db-psql-update",
+				Namespace: "default",
+			},
+			Spec: storagev1alpha1.DatabaseSpec{
+				Version:    17,
+				ServerType: "dev",
+				Auth: storagev1alpha1.DatabaseAuth{
+					AdminAppIdentity: "admin-mi",
+					UserAppIdentity:  "user-mi",
+				},
+				Storage: &storagev1alpha1.DatabaseStorageSpec{
+					SizeGB: &initialSize,
+					Tier:   &initialTier,
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			var s dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &s)).To(Succeed())
+			g.Expect(s.Spec.Storage).NotTo(BeNil())
+			g.Expect(s.Spec.Storage.StorageSizeGB).NotTo(BeNil())
+			g.Expect(s.Spec.Storage.Tier).NotTo(BeNil())
+			return *s.Spec.Storage.StorageSizeGB
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(int(initialSize)))
+
+		var updated storagev1alpha1.Database
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
+		updated.Spec.Storage = &storagev1alpha1.DatabaseStorageSpec{
+			SizeGB: &updatedSize,
+			Tier:   &updatedTier,
+		}
+		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
+
+		Eventually(func(g Gomega) struct {
+			size int
+			tier string
+		} {
+			var s dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &s)).To(Succeed())
+			g.Expect(s.Spec.Storage).NotTo(BeNil())
+			g.Expect(s.Spec.Storage.StorageSizeGB).NotTo(BeNil())
+			g.Expect(s.Spec.Storage.Tier).NotTo(BeNil())
+			return struct {
+				size int
+				tier string
+			}{
+				size: *s.Spec.Storage.StorageSizeGB,
+				tier: string(*s.Spec.Storage.Tier),
+			}
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(struct {
+				size int
+				tier string
+			}{
+				size: int(updatedSize),
+				tier: updatedTier,
+			}))
+	})
+
 	It("creates a FlexibleServersAdministrator for the Database", func() {
 		db := &storagev1alpha1.Database{
 			ObjectMeta: metav1.ObjectMeta{
@@ -346,6 +422,68 @@ var _ = Describe("Database controller", func() {
 		// And that we used config refs
 		Expect(a.Spec.PrincipalName).NotTo(BeNil())
 		Expect(a.Spec.TenantId).NotTo(BeNil())
+	})
+
+	It("updates the FlexibleServersAdministrator when admin identity changes", func() {
+		db := &storagev1alpha1.Database{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-app-db-admin-update",
+				Namespace: "default",
+			},
+			Spec: storagev1alpha1.DatabaseSpec{
+				Version:    17,
+				ServerType: "dev",
+				Auth: storagev1alpha1.DatabaseAuth{
+					AdminAppIdentity: "admin-old",
+					UserAppIdentity:  "user",
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		adminName := fmt.Sprintf("%s-admin", db.Name)
+
+		Eventually(func(g Gomega) string {
+			var a dbforpostgresqlv1.FlexibleServersAdministrator
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      adminName,
+				Namespace: db.Namespace,
+			}, &a)).To(Succeed())
+			g.Expect(a.Spec.PrincipalName).NotTo(BeNil())
+			return *a.Spec.PrincipalName
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal("admin-old"))
+
+		var updated storagev1alpha1.Database
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
+		updated.Spec.Auth.AdminAppIdentity = "admin-new"
+		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
+
+		Eventually(func(g Gomega) struct {
+			azureName     string
+			principalName string
+		} {
+			var a dbforpostgresqlv1.FlexibleServersAdministrator
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      adminName,
+				Namespace: db.Namespace,
+			}, &a)).To(Succeed())
+			g.Expect(a.Spec.PrincipalName).NotTo(BeNil())
+			return struct {
+				azureName     string
+				principalName string
+			}{
+				azureName:     a.Spec.AzureName,
+				principalName: *a.Spec.PrincipalName,
+			}
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(struct {
+				azureName     string
+				principalName string
+			}{
+				azureName:     "admin-new",
+				principalName: "admin-new",
+			}))
 	})
 
 })

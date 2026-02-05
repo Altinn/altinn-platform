@@ -116,12 +116,28 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
+	// create ARM IDs for vnet links
+	dbVnetID := fmt.Sprintf(
+		"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/virtualNetworks/%s",
+		r.Config.SubscriptionId,
+		r.Config.ResourceGroup,
+		r.Config.DBVNetName,
+	)
+
+	aksVnetID := fmt.Sprintf(
+		"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/virtualNetworks/%s",
+		r.Config.SubscriptionId,
+		r.Config.AKSResourceGroup,
+		r.Config.AKSVNetName,
+	)
+
 	// DB VNet link
 	if err := r.ensurePrivateDNSVNetLink(
 		ctx, logger, &db,
 		zoneNameForDatabase(&db),
 		vnetLinkNameForDB(&db),
 		r.Config.DBVNetName,
+		dbVnetID,
 	); err != nil {
 		logger.Error(err, "failed to ensure private DNS vnet link for DB VNet")
 		return ctrl.Result{}, err
@@ -133,6 +149,7 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		zoneNameForDatabase(&db),
 		vnetLinkNameForAKS(&db),
 		r.Config.AKSVNetName,
+		aksVnetID,
 	); err != nil {
 		logger.Error(err, "failed to ensure private DNS vnet link for AKS VNet")
 		return ctrl.Result{}, err
@@ -151,19 +168,6 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	return ctrl.Result{}, nil
-}
-
-func (r *DatabaseReconciler) vnetARMID(vnetName string) (string, error) {
-	if vnetName == "" {
-		return "", fmt.Errorf("vnet name is empty")
-	}
-
-	return fmt.Sprintf(
-		"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/virtualNetworks/%s",
-		r.Config.SubscriptionId,
-		r.Config.ResourceGroup,
-		vnetName,
-	), nil
 }
 
 func (r *DatabaseReconciler) allocateSubnetForDatabase(

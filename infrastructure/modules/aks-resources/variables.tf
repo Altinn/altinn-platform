@@ -146,6 +146,23 @@ variable "enable_dis_identity_operator" {
 
 }
 
+variable "enable_dis_pgsql_operator" {
+  type        = bool
+  default     = false
+  description = "Enable the dis-pgsql-operator to manage Databases in the cluster."
+
+}
+
+variable "dis_pgsql_uami_client_id" {
+  type        = string
+  description = "The client ID of the User Assigned Managed Identity managed by dis-pgsql-operator."
+  default     = ""
+  validation {
+    condition     = var.enable_dis_pgsql_operator == false || (var.enable_dis_pgsql_operator == true && length(var.dis_pgsql_uami_client_id) > 0)
+    error_message = "You must provide a value for dis_pgsql_uami_client_id when enable_dis_pgsql_operator is true."
+  }
+}
+
 variable "azurerm_kubernetes_cluster_oidc_issuer_url" {
   type        = string
   description = "The OIDC issuer URL of the AKS cluster."
@@ -210,4 +227,19 @@ variable "lakmus_client_id" {
 variable "developer_entra_id_group" {
   description = "EntraID group that should have access to grafana and kubernetes cluster"
   type        = string
+}
+
+variable "aks_workpool_vnet_name" {
+  type        = string
+  description = "Name of the vnets where the workpool nodes are located"
+}
+
+variable "dis_db_vnet_name" {
+  type = string
+  description = "The name of the VNet where the DIS PostgreSQL instance is deployed"
+}
+
+variable "dis_resource_group_name" {
+  type        = string
+  description = "Name of the resource group for DIS resources"
 }

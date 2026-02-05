@@ -23,8 +23,6 @@ func GetProfile(serverType string) Profile {
 	switch serverType {
 	case "prod", "production":
 		return prodProfile
-	case "dev", "development":
-		fallthrough
 	default:
 		return devProfile
 	}

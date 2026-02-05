@@ -85,6 +85,7 @@ func main() {
 	var resourceGroup string
 	var vnetName string
 	var aksVnetName string
+	var aksResourceGroup string
 	var tenantID string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -107,33 +108,40 @@ func main() {
 	flag.StringVar(
 		&subscriptionID,
 		"subscription-id",
-		os.Getenv("AZURE_SUBSCRIPTION_ID"),
+		os.Getenv("DISPG_AZURE_SUBSCRIPTION_ID"),
 		"Azure subscription ID (required)",
 	)
 	flag.StringVar(
 		&resourceGroup,
 		"resource-group",
-		os.Getenv("AZURE_VNET_RESOURCE_GROUP"),
-		"Azure Resource Group where the VNet is located (required)",
+		os.Getenv("DISPG_DB_RESOURCE_GROUP"),
+		"Azure Resource Group where the DBs are located (required)",
 	)
 	flag.StringVar(
 		&vnetName,
 		"vnet-name",
-		os.Getenv("AZURE_VNET_NAME"),
+		os.Getenv("DISPG_DB_VNET_NAME"),
 		"Azure VNet name (required)",
 	)
 	flag.StringVar(
 		&aksVnetName,
 		"aks-vnet",
-		os.Getenv("AKS_VNET_NAME"),
+		os.Getenv("DISPG_AKS_VNET_NAME"),
 		"Azure VNet name where the AKS cluster is located (required)",
 	)
 	flag.StringVar(
 		&tenantID,
 		"tenant-id",
-		os.Getenv("AZURE_TENANT_ID"),
+		os.Getenv("DISPG_AZURE_TENANT_ID"),
 		"Azure Tenant ID (required)",
 	)
+	flag.StringVar(
+		&aksResourceGroup,
+		"aks-resource-group",
+		os.Getenv("DISPG_AKS_RESOURCE_GROUP"),
+		"Azure RG for AKS VNet (required)",
+	)
+
 	opts := zap.Options{
 		Development: true,
 	}
@@ -253,7 +261,14 @@ func main() {
 		armOpts = nil
 	}
 
-	opCfg, err := config.NewOperatorConfig(resourceGroup, vnetName, aksVnetName, subscriptionID, tenantID)
+	opCfg, err := config.NewOperatorConfig(
+		resourceGroup,
+		vnetName,
+		aksVnetName,
+		subscriptionID,
+		tenantID,
+		aksResourceGroup,
+	)
 	if err != nil {
 		setupLog.Error(err, "invalid operator configuration")
 		os.Exit(1)
