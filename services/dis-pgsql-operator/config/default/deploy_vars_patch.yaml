@@ -1,0 +1,18 @@
+- op: add
+  path: /spec/template/spec/containers/0/env
+  value:
+    - name: DISPG_AZURE_SUBSCRIPTION_ID
+      value: ${DISPG_AZURE_SUBSCRIPTION_ID}
+    - name: DISPG_AZURE_TENANT_ID
+      value: ${DISPG_AZURE_TENANT_ID}
+    - name: DISPG_DB_RESOURCE_GROUP
+      value: ${DISPG_DB_RESOURCE_GROUP}
+    - name: DISPG_DB_VNET_NAME
+      value: ${DISPG_DB_VNET_NAME}
+    - name: DISPG_AKS_VNET_NAME
+      value: ${DISPG_AKS_VNET_NAME}
+    - name: DISPG_AKS_RESOURCE_GROUP
+      value: ${DISPG_AKS_RESOURCE_GROUP}
+- op: add
+  path: /spec/template/metadata/labels/azure.workload.identity~1use
+  value: "true"

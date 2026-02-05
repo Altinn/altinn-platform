@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -27,10 +28,13 @@ func (r *DatabaseReconciler) ensureFlexibleServerAdministrator(
 
 	key := types.NamespacedName{Name: adminName, Namespace: ns}
 	var existing dbforpostgresqlv1.FlexibleServersAdministrator
-	if err := r.Get(ctx, key, &existing); err == nil {
-		return nil
-	} else if err != nil && !apierrors.IsNotFound(err) {
-		return fmt.Errorf("get FlexibleServersAdministrator %s/%s: %w", ns, adminName, err)
+	found := true
+	if err := r.Get(ctx, key, &existing); err != nil {
+		if apierrors.IsNotFound(err) {
+			found = false
+		} else {
+			return fmt.Errorf("get FlexibleServersAdministrator %s/%s: %w", ns, adminName, err)
+		}
 	}
 
 	// TODO: adminAppIdentity is the Entra principal OBJECT ID (GUID).
@@ -46,44 +50,77 @@ func (r *DatabaseReconciler) ensureFlexibleServerAdministrator(
 
 	pt := dbforpostgresqlv1.AdministratorMicrosoftEntraPropertiesForAdd_PrincipalType_ServicePrincipal
 
-	admin := &dbforpostgresqlv1.FlexibleServersAdministrator{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      adminName,
-			Namespace: ns,
-			Labels: map[string]string{
-				"dis.altinn.cloud/database-name": db.Name,
-			},
-		},
-		Spec: dbforpostgresqlv1.FlexibleServersAdministrator_Spec{
-			// AzureName is the principal object id
-			AzureName: principalID,
+	desiredSpec := dbforpostgresqlv1.FlexibleServersAdministrator_Spec{
+		// AzureName is the principal object id
+		AzureName: principalID,
 
-			Owner: &genruntime.KnownResourceReference{
-				// Owner is the FlexibleServer k8s object name
-				Name: db.Name,
-			},
-
-			PrincipalName: to.Ptr(principalID),
-			PrincipalType: &pt,
-			TenantId:      to.Ptr(r.Config.TenantId),
+		Owner: &genruntime.KnownResourceReference{
+			// Owner is the FlexibleServer k8s object name
+			Name: db.Name,
 		},
+
+		PrincipalName: to.Ptr(principalID),
+		PrincipalType: &pt,
+		TenantId:      to.Ptr(r.Config.TenantId),
 	}
 
-	if err := controllerutil.SetControllerReference(db, admin, r.Scheme); err != nil {
-		return fmt.Errorf("set controller reference on FlexibleServersAdministrator: %w", err)
+	desiredLabels := map[string]string{
+		"dis.altinn.cloud/database-name": db.Name,
 	}
 
-	logger.Info("creating FlexibleServersAdministrator for database",
-		"adminName", adminName,
-		"namespace", ns,
-		"principalID", principalID,
-	)
-
-	if err := r.Create(ctx, admin); err != nil {
-		if apierrors.IsAlreadyExists(err) {
-			return nil
+	if !found {
+		admin := &dbforpostgresqlv1.FlexibleServersAdministrator{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      adminName,
+				Namespace: ns,
+				Labels:    desiredLabels,
+			},
+			Spec: desiredSpec,
 		}
-		return fmt.Errorf("create FlexibleServersAdministrator %s/%s: %w", ns, adminName, err)
+
+		if err := controllerutil.SetControllerReference(db, admin, r.Scheme); err != nil {
+			return fmt.Errorf("set controller reference on FlexibleServersAdministrator: %w", err)
+		}
+
+		logger.Info("creating FlexibleServersAdministrator for database",
+			"adminName", adminName,
+			"namespace", ns,
+			"principalID", principalID,
+		)
+
+		if err := r.Create(ctx, admin); err != nil {
+			if apierrors.IsAlreadyExists(err) {
+				return nil
+			}
+			return fmt.Errorf("create FlexibleServersAdministrator %s/%s: %w", ns, adminName, err)
+		}
+		return nil
+	}
+
+	updated := false
+	if !equality.Semantic.DeepEqual(existing.Spec, desiredSpec) {
+		existing.Spec = desiredSpec
+		updated = true
+	}
+	if existing.Labels == nil {
+		existing.Labels = map[string]string{}
+	}
+	for k, v := range desiredLabels {
+		if existing.Labels[k] != v {
+			existing.Labels[k] = v
+			updated = true
+		}
+	}
+
+	if updated {
+		logger.Info("updating FlexibleServersAdministrator to match Database",
+			"adminName", adminName,
+			"namespace", ns,
+			"principalID", principalID,
+		)
+		if err := r.Update(ctx, &existing); err != nil {
+			return fmt.Errorf("update FlexibleServersAdministrator %s/%s: %w", ns, adminName, err)
+		}
 	}
 
 	return nil

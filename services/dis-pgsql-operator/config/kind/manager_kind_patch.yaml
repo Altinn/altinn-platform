@@ -12,15 +12,22 @@ spec:
           args:
             - "--use-az-fakes"
           env:
-            - name: AZURE_SUBSCRIPTION_ID
+            - name: DISPG_AZURE_SUBSCRIPTION_ID
               value: "fake-subscription"
-            - name: AZURE_VNET_RESOURCE_GROUP
+            - name: DISPG_DB_RESOURCE_GROUP
               value: "fake-rg"
-            - name: AZURE_VNET_NAME
+            - name: DISPG_DB_VNET_NAME
               value: "fake-db-vnet"
-            - name: AKS_VNET_NAME
+            - name: DISPG_AKS_VNET_NAME
               value: "fake-aks-vnet"
-            - name: AZURE_TENANT_ID
+            - name: DISPG_AZURE_TENANT_ID
               value: "fake-tenant"
-            - name: AKS_RESOURCE_GROUP
+            - name: DISPG_AKS_RESOURCE_GROUP
               value: "fake-aks-rg"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

@@ -12,9 +12,13 @@ resource "azapi_resource" "dis_pgsql_operator" {
           path  = "./"
           postBuild = {
             substitute = {
-              DISPG_ISSUER_URL            = "${var.azurerm_kubernetes_cluster_oidc_issuer_url}"
-              DISPG_TARGET_RESOURCE_GROUP = "${var.dis_pgsql_resource_group_id}"
-              DISPG_UAMI_CLIENT_ID        = "${var.dis_pgsql_uami_client_id}"
+              DISPG_AZURE_SUBSCRIPTION_ID = "${var.subscription_id}"
+              DISPG_AZURE_TENANT_ID = "${var.obs_tenant_id}" # same tenant as obs
+              DISPG_DB_RESOURCE_GROUP = "${var.dis_resource_group_name}"
+              DISPG_DB_VNET_NAME = "${var.dis_db_vnet_name}"
+              DISPG_AKS_VNET_NAME = "${var.aks_workpool_vnet_name}"
+              DISPG_AKS_RESOURCE_GROUP = "${var.aks_node_resource_group}"
+              DISPG_WORKLOAD_IDENTITY_CLIENT_ID = "${var.dis_pgsql_uami_client_id}"
             }
           }
           prune                  = false

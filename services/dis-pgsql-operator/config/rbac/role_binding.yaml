@@ -11,5 +11,5 @@ roleRef:
   name: manager-role
 subjects:
 - kind: ServiceAccount
-  name: dis-pgsql-operator
-  namespace: dis-pgsql-operator-system
+  name: controller-manager
+  namespace: system

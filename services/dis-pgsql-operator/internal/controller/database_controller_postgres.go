@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -86,11 +87,13 @@ func (r *DatabaseReconciler) ensurePostgresServer(
 	}
 
 	var existing dbforpostgresqlv1.FlexibleServer
-	if err := r.Get(ctx, key, &existing); err == nil {
-		// already exists; nothing to do
-		return nil
-	} else if err != nil && !apierrors.IsNotFound(err) {
-		return fmt.Errorf("get FlexibleServer %s/%s: %w", ns, serverName, err)
+	found := true
+	if err := r.Get(ctx, key, &existing); err != nil {
+		if apierrors.IsNotFound(err) {
+			found = false
+		} else {
+			return fmt.Errorf("get FlexibleServer %s/%s: %w", ns, serverName, err)
+		}
 	}
 
 	// define if dev/prod profile
@@ -135,58 +138,90 @@ func (r *DatabaseReconciler) ensurePostgresServer(
 	}
 
 	// 5) Build server
-	server := &dbforpostgresqlv1.FlexibleServer{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      serverName,
-			Namespace: ns,
-			Labels: map[string]string{
-				"dis.altinn.cloud/database-name": db.Name,
-			},
+	desiredSpec := dbforpostgresqlv1.FlexibleServer_Spec{
+		AzureName: serverName,
+		Location:  to.Ptr(loc),
+
+		Owner: &genruntime.KnownResourceReference{
+			ARMID: fmt.Sprintf("/subscriptions/%s/resourceGroups/%s", r.Config.SubscriptionId, r.Config.ResourceGroup),
 		},
-		Spec: dbforpostgresqlv1.FlexibleServer_Spec{
-			AzureName: serverName,
-			Location:  to.Ptr(loc),
 
-			Owner: &genruntime.KnownResourceReference{
-				ARMID: fmt.Sprintf("/subscriptions/%s/resourceGroups/%s", r.Config.SubscriptionId, r.Config.ResourceGroup),
-			},
-
-			Version: &version,
-			Network: network,
-			Storage: storage,
-			Sku: &dbforpostgresqlv1.Sku{
-				Name: to.Ptr(profile.SkuName),
-				Tier: to.Ptr(profile.SkuTier),
-			},
-
-			Tags: map[string]string{
-				"dis-database": db.Name,
-			},
-
-			AuthConfig: authConfig,
+		Version: &version,
+		Network: network,
+		Storage: storage,
+		Sku: &dbforpostgresqlv1.Sku{
+			Name: to.Ptr(profile.SkuName),
+			Tier: to.Ptr(profile.SkuTier),
 		},
+
+		Tags: map[string]string{
+			"dis-database": db.Name,
+		},
+
+		AuthConfig: authConfig,
 	}
 
-	if err := controllerutil.SetControllerReference(db, server, r.Scheme); err != nil {
-		return fmt.Errorf("set controller reference on FlexibleServer: %w", err)
+	desiredLabels := map[string]string{
+		"dis.altinn.cloud/database-name": db.Name,
 	}
 
-	logger.Info("creating PostgreSQL FlexibleServer for database",
-		"serverName", serverName,
-		"namespace", ns,
-		"location", loc,
-		"version", versionStr,
-		"subnetID", subnetID,
-		"zoneID", zoneID,
-		"skuName", profile.SkuName,
-		"storageGB", storage.StorageSizeGB,
-	)
-
-	if err := r.Create(ctx, server); err != nil {
-		if apierrors.IsAlreadyExists(err) {
-			return nil
+	// Create when missing
+	if !found {
+		server := &dbforpostgresqlv1.FlexibleServer{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      serverName,
+				Namespace: ns,
+				Labels:    desiredLabels,
+			},
+			Spec: desiredSpec,
 		}
-		return fmt.Errorf("create FlexibleServer %s/%s: %w", ns, serverName, err)
+
+		if err := controllerutil.SetControllerReference(db, server, r.Scheme); err != nil {
+			return fmt.Errorf("set controller reference on FlexibleServer: %w", err)
+		}
+
+		logger.Info("creating PostgreSQL FlexibleServer for database",
+			"serverName", serverName,
+			"namespace", ns,
+			"location", loc,
+			"version", versionStr,
+			"subnetID", subnetID,
+			"zoneID", zoneID,
+			"skuName", profile.SkuName,
+			"storageGB", storage.StorageSizeGB,
+		)
+
+		if err := r.Create(ctx, server); err != nil {
+			if apierrors.IsAlreadyExists(err) {
+				return nil
+			}
+			return fmt.Errorf("create FlexibleServer %s/%s: %w", ns, serverName, err)
+		}
+		return nil
+	}
+
+	updated := false
+	if !equality.Semantic.DeepEqual(existing.Spec, desiredSpec) {
+		existing.Spec = desiredSpec
+		updated = true
+	}
+	if existing.Labels == nil {
+		existing.Labels = map[string]string{}
+	}
+	for k, v := range desiredLabels {
+		if existing.Labels[k] != v {
+			existing.Labels[k] = v
+			updated = true
+		}
+	}
+	if updated {
+		logger.Info("updating PostgreSQL FlexibleServer to match Database",
+			"serverName", serverName,
+			"namespace", ns,
+		)
+		if err := r.Update(ctx, &existing); err != nil {
+			return fmt.Errorf("update FlexibleServer %s/%s: %w", ns, serverName, err)
+		}
 	}
 
 	return nil

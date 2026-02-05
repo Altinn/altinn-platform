@@ -108,37 +108,37 @@ func main() {
 	flag.StringVar(
 		&subscriptionID,
 		"subscription-id",
-		os.Getenv("AZURE_SUBSCRIPTION_ID"),
+		os.Getenv("DISPG_AZURE_SUBSCRIPTION_ID"),
 		"Azure subscription ID (required)",
 	)
 	flag.StringVar(
 		&resourceGroup,
 		"resource-group",
-		os.Getenv("AZURE_VNET_RESOURCE_GROUP"),
-		"Azure Resource Group where the VNet is located (required)",
+		os.Getenv("DISPG_DB_RESOURCE_GROUP"),
+		"Azure Resource Group where the DBs are located (required)",
 	)
 	flag.StringVar(
 		&vnetName,
 		"vnet-name",
-		os.Getenv("AZURE_VNET_NAME"),
+		os.Getenv("DISPG_DB_VNET_NAME"),
 		"Azure VNet name (required)",
 	)
 	flag.StringVar(
 		&aksVnetName,
 		"aks-vnet",
-		os.Getenv("AKS_VNET_NAME"),
+		os.Getenv("DISPG_AKS_VNET_NAME"),
 		"Azure VNet name where the AKS cluster is located (required)",
 	)
 	flag.StringVar(
 		&tenantID,
 		"tenant-id",
-		os.Getenv("AZURE_TENANT_ID"),
+		os.Getenv("DISPG_AZURE_TENANT_ID"),
 		"Azure Tenant ID (required)",
 	)
 	flag.StringVar(
 		&aksResourceGroup,
 		"aks-resource-group",
-		os.Getenv("AKS_RESOURCE_GROUP"),
+		os.Getenv("DISPG_AKS_RESOURCE_GROUP"),
 		"Azure RG for AKS VNet (required)",
 	)
 

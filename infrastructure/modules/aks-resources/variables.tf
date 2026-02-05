@@ -238,3 +238,18 @@ variable "developer_entra_id_group" {
   description = "EntraID group that should have access to grafana and kubernetes cluster"
   type        = string
 }
+
+variable "aks_workpool_vnet_name" {
+  type        = string
+  description = "Name of the vnets where the workpool nodes are located"
+}
+
+variable "dis_db_vnet_name" {
+  type = string
+  description = "The name of the VNet where the DIS PostgreSQL instance is deployed"
+}
+
+variable "dis_resource_group_name" {
+  type        = string
+  description = "Name of the resource group for DIS resources"
+}
