@@ -59,4 +59,9 @@ module "aks_resources" {
   azurerm_dis_identity_resource_group_id     = module.aks.dis_resource_group_id
   azurerm_kubernetes_cluster_oidc_issuer_url = module.aks.aks_oidc_issuer_url
   obs_amw_write_endpoint                     = module.observability.monitor_workspace_write_endpoint
+  dis_db_vnet_name                           = module.aks.dis_db_vnet_name
+  dis_resource_group_name                    = module.aks.dis_resource_group_name
+  dis_pgsql_uami_client_id                   = module.postgresql_vnet_subnets.dispgsql_uami_client_id
+  enable_dis_pgsql_operator                  = true
+  aks_workpool_vnet_name                     = module.aks.aks_workpool_vnet_name
 }
