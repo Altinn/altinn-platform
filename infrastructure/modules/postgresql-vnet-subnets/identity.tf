@@ -17,6 +17,6 @@ resource "azurerm_federated_identity_credential" "dispgsql_fic" {
 
 resource "azurerm_role_assignment" "dispgsql_network_reader" {
   scope                = azurerm_virtual_network.postgresql.id
-  role_definition_name = "Network Reader"
+  role_definition_name = "Reader"
   principal_id         = azurerm_user_assigned_identity.dispgsql_identity.principal_id
 }
