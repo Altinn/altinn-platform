@@ -16,10 +16,6 @@
       "release-type": "simple",
       "component": "flux-oci-lakmus"
     },
-    "flux/traefik": {
-      "release-type": "simple",
-      "component": "flux-oci-traefik"
-    },
     "infrastructure/images/azure-devops-agent": {
       "release-type": "simple",
       "component": "azdevops-agent",
