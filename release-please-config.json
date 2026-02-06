@@ -1,9 +1,5 @@
 {
   "packages": {
-    "flux/container-runtime-aks-config": {
-      "release-type": "simple",
-      "component": "flux-oci-container-runtime-aks-config"
-    },
     "flux/dis-pgsql": {
       "release-type": "simple",
       "component": "flux-oci-dis-pgsql"
