@@ -1,5 +1,4 @@
 {
-  "flux/container-runtime-aks-config": "0.2.0",
   "flux/helm-uninstall-outdated-apps": "1.0.0",
   "flux/lakmus": "1.0.2",
   "infrastructure/images/azure-devops-agent": "1.2.6",
