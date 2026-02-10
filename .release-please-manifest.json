@@ -1,5 +1,4 @@
 {
-  "flux/helm-uninstall-outdated-apps": "1.0.0",
   "flux/lakmus": "1.0.2",
   "infrastructure/images/azure-devops-agent": "1.2.6",
   "infrastructure/images/gh-runner": "0.4.1",

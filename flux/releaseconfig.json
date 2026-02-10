@@ -6,13 +6,5 @@
     "tt_ring2": "1.0.2",
     "prod_ring1": "1.0.2",
     "prod_ring2": "1.0.2"
-  },
-  "helm-uninstall-outdated-apps": {
-    "at_ring1": "1.0.0",
-    "at_ring2": "1.0.0",
-    "tt_ring1": "1.0.0",
-    "tt_ring2": "1.0.0",
-    "prod_ring1": "1.0.0",
-    "prod_ring2": "1.0.0"
   }
 }

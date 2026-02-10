@@ -4,10 +4,6 @@
       "release-type": "simple",
       "component": "flux-oci-dis-pgsql"
     },
-    "flux/helm-uninstall-outdated-apps": {
-      "release-type": "simple",
-      "component": "flux-oci-helm-uninstall-outdated-apps"
-    },
     "flux/lakmus": {
       "release-type": "simple",
       "component": "flux-oci-lakmus"
