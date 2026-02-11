@@ -1,32 +1,23 @@
-# Calling Verify with a VerifyOptions.KeyUsages that contains ExtKeyUsageAny unintentionally disabledpolicy validation.
-# This only affected certificate chains which contain policy graphs, which are rather uncommon.
-CVE-2025-22874
-
-# Calling Decoder.Decode on a message which contains deeply nested structures can cause a panic due to stack exhaustion. This is a follow-up to CVE-2022-30635.
+# https://avd.aquasec.com/nvd/cve-2024-34156
 CVE-2024-34156
 
-# database/sql: Postgres Scan Race Condition https://avd.aquasec.com/nvd/cve-2025-47907
+# https://avd.aquasec.com/nvd/cve-2025-47907
 CVE-2025-47907
 
-# If the PATH environment variable contains paths which are executables (rather than just directories), passing certain strings to LookPath (, ., and ..), can result in the binaries listed in the PATH being unexpectedly returned.
-CVE-2025-47906
-
-# The Parse function permits values other than IPv6 addresses to be included in square brackets within the host component of a URL
-CVE-2025-47912
-
-# tar.Reader does not set a maximum size on the number of sparse region data blocks in GNU tar pax 1.0 sparse files. A maliciously-crafted archive containing a large number of sparse regions can cause a Reader to read an unbounded amount of data from the archive into memory. When reading from a compressed source, a small compressed input can result in large allocations.
+# https://avd.aquasec.com/nvd/cve-2025-58183
 CVE-2025-58183
 
-# Despite HTTP headers having a default limit of 1MB, the number of cookies that can be parsed does not have a limit. By sending a lot of very small cookies such as a=;, an attacker can make an HTTP server allocate a large amount of structs, causing large memory consumption.
-CVE-2025-58186
-
-# Due to the design of the name constraint checking algorithm, the processing time of some inputs scals non-linearly with respect to the size of the certificate. This affects programs which validate arbitrary certificate chains.
-CVE-2025-58187
-
-# Validating certificate chains which contain DSA public keys can cause programs to panic, due to a interface cast that assumes they implement the Equal method. This affects programs which validate arbitrary certificate chains.
-CVE-2025-58188
-
-# The Reader.ReadResponse function constructs a response string through repeated string concatenation of lines. When the number of lines in a response is large, this can cause excessive CPU consumption.
-CVE-2025-61724
-# Within HostnameError.Error(), when constructing an error string, there is no limit to the number of hosts that will be printed out. Furthermore, the error string is constructed by repeated string concatenation, leading to quadratic runtime. Therefore, a certificate provided by a malicious actor can result in excessive resource consumption.
+# https://avd.aquasec.com/nvd/cve-2025-61729
 CVE-2025-61729
+
+# https://avd.aquasec.com/nvd/cve-2025-68121
+CVE-2025-68121
+
+# https://avd.aquasec.com/nvd/cve-2025-61726
+CVE-2025-61726
+
+# https://avd.aquasec.com/nvd/cve-2025-61728
+CVE-2025-61728
+
+# https://avd.aquasec.com/nvd/cve-2025-61730
+CVE-2025-61730
