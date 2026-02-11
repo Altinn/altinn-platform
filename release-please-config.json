@@ -1,9 +1,5 @@
 {
   "packages": {
-    "flux/dis-pgsql": {
-      "release-type": "simple",
-      "component": "flux-oci-dis-pgsql"
-    },
     "flux/lakmus": {
       "release-type": "simple",
       "component": "flux-oci-lakmus"
