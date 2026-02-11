@@ -1,6 +1,6 @@
-FROM golang:1.25-alpine@sha256:d9b2e14101f27ec8d09674cd01186798d227bb0daec90e032aeb1cd22ac0f029 AS builder
+FROM golang:1.26-alpine@sha256:d4c4845f5d60c6a974c6000ce58ae079328d03ab7f721a0734277e69905473e5 AS builder
 # renovate: datasource=github-tags depName=kubectl packageName=kubernetes/kubectl versioning=semver extractVersion=^kubernetes-(?<version>.*)$
-ARG KUBECTL_VERSION=1.35.0
+ARG KUBECTL_VERSION=1.35.1
 # renovate: datasource=github-releases depName=kubeseal packageName=bitnami-labs/sealed-secrets versioning=semver extractVersion=^sealed-secrets-(?<version>.*)$
 ARG KUBESEAL_VERSION=0.34.0
 # renovate: datasource=github-releases depName=jsonnet packageName=google/jsonnet versioning=semver
@@ -56,10 +56,10 @@ RUN go build . && \
     chmod +x generate-k6-manifests && \
     mv generate-k6-manifests /usr/local/bin
 
-FROM ghcr.io/altinn/altinn-platform/k6-image:v1.5.0@sha256:2ae4a209e8fed3c524f585162e2c7df8216159662c89a3627a67d302723585f3 AS k6image
+FROM ghcr.io/altinn/altinn-platform/k6-image:v1.6@sha256:278928e7ec44d5881f9041e24e29732c814567433ebd48be137b9dadf45af1af  AS k6image
 
 # Final image with the needed binaries and helper files
-FROM alpine:3.23.2@sha256:865b95f46d98cf867a156fe4a135ad3fe50d2056aa3f25ed31662dff6da4eb62
+FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /jsonnet/vendor /jsonnet/vendor
 COPY --from=k6image /usr/bin/k6 /usr/bin/k6
