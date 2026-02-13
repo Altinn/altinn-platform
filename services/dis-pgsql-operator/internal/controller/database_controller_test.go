@@ -12,6 +12,7 @@ import (
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
+	asoconditions "github.com/Azure/azure-service-operator/v2/pkg/genruntime/conditions"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -51,6 +52,53 @@ var _ = Describe("Database controller", func() {
 		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
 			Should(Succeed())
 		return job
+	}
+
+	markASOReady := func(ctx context.Context, db *storagev1alpha1.Database) {
+		serverName := db.Name
+		adminName := fmt.Sprintf("%s-admin", db.Name)
+
+		Eventually(func() error {
+			var server dbforpostgresqlv1.FlexibleServer
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      serverName,
+				Namespace: db.Namespace,
+			}, &server); err != nil {
+				return err
+			}
+			server.Status.Conditions = []asoconditions.Condition{
+				{
+					Type:               asoconditions.ConditionTypeReady,
+					Status:             metav1.ConditionTrue,
+					Reason:             "Ready",
+					LastTransitionTime: metav1.Now(),
+					ObservedGeneration: server.Generation,
+				},
+			}
+			return k8sClient.Status().Update(ctx, &server)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func() error {
+			var admin dbforpostgresqlv1.FlexibleServersAdministrator
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      adminName,
+				Namespace: db.Namespace,
+			}, &admin); err != nil {
+				return err
+			}
+			admin.Status.Conditions = []asoconditions.Condition{
+				{
+					Type:               asoconditions.ConditionTypeReady,
+					Status:             metav1.ConditionTrue,
+					Reason:             "Ready",
+					LastTransitionTime: metav1.Now(),
+					ObservedGeneration: admin.Generation,
+				},
+			}
+			return k8sClient.Status().Update(ctx, &admin)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
 	}
 
 	BeforeEach(func() {
@@ -553,6 +601,8 @@ var _ = Describe("Database controller", func() {
 		})
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
+		markASOReady(ctx, db)
+
 		jobName := userProvisionJobName(db)
 
 		job := waitForJob(ctx, jobName, db.Namespace)
@@ -589,6 +639,8 @@ var _ = Describe("Database controller", func() {
 			UserAppPrincipalId:      "user-mi-id",
 		})
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		markASOReady(ctx, db)
 
 		oldJobName := userProvisionJobName(db)
 
