@@ -6,13 +6,26 @@ import (
 
 // DatabaseAuth contains the identities that should get access to the database.
 type DatabaseAuth struct {
-	// adminAppIdentity is the name of the AppIdentity that should have full admin access to the database.
+	// adminAppIdentity is the Entra principal name that should have full admin access to the database.
 	// +kubebuilder:validation:MinLength=1
 	AdminAppIdentity string `json:"adminAppIdentity"`
 
-	// userAppIdentity is the name of the AppIdentity that should have non-admin access to the database.
+	// adminAppPrincipalId is the Entra principal object ID (GUID) for adminAppIdentity.
+	// +kubebuilder:validation:MinLength=1
+	AdminAppPrincipalId string `json:"adminAppPrincipalId"`
+
+	// adminServiceAccountName is the ServiceAccount name used for workload identity
+	// when provisioning normal DB users for this database.
+	// +kubebuilder:validation:MinLength=1
+	AdminServiceAccountName string `json:"adminServiceAccountName"`
+
+	// userAppIdentity is the Entra principal name that should have non-admin access to the database.
 	// +kubebuilder:validation:MinLength=1
 	UserAppIdentity string `json:"userAppIdentity"`
+
+	// userAppPrincipalId is the Entra principal object ID (GUID) for userAppIdentity.
+	// +kubebuilder:validation:MinLength=1
+	UserAppPrincipalId string `json:"userAppPrincipalId"`
 }
 
 // DatabaseSpec defines the desired state of Database.

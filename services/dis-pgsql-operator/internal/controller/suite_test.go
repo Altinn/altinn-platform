@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -39,12 +40,18 @@ func TestControllers(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	if os.Getenv("DISPG_SKIP_ENVTEST") == "1" {
+		Skip("envtest disabled via DISPG_SKIP_ENVTEST")
+	}
+
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	ctx, cancel = context.WithCancel(context.TODO())
 	scheme := runtime.NewScheme()
 	var err error
 	err = storagev1alpha1.AddToScheme(scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = batchv1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = networkv1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
@@ -102,12 +109,13 @@ var _ = BeforeSuite(func() {
 
 	// Operator config for tests
 	config := config.OperatorConfig{
-		ResourceGroup:    "rg-dis-dev-network",
-		DBVNetName:       "vnet-dis-dev-001",
-		AKSVNetName:      "aks-vnet-dis-dev-001",
-		SubscriptionId:   "my-subscription-id",
-		TenantId:         "my-tenant-id",
-		AKSResourceGroup: "aks-vnet-rg",
+		ResourceGroup:      "rg-dis-dev-network",
+		DBVNetName:         "vnet-dis-dev-001",
+		AKSVNetName:        "aks-vnet-dis-dev-001",
+		SubscriptionId:     "my-subscription-id",
+		TenantId:           "my-tenant-id",
+		AKSResourceGroup:   "aks-vnet-rg",
+		UserProvisionImage: "controller:latest",
 	}
 	err = (&DatabaseReconciler{
 		Client:        k8sManager.GetClient(),
@@ -128,7 +136,12 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
-	cancel()
+	if testEnv == nil {
+		return
+	}
+	if cancel != nil {
+		cancel()
+	}
 	err := testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())
 })

@@ -241,3 +241,16 @@ patches:
 #     fieldPath: .metadata.name
 #   targets: # Do not remove or uncomment the following scaffold marker; required to generate code for target CRD.
 # +kubebuilder:scaffold:crdkustomizecainjectionname
+
+# Sync the controller image into the user-provision Job image env var.
+replacements:
+  - source:
+      kind: Deployment
+      name: controller-manager
+      fieldPath: spec.template.spec.containers.[name=manager].image
+    targets:
+      - select:
+          kind: Deployment
+          name: controller-manager
+        fieldPaths:
+          - spec.template.spec.containers.[name=manager].env.[name=DISPG_USER_PROVISION_IMAGE].value

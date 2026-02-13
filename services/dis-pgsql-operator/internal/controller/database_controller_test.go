@@ -12,6 +12,9 @@ import (
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -23,6 +26,32 @@ var _ = Describe("Database controller", func() {
 	)
 
 	const ns = "default"
+
+	newDatabaseForJob := func(name string, auth storagev1alpha1.DatabaseAuth) *storagev1alpha1.Database {
+		return &storagev1alpha1.Database{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: ns,
+			},
+			Spec: storagev1alpha1.DatabaseSpec{
+				Version:    17,
+				ServerType: "dev",
+				Auth:       auth,
+			},
+		}
+	}
+
+	waitForJob := func(ctx context.Context, name, namespace string) batchv1.Job {
+		var job batchv1.Job
+		Eventually(func() error {
+			return k8sClient.Get(ctx, types.NamespacedName{
+				Name:      name,
+				Namespace: namespace,
+			}, &job)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+		return job
+	}
 
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
@@ -42,8 +71,11 @@ var _ = Describe("Database controller", func() {
 				Version:    17,
 				ServerType: "dev",
 				Auth: storagev1alpha1.DatabaseAuth{
-					AdminAppIdentity: "my-admin-app-identity",
-					UserAppIdentity:  "my-app-identity",
+					AdminAppIdentity:        "my-admin-app-identity",
+					AdminAppPrincipalId:     "my-admin-app-identity-id",
+					AdminServiceAccountName: "my-admin-app-identity",
+					UserAppIdentity:         "my-app-identity",
+					UserAppPrincipalId:      "my-app-identity-id",
 				},
 			},
 		}
@@ -75,8 +107,11 @@ var _ = Describe("Database controller", func() {
 				Version:    17,
 				ServerType: "dev",
 				Auth: storagev1alpha1.DatabaseAuth{
-					AdminAppIdentity: "admin1",
-					UserAppIdentity:  "user1",
+					AdminAppIdentity:        "admin1",
+					AdminAppPrincipalId:     "admin1-id",
+					AdminServiceAccountName: "admin1",
+					UserAppIdentity:         "user1",
+					UserAppPrincipalId:      "user1-id",
 				},
 			},
 		}
@@ -115,8 +150,11 @@ var _ = Describe("Database controller", func() {
 				Version:    17,
 				ServerType: "dev",
 				Auth: storagev1alpha1.DatabaseAuth{
-					AdminAppIdentity: "admin2",
-					UserAppIdentity:  "user2",
+					AdminAppIdentity:        "admin2",
+					AdminAppPrincipalId:     "admin2-id",
+					AdminServiceAccountName: "admin2",
+					UserAppIdentity:         "user2",
+					UserAppPrincipalId:      "user2-id",
 				},
 			},
 		}
@@ -151,8 +189,11 @@ var _ = Describe("Database controller", func() {
 				Version:    17,
 				ServerType: "dev",
 				Auth: storagev1alpha1.DatabaseAuth{
-					AdminAppIdentity: "admin-mi",
-					UserAppIdentity:  "user-mi",
+					AdminAppIdentity:        "admin-mi",
+					AdminAppPrincipalId:     "admin-mi-id",
+					AdminServiceAccountName: "admin-mi",
+					UserAppIdentity:         "user-mi",
+					UserAppPrincipalId:      "user-mi-id",
 				},
 			},
 		}
@@ -195,8 +236,11 @@ var _ = Describe("Database controller", func() {
 				Version:    17,
 				ServerType: "dev",
 				Auth: storagev1alpha1.DatabaseAuth{
-					AdminAppIdentity: "admin-mi",
-					UserAppIdentity:  "user-mi",
+					AdminAppIdentity:        "admin-mi",
+					AdminAppPrincipalId:     "admin-mi-id",
+					AdminServiceAccountName: "admin-mi",
+					UserAppIdentity:         "user-mi",
+					UserAppPrincipalId:      "user-mi-id",
 				},
 			},
 		}
@@ -258,8 +302,11 @@ var _ = Describe("Database controller", func() {
 				Version:    17,
 				ServerType: "dev",
 				Auth: storagev1alpha1.DatabaseAuth{
-					AdminAppIdentity: "admin-mi",
-					UserAppIdentity:  "user-mi",
+					AdminAppIdentity:        "admin-mi",
+					AdminAppPrincipalId:     "admin-mi-id",
+					AdminServiceAccountName: "admin-mi",
+					UserAppIdentity:         "user-mi",
+					UserAppPrincipalId:      "user-mi-id",
 				},
 			},
 		}
@@ -317,8 +364,11 @@ var _ = Describe("Database controller", func() {
 				Version:    17,
 				ServerType: "dev",
 				Auth: storagev1alpha1.DatabaseAuth{
-					AdminAppIdentity: "admin-mi",
-					UserAppIdentity:  "user-mi",
+					AdminAppIdentity:        "admin-mi",
+					AdminAppPrincipalId:     "admin-mi-id",
+					AdminServiceAccountName: "admin-mi",
+					UserAppIdentity:         "user-mi",
+					UserAppPrincipalId:      "user-mi-id",
 				},
 				Storage: &storagev1alpha1.DatabaseStorageSpec{
 					SizeGB: &initialSize,
@@ -388,8 +438,11 @@ var _ = Describe("Database controller", func() {
 				Version:    17,
 				ServerType: "dev",
 				Auth: storagev1alpha1.DatabaseAuth{
-					AdminAppIdentity: "admin",
-					UserAppIdentity:  "user",
+					AdminAppIdentity:        "admin",
+					AdminAppPrincipalId:     "admin-id",
+					AdminServiceAccountName: "admin",
+					UserAppIdentity:         "user",
+					UserAppPrincipalId:      "user-id",
 				},
 			},
 		}
@@ -434,8 +487,11 @@ var _ = Describe("Database controller", func() {
 				Version:    17,
 				ServerType: "dev",
 				Auth: storagev1alpha1.DatabaseAuth{
-					AdminAppIdentity: "admin-old",
-					UserAppIdentity:  "user",
+					AdminAppIdentity:        "admin-old",
+					AdminAppPrincipalId:     "admin-old-id",
+					AdminServiceAccountName: "admin-old",
+					UserAppIdentity:         "user",
+					UserAppPrincipalId:      "user-id",
 				},
 			},
 		}
@@ -457,6 +513,7 @@ var _ = Describe("Database controller", func() {
 		var updated storagev1alpha1.Database
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
 		updated.Spec.Auth.AdminAppIdentity = "admin-new"
+		updated.Spec.Auth.AdminAppPrincipalId = "admin-new-id"
 		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
 
 		Eventually(func(g Gomega) struct {
@@ -481,9 +538,91 @@ var _ = Describe("Database controller", func() {
 				azureName     string
 				principalName string
 			}{
-				azureName:     "admin-new",
+				azureName:     "admin-new-id",
 				principalName: "admin-new",
 			}))
+	})
+
+	It("creates a Job to provision the normal database user", func() {
+		db := newDatabaseForJob("my-app-db-user-job", storagev1alpha1.DatabaseAuth{
+			AdminAppIdentity:        "admin-mi",
+			AdminAppPrincipalId:     "admin-mi-id",
+			AdminServiceAccountName: "admin-mi",
+			UserAppIdentity:         "user-mi",
+			UserAppPrincipalId:      "user-mi-id",
+		})
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		jobName := userProvisionJobName(db)
+
+		job := waitForJob(ctx, jobName, db.Namespace)
+
+		Expect(job.Labels["dis.altinn.cloud/database-name"]).To(Equal(db.Name))
+		Expect(job.Spec.Template.Labels["azure.workload.identity/use"]).To(Equal("true"))
+		Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(db.Spec.Auth.AdminServiceAccountName))
+		Expect(job.Spec.Template.Spec.RestartPolicy).To(Equal(corev1.RestartPolicyOnFailure))
+		Expect(job.Spec.Template.Spec.Containers).To(HaveLen(1))
+		Expect(job.Spec.Template.Spec.Containers[0].Args).To(ContainElement("--provision-user"))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: "DISPG_USER_APP_IDENTITY", Value: db.Spec.Auth.UserAppIdentity},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: "DISPG_USER_APP_PRINCIPAL_ID", Value: db.Spec.Auth.UserAppPrincipalId},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: "DISPG_ADMIN_APP_IDENTITY", Value: db.Spec.Auth.AdminAppIdentity},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: "DISPG_DATABASE_NAME", Value: db.Name},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: "DISPG_DB_SCHEMA", Value: db.Name},
+		))
+	})
+
+	It("recreates the user provisioning Job when the spec changes", func() {
+		db := newDatabaseForJob("my-app-db-user-job-update", storagev1alpha1.DatabaseAuth{
+			AdminAppIdentity:        "admin-mi",
+			AdminAppPrincipalId:     "admin-mi-id",
+			AdminServiceAccountName: "admin-mi",
+			UserAppIdentity:         "user-mi",
+			UserAppPrincipalId:      "user-mi-id",
+		})
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		oldJobName := userProvisionJobName(db)
+
+		waitForJob(ctx, oldJobName, db.Namespace)
+
+		var updated storagev1alpha1.Database
+		Expect(k8sClient.Get(ctx, types.NamespacedName{
+			Name:      db.Name,
+			Namespace: db.Namespace,
+		}, &updated)).To(Succeed())
+		updated.Spec.Auth.UserAppIdentity = "user-mi-2"
+		updated.Spec.Auth.UserAppPrincipalId = "user-mi-2-id"
+		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
+
+		newJobName := userProvisionJobName(&updated)
+		Expect(newJobName).NotTo(Equal(oldJobName))
+
+		waitForJob(ctx, newJobName, db.Namespace)
+
+		Eventually(func() error {
+			var job batchv1.Job
+			err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      oldJobName,
+				Namespace: db.Namespace,
+			}, &job)
+			if err == nil {
+				return fmt.Errorf("old job still exists")
+			}
+			if !apierrors.IsNotFound(err) {
+				return err
+			}
+			return nil
+		}).WithTimeout(30*time.Second).WithPolling(500*time.Millisecond).
+			Should(Succeed(), "expected old user-provisioning Job to be deleted")
 	})
 
 })

@@ -14,11 +14,17 @@ type OperatorConfig struct {
 	AKSResourceGroup string
 	SubscriptionId   string
 	TenantId         string
+
+	// UserProvisionImage is the image used for user provisioning Jobs.
+	UserProvisionImage string
+
+	// UseAzFakes toggles Azure fake servers (used for kind/local).
+	UseAzFakes bool
 }
 
 // NewOperatorConfig builds and validates the OperatorConfig from already-parsed
 // flag values. It does NOT read environment variables itself.
-func NewOperatorConfig(resourceGroup, dbVnetName, aksVnetName, subscriptionId, tenantId string, aksRG string) (*OperatorConfig, error) {
+func NewOperatorConfig(resourceGroup, dbVnetName, aksVnetName, subscriptionId, tenantId, aksRG, userProvisionImage string, useAzFakes bool) (*OperatorConfig, error) {
 	var missing []string
 
 	subscriptionId = strings.TrimSpace(subscriptionId)
@@ -26,6 +32,7 @@ func NewOperatorConfig(resourceGroup, dbVnetName, aksVnetName, subscriptionId, t
 	dbVnetName = strings.TrimSpace(dbVnetName)
 	aksVnetName = strings.TrimSpace(aksVnetName)
 	aksRG = strings.TrimSpace(aksRG)
+	userProvisionImage = strings.TrimSpace(userProvisionImage)
 
 	tenantId = strings.TrimSpace(tenantId)
 
@@ -47,16 +54,21 @@ func NewOperatorConfig(resourceGroup, dbVnetName, aksVnetName, subscriptionId, t
 	if aksRG == "" {
 		missing = append(missing, "aks-resource-group")
 	}
+	if userProvisionImage == "" {
+		missing = append(missing, "user-provision-image")
+	}
 
 	if len(missing) > 0 {
 		return nil, fmt.Errorf("missing required configuration: %s", strings.Join(missing, ", "))
 	}
 	return &OperatorConfig{
-		SubscriptionId:   subscriptionId,
-		ResourceGroup:    resourceGroup,
-		DBVNetName:       dbVnetName,
-		AKSVNetName:      aksVnetName,
-		AKSResourceGroup: aksRG,
-		TenantId:         tenantId,
+		SubscriptionId:     subscriptionId,
+		ResourceGroup:      resourceGroup,
+		DBVNetName:         dbVnetName,
+		AKSVNetName:        aksVnetName,
+		AKSResourceGroup:   aksRG,
+		TenantId:           tenantId,
+		UserProvisionImage: userProvisionImage,
+		UseAzFakes:         useAzFakes,
 	}, nil
 }

@@ -14,6 +14,7 @@ import (
 
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
+	batchv1 "k8s.io/api/batch/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -53,6 +54,10 @@ type DatabaseReconciler struct {
 // +kubebuilder:rbac:groups=network.azure.com,resources=privatednszones/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=network.azure.com,resources=privatednszonesvirtualnetworklinks,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=network.azure.com,resources=privatednszonesvirtualnetworklinks/status,verbs=get;update;patch
+
+// Jobs: user provisioning
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=batch,resources=jobs/status,verbs=get;update;patch
 
 func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("database", req.NamespacedName)
@@ -167,6 +172,12 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
+	// Normal DB user provisioning job
+	if err := r.ensureUserProvisionJob(ctx, logger, &db); err != nil {
+		logger.Error(err, "failed to ensure user provisioning job for database")
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -213,6 +224,7 @@ func (r *DatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&networkv1.PrivateDnsZonesVirtualNetworkLink{}).
 		Owns(&dbforpostgresqlv1.FlexibleServer{}).
 		Owns(&dbforpostgresqlv1.FlexibleServersAdministrator{}).
+		Owns(&batchv1.Job{}).
 		WithOptions(controller.Options{
 			// Force single-threaded reconciliation
 			MaxConcurrentReconciles: 1,

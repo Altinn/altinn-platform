@@ -44,18 +44,37 @@ spec:
                   this database.
                 properties:
                   adminAppIdentity:
-                    description: adminAppIdentity is the name of the AppIdentity that
+                    description: adminAppIdentity is the Entra principal name that
                       should have full admin access to the database.
                     minLength: 1
                     type: string
+                  adminAppPrincipalId:
+                    description: adminAppPrincipalId is the Entra principal object
+                      ID (GUID) for adminAppIdentity.
+                    minLength: 1
+                    type: string
+                  adminServiceAccountName:
+                    description: |-
+                      adminServiceAccountName is the ServiceAccount name used for workload identity
+                      when provisioning normal DB users for this database.
+                    minLength: 1
+                    type: string
                   userAppIdentity:
-                    description: userAppIdentity is the name of the AppIdentity that
+                    description: userAppIdentity is the Entra principal name that
                       should have non-admin access to the database.
+                    minLength: 1
+                    type: string
+                  userAppPrincipalId:
+                    description: userAppPrincipalId is the Entra principal object
+                      ID (GUID) for userAppIdentity.
                     minLength: 1
                     type: string
                 required:
                 - adminAppIdentity
+                - adminAppPrincipalId
+                - adminServiceAccountName
                 - userAppIdentity
+                - userAppPrincipalId
                 type: object
               serverType:
                 description: serverType selects the size/profile of the database server
