@@ -90,7 +90,9 @@ func TestEnsureUserCreatesRoleWhenMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new mock: %v", err)
 	}
-	defer mock.Close(context.Background())
+	defer func() {
+		_ = mock.Close(context.Background())
+	}()
 
 	mock.ExpectQuery("SELECT EXISTS \\(SELECT 1 FROM pg_roles WHERE rolname = \\$1\\)").
 		WithArgs("app-user").
@@ -120,7 +122,9 @@ func TestEnsureUserCreatesAADRoleWhenMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new mock: %v", err)
 	}
-	defer mock.Close(context.Background())
+	defer func() {
+		_ = mock.Close(context.Background())
+	}()
 
 	mock.ExpectQuery("SELECT EXISTS \\(SELECT 1 FROM pg_roles WHERE rolname = \\$1\\)").
 		WithArgs("app-user").
@@ -151,7 +155,9 @@ func TestEnsureUserSkipsCreateWhenExists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new mock: %v", err)
 	}
-	defer mock.Close(context.Background())
+	defer func() {
+		_ = mock.Close(context.Background())
+	}()
 
 	mock.ExpectQuery("SELECT EXISTS \\(SELECT 1 FROM pg_roles WHERE rolname = \\$1\\)").
 		WithArgs("app-user").

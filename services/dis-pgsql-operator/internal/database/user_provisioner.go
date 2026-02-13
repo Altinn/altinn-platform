@@ -99,7 +99,11 @@ func RunUserProvisioner(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("connect postgres: %w", err)
 	}
-	defer conn.Close(ctx)
+	defer func() {
+		if err := conn.Close(ctx); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "close postgres connection: %v\n", err)
+		}
+	}()
 
 	if err := ensureUser(ctx, conn, userAppIdentity, userAppPrincipalId, dbName, schemaName, !disableAAD); err != nil {
 		return err
