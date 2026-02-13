@@ -11,7 +11,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
@@ -20,6 +22,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
@@ -60,6 +63,9 @@ type DatabaseReconciler struct {
 // Jobs: user provisioning
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=batch,resources=jobs/status,verbs=get;update;patch
+
+// ApplicationIdentity (dis-application)
+// +kubebuilder:rbac:groups=application.dis.altinn.cloud,resources=applicationidentities,verbs=get;list;watch
 
 func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("database", req.NamespacedName)
@@ -168,8 +174,18 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
+	adminIdentity, requeue, err := r.resolveAdminIdentity(ctx, logger, &db)
+	if err != nil {
+		logger.Error(err, "failed to resolve admin identity")
+		return ctrl.Result{}, err
+	}
+	if requeue {
+		logger.Info("waiting for admin ApplicationIdentity to be ready")
+		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+	}
+
 	// Flexible Server admin
-	if err := r.ensureFlexibleServerAdministrator(ctx, logger, &db); err != nil {
+	if err := r.ensureFlexibleServerAdministrator(ctx, logger, &db, adminIdentity); err != nil {
 		logger.Error(err, "failed to ensure FlexibleServerAdministrator for database")
 		return ctrl.Result{}, err
 	}
@@ -186,8 +202,21 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 	}
 
+	userIdentity, requeue, err := r.resolveUserIdentity(ctx, logger, &db)
+	if err != nil {
+		logger.Error(err, "failed to resolve user identity")
+		return ctrl.Result{}, err
+	}
+	if requeue {
+		logger.Info("waiting for user ApplicationIdentity to be ready")
+		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+	}
+
 	// Normal DB user provisioning job
-	if err := r.ensureUserProvisionJob(ctx, logger, &db); err != nil {
+	if err := r.ensureUserProvisionJob(ctx, logger, &db, resolvedDatabaseAuth{
+		Admin: adminIdentity,
+		User:  userIdentity,
+	}); err != nil {
 		logger.Error(err, "failed to ensure user provisioning job for database")
 		return ctrl.Result{}, err
 	}
@@ -297,6 +326,13 @@ func readyConditionInfo(
 }
 
 func (r *DatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	appIdentity := &unstructured.Unstructured{}
+	appIdentity.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   applicationIdentityGroup,
+		Version: applicationIdentityVersion,
+		Kind:    applicationIdentityKind,
+	})
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&storagev1alpha1.Database{}).
 		Owns(&networkv1.PrivateDnsZone{}).
@@ -304,6 +340,7 @@ func (r *DatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&dbforpostgresqlv1.FlexibleServer{}).
 		Owns(&dbforpostgresqlv1.FlexibleServersAdministrator{}).
 		Owns(&batchv1.Job{}).
+		Watches(appIdentity, handler.EnqueueRequestsFromMapFunc(r.mapApplicationIdentityToDatabases)).
 		WithOptions(controller.Options{
 			// Force single-threaded reconciliation
 			MaxConcurrentReconciles: 1,

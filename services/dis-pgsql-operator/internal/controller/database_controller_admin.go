@@ -21,6 +21,7 @@ func (r *DatabaseReconciler) ensureFlexibleServerAdministrator(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
+	adminIdentity resolvedAdminIdentity,
 ) error {
 	ns := db.Namespace
 
@@ -39,13 +40,13 @@ func (r *DatabaseReconciler) ensureFlexibleServerAdministrator(
 
 	// adminAppPrincipalId is the Entra principal OBJECT ID (GUID).
 	// This is required by ASO for FlexibleServersAdministrator.
-	principalID := db.Spec.Auth.AdminAppPrincipalId
+	principalID := adminIdentity.PrincipalID
 	if principalID == "" {
-		return fmt.Errorf("spec.auth.adminAppPrincipalId must be set (Entra principal object id)")
+		return fmt.Errorf("resolved admin principal ID is empty")
 	}
-	principalName := db.Spec.Auth.AdminAppIdentity
+	principalName := adminIdentity.Name
 	if principalName == "" {
-		return fmt.Errorf("spec.auth.adminAppIdentity must be set (Entra principal name)")
+		return fmt.Errorf("resolved admin principal name is empty")
 	}
 	if r.Config.TenantId == "" {
 		return fmt.Errorf("TenantID is not configured")
