@@ -88,7 +88,9 @@ func (r *DatabaseReconciler) ensureUserProvisionJob(
 			hasCurrent = true
 			continue
 		}
-		if err := r.Delete(ctx, &job); err != nil && !apierrors.IsNotFound(err) {
+		if err := r.Delete(ctx, &job, &client.DeleteOptions{
+			PropagationPolicy: client.PropagationPolicy(metav1.DeletePropagationBackground),
+		}); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("delete outdated user provisioning Job %s/%s: %w", job.Namespace, job.Name, err)
 		}
 	}

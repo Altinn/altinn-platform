@@ -667,6 +667,11 @@ var _ = Describe("Database controller", func() {
 				Namespace: db.Namespace,
 			}, &job)
 			if err == nil {
+				// envtest doesn't run the Job controller, so deletion may hang on finalizers.
+				// Treat a deletion timestamp as "deleted" for test purposes.
+				if job.DeletionTimestamp != nil {
+					return nil
+				}
 				return fmt.Errorf("old job still exists")
 			}
 			if !apierrors.IsNotFound(err) {
