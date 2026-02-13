@@ -43,38 +43,94 @@ spec:
                 description: auth defines which AppIdentities should have access to
                   this database.
                 properties:
-                  adminAppIdentity:
-                    description: adminAppIdentity is the Entra principal name that
-                      should have full admin access to the database.
-                    minLength: 1
-                    type: string
-                  adminAppPrincipalId:
-                    description: adminAppPrincipalId is the Entra principal object
-                      ID (GUID) for adminAppIdentity.
-                    minLength: 1
-                    type: string
-                  adminServiceAccountName:
-                    description: |-
-                      adminServiceAccountName is the ServiceAccount name used for workload identity
-                      when provisioning normal DB users for this database.
-                    minLength: 1
-                    type: string
-                  userAppIdentity:
-                    description: userAppIdentity is the Entra principal name that
-                      should have non-admin access to the database.
-                    minLength: 1
-                    type: string
-                  userAppPrincipalId:
-                    description: userAppPrincipalId is the Entra principal object
-                      ID (GUID) for userAppIdentity.
-                    minLength: 1
-                    type: string
+                  admin:
+                    description: admin defines the identity used for admin access.
+                    properties:
+                      identity:
+                        description: identity defines the Entra identity source (direct
+                          values or ApplicationIdentity reference).
+                        properties:
+                          identityRef:
+                            description: identityRef points to an ApplicationIdentity
+                              in the same namespace.
+                            properties:
+                              name:
+                                description: name is the ApplicationIdentity name
+                                  in the same namespace.
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          name:
+                            description: name is the Entra principal name (managed
+                              identity name).
+                            minLength: 1
+                            type: string
+                          principalId:
+                            description: principalId is the Entra principal object
+                              ID (GUID).
+                            minLength: 1
+                            type: string
+                        type: object
+                        x-kubernetes-validations:
+                        - message: Provide either identityRef or both name and principalId.
+                          rule: (has(self.identityRef) && !has(self.name) && !has(self.principalId))
+                            || (!has(self.identityRef) && has(self.name) && has(self.principalId))
+                      serviceAccountName:
+                        description: |-
+                          serviceAccountName is the ServiceAccount name used for workload identity
+                          when provisioning normal DB users for this database.
+                          Optional when identityRef is set; defaults to identityRef.name.
+                        minLength: 1
+                        type: string
+                    required:
+                    - identity
+                    type: object
+                    x-kubernetes-validations:
+                    - message: serviceAccountName is required when identity.identityRef
+                        is not set.
+                      rule: has(self.identity.identityRef) || has(self.serviceAccountName)
+                  user:
+                    description: user defines the identity used for normal user access.
+                    properties:
+                      identity:
+                        description: identity defines the Entra identity source (direct
+                          values or ApplicationIdentity reference).
+                        properties:
+                          identityRef:
+                            description: identityRef points to an ApplicationIdentity
+                              in the same namespace.
+                            properties:
+                              name:
+                                description: name is the ApplicationIdentity name
+                                  in the same namespace.
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          name:
+                            description: name is the Entra principal name (managed
+                              identity name).
+                            minLength: 1
+                            type: string
+                          principalId:
+                            description: principalId is the Entra principal object
+                              ID (GUID).
+                            minLength: 1
+                            type: string
+                        type: object
+                        x-kubernetes-validations:
+                        - message: Provide either identityRef or both name and principalId.
+                          rule: (has(self.identityRef) && !has(self.name) && !has(self.principalId))
+                            || (!has(self.identityRef) && has(self.name) && has(self.principalId))
+                    required:
+                    - identity
+                    type: object
                 required:
-                - adminAppIdentity
-                - adminAppPrincipalId
-                - adminServiceAccountName
-                - userAppIdentity
-                - userAppPrincipalId
+                - admin
+                - user
                 type: object
               serverType:
                 description: serverType selects the size/profile of the database server
