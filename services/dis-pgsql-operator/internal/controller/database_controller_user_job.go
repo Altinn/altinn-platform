@@ -20,9 +20,9 @@ import (
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 )
 
-func userProvisionJobName(db *storagev1alpha1.Database) string {
-	hash := userProvisionSpecHash(db)
-	base := fmt.Sprintf("%s-user-provision", db.Name)
+func userProvisionJobName(dbName string, auth resolvedDatabaseAuth) string {
+	hash := userProvisionSpecHash(dbName, auth)
+	base := fmt.Sprintf("%s-user-provision", dbName)
 	maxBaseLen := max(63-1-len(hash), 1)
 	if len(base) > maxBaseLen {
 		base = strings.TrimRight(base[:maxBaseLen], "-")
@@ -33,13 +33,13 @@ func userProvisionJobName(db *storagev1alpha1.Database) string {
 	return fmt.Sprintf("%s-%s", base, hash)
 }
 
-func userProvisionSpecHash(db *storagev1alpha1.Database) string {
+func userProvisionSpecHash(dbName string, auth resolvedDatabaseAuth) string {
 	payload := fmt.Sprintf("adminSA=%s;admin=%s;user=%s;userPID=%s;db=%s",
-		db.Spec.Auth.AdminServiceAccountName,
-		db.Spec.Auth.AdminAppIdentity,
-		db.Spec.Auth.UserAppIdentity,
-		db.Spec.Auth.UserAppPrincipalId,
-		db.Name,
+		auth.Admin.ServiceAccountName,
+		auth.Admin.Name,
+		auth.User.Name,
+		auth.User.PrincipalID,
+		dbName,
 	)
 	sum := sha256.Sum256([]byte(payload))
 	return hex.EncodeToString(sum[:])[:8]
@@ -49,18 +49,19 @@ func (r *DatabaseReconciler) ensureUserProvisionJob(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
+	auth resolvedDatabaseAuth,
 ) error {
 	ns := db.Namespace
-	jobName := userProvisionJobName(db)
+	jobName := userProvisionJobName(db.Name, auth)
 
-	if db.Spec.Auth.AdminServiceAccountName == "" {
-		return fmt.Errorf("spec.auth.adminServiceAccountName must be set for user provisioning")
+	if auth.Admin.ServiceAccountName == "" {
+		return fmt.Errorf("admin serviceAccountName must be set for user provisioning")
 	}
-	if db.Spec.Auth.UserAppIdentity == "" {
-		return fmt.Errorf("spec.auth.userAppIdentity must be set for user provisioning")
+	if auth.User.Name == "" {
+		return fmt.Errorf("user identity name must be set for user provisioning")
 	}
-	if db.Spec.Auth.UserAppPrincipalId == "" {
-		return fmt.Errorf("spec.auth.userAppPrincipalId must be set for user provisioning")
+	if auth.User.PrincipalID == "" {
+		return fmt.Errorf("user principal ID must be set for user provisioning")
 	}
 
 	ttlSeconds := int32(300)
@@ -120,7 +121,7 @@ func (r *DatabaseReconciler) ensureUserProvisionJob(
 					Labels: podLabels,
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: db.Spec.Auth.AdminServiceAccountName,
+					ServiceAccountName: auth.Admin.ServiceAccountName,
 					RestartPolicy:      corev1.RestartPolicyOnFailure,
 					Containers: []corev1.Container{
 						{
@@ -130,15 +131,15 @@ func (r *DatabaseReconciler) ensureUserProvisionJob(
 							Env: []corev1.EnvVar{
 								{
 									Name:  "DISPG_USER_APP_IDENTITY",
-									Value: db.Spec.Auth.UserAppIdentity,
+									Value: auth.User.Name,
 								},
 								{
 									Name:  "DISPG_USER_APP_PRINCIPAL_ID",
-									Value: db.Spec.Auth.UserAppPrincipalId,
+									Value: auth.User.PrincipalID,
 								},
 								{
 									Name:  "DISPG_ADMIN_APP_IDENTITY",
-									Value: db.Spec.Auth.AdminAppIdentity,
+									Value: auth.Admin.Name,
 								},
 								{
 									Name:  "DISPG_DATABASE_NAME",
@@ -187,8 +188,8 @@ func (r *DatabaseReconciler) ensureUserProvisionJob(
 	logger.Info("creating user provisioning Job for database",
 		"jobName", jobName,
 		"namespace", ns,
-		"serviceAccount", db.Spec.Auth.AdminServiceAccountName,
-		"userIdentity", db.Spec.Auth.UserAppIdentity,
+		"serviceAccount", auth.Admin.ServiceAccountName,
+		"userIdentity", auth.User.Name,
 	)
 
 	if err := r.Create(ctx, job); err != nil {

@@ -1,0 +1,20 @@
+apiVersion: application.dis.altinn.cloud/v1alpha1
+kind: ApplicationIdentity
+metadata:
+  name: adminidentity
+  namespace: default
+spec: {}
+---
+apiVersion: application.dis.altinn.cloud/v1alpha1
+kind: ApplicationIdentity
+metadata:
+  name: useridentity
+  namespace: default
+spec: {}
+---
+apiVersion: application.dis.altinn.cloud/v1alpha1
+kind: ApplicationIdentity
+metadata:
+  name: useridentity2
+  namespace: default
+spec: {}
