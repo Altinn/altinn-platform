@@ -315,7 +315,7 @@ $(CONTROLLER_GEN): $(LOCALBIN)
 	$(call go-install-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen,$(CONTROLLER_TOOLS_VERSION))
 
 .PHONY: setup-envtest
-setup-envtest: aso-crds envtest ## Download the binaries required for ENVTEST in the local bin directory.
+setup-envtest: aso-crds dis-identity-crd envtest ## Download the binaries required for ENVTEST in the local bin directory.
 	@echo "Setting up envtest binaries for Kubernetes version $(ENVTEST_K8S_VERSION)..."
 	@"$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path || { \
 		echo "Error: Failed to set up envtest binaries for version $(ENVTEST_K8S_VERSION)."; \
@@ -353,7 +353,7 @@ $(shell go list -m -f '{{if .Replace}}{{.Replace.Version}}{{else}}{{.Version}}{{
 endef
 
 ASO_CRD_VERSION ?= v2.17.0
-DIS_IDENTITY_CRD_URL ?= https://raw.githubusercontent.com/Altinn/altinn-platform/refs/heads/main/services/dis-identity-operator/config/crd/bases/application.dis.altinn.cloud_applicationidentities.yaml
+DIS_IDENTITY_CRD_URL ?= https://raw.githubusercontent.com/Altinn/altinn-platform/main/services/dis-identity-operator/config/crd/bases/application.dis.altinn.cloud_applicationidentities.yaml
 DIS_IDENTITY_CRD_DIR ?= $(LOCALBIN)/dis-identity-crds
 DIS_IDENTITY_CRD_FILE ?= $(DIS_IDENTITY_CRD_DIR)/application.dis.altinn.cloud_applicationidentities.yaml
 
@@ -372,5 +372,5 @@ dis-identity-crd: ## Download the ApplicationIdentity CRD locally if necessary.
 	@if [ -f "$(DIS_IDENTITY_CRD_FILE)" ]; then \
 		echo "ApplicationIdentity CRD already present; skipping download."; \
 	else \
-		curl -sSL $(DIS_IDENTITY_CRD_URL) -o $(DIS_IDENTITY_CRD_FILE); \
+		curl -fsSL $(DIS_IDENTITY_CRD_URL) -o $(DIS_IDENTITY_CRD_FILE); \
 	fi
