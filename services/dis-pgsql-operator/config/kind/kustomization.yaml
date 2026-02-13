@@ -3,6 +3,8 @@ kind: Kustomization
 
 resources:
   - ../default
+  - serviceaccounts.yaml
+  - postgres.yaml
 
 patches:
   - path: manager_kind_patch.yaml

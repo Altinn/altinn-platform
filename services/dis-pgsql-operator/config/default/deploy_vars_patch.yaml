@@ -13,6 +13,8 @@
       value: ${DISPG_AKS_VNET_NAME}
     - name: DISPG_AKS_RESOURCE_GROUP
       value: ${DISPG_AKS_RESOURCE_GROUP}
+    - name: DISPG_USER_PROVISION_IMAGE
+      value: ${DISPG_USER_PROVISION_IMAGE}
 - op: add
   path: /spec/template/metadata/labels/azure.workload.identity~1use
   value: "true"

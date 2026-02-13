@@ -37,12 +37,15 @@ func (r *DatabaseReconciler) ensureFlexibleServerAdministrator(
 		}
 	}
 
-	// TODO: adminAppIdentity is the Entra principal OBJECT ID (GUID).
-	// As of now we can't pass just the name of a managed identity
-	// due to https://github.com/Azure/azure-service-operator/issues/5035
-	principalID := db.Spec.Auth.AdminAppIdentity
+	// adminAppPrincipalId is the Entra principal OBJECT ID (GUID).
+	// This is required by ASO for FlexibleServersAdministrator.
+	principalID := db.Spec.Auth.AdminAppPrincipalId
 	if principalID == "" {
-		return fmt.Errorf("spec.auth.adminAppIdentity must be set (Entra principal object id)")
+		return fmt.Errorf("spec.auth.adminAppPrincipalId must be set (Entra principal object id)")
+	}
+	principalName := db.Spec.Auth.AdminAppIdentity
+	if principalName == "" {
+		return fmt.Errorf("spec.auth.adminAppIdentity must be set (Entra principal name)")
 	}
 	if r.Config.TenantId == "" {
 		return fmt.Errorf("TenantID is not configured")
@@ -59,7 +62,7 @@ func (r *DatabaseReconciler) ensureFlexibleServerAdministrator(
 			Name: db.Name,
 		},
 
-		PrincipalName: to.Ptr(principalID),
+		PrincipalName: to.Ptr(principalName),
 		PrincipalType: &pt,
 		TenantId:      to.Ptr(r.Config.TenantId),
 	}

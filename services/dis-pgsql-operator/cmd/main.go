@@ -46,6 +46,7 @@ import (
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/controller"
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/network"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/test/azfakes"
 	// +kubebuilder:scaffold:imports
@@ -87,6 +88,8 @@ func main() {
 	var aksVnetName string
 	var aksResourceGroup string
 	var tenantID string
+	var userProvisionImage string
+	var provisionUser bool
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -105,6 +108,7 @@ func main() {
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.BoolVar(&useFakes, "use-az-fakes", false, "use Azure SDK fake servers (for local/kind)")
+	flag.BoolVar(&provisionUser, "provision-user", false, "run user provisioning job and exit")
 	flag.StringVar(
 		&subscriptionID,
 		"subscription-id",
@@ -141,6 +145,12 @@ func main() {
 		os.Getenv("DISPG_AKS_RESOURCE_GROUP"),
 		"Azure RG for AKS VNet (required)",
 	)
+	flag.StringVar(
+		&userProvisionImage,
+		"user-provision-image",
+		os.Getenv("DISPG_USER_PROVISION_IMAGE"),
+		"Image used for user provisioning Jobs (required)",
+	)
 
 	opts := zap.Options{
 		Development: true,
@@ -149,6 +159,15 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	if provisionUser {
+		if err := database.RunUserProvisioner(context.Background()); err != nil {
+			setupLog.Error(err, "user provisioner failed")
+			os.Exit(1)
+		}
+		setupLog.Info("user provisioner completed")
+		return
+	}
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -268,6 +287,8 @@ func main() {
 		subscriptionID,
 		tenantID,
 		aksResourceGroup,
+		userProvisionImage,
+		useFakes,
 	)
 	if err != nil {
 		setupLog.Error(err, "invalid operator configuration")

@@ -4,11 +4,14 @@ metadata:
   name: db1
   namespace: default
 spec:
-  version: 17
-  serverType: dev
+  version: 16
+  serverType: prod
   auth:
     adminAppIdentity: admin1
-    userAppIdentity: user1
+    adminAppPrincipalId: admin1-principal-id
+    adminServiceAccountName: admin1
+    userAppIdentity: user3
+    userAppPrincipalId: user3-principal-id
 ---
 apiVersion: storage.dis.altinn.cloud/v1alpha1
 kind: Database
@@ -20,7 +23,10 @@ spec:
   serverType: dev
   auth:
     adminAppIdentity: admin2
+    adminAppPrincipalId: admin2-principal-id
+    adminServiceAccountName: admin2
     userAppIdentity: user2
+    userAppPrincipalId: user2-principal-id
 ---
 apiVersion: storage.dis.altinn.cloud/v1alpha1
 kind: Database
@@ -32,7 +38,10 @@ spec:
   serverType: dev
   auth:
     adminAppIdentity: admin2
+    adminAppPrincipalId: admin2-principal-id
+    adminServiceAccountName: admin2
     userAppIdentity: user2
+    userAppPrincipalId: user2-principal-id
 ---
 apiVersion: storage.dis.altinn.cloud/v1alpha1
 kind: Database
@@ -44,4 +53,37 @@ spec:
   serverType: dev
   auth:
     adminAppIdentity: admin1
+    adminAppPrincipalId: admin1-principal-id
+    adminServiceAccountName: admin1
     userAppIdentity: user2
+    userAppPrincipalId: user2-principal-id
+# ---
+# apiVersion: storage.dis.altinn.cloud/v1alpha1
+# kind: Database
+# metadata:
+#   name: db6
+#   namespace: test
+# spec:
+#   version: 17
+#   serverType: dev
+#   auth:
+#     adminAppIdentity: 520c5076-2b03-4f08-b087-8860a662845c
+#     adminAppPrincipalId: 520c5076-2b03-4f08-b087-8860a662845c
+#     adminServiceAccountName: 520c5076-2b03-4f08-b087-8860a662845c
+#     userAppIdentity: user1
+#     userAppPrincipalId: 00000000-0000-0000-0000-000000000000
+# ---
+# apiVersion: storage.dis.altinn.cloud/v1alpha1
+# kind: Database
+# metadata:
+#   name: db9
+#   namespace: test
+# spec:
+#   version: 17
+#   serverType: dev
+#   auth:
+#     adminAppIdentity: 520c5076-2b03-4f08-b087-8860a662845c
+#     adminAppPrincipalId: 520c5076-2b03-4f08-b087-8860a662845c
+#     adminServiceAccountName: 520c5076-2b03-4f08-b087-8860a662845c
+#     userAppIdentity: user1
+#     userAppPrincipalId: 00000000-0000-0000-0000-000000000000

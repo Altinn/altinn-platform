@@ -6,14 +6,17 @@ import (
 	"fmt"
 	"time"
 
+	asoconditions "github.com/Azure/azure-service-operator/v2/pkg/genruntime/conditions"
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
+	batchv1 "k8s.io/api/batch/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -53,6 +56,10 @@ type DatabaseReconciler struct {
 // +kubebuilder:rbac:groups=network.azure.com,resources=privatednszones/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=network.azure.com,resources=privatednszonesvirtualnetworklinks,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=network.azure.com,resources=privatednszonesvirtualnetworklinks/status,verbs=get;update;patch
+
+// Jobs: user provisioning
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=batch,resources=jobs/status,verbs=get;update;patch
 
 func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("database", req.NamespacedName)
@@ -167,6 +174,24 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
+	if !r.Config.UseAzFakes {
+		ready, err := r.asoResourcesReady(ctx, logger, &db)
+		if err != nil {
+			logger.Error(err, "failed to check ASO readiness for database")
+			return ctrl.Result{}, err
+		}
+		if !ready {
+			logger.Info("waiting for ASO resources to be ready before provisioning user")
+			return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+		}
+	}
+
+	// Normal DB user provisioning job
+	if err := r.ensureUserProvisionJob(ctx, logger, &db); err != nil {
+		logger.Error(err, "failed to ensure user provisioning job for database")
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -206,6 +231,71 @@ func (r *DatabaseReconciler) allocateSubnetForDatabase(
 	return nil
 }
 
+func (r *DatabaseReconciler) asoResourcesReady(
+	ctx context.Context,
+	logger logr.Logger,
+	db *storagev1alpha1.Database,
+) (bool, error) {
+	ns := db.Namespace
+
+	serverName := db.Name
+	adminName := fmt.Sprintf("%s-admin", db.Name)
+
+	var server dbforpostgresqlv1.FlexibleServer
+	if err := r.Get(ctx, types.NamespacedName{Name: serverName, Namespace: ns}, &server); err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Info("FlexibleServer not found yet", "server", serverName)
+			return false, nil
+		}
+		return false, fmt.Errorf("get FlexibleServer %s/%s: %w", ns, serverName, err)
+	}
+
+	serverStatus, serverReason, serverMessage, serverReady := readyConditionInfo(server.Status.Conditions)
+	if !serverReady || serverStatus != metav1.ConditionTrue {
+		logger.Info("FlexibleServer not ready yet",
+			"server", serverName,
+			"status", serverStatus,
+			"reason", serverReason,
+			"message", serverMessage,
+		)
+		return false, nil
+	}
+
+	var admin dbforpostgresqlv1.FlexibleServersAdministrator
+	if err := r.Get(ctx, types.NamespacedName{Name: adminName, Namespace: ns}, &admin); err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Info("FlexibleServersAdministrator not found yet", "admin", adminName)
+			return false, nil
+		}
+		return false, fmt.Errorf("get FlexibleServersAdministrator %s/%s: %w", ns, adminName, err)
+	}
+
+	adminStatus, adminReason, adminMessage, adminReady := readyConditionInfo(admin.Status.Conditions)
+	if !adminReady || adminStatus != metav1.ConditionTrue {
+		logger.Info("FlexibleServersAdministrator not ready yet",
+			"admin", adminName,
+			"status", adminStatus,
+			"reason", adminReason,
+			"message", adminMessage,
+		)
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func readyConditionInfo(
+	conds []asoconditions.Condition,
+) (status metav1.ConditionStatus, reason, message string, ok bool) {
+	for i := range conds {
+		cond := conds[i]
+		if cond.Type == asoconditions.ConditionTypeReady {
+			return cond.Status, cond.Reason, cond.Message, true
+		}
+	}
+	return "", "", "", false
+}
+
 func (r *DatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&storagev1alpha1.Database{}).
@@ -213,6 +303,7 @@ func (r *DatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&networkv1.PrivateDnsZonesVirtualNetworkLink{}).
 		Owns(&dbforpostgresqlv1.FlexibleServer{}).
 		Owns(&dbforpostgresqlv1.FlexibleServersAdministrator{}).
+		Owns(&batchv1.Job{}).
 		WithOptions(controller.Options{
 			// Force single-threaded reconciliation
 			MaxConcurrentReconciles: 1,
