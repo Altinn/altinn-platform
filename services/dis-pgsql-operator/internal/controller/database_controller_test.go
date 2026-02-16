@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
@@ -17,8 +18,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -99,22 +98,18 @@ var _ = Describe("Database controller", func() {
 	}
 
 	createApplicationIdentity := func(ctx context.Context, name, namespace, managedName, principalID string) {
-		appIdentity := &unstructured.Unstructured{}
-		appIdentity.SetGroupVersionKind(schema.GroupVersionKind{
-			Group:   applicationIdentityGroup,
-			Version: applicationIdentityVersion,
-			Kind:    applicationIdentityKind,
-		})
-		appIdentity.SetName(name)
-		appIdentity.SetNamespace(namespace)
-		appIdentity.Object["spec"] = map[string]interface{}{}
-		Expect(k8sClient.Create(ctx, appIdentity)).To(Succeed())
-
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, appIdentity)).To(Succeed())
-		appIdentity.Object["status"] = map[string]interface{}{
-			"managedIdentityName": managedName,
-			"principalId":         principalID,
+		appIdentity := &identityv1alpha1.ApplicationIdentity{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			},
+			Spec: identityv1alpha1.ApplicationIdentitySpec{},
 		}
+		Expect(k8sClient.Create(ctx, appIdentity)).To(Succeed())
+		managed := managedName
+		principal := principalID
+		appIdentity.Status.ManagedIdentityName = &managed
+		appIdentity.Status.PrincipalID = &principal
 		Expect(k8sClient.Status().Update(ctx, appIdentity)).To(Succeed())
 	}
 
@@ -219,9 +214,9 @@ var _ = Describe("Database controller", func() {
 				Version:    17,
 				ServerType: "dev",
 				Auth: directAuth(
-					"admin1",
-					"admin1-id",
-					"admin1",
+					"adminidentity",
+					"adminidentity-id",
+					"adminidentity",
 					"user1",
 					"user1-id",
 				),
@@ -262,9 +257,9 @@ var _ = Describe("Database controller", func() {
 				Version:    17,
 				ServerType: "dev",
 				Auth: directAuth(
-					"admin2",
-					"admin2-id",
-					"admin2",
+					"adminidentity",
+					"adminidentity-id",
+					"adminidentity",
 					"user2",
 					"user2-id",
 				),

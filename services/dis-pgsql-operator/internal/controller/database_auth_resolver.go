@@ -5,19 +5,13 @@ import (
 	"fmt"
 	"strings"
 
+	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
-)
-
-const (
-	applicationIdentityGroup   = "application.dis.altinn.cloud"
-	applicationIdentityVersion = "v1alpha1"
-	applicationIdentityKind    = "ApplicationIdentity"
 )
 
 type resolvedIdentity struct {
@@ -84,14 +78,8 @@ func (r *DatabaseReconciler) resolveIdentitySource(
 			return resolvedIdentity{}, false, fmt.Errorf("spec.auth.%s.identity.identityRef.name must be set", role)
 		}
 
-		appIdentity := &unstructured.Unstructured{}
-		appIdentity.SetGroupVersionKind(schema.GroupVersionKind{
-			Group:   applicationIdentityGroup,
-			Version: applicationIdentityVersion,
-			Kind:    applicationIdentityKind,
-		})
-
-		if err := r.Get(ctx, types.NamespacedName{Name: refName, Namespace: db.Namespace}, appIdentity); err != nil {
+		var appIdentity identityv1alpha1.ApplicationIdentity
+		if err := r.Get(ctx, types.NamespacedName{Name: refName, Namespace: db.Namespace}, &appIdentity); err != nil {
 			if apierrors.IsNotFound(err) {
 				logger.Info("ApplicationIdentity not found yet", "role", role, "name", refName)
 				return resolvedIdentity{}, true, nil
@@ -99,26 +87,20 @@ func (r *DatabaseReconciler) resolveIdentitySource(
 			return resolvedIdentity{}, false, fmt.Errorf("get ApplicationIdentity %s/%s: %w", db.Namespace, refName, err)
 		}
 
-		ready, readyFound, err := applicationIdentityReady(appIdentity)
-		if err != nil {
-			return resolvedIdentity{}, false, err
-		}
+		ready, readyFound := applicationIdentityReady(&appIdentity)
 		if readyFound && !ready {
 			logger.Info("ApplicationIdentity not ready yet", "role", role, "name", refName)
 			return resolvedIdentity{}, true, nil
 		}
 
-		managedIdentityName, _, err := unstructured.NestedString(appIdentity.Object, "status", "managedIdentityName")
-		if err != nil {
-			return resolvedIdentity{}, false, fmt.Errorf("read ApplicationIdentity status.managedIdentityName: %w", err)
+		var managedIdentityName string
+		if appIdentity.Status.ManagedIdentityName != nil {
+			managedIdentityName = strings.TrimSpace(*appIdentity.Status.ManagedIdentityName)
 		}
-		principalID, _, err := unstructured.NestedString(appIdentity.Object, "status", "principalId")
-		if err != nil {
-			return resolvedIdentity{}, false, fmt.Errorf("read ApplicationIdentity status.principalId: %w", err)
+		var principalID string
+		if appIdentity.Status.PrincipalID != nil {
+			principalID = strings.TrimSpace(*appIdentity.Status.PrincipalID)
 		}
-
-		managedIdentityName = strings.TrimSpace(managedIdentityName)
-		principalID = strings.TrimSpace(principalID)
 		if managedIdentityName == "" || principalID == "" {
 			logger.Info("ApplicationIdentity status not populated yet", "role", role, "name", refName)
 			return resolvedIdentity{}, true, nil
@@ -142,25 +124,12 @@ func (r *DatabaseReconciler) resolveIdentitySource(
 	}, false, nil
 }
 
-func applicationIdentityReady(obj *unstructured.Unstructured) (bool, bool, error) {
-	conditions, found, err := unstructured.NestedSlice(obj.Object, "status", "conditions")
-	if err != nil {
-		return false, false, fmt.Errorf("read ApplicationIdentity status.conditions: %w", err)
-	}
-	if !found {
-		return false, false, nil
-	}
-	for _, cond := range conditions {
-		condMap, ok := cond.(map[string]any)
-		if !ok {
+func applicationIdentityReady(identity *identityv1alpha1.ApplicationIdentity) (bool, bool) {
+	for _, cond := range identity.Status.Conditions {
+		if cond.Type != string(identityv1alpha1.ConditionReady) {
 			continue
 		}
-		condType, _, _ := unstructured.NestedString(condMap, "type")
-		if condType != "Ready" {
-			continue
-		}
-		status, _, _ := unstructured.NestedString(condMap, "status")
-		return status == "True", true, nil
+		return cond.Status == metav1.ConditionTrue, true
 	}
-	return false, false, nil
+	return false, false
 }

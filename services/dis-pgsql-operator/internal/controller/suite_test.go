@@ -18,6 +18,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/network"
@@ -50,6 +51,8 @@ var _ = BeforeSuite(func() {
 	scheme := runtime.NewScheme()
 	var err error
 	err = storagev1alpha1.AddToScheme(scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = identityv1alpha1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = batchv1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())

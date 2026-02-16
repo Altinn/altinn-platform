@@ -175,7 +175,7 @@ seed-dis-identity-kind: ## Apply ApplicationIdentity stubs and patch status for 
 	kubectl apply -f config/kind/applicationidentities.yaml
 	kubectl patch applicationidentity adminidentity -n default \
 		--subresource=status --type=merge \
-		-p '{"status":{"managedIdentityName":"admin1","principalId":"admin1-principal-id"}}'
+		-p '{"status":{"managedIdentityName":"adminidentity","principalId":"adminidentity-principal-id"}}'
 	kubectl patch applicationidentity useridentity -n default \
 		--subresource=status --type=merge \
 		-p '{"status":{"managedIdentityName":"user1","principalId":"user1-principal-id"}}'

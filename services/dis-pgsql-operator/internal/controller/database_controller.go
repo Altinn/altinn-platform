@@ -6,14 +6,13 @@ import (
 	"fmt"
 	"time"
 
+	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	asoconditions "github.com/Azure/azure-service-operator/v2/pkg/genruntime/conditions"
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
@@ -326,13 +325,6 @@ func readyConditionInfo(
 }
 
 func (r *DatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	appIdentity := &unstructured.Unstructured{}
-	appIdentity.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   applicationIdentityGroup,
-		Version: applicationIdentityVersion,
-		Kind:    applicationIdentityKind,
-	})
-
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&storagev1alpha1.Database{}).
 		Owns(&networkv1.PrivateDnsZone{}).
@@ -340,7 +332,7 @@ func (r *DatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&dbforpostgresqlv1.FlexibleServer{}).
 		Owns(&dbforpostgresqlv1.FlexibleServersAdministrator{}).
 		Owns(&batchv1.Job{}).
-		Watches(appIdentity, handler.EnqueueRequestsFromMapFunc(r.mapApplicationIdentityToDatabases)).
+		Watches(&identityv1alpha1.ApplicationIdentity{}, handler.EnqueueRequestsFromMapFunc(r.mapApplicationIdentityToDatabases)).
 		WithOptions(controller.Options{
 			// Force single-threaded reconciliation
 			MaxConcurrentReconciles: 1,
