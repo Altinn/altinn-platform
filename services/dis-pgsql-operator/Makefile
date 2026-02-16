@@ -5,6 +5,7 @@ KIND_IMAGE_ARCHIVE := bin/dis-pgsql-operator_image.tar
 # Local Go cache settings for CI check runs
 CACHE_DIR ?= $(CURDIR)/.cache
 GOCACHE ?= $(CACHE_DIR)/go-build
+WORKSPACE_ROOT ?= $(abspath $(CURDIR)/../..)
 
 # Operator config test defaults
 WRITE_NAMESPACE ?= default
@@ -57,6 +58,21 @@ all: build
 .PHONY: help
 help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+.PHONY: workspace
+workspace: ## Create local go.work for dev across dis-pgsql-operator and dis-identity-operator (not committed).
+	@cd "$(WORKSPACE_ROOT)" && \
+	if [ -f go.work ]; then \
+		echo "go.work already exists; updating modules"; \
+		go work use ./services/dis-pgsql-operator ./services/dis-identity-operator; \
+	else \
+		go work init ./services/dis-pgsql-operator ./services/dis-identity-operator; \
+	fi
+	@echo "Local workspace at $(WORKSPACE_ROOT)/go.work (ignored by git)."
+
+.PHONY: workspace-clean
+workspace-clean: ## Remove local go.work/go.work.sum (dev only).
+	@rm -f "$(WORKSPACE_ROOT)/go.work" "$(WORKSPACE_ROOT)/go.work.sum"
 
 ##@ Cache
 

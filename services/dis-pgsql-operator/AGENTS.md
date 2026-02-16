@@ -10,6 +10,12 @@
 - Install deps / tools: follow `make help` and the `Makefile` toolchain (Go, controller-gen, kustomize).
 - List targets: `make help`
 
+## Local workspace (dev only)
+- To work across `dis-pgsql-operator` and `dis-identity-operator`, run `make workspace` (creates a local `go.work` at the repo root).
+- `go.work` and `go.work.sum` are gitignored and should not be committed.
+- To clean up, run `make workspace-clean`.
+- Avoid running `go work sync` on shared branches; it can update other modules' `go.mod`/`go.sum`.
+
 ## Common commands
 - Format: `make fmt-cache`
 - Lint: `make lint-cache`
