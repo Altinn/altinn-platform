@@ -1,5 +1,5 @@
 # Image URL to use all building/pushing image targets
-IMG ?= localhost/dis-pgsql-operator:e2e
+IMG ?= controller:latest
 KIND_IMAGE_ARCHIVE := bin/dis-pgsql-operator_image.tar
 
 # Local Go cache settings for CI check runs
@@ -73,6 +73,13 @@ workspace: ## Create local go.work for dev across dis-pgsql-operator and dis-ide
 .PHONY: workspace-clean
 workspace-clean: ## Remove local go.work/go.work.sum (dev only).
 	@rm -f "$(WORKSPACE_ROOT)/go.work" "$(WORKSPACE_ROOT)/go.work.sum"
+
+.PHONY: clean
+clean: restore-kustomize workspace-clean tidy test ## Clean local dev artifacts before pushing.
+
+.PHONY: tidy
+tidy: ## Run go mod tidy.
+	go mod tidy
 
 ##@ Cache
 
@@ -290,6 +297,10 @@ deploy-kind: manifests kustomize ## Deploy controller to a Kind cluster (IfNotPr
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" delete --ignore-not-found=$(ignore-not-found) -f -
+
+.PHONY: restore-kustomize
+restore-kustomize: ## Restore kustomize edits made by deploy/build targets.
+	git restore -- config/manager/kustomization.yaml
 
 ##@ Dependencies
 
