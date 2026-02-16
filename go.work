@@ -1,6 +1,6 @@
 go 1.24.6
 
 use (
-	./services/dis-pgsql-operator
 	./services/dis-identity-operator
+	./services/dis-pgsql-operator
 )
