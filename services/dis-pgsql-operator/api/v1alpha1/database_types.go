@@ -6,26 +6,56 @@ import (
 
 // DatabaseAuth contains the identities that should get access to the database.
 type DatabaseAuth struct {
-	// adminAppIdentity is the Entra principal name that should have full admin access to the database.
-	// +kubebuilder:validation:MinLength=1
-	AdminAppIdentity string `json:"adminAppIdentity"`
+	// admin defines the identity used for admin access.
+	Admin AdminIdentitySpec `json:"admin"`
 
-	// adminAppPrincipalId is the Entra principal object ID (GUID) for adminAppIdentity.
-	// +kubebuilder:validation:MinLength=1
-	AdminAppPrincipalId string `json:"adminAppPrincipalId"`
+	// user defines the identity used for normal user access.
+	User UserIdentitySpec `json:"user"`
+}
 
-	// adminServiceAccountName is the ServiceAccount name used for workload identity
+// +kubebuilder:validation:XValidation:rule="has(self.identity.identityRef) || has(self.serviceAccountName)",message="serviceAccountName is required when identity.identityRef is not set."
+// AdminIdentitySpec contains admin identity configuration and the workload identity ServiceAccount.
+type AdminIdentitySpec struct {
+	// identity defines the Entra identity source (direct values or ApplicationIdentity reference).
+	Identity IdentitySource `json:"identity"`
+
+	// serviceAccountName is the ServiceAccount name used for workload identity
 	// when provisioning normal DB users for this database.
+	// Optional when identityRef is set; defaults to identityRef.name.
+	// +optional
 	// +kubebuilder:validation:MinLength=1
-	AdminServiceAccountName string `json:"adminServiceAccountName"`
+	ServiceAccountName string `json:"serviceAccountName,omitempty"`
+}
 
-	// userAppIdentity is the Entra principal name that should have non-admin access to the database.
-	// +kubebuilder:validation:MinLength=1
-	UserAppIdentity string `json:"userAppIdentity"`
+// UserIdentitySpec contains identity configuration for normal user access.
+type UserIdentitySpec struct {
+	// identity defines the Entra identity source (direct values or ApplicationIdentity reference).
+	Identity IdentitySource `json:"identity"`
+}
 
-	// userAppPrincipalId is the Entra principal object ID (GUID) for userAppIdentity.
+// +kubebuilder:validation:XValidation:rule="(has(self.identityRef) && !has(self.name) && !has(self.principalId)) || (!has(self.identityRef) && has(self.name) && has(self.principalId))",message="Provide either identityRef or both name and principalId."
+// IdentitySource specifies either a reference to an ApplicationIdentity or direct identity values.
+type IdentitySource struct {
+	// identityRef points to an ApplicationIdentity in the same namespace.
+	// +optional
+	IdentityRef *ApplicationIdentityRef `json:"identityRef,omitempty"`
+
+	// name is the Entra principal name (managed identity name).
+	// +optional
 	// +kubebuilder:validation:MinLength=1
-	UserAppPrincipalId string `json:"userAppPrincipalId"`
+	Name string `json:"name,omitempty"`
+
+	// principalId is the Entra principal object ID (GUID).
+	// +optional
+	// +kubebuilder:validation:MinLength=1
+	PrincipalId string `json:"principalId,omitempty"`
+}
+
+// ApplicationIdentityRef references an ApplicationIdentity in the same namespace.
+type ApplicationIdentityRef struct {
+	// name is the ApplicationIdentity name in the same namespace.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
 }
 
 // DatabaseSpec defines the desired state of Database.

@@ -1,6 +1,11 @@
 # Image URL to use all building/pushing image targets
-IMG ?= localhost/dis-pgsql-operator:e2e
+IMG ?= controller:latest
 KIND_IMAGE_ARCHIVE := bin/dis-pgsql-operator_image.tar
+
+# Local Go cache settings for CI check runs
+CACHE_DIR ?= $(CURDIR)/.cache
+GOCACHE ?= $(CACHE_DIR)/go-build
+WORKSPACE_ROOT ?= $(abspath $(CURDIR)/../..)
 
 # Operator config test defaults
 WRITE_NAMESPACE ?= default
@@ -54,6 +59,43 @@ all: build
 help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
+.PHONY: workspace
+workspace: ## Create local go.work for dev across dis-pgsql-operator and dis-identity-operator (not committed).
+	@cd "$(WORKSPACE_ROOT)" && \
+	if [ -f go.work ]; then \
+		echo "go.work already exists; updating modules"; \
+		go work use ./services/dis-pgsql-operator ./services/dis-identity-operator; \
+	else \
+		go work init ./services/dis-pgsql-operator ./services/dis-identity-operator; \
+	fi
+	@echo "Local workspace at $(WORKSPACE_ROOT)/go.work (ignored by git)."
+
+.PHONY: workspace-clean
+workspace-clean: ## Remove local go.work/go.work.sum (dev only).
+	@rm -f "$(WORKSPACE_ROOT)/go.work" "$(WORKSPACE_ROOT)/go.work.sum"
+
+.PHONY: clean
+clean: restore-kustomize workspace-clean tidy test ## Clean local dev artifacts before pushing.
+
+.PHONY: tidy
+tidy: ## Run go mod tidy.
+	go mod tidy
+
+##@ Cache
+
+CACHE_TARGETS := run-checks-ci
+
+.PHONY: cache-setup
+cache-setup:
+	@mkdir -p "$(GOCACHE)"
+
+$(CACHE_TARGETS): export GOCACHE := $(GOCACHE)
+$(CACHE_TARGETS): cache-setup
+
+%-cache: export GOCACHE := $(GOCACHE)
+%-cache: cache-setup
+	$(MAKE) $*
+
 ##@ Development
 
 .PHONY: manifests
@@ -79,6 +121,13 @@ test: manifests generate fmt vet setup-envtest ## Run tests.
 .PHONY: test-ci
 test-ci: manifests generate fmt vet ## Run tests (envtest disabled).
 	DISPG_SKIP_ENVTEST=1 KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
+
+.PHONY: run-checks-ci
+run-checks-ci: ## Run CI checks with local Go caches.
+	$(MAKE) fmt
+	$(MAKE) generate
+	$(MAKE) manifests
+	$(MAKE) test-ci
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
@@ -106,11 +155,12 @@ test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expect
 	$(MAKE) cleanup-test-e2e
 
 .PHONY: test-e2e-kind
-test-e2e-kind: cleanup-test-e2e setup-test-e2e docker-build kind-load install install-aso-crds-kind deploy-kind
+test-e2e-kind: cleanup-test-e2e setup-test-e2e docker-build kind-load install install-aso-crds-kind install-dis-identity-crd-kind deploy-kind
 	kubectl apply -f config/samples/storage_v1alpha1_database.yaml
+	$(MAKE) seed-dis-identity-kind
 
 .PHONY: test-e2e-kind-ci
-test-e2e-kind-ci: cleanup-test-e2e setup-test-e2e manifests generate fmt vet install-aso-crds-kind ## Run the e2e tests on Kind and cleanup (CI).
+test-e2e-kind-ci: cleanup-test-e2e setup-test-e2e manifests generate fmt vet install-aso-crds-kind install-dis-identity-crd-kind ## Run the e2e tests on Kind and cleanup (CI).
 	CERT_MANAGER_INSTALL_SKIP=$(CERT_MANAGER_INSTALL_SKIP) KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
 	$(MAKE) cleanup-test-e2e
 
@@ -138,6 +188,24 @@ install-aso-crds-kind: aso-crds
 	kubectl patch crd flexibleserversadministrators.dbforpostgresql.azure.com \
 	--type='json' \
 	-p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'
+
+.PHONY: install-dis-identity-crd-kind
+install-dis-identity-crd-kind: dis-identity-crd
+	kubectl apply --server-side --force-conflicts -f $(DIS_IDENTITY_CRD_FILE)
+
+.PHONY: seed-dis-identity-kind
+seed-dis-identity-kind: ## Apply ApplicationIdentity stubs and patch status for Kind tests.
+	kubectl apply -f config/kind/applicationidentities.yaml
+	kubectl patch applicationidentity adminidentity -n default \
+		--subresource=status --type=merge \
+		-p '{"status":{"managedIdentityName":"adminidentity","principalId":"adminidentity-principal-id"}}'
+	kubectl patch applicationidentity useridentity -n default \
+		--subresource=status --type=merge \
+		-p '{"status":{"managedIdentityName":"user1","principalId":"user1-principal-id"}}'
+	kubectl patch applicationidentity useridentity2 -n default \
+		--subresource=status --type=merge \
+		-p '{"status":{"managedIdentityName":"user2","principalId":"user2-principal-id"}}'
+
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
 	"$(GOLANGCI_LINT)" run
@@ -230,6 +298,10 @@ deploy-kind: manifests kustomize ## Deploy controller to a Kind cluster (IfNotPr
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" delete --ignore-not-found=$(ignore-not-found) -f -
 
+.PHONY: restore-kustomize
+restore-kustomize: ## Restore kustomize edits made by deploy/build targets.
+	git restore -- config/manager/kustomization.yaml
+
 ##@ Dependencies
 
 ## Location to install dependencies to
@@ -271,7 +343,7 @@ $(CONTROLLER_GEN): $(LOCALBIN)
 	$(call go-install-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen,$(CONTROLLER_TOOLS_VERSION))
 
 .PHONY: setup-envtest
-setup-envtest: aso-crds envtest ## Download the binaries required for ENVTEST in the local bin directory.
+setup-envtest: aso-crds dis-identity-crd envtest ## Download the binaries required for ENVTEST in the local bin directory.
 	@echo "Setting up envtest binaries for Kubernetes version $(ENVTEST_K8S_VERSION)..."
 	@"$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path || { \
 		echo "Error: Failed to set up envtest binaries for version $(ENVTEST_K8S_VERSION)."; \
@@ -309,6 +381,9 @@ $(shell go list -m -f '{{if .Replace}}{{.Replace.Version}}{{else}}{{.Version}}{{
 endef
 
 ASO_CRD_VERSION ?= v2.17.0
+DIS_IDENTITY_CRD_URL ?= https://raw.githubusercontent.com/Altinn/altinn-platform/main/services/dis-identity-operator/config/crd/bases/application.dis.altinn.cloud_applicationidentities.yaml
+DIS_IDENTITY_CRD_DIR ?= $(LOCALBIN)/dis-identity-crds
+DIS_IDENTITY_CRD_FILE ?= $(DIS_IDENTITY_CRD_DIR)/application.dis.altinn.cloud_applicationidentities.yaml
 
 .PHONY: aso-crds
 aso-crds: ## Download the ASO CRDs locally if necessary.
@@ -317,4 +392,13 @@ aso-crds: ## Download the ASO CRDs locally if necessary.
 		echo "ASO CRDs already present; skipping download."; \
 	else \
 		curl -sSL https://github.com/Azure/azure-service-operator/releases/download/$(ASO_CRD_VERSION)/azureserviceoperator_customresourcedefinitions_$(ASO_CRD_VERSION).yaml -o $(LOCALBIN)/aso-crds/azureserviceoperator_customresourcedefinitions_$(ASO_CRD_VERSION).yaml; \
+	fi
+
+.PHONY: dis-identity-crd
+dis-identity-crd: ## Download the ApplicationIdentity CRD locally if necessary.
+	@mkdir -p $(DIS_IDENTITY_CRD_DIR)
+	@if [ -f "$(DIS_IDENTITY_CRD_FILE)" ]; then \
+		echo "ApplicationIdentity CRD already present; skipping download."; \
+	else \
+		curl -fsSL $(DIS_IDENTITY_CRD_URL) -o $(DIS_IDENTITY_CRD_FILE); \
 	fi

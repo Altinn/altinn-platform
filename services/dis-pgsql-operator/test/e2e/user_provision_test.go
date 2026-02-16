@@ -34,22 +34,53 @@ import (
 
 var _ = Describe("User provisioning", Ordered, func() {
 	const (
-		dbName          = "e2e-user-provision"
-		namespace       = "default"
-		adminIdentity   = "admin1"
-		adminPrincipal  = "admin1-principal-id"
-		userIdentity    = "user-e2e"
-		userPrincipalId = "user-e2e-principal-id"
+		dbName           = "e2e-user-provision"
+		namespace        = "default"
+		adminIdentityRef = "adminidentity"
+		adminIdentity    = "adminidentity"
+		adminPrincipal   = "adminidentity-principal-id"
+		userIdentityRef  = "useridentity"
+		userIdentity     = "user1"
+		userPrincipalId  = "user1-principal-id"
 	)
 
 	var manifestPath string
 
 	BeforeAll(func() {
-		manifestPath = writeDatabaseManifest(dbName, namespace, adminIdentity, adminPrincipal, userIdentity, userPrincipalId)
+		manifestPath = writeDatabaseManifest(
+			dbName,
+			namespace,
+			adminIdentityRef,
+			userIdentityRef,
+		)
 		By("creating a Database custom resource")
 		cmd := exec.Command("kubectl", "apply", "-f", manifestPath)
 		_, err := utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to apply Database manifest")
+
+		By("patching ApplicationIdentity status fields")
+		cmd = exec.Command(
+			"kubectl", "patch",
+			"applicationidentity", adminIdentityRef,
+			"-n", namespace,
+			"--subresource=status",
+			"--type=merge",
+			"-p", fmt.Sprintf(`{"status":{"managedIdentityName":"%s","principalId":"%s"}}`, adminIdentity, adminPrincipal),
+		)
+		_, err = utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed to patch admin ApplicationIdentity status")
+
+		cmd = exec.Command(
+			"kubectl", "patch",
+			"applicationidentity", userIdentityRef,
+			"-n", namespace,
+			"--subresource=status",
+			"--type=merge",
+			"-p", fmt.Sprintf(`{"status":{"managedIdentityName":"%s","principalId":"%s"}}`, userIdentity, userPrincipalId),
+		)
+		_, err = utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed to patch user ApplicationIdentity status")
+
 	})
 
 	AfterAll(func() {
@@ -94,8 +125,22 @@ var _ = Describe("User provisioning", Ordered, func() {
 	})
 })
 
-func writeDatabaseManifest(dbName, namespace, adminIdentity, adminPrincipalId, userIdentity, userPrincipalId string) string {
-	content := fmt.Sprintf(`apiVersion: storage.dis.altinn.cloud/v1alpha1
+func writeDatabaseManifest(dbName, namespace, adminIdentityRef, userIdentityRef string) string {
+	content := fmt.Sprintf(`apiVersion: application.dis.altinn.cloud/v1alpha1
+kind: ApplicationIdentity
+metadata:
+  name: %s
+  namespace: %s
+spec: {}
+---
+apiVersion: application.dis.altinn.cloud/v1alpha1
+kind: ApplicationIdentity
+metadata:
+  name: %s
+  namespace: %s
+spec: {}
+---
+apiVersion: storage.dis.altinn.cloud/v1alpha1
 kind: Database
 metadata:
   name: %s
@@ -104,12 +149,15 @@ spec:
   version: 17
   serverType: dev
   auth:
-    adminAppIdentity: %s
-    adminAppPrincipalId: %s
-    adminServiceAccountName: %s
-    userAppIdentity: %s
-    userAppPrincipalId: %s
-`, dbName, namespace, adminIdentity, adminPrincipalId, adminIdentity, userIdentity, userPrincipalId)
+    admin:
+      identity:
+        identityRef:
+          name: %s
+    user:
+      identity:
+        identityRef:
+          name: %s
+`, adminIdentityRef, namespace, userIdentityRef, namespace, dbName, namespace, adminIdentityRef, userIdentityRef)
 
 	dir := os.TempDir()
 	path := filepath.Join(dir, fmt.Sprintf("db-%s.yaml", dbName))

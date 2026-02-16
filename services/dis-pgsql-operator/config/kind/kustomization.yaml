@@ -5,6 +5,7 @@ resources:
   - ../default
   - serviceaccounts.yaml
   - postgres.yaml
+  - applicationidentities.yaml
 
 patches:
   - path: manager_kind_patch.yaml
