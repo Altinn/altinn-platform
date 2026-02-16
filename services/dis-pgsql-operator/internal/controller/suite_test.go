@@ -2,15 +2,21 @@ package controller
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	batchv1 "k8s.io/api/batch/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -64,15 +70,20 @@ var _ = BeforeSuite(func() {
 	// +kubebuilder:scaffold:scheme
 
 	By("bootstrapping test environment")
+	identityCRDPath := disIdentityCRDPath()
+	crdPaths := []string{
+		filepath.Join("..", "..", "config", "crd", "bases"),
+		filepath.Join("..", "..", "bin", "aso-crds"),
+	}
+	if identityCRDPath != "" {
+		crdPaths = append(crdPaths, identityCRDPath)
+	}
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths: []string{
-			filepath.Join("..", "..", "config", "crd", "bases"),
-			filepath.Join("..", "..", "bin", "aso-crds"),
-			filepath.Join("..", "..", "bin", "dis-identity-crds"),
-		},
+		CRDDirectoryPaths:     crdPaths,
 		Scheme:                scheme,
 		ErrorIfCRDPathMissing: true,
 	}
+	Expect(ensureApplicationIdentityCRD(testEnv.CRDDirectoryPaths)).To(Succeed())
 
 	// Retrieve the first found binary directory to allow running tests from IDEs
 	if getFirstFoundEnvTestBinaryDir() != "" {
@@ -164,4 +175,68 @@ func getFirstFoundEnvTestBinaryDir() string {
 		}
 	}
 	return ""
+}
+
+func disIdentityCRDPath() string {
+	monorepoPath := filepath.Join("..", "..", "..", "dis-identity-operator", "config", "crd", "bases")
+	if info, err := os.Stat(monorepoPath); err == nil && info.IsDir() {
+		return monorepoPath
+	}
+	downloadedPath := filepath.Join("..", "..", "bin", "dis-identity-crds")
+	if info, err := os.Stat(downloadedPath); err == nil && info.IsDir() {
+		return downloadedPath
+	}
+	return ""
+}
+
+func ensureApplicationIdentityCRD(paths []string) error {
+	const (
+		targetGroup = "application.dis.altinn.cloud"
+		targetKind  = "ApplicationIdentity"
+	)
+
+	for _, dir := range paths {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return fmt.Errorf("failed to read CRD directory %s: %w", dir, err)
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			ext := strings.ToLower(filepath.Ext(entry.Name()))
+			if ext != ".yaml" && ext != ".yml" {
+				continue
+			}
+			filePath := filepath.Join(dir, entry.Name())
+			file, err := os.Open(filePath)
+			if err != nil {
+				return fmt.Errorf("open CRD file %s: %w", filePath, err)
+			}
+			decoder := yaml.NewYAMLOrJSONDecoder(file, 4096)
+			for {
+				var crd apiextensionsv1.CustomResourceDefinition
+				if err := decoder.Decode(&crd); err != nil {
+					if errors.Is(err, io.EOF) {
+						break
+					}
+					_ = file.Close()
+					return fmt.Errorf("decode CRD file %s: %w", filePath, err)
+				}
+				if crd.Kind == "CustomResourceDefinition" &&
+					crd.Spec.Group == targetGroup &&
+					crd.Spec.Names.Kind == targetKind {
+					_ = file.Close()
+					return nil
+				}
+			}
+			_ = file.Close()
+		}
+	}
+
+	return fmt.Errorf(
+		"ApplicationIdentity CRD (%s/%s) not found; run `make setup-envtest` (or `make test`) to install it",
+		targetGroup,
+		targetKind,
+	)
 }

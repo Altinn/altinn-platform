@@ -182,6 +182,7 @@ seed-dis-identity-kind: ## Apply ApplicationIdentity stubs and patch status for 
 	kubectl patch applicationidentity useridentity2 -n default \
 		--subresource=status --type=merge \
 		-p '{"status":{"managedIdentityName":"user2","principalId":"user2-principal-id"}}'
+
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
 	"$(GOLANGCI_LINT)" run
