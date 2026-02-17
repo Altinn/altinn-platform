@@ -24,28 +24,27 @@ import (
 // The defaults for storage size and tier are also hardcoded
 // until we release the beta version.
 const (
-	defaultStorageGB   int32  = 32
-	defaultStorageTier string = "P10"
-	loc                       = "norwayeast"
+	defaultStorageGB int32 = 32
+	loc                    = "norwayeast"
 )
 
 // Reuse the defaults for now
 func desiredStorage(db *storagev1alpha1.Database) *dbforpostgresqlv1.Storage {
-
 	sizeGB := defaultStorageGB
-	tierStr := defaultStorageTier
 	autoGrow := dbforpostgresqlv1.Storage_AutoGrow_Enabled
+
+	var requestedTier *string
 
 	if db.Spec.Storage != nil {
 		if db.Spec.Storage.SizeGB != nil && *db.Spec.Storage.SizeGB > 0 {
 			sizeGB = *db.Spec.Storage.SizeGB
 		}
 		if db.Spec.Storage.Tier != nil && *db.Spec.Storage.Tier != "" {
-			tierStr = *db.Spec.Storage.Tier
+			requestedTier = db.Spec.Storage.Tier
 		}
 	}
 
-	asoTier := dbforpostgresqlv1.Storage_Tier(tierStr)
+	asoTier := dbUtil.ResolveStorageTier(sizeGB, requestedTier)
 
 	return &dbforpostgresqlv1.Storage{
 		AutoGrow:      &autoGrow,
