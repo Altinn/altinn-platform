@@ -37,6 +37,7 @@ rules:
   resources:
   - flexibleservers
   - flexibleserversadministrators
+  - flexibleserversconfigurations
   verbs:
   - create
   - delete
@@ -50,6 +51,7 @@ rules:
   resources:
   - flexibleservers/status
   - flexibleserversadministrators/status
+  - flexibleserversconfigurations/status
   verbs:
   - get
   - patch

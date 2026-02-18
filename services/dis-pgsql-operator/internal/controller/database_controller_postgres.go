@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -14,6 +13,7 @@ import (
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
+	k8sutil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/k8s"
 	to "github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	genruntime "github.com/Azure/azure-service-operator/v2/pkg/genruntime"
@@ -199,20 +199,8 @@ func (r *DatabaseReconciler) ensurePostgresServer(
 		return nil
 	}
 
-	updated := false
-	if !equality.Semantic.DeepEqual(existing.Spec, desiredSpec) {
-		existing.Spec = desiredSpec
-		updated = true
-	}
-	if existing.Labels == nil {
-		existing.Labels = map[string]string{}
-	}
-	for k, v := range desiredLabels {
-		if existing.Labels[k] != v {
-			existing.Labels[k] = v
-			updated = true
-		}
-	}
+	var updated bool
+	existing.Labels, updated = k8sutil.SyncSpecAndLabels(&existing.Spec, desiredSpec, existing.Labels, desiredLabels)
 	if updated {
 		logger.Info("updating PostgreSQL FlexibleServer to match Database",
 			"serverName", serverName,

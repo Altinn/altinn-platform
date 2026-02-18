@@ -48,6 +48,8 @@ type DatabaseReconciler struct {
 // ASO: PostgreSQL Flexible Server
 // +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleservers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleservers/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversconfigurations,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversconfigurations/status,verbs=get;update;patch
 
 // ASO: Flexible Server AAD administrator
 // +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversadministrators,verbs=get;list;watch;create;update;patch;delete
@@ -170,6 +172,11 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// PostgreSQL Flexible Server
 	if err := r.ensurePostgresServer(ctx, logger, &db, zoneNameForDatabase(&db)); err != nil {
 		logger.Error(err, "failed to ensure PostgreSQLFlexibleServer for database")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.ensurePostgresExtensionSettings(ctx, logger, &db); err != nil {
+		logger.Error(err, "failed to ensure PostgreSQL extension settings for database")
 		return ctrl.Result{}, err
 	}
 
@@ -330,6 +337,7 @@ func (r *DatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&networkv1.PrivateDnsZone{}).
 		Owns(&networkv1.PrivateDnsZonesVirtualNetworkLink{}).
 		Owns(&dbforpostgresqlv1.FlexibleServer{}).
+		Owns(&dbforpostgresqlv1.FlexibleServersConfiguration{}).
 		Owns(&dbforpostgresqlv1.FlexibleServersAdministrator{}).
 		Owns(&batchv1.Job{}).
 		Watches(&identityv1alpha1.ApplicationIdentity{}, handler.EnqueueRequestsFromMapFunc(r.mapApplicationIdentityToDatabases)).

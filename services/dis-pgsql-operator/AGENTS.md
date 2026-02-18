@@ -58,3 +58,8 @@ If you touch `api/**`:
 Before opening a PR, ensure:
 - Never run git push by yourself
 - Always suggest to create a new branch in case we are working on main by mistake
+
+## Code organization
+- internal/controller should only contain high level code that reflects the controller duties and operation, all other code needs to go in another pkg, e.g see internal/pkg, internal/database for reference
+- Tests for internal/controller code must go in database_controller_test.go (gingko), and these are aimed for high level testing of capabilities
+- All remaining tests (pkgs that aren't controller) should follow the standard unit test go practice, ie. mycode.go + mycode_test.go
