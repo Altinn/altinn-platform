@@ -8,6 +8,9 @@ import (
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 )
 
+// We are following the docs here:
+// https://github.com/MicrosoftDocs/azure-databases-docs/blob/main/articles/postgresql/extensions/includes/extensions-table.md
+
 // Here for getting better reconcile error messages
 // before we send a bad parameter to ASO/Azure
 var allowedDatabaseExtensions = map[storagev1alpha1.DatabaseExtension]struct{}{
