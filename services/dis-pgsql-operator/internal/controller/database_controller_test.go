@@ -535,6 +535,48 @@ var _ = Describe("Database controller", func() {
 			}))
 	})
 
+	It("clamps storage tier to the max supported for the requested size", func() {
+		size := int32(32)
+		requestedTier := "P80"
+		expectedTier := "P50"
+
+		db := &storagev1alpha1.Database{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-app-db-psql-tier-clamp",
+				Namespace: "default",
+			},
+			Spec: storagev1alpha1.DatabaseSpec{
+				Version:    17,
+				ServerType: "dev",
+				Auth: directAuth(
+					"admin-mi",
+					"admin-mi-id",
+					"admin-mi",
+					"user-mi",
+					"user-mi-id",
+				),
+				Storage: &storagev1alpha1.DatabaseStorageSpec{
+					SizeGB: &size,
+					Tier:   &requestedTier,
+				},
+			},
+		}
+
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		Eventually(func(g Gomega) string {
+			var s dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &s)).To(Succeed())
+			g.Expect(s.Spec.Storage).NotTo(BeNil())
+			g.Expect(s.Spec.Storage.Tier).NotTo(BeNil())
+			return string(*s.Spec.Storage.Tier)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(expectedTier))
+	})
+
 	It("creates a FlexibleServersAdministrator for the Database", func() {
 		db := &storagev1alpha1.Database{
 			ObjectMeta: metav1.ObjectMeta{
@@ -746,6 +788,62 @@ var _ = Describe("Database controller", func() {
 			return nil
 		}).WithTimeout(30*time.Second).WithPolling(500*time.Millisecond).
 			Should(Succeed(), "expected old user-provisioning Job to be deleted")
+	})
+
+	It("recreates the user provisioning Job when the current Job is failed", func() {
+		db := newDatabaseForJob("my-app-db-user-job-failed", directAuth(
+			"admin-mi",
+			"admin-mi-id",
+			"admin-mi",
+			"user-mi",
+			"user-mi-id",
+		))
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		markASOReady(ctx, db)
+
+		oldJob := waitForProvisionJob(ctx, db.Name, db.Namespace)
+		oldUID := oldJob.UID
+
+		Eventually(func() error {
+			var failedJob batchv1.Job
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      oldJob.Name,
+				Namespace: db.Namespace,
+			}, &failedJob); err != nil {
+				return err
+			}
+			now := metav1.Now()
+			failedJob.Status.StartTime = &now
+			failedJob.Status.CompletionTime = nil
+			failedJob.Status.Failed = 1
+			failedJob.Status.Conditions = []batchv1.JobCondition{
+				{
+					Type:               batchv1.JobFailureTarget,
+					Status:             corev1.ConditionTrue,
+					Reason:             "BackoffLimitExceeded",
+					LastTransitionTime: now,
+				},
+				{
+					Type:               batchv1.JobFailed,
+					Status:             corev1.ConditionTrue,
+					Reason:             "BackoffLimitExceeded",
+					LastTransitionTime: now,
+				},
+			}
+			return k8sClient.Status().Update(ctx, &failedJob)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func(g Gomega) types.UID {
+			var recreatedJob batchv1.Job
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      oldJob.Name,
+				Namespace: db.Namespace,
+			}, &recreatedJob)).To(Succeed())
+			return recreatedJob.UID
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			ShouldNot(Equal(oldUID))
 	})
 
 	It("resolves ApplicationIdentity references for admin and user", func() {

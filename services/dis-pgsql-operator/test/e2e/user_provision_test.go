@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -47,6 +48,9 @@ var _ = Describe("User provisioning", Ordered, func() {
 	var manifestPath string
 
 	BeforeAll(func() {
+		By("cleaning up stale Database and Job resources from previous runs")
+		deleteDatabaseAndProvisionJobs(dbName, namespace)
+
 		manifestPath = writeDatabaseManifest(
 			dbName,
 			namespace,
@@ -95,16 +99,20 @@ var _ = Describe("User provisioning", Ordered, func() {
 
 	It("provisions the user and schema in Postgres", func() {
 		By("waiting for the user provisioning job to complete")
-		cmd := exec.Command(
-			"kubectl", "wait",
-			"--for=condition=complete",
-			"job",
-			"-l", fmt.Sprintf("dis.altinn.cloud/database-name=%s,dis.altinn.cloud/user-provision=true", dbName),
-			"-n", namespace,
-			"--timeout=5m",
-		)
-		_, err := utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "User provisioning job did not complete")
+		labelSelector := fmt.Sprintf("dis.altinn.cloud/database-name=%s,dis.altinn.cloud/user-provision=true", dbName)
+		Eventually(func() error {
+			cmd := exec.Command(
+				"kubectl", "wait",
+				"--for=condition=complete",
+				"job",
+				"-l", labelSelector,
+				"-n", namespace,
+				"--timeout=20s",
+			)
+			_, err := utils.Run(cmd)
+			return err
+		}).WithTimeout(5*time.Minute).WithPolling(2*time.Second).
+			Should(Succeed(), "User provisioning job did not complete")
 
 		By("verifying the role exists in Postgres")
 		output := runPostgresQuery("SELECT 1 FROM pg_roles WHERE rolname = '" + userIdentity + "';")
@@ -116,12 +124,48 @@ var _ = Describe("User provisioning", Ordered, func() {
 
 		By("verifying the user can create tables in its schema")
 		tableName := fmt.Sprintf("%s.e2e_check", quoteIdentifier(dbName))
-		_, err = runPostgresQueryAsUser(userIdentity, fmt.Sprintf(
+		_, err := runPostgresQueryAsUser(userIdentity, fmt.Sprintf(
 			"CREATE TABLE %s (id int); DROP TABLE %s;",
 			tableName,
 			tableName,
 		))
 		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("applies storage settings to the FlexibleServer", func() {
+		By("verifying the FlexibleServer storage size and tier")
+		Eventually(func(g Gomega) struct {
+			size string
+			tier string
+		} {
+			cmd := exec.Command(
+				"kubectl", "get",
+				"flexibleservers.dbforpostgresql.azure.com",
+				dbName,
+				"-n", namespace,
+				"-o", "jsonpath={.spec.storage.storageSizeGB},{.spec.storage.tier}",
+			)
+			output, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			parts := strings.Split(strings.TrimSpace(output), ",")
+			g.Expect(parts).To(HaveLen(2))
+
+			return struct {
+				size string
+				tier string
+			}{
+				size: parts[0],
+				tier: parts[1],
+			}
+		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).
+			Should(Equal(struct {
+				size string
+				tier string
+			}{
+				size: "32",
+				tier: "P50",
+			}))
 	})
 })
 
@@ -148,6 +192,9 @@ metadata:
 spec:
   version: 17
   serverType: dev
+  storage:
+    sizeGB: 32
+    tier: P80
   auth:
     admin:
       identity:
@@ -190,4 +237,41 @@ func runPostgresQueryAsUser(user, query string) (string, error) {
 func quoteIdentifier(value string) string {
 	escaped := strings.ReplaceAll(value, `"`, `""`)
 	return `"` + escaped + `"`
+}
+
+func deleteDatabaseAndProvisionJobs(dbName, namespace string) {
+	cmd := exec.Command(
+		"kubectl", "delete",
+		"databases.storage.dis.altinn.cloud",
+		dbName,
+		"-n", namespace,
+		"--ignore-not-found=true",
+	)
+	_, _ = utils.Run(cmd)
+
+	labelSelector := fmt.Sprintf("dis.altinn.cloud/database-name=%s,dis.altinn.cloud/user-provision=true", dbName)
+	cmd = exec.Command(
+		"kubectl", "delete",
+		"job",
+		"-l", labelSelector,
+		"-n", namespace,
+		"--ignore-not-found=true",
+	)
+	_, _ = utils.Run(cmd)
+
+	Eventually(func() string {
+		cmd = exec.Command(
+			"kubectl", "get",
+			"job",
+			"-l", labelSelector,
+			"-n", namespace,
+			"-o", "name",
+		)
+		output, err := utils.Run(cmd)
+		if err != nil {
+			return "error"
+		}
+		return strings.TrimSpace(output)
+	}).WithTimeout(30 * time.Second).WithPolling(2 * time.Second).
+		Should(BeEmpty())
 }

@@ -83,9 +83,24 @@ func (r *DatabaseReconciler) ensureUserProvisionJob(
 	}
 
 	hasCurrent := false
+	deletedCurrent := false
 	for i := range jobs.Items {
 		job := jobs.Items[i]
 		if job.Name == jobName {
+			if jobConditionTrue(&job, batchv1.JobFailed) {
+				policy := metav1.DeletePropagationBackground
+				if err := r.Delete(ctx, &job, &client.DeleteOptions{
+					PropagationPolicy: &policy,
+				}); err != nil && !apierrors.IsNotFound(err) {
+					return fmt.Errorf("delete failed user provisioning Job %s/%s: %w", job.Namespace, job.Name, err)
+				}
+				logger.Info("deleting failed user provisioning Job for database",
+					"jobName", job.Name,
+					"namespace", job.Namespace,
+				)
+				deletedCurrent = true
+				continue
+			}
 			hasCurrent = true
 			continue
 		}
@@ -97,7 +112,7 @@ func (r *DatabaseReconciler) ensureUserProvisionJob(
 		}
 	}
 
-	if hasCurrent {
+	if hasCurrent || deletedCurrent {
 		return nil
 	}
 
@@ -200,4 +215,13 @@ func (r *DatabaseReconciler) ensureUserProvisionJob(
 	}
 
 	return nil
+}
+
+func jobConditionTrue(job *batchv1.Job, conditionType batchv1.JobConditionType) bool {
+	for _, condition := range job.Status.Conditions {
+		if condition.Type == conditionType && condition.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
 }

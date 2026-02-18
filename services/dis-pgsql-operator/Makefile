@@ -1,5 +1,5 @@
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= localhost/controller:latest
 KIND_IMAGE_ARCHIVE := bin/dis-pgsql-operator_image.tar
 
 # Local Go cache settings for CI check runs
