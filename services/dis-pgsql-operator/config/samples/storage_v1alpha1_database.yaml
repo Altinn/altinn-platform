@@ -27,6 +27,9 @@ metadata:
 spec:
   version: 17
   serverType: dev
+  enableExtensions:
+    - hstore
+    - pg_cron
   storage:
     sizeGB: 32
     tier: P10

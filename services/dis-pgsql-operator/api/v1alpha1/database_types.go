@@ -58,6 +58,18 @@ type ApplicationIdentityRef struct {
 	Name string `json:"name"`
 }
 
+// +kubebuilder:validation:Enum=hstore;pg_cron;pg_stat_statements;pgaudit;uuid-ossp
+// DatabaseExtension is a curated PostgreSQL extension allowed by this operator.
+type DatabaseExtension string
+
+const (
+	DatabaseExtensionHstore           DatabaseExtension = "hstore"
+	DatabaseExtensionPgCron           DatabaseExtension = "pg_cron"
+	DatabaseExtensionPgStatStatements DatabaseExtension = "pg_stat_statements"
+	DatabaseExtensionPgAudit          DatabaseExtension = "pgaudit"
+	DatabaseExtensionUUIDOSSP         DatabaseExtension = "uuid-ossp"
+)
+
 // DatabaseSpec defines the desired state of Database.
 type DatabaseSpec struct {
 	// version is the major version of PostgreSQL to run (e.g. 17).
@@ -70,6 +82,12 @@ type DatabaseSpec struct {
 
 	// auth defines which AppIdentities should have access to this database.
 	Auth DatabaseAuth `json:"auth"`
+
+	// enableExtensions is the curated list of PostgreSQL extensions that should be enabled.
+	// Some extensions require shared_preload_libraries and are configured automatically.
+	// +optional
+	// +listType=set
+	EnableExtensions []DatabaseExtension `json:"enableExtensions,omitempty"`
 
 	// +optional
 	Storage *DatabaseStorageSpec `json:"storage,omitempty"`

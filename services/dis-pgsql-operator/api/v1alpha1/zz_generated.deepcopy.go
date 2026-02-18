@@ -136,6 +136,11 @@ func (in *DatabaseList) DeepCopyObject() runtime.Object {
 func (in *DatabaseSpec) DeepCopyInto(out *DatabaseSpec) {
 	*out = *in
 	in.Auth.DeepCopyInto(&out.Auth)
+	if in.EnableExtensions != nil {
+		in, out := &in.EnableExtensions, &out.EnableExtensions
+		*out = make([]DatabaseExtension, len(*in))
+		copy(*out, *in)
+	}
 	if in.Storage != nil {
 		in, out := &in.Storage, &out.Storage
 		*out = new(DatabaseStorageSpec)

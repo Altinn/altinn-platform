@@ -132,6 +132,22 @@ spec:
                 - admin
                 - user
                 type: object
+              enableExtensions:
+                description: |-
+                  enableExtensions is the curated list of PostgreSQL extensions that should be enabled.
+                  Some extensions require shared_preload_libraries and are configured automatically.
+                items:
+                  description: DatabaseExtension is a curated PostgreSQL extension
+                    allowed by this operator.
+                  enum:
+                  - hstore
+                  - pg_cron
+                  - pg_stat_statements
+                  - pgaudit
+                  - uuid-ossp
+                  type: string
+                type: array
+                x-kubernetes-list-type: set
               serverType:
                 description: serverType selects the size/profile of the database server
                   (e.g. "dev", "prod").
