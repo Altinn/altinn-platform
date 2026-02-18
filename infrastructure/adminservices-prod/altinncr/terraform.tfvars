@@ -88,6 +88,14 @@ acr_push_object_ids = [
   {
     object_id = "99357379-c461-45bc-b9e7-6a2a51ccdac0" # SP: Github: altinn/altinn-studio prod
     type      = "ServicePrincipal"
+  },
+  {
+    object_id = "84805870-1289-4375-9ff7-37cf82fb1419" # SP: Github: altinn/dialogporten dev
+    type      = "ServicePrincipal"
+  },
+  {
+    object_id = "63ce00c5-c637-4a33-98fa-2cd180e47020" # SP: Github: altinn/dialogporten prod
+    type      = "ServicePrincipal"
   }
 ]
 
