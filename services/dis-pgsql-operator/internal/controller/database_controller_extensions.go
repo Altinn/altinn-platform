@@ -8,7 +8,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
@@ -81,19 +80,39 @@ func (r *DatabaseReconciler) clearOwnedManagedExtensionConfigurations(
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
 ) error {
-	var configurations dbforpostgresqlv1.FlexibleServersConfigurationList
-	if err := r.List(ctx, &configurations, client.InNamespace(db.Namespace)); err != nil {
-		return fmt.Errorf("list FlexibleServersConfiguration in namespace %q: %w", db.Namespace, err)
+	// Reconcile only the two extension configs this controller owns, identified by
+	// deterministic names derived from the Database name. We intentionally do not
+	// iterate all FlexibleServersConfiguration objects in the namespace.
+	candidates := []struct {
+		resourceName  string
+		parameterName string
+	}{
+		{
+			resourceName:  extensionsConfigResourceName(db.Name),
+			parameterName: azureExtensionsConfigName,
+		},
+		{
+			resourceName:  sharedPreloadLibrariesConfigResourceName(db.Name),
+			parameterName: sharedPreloadLibrariesConfigName,
+		},
 	}
 
-	for i := range configurations.Items {
-		configuration := &configurations.Items[i]
-		if !metav1.IsControlledBy(configuration, db) {
-			continue
+	for _, candidate := range candidates {
+		key := types.NamespacedName{Name: candidate.resourceName, Namespace: db.Namespace}
+		var configuration dbforpostgresqlv1.FlexibleServersConfiguration
+		if err := r.Get(ctx, key, &configuration); err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			return fmt.Errorf("get FlexibleServersConfiguration %s/%s: %w", db.Namespace, candidate.resourceName, err)
 		}
 
-		parameterName, managed := managedExtensionParameterName(configuration, db.Name)
-		if !managed {
+		if !metav1.IsControlledBy(&configuration, db) {
+			logger.Info(
+				"skipping extension configuration that is not controlled by Database",
+				"configurationName", candidate.resourceName,
+				"namespace", db.Namespace,
+			)
 			continue
 		}
 
@@ -101,39 +120,20 @@ func (r *DatabaseReconciler) clearOwnedManagedExtensionConfigurations(
 			ctx,
 			logger,
 			db,
-			configuration,
-			parameterName,
+			&configuration,
+			candidate.parameterName,
 			"",
 		); err != nil {
 			return fmt.Errorf(
 				"clear managed extension configuration %s/%s: %w",
 				db.Namespace,
-				configuration.Name,
+				candidate.resourceName,
 				err,
 			)
 		}
 	}
 
 	return nil
-}
-
-func managedExtensionParameterName(
-	configuration *dbforpostgresqlv1.FlexibleServersConfiguration,
-	dbName string,
-) (string, bool) {
-	switch configuration.Spec.AzureName {
-	case azureExtensionsConfigName, sharedPreloadLibrariesConfigName:
-		return configuration.Spec.AzureName, true
-	}
-
-	switch configuration.Name {
-	case extensionsConfigResourceName(dbName):
-		return azureExtensionsConfigName, true
-	case sharedPreloadLibrariesConfigResourceName(dbName):
-		return sharedPreloadLibrariesConfigName, true
-	default:
-		return "", false
-	}
 }
 
 func (r *DatabaseReconciler) ensureFlexibleServerConfiguration(

@@ -100,25 +100,9 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sManager).NotTo(BeNil())
 
-	// Build a fixed subnet catalog for tests
-	testCatalog, err := network.NewSubnetCatalog([]network.SubnetInfo{
-		{Name: "s1", CIDR: "10.100.1.0/28"},
-		{Name: "s2", CIDR: "10.100.1.16/28"},
-		{Name: "s3", CIDR: "10.100.1.32/28"},
-		{Name: "s4", CIDR: "10.100.1.48/28"},
-		{Name: "s5", CIDR: "10.100.1.64/28"},
-		{Name: "s6", CIDR: "10.100.1.80/28"},
-		{Name: "s7", CIDR: "10.100.1.96/28"},
-		{Name: "s8", CIDR: "10.100.1.112/28"},
-		{Name: "s9", CIDR: "10.100.1.128/28"},
-		{Name: "s10", CIDR: "10.100.1.144/28"},
-		{Name: "s11", CIDR: "10.100.1.160/28"},
-		{Name: "s12", CIDR: "10.100.1.176/28"},
-		{Name: "s13", CIDR: "10.100.1.192/28"},
-		{Name: "s14", CIDR: "10.100.1.208/28"},
-		{Name: "s15", CIDR: "10.100.1.224/28"},
-		{Name: "s16", CIDR: "10.100.1.240/28"},
-	})
+	// Build a fixed subnet catalog for tests.
+	// A /24 can hold 16 /28 subnets, which matches production assumptions.
+	testCatalog, err := network.NewSubnetCatalog(buildTestSubnets(16))
 
 	Expect(err).NotTo(HaveOccurred())
 
@@ -187,6 +171,19 @@ func disIdentityCRDPath() string {
 		return downloadedPath
 	}
 	return ""
+}
+
+func buildTestSubnets(count int) []network.SubnetInfo {
+	out := make([]network.SubnetInfo, 0, count)
+	for i := 0; i < count; i++ {
+		thirdOctet := (i / 16) + 1
+		fourthOctet := (i % 16) * 16
+		out = append(out, network.SubnetInfo{
+			Name: fmt.Sprintf("s%d", i+1),
+			CIDR: fmt.Sprintf("10.100.%d.%d/28", thirdOctet, fourthOctet),
+		})
+	}
+	return out
 }
 
 func ensureApplicationIdentityCRD(paths []string) error {

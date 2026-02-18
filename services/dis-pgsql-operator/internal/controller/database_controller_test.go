@@ -160,11 +160,37 @@ var _ = Describe("Database controller", func() {
 			Should(Succeed())
 	}
 
+	cleanupNamespacedTestResources := func(ctx context.Context, namespace string) {
+		deleteAll := func(obj client.Object) {
+			Expect(k8sClient.DeleteAllOf(ctx, obj, client.InNamespace(namespace))).To(Succeed())
+		}
+
+		// Delete dependents first so each spec starts from a clean namespace.
+		deleteAll(&batchv1.Job{})
+		deleteAll(&dbforpostgresqlv1.FlexibleServersAdministrator{})
+		deleteAll(&dbforpostgresqlv1.FlexibleServersConfiguration{})
+		deleteAll(&dbforpostgresqlv1.FlexibleServer{})
+		deleteAll(&networkv1.PrivateDnsZonesVirtualNetworkLink{})
+		deleteAll(&networkv1.PrivateDnsZone{})
+		deleteAll(&identityv1alpha1.ApplicationIdentity{})
+		deleteAll(&storagev1alpha1.Database{})
+
+		Eventually(func(g Gomega) int {
+			var list storagev1alpha1.DatabaseList
+			g.Expect(k8sClient.List(ctx, &list, client.InNamespace(namespace))).To(Succeed())
+			return len(list.Items)
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(0))
+	}
+
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
 	})
 
 	AfterEach(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cleanupCancel()
+		cleanupNamespacedTestResources(cleanupCtx, ns)
 		cancel()
 	})
 
