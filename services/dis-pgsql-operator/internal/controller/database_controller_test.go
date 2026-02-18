@@ -456,6 +456,50 @@ var _ = Describe("Database controller", func() {
 		Expect(string(*s.Spec.Storage.Tier)).To(Equal("P10"))
 	})
 
+	It("does not create FlexibleServersConfiguration resources when enableExtensions is omitted", func() {
+		db := &storagev1alpha1.Database{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-app-db-no-extensions",
+				Namespace: "default",
+			},
+			Spec: storagev1alpha1.DatabaseSpec{
+				Version:    17,
+				ServerType: "dev",
+				Auth: directAuth(
+					"admin-mi",
+					"admin-mi-id",
+					"admin-mi",
+					"user-mi",
+					"user-mi-id",
+				),
+			},
+		}
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		extensionsName := extensionsConfigResourceName(db.Name)
+		sharedPreloadName := sharedPreloadLibrariesConfigResourceName(db.Name)
+
+		Consistently(func() bool {
+			var configuration dbforpostgresqlv1.FlexibleServersConfiguration
+			err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      extensionsName,
+				Namespace: db.Namespace,
+			}, &configuration)
+			return apierrors.IsNotFound(err)
+		}).WithTimeout(5 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeTrue())
+
+		Consistently(func() bool {
+			var configuration dbforpostgresqlv1.FlexibleServersConfiguration
+			err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      sharedPreloadName,
+				Namespace: db.Namespace,
+			}, &configuration)
+			return apierrors.IsNotFound(err)
+		}).WithTimeout(5 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeTrue())
+	})
+
 	It("creates FlexibleServersConfiguration resources for enabled extensions", func() {
 		db := &storagev1alpha1.Database{
 			ObjectMeta: metav1.ObjectMeta{
@@ -616,6 +660,32 @@ var _ = Describe("Database controller", func() {
 			return *configuration.Spec.Value
 		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
 			Should(Equal("pg_cron"))
+
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
+		updated.Spec.EnableExtensions = nil
+		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
+
+		Eventually(func(g Gomega) string {
+			var configuration dbforpostgresqlv1.FlexibleServersConfiguration
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      extensionsName,
+				Namespace: db.Namespace,
+			}, &configuration)).To(Succeed())
+			g.Expect(configuration.Spec.Value).NotTo(BeNil())
+			return *configuration.Spec.Value
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(BeEmpty())
+
+		Eventually(func(g Gomega) string {
+			var configuration dbforpostgresqlv1.FlexibleServersConfiguration
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      sharedPreloadName,
+				Namespace: db.Namespace,
+			}, &configuration)).To(Succeed())
+			g.Expect(configuration.Spec.Value).NotTo(BeNil())
+			return *configuration.Spec.Value
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(BeEmpty())
 	})
 
 	It("updates the FlexibleServer when Database storage spec changes", func() {

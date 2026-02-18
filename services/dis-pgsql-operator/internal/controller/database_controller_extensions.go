@@ -8,6 +8,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
@@ -39,9 +40,8 @@ func (r *DatabaseReconciler) ensurePostgresExtensionSettings(
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
 ) error {
-	// Treat nil as "not managed yet" for backward compatibility with existing Database resources.
 	if db.Spec.EnableExtensions == nil {
-		return nil
+		return r.clearOwnedManagedExtensionConfigurations(ctx, logger, db)
 	}
 
 	extensionsValue, preloadValue, err := dbUtil.ResolveExtensionSettings(db.Spec.EnableExtensions)
@@ -76,6 +76,66 @@ func (r *DatabaseReconciler) ensurePostgresExtensionSettings(
 	return nil
 }
 
+func (r *DatabaseReconciler) clearOwnedManagedExtensionConfigurations(
+	ctx context.Context,
+	logger logr.Logger,
+	db *storagev1alpha1.Database,
+) error {
+	var configurations dbforpostgresqlv1.FlexibleServersConfigurationList
+	if err := r.List(ctx, &configurations, client.InNamespace(db.Namespace)); err != nil {
+		return fmt.Errorf("list FlexibleServersConfiguration in namespace %q: %w", db.Namespace, err)
+	}
+
+	for i := range configurations.Items {
+		configuration := &configurations.Items[i]
+		if !metav1.IsControlledBy(configuration, db) {
+			continue
+		}
+
+		parameterName, managed := managedExtensionParameterName(configuration, db.Name)
+		if !managed {
+			continue
+		}
+
+		if err := r.updateFlexibleServerConfiguration(
+			ctx,
+			logger,
+			db,
+			configuration,
+			parameterName,
+			"",
+		); err != nil {
+			return fmt.Errorf(
+				"clear managed extension configuration %s/%s: %w",
+				db.Namespace,
+				configuration.Name,
+				err,
+			)
+		}
+	}
+
+	return nil
+}
+
+func managedExtensionParameterName(
+	configuration *dbforpostgresqlv1.FlexibleServersConfiguration,
+	dbName string,
+) (string, bool) {
+	switch configuration.Spec.AzureName {
+	case azureExtensionsConfigName, sharedPreloadLibrariesConfigName:
+		return configuration.Spec.AzureName, true
+	}
+
+	switch configuration.Name {
+	case extensionsConfigResourceName(dbName):
+		return azureExtensionsConfigName, true
+	case sharedPreloadLibrariesConfigResourceName(dbName):
+		return sharedPreloadLibrariesConfigName, true
+	default:
+		return "", false
+	}
+}
+
 func (r *DatabaseReconciler) ensureFlexibleServerConfiguration(
 	ctx context.Context,
 	logger logr.Logger,
@@ -96,20 +156,9 @@ func (r *DatabaseReconciler) ensureFlexibleServerConfiguration(
 		}
 	}
 
-	desiredSpec := dbforpostgresqlv1.FlexibleServersConfiguration_Spec{
-		AzureName: parameterName,
-		Owner: &genruntime.KnownResourceReference{
-			Name: db.Name,
-		},
-		Source: to.Ptr(configSourceUserOverride),
-		Value:  to.Ptr(value),
-	}
-
-	desiredLabels := map[string]string{
-		"dis.altinn.cloud/database-name": db.Name,
-	}
-
 	if !found {
+		desiredSpec, desiredLabels := desiredFlexibleServerConfiguration(db, parameterName, value)
+
 		configuration := &dbforpostgresqlv1.FlexibleServersConfiguration{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      resourceName,
@@ -139,19 +188,60 @@ func (r *DatabaseReconciler) ensureFlexibleServerConfiguration(
 		return nil
 	}
 
-	var updated bool
-	existing.Labels, updated = k8sutil.SyncSpecAndLabels(&existing.Spec, desiredSpec, existing.Labels, desiredLabels)
+	return r.updateFlexibleServerConfiguration(ctx, logger, db, &existing, parameterName, value)
+}
 
-	if updated {
-		logger.Info("updating FlexibleServersConfiguration to match Database",
-			"configurationName", resourceName,
-			"namespace", db.Namespace,
-			"parameter", parameterName,
-			"value", value,
-		)
-		if err := r.Update(ctx, &existing); err != nil {
-			return fmt.Errorf("update FlexibleServersConfiguration %s/%s: %w", db.Namespace, resourceName, err)
-		}
+func desiredFlexibleServerConfiguration(
+	db *storagev1alpha1.Database,
+	parameterName string,
+	value string,
+) (dbforpostgresqlv1.FlexibleServersConfiguration_Spec, map[string]string) {
+	desiredSpec := dbforpostgresqlv1.FlexibleServersConfiguration_Spec{
+		AzureName: parameterName,
+		Owner: &genruntime.KnownResourceReference{
+			Name: db.Name,
+		},
+		Source: to.Ptr(configSourceUserOverride),
+		Value:  to.Ptr(value),
+	}
+
+	desiredLabels := map[string]string{
+		"dis.altinn.cloud/database-name": db.Name,
+	}
+
+	return desiredSpec, desiredLabels
+}
+
+func (r *DatabaseReconciler) updateFlexibleServerConfiguration(
+	ctx context.Context,
+	logger logr.Logger,
+	db *storagev1alpha1.Database,
+	configuration *dbforpostgresqlv1.FlexibleServersConfiguration,
+	parameterName string,
+	value string,
+) error {
+	desiredSpec, desiredLabels := desiredFlexibleServerConfiguration(db, parameterName, value)
+
+	var updated bool
+	configuration.Labels, updated = k8sutil.SyncSpecAndLabels(
+		&configuration.Spec,
+		desiredSpec,
+		configuration.Labels,
+		desiredLabels,
+	)
+
+	if !updated {
+		return nil
+	}
+
+	logger.Info("updating FlexibleServersConfiguration to match Database",
+		"configurationName", configuration.Name,
+		"namespace", db.Namespace,
+		"parameter", parameterName,
+		"value", value,
+	)
+	if err := r.Update(ctx, configuration); err != nil {
+		return fmt.Errorf("update FlexibleServersConfiguration %s/%s: %w", db.Namespace, configuration.Name, err)
 	}
 
 	return nil
