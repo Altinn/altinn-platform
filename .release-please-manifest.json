@@ -1,5 +1,8 @@
 {
   "flux/lakmus": "1.0.2",
+  "services/dis-pgsql-operator": "0.1.1",
+  "services/dis-identity-operator": "0.0.4",
+  "services/dis-apim-operator": "0.0.0",
   "infrastructure/images/azure-devops-agent": "1.2.6",
   "infrastructure/images/gh-runner": "0.4.1",
   "infrastructure/images/k6-action": "0.0.23",
