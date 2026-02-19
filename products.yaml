@@ -38,6 +38,7 @@ products:
       repositories:
         - dialogporten
         - dialogporten-frontend
+        - dialogporten-manifests
 
   - name: Core
     slug: PAC # Product Altinn Core
