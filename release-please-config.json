@@ -4,6 +4,18 @@
       "release-type": "simple",
       "component": "flux-oci-lakmus"
     },
+    "services/dis-pgsql-operator": {
+      "release-type": "simple",
+      "component": "dis-pgsql"
+    },
+    "services/dis-identity-operator": {
+      "release-type": "simple",
+      "component": "dis-identity"
+    },
+    "services/dis-apim-operator": {
+      "release-type": "simple",
+      "component": "dis-apim"
+    },
     "infrastructure/images/azure-devops-agent": {
       "release-type": "simple",
       "component": "azdevops-agent",

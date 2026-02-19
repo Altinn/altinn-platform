@@ -20,7 +20,7 @@ on:
       - .github/workflows/reusable-image-scan-and-release-ghcr.yml
     tags:
       - "dis-apim-v*"
-      - "kustomize-dis-apim-*"
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -55,7 +55,7 @@ jobs:
           azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
   build-release-flux-oci-release:
     name: Build release from tag
-    if: startsWith(github.ref, 'refs/tags/kustomize-dis-apim-')
+    if: startsWith(github.ref, 'refs/tags/dis-apim-v')
     environment: flux-release
     defaults:
       run:
@@ -67,7 +67,7 @@ jobs:
       - name: Setup vars
         id: vars
         run: |
-          tag=${GITHUB_REF/refs\/tags\/kustomize-dis-apim-/}
+          tag=${GITHUB_REF/refs\/tags\/dis-apim-/}
           echo "tag=${tag}" >> ${GITHUB_OUTPUT}
       - name: Push flux oci image from release tag
         uses: ./actions/flux/build-push-image

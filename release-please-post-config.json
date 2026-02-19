@@ -18,6 +18,21 @@
         }
       ]
     },
+    "services/dis-pgsql-operator": {
+      "dispatch-pipelines": [
+        {"filename": "dis-pgsql-release.yml"}
+      ]
+    },
+    "services/dis-identity-operator": {
+      "dispatch-pipelines": [
+        {"filename": "dis-identity-release.yml"}
+      ]
+    },
+    "services/dis-apim-operator": {
+      "dispatch-pipelines": [
+        {"filename": "dis-apim-release.yml"}
+      ]
+    },
     "infrastructure/images/azure-devops-agent": {
       "dispatch-pipelines": [
         {"filename": "azdevops-agent-release.yml"}
