@@ -1,6 +1,6 @@
 {
   "flux/lakmus": "1.0.2",
-  "services/dis-pgsql-operator": "0.1.1",
+  "services/dis-pgsql-operator": "0.2.0",
   "services/dis-identity-operator": "0.0.4",
   "services/dis-apim-operator": "0.0.0",
   "infrastructure/images/azure-devops-agent": "1.2.6",
