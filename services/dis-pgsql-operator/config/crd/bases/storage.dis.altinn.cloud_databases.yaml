@@ -136,8 +136,8 @@ spec:
                 description: |-
                   backupRetentionDays controls backup retention for the server.
                   If omitted, it defaults to 14 for non-prod server types and 30 for prod/production.
-                maximum: 90
-                minimum: 1
+                maximum: 35
+                minimum: 7
                 type: integer
               enableExtensions:
                 description: |-

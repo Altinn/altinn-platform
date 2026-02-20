@@ -484,6 +484,8 @@ var _ = Describe("Database controller", func() {
 		Expect(s.Spec.Backup).NotTo(BeNil())
 		Expect(s.Spec.Backup.BackupRetentionDays).NotTo(BeNil())
 		Expect(*s.Spec.Backup.BackupRetentionDays).To(Equal(14))
+		Expect(s.Spec.Backup.GeoRedundantBackup).NotTo(BeNil())
+		Expect(*s.Spec.Backup.GeoRedundantBackup).To(Equal(dbforpostgresqlv1.Backup_GeoRedundantBackup_Disabled))
 	})
 
 	It("uses explicit backupRetentionDays when set", func() {
@@ -556,6 +558,101 @@ var _ = Describe("Database controller", func() {
 			return *s.Spec.Backup.BackupRetentionDays
 		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
 			Should(Equal(30))
+	})
+
+	It("forces GeoRedundantBackup to Disabled when backupRetentionDays changes", func() {
+		db := &storagev1alpha1.Database{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-app-db-psql-backup-geo",
+				Namespace: "default",
+			},
+			Spec: storagev1alpha1.DatabaseSpec{
+				Version:    17,
+				ServerType: "dev",
+				Auth: directAuth(
+					"admin-mi",
+					"admin-mi-id",
+					"admin-mi",
+					"user-mi",
+					"user-mi-id",
+				),
+			},
+		}
+
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		expectedServerName := db.Name
+
+		Eventually(func(g Gomega) struct {
+			retention int
+			geo       dbforpostgresqlv1.Backup_GeoRedundantBackup
+		} {
+			var s dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      expectedServerName,
+				Namespace: db.Namespace,
+			}, &s)).To(Succeed())
+			g.Expect(s.Spec.Backup).NotTo(BeNil())
+			g.Expect(s.Spec.Backup.BackupRetentionDays).NotTo(BeNil())
+			g.Expect(s.Spec.Backup.GeoRedundantBackup).NotTo(BeNil())
+			return struct {
+				retention int
+				geo       dbforpostgresqlv1.Backup_GeoRedundantBackup
+			}{
+				retention: *s.Spec.Backup.BackupRetentionDays,
+				geo:       *s.Spec.Backup.GeoRedundantBackup,
+			}
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(struct {
+				retention int
+				geo       dbforpostgresqlv1.Backup_GeoRedundantBackup
+			}{
+				retention: 14,
+				geo:       dbforpostgresqlv1.Backup_GeoRedundantBackup_Disabled,
+			}))
+
+		var server dbforpostgresqlv1.FlexibleServer
+		Expect(k8sClient.Get(ctx, types.NamespacedName{
+			Name:      expectedServerName,
+			Namespace: db.Namespace,
+		}, &server)).To(Succeed())
+		enabled := dbforpostgresqlv1.Backup_GeoRedundantBackup_Enabled
+		server.Spec.Backup.GeoRedundantBackup = &enabled
+		Expect(k8sClient.Update(ctx, &server)).To(Succeed())
+
+		requestedRetentionDays := 22
+		var updated storagev1alpha1.Database
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
+		updated.Spec.BackupRetentionDays = &requestedRetentionDays
+		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
+
+		Eventually(func(g Gomega) struct {
+			retention int
+			geo       dbforpostgresqlv1.Backup_GeoRedundantBackup
+		} {
+			var s dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      expectedServerName,
+				Namespace: db.Namespace,
+			}, &s)).To(Succeed())
+			g.Expect(s.Spec.Backup).NotTo(BeNil())
+			g.Expect(s.Spec.Backup.BackupRetentionDays).NotTo(BeNil())
+			g.Expect(s.Spec.Backup.GeoRedundantBackup).NotTo(BeNil())
+
+			return struct {
+				retention int
+				geo       dbforpostgresqlv1.Backup_GeoRedundantBackup
+			}{
+				retention: *s.Spec.Backup.BackupRetentionDays,
+				geo:       *s.Spec.Backup.GeoRedundantBackup,
+			}
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(struct {
+				retention int
+				geo       dbforpostgresqlv1.Backup_GeoRedundantBackup
+			}{
+				retention: requestedRetentionDays,
+				geo:       dbforpostgresqlv1.Backup_GeoRedundantBackup_Disabled,
+			}))
 	})
 
 	It("does not create FlexibleServersConfiguration resources when enableExtensions is omitted", func() {

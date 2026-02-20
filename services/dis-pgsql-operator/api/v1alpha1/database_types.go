@@ -95,8 +95,8 @@ type DatabaseSpec struct {
 	// backupRetentionDays controls backup retention for the server.
 	// If omitted, it defaults to 14 for non-prod server types and 30 for prod/production.
 	// +optional
-	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:validation:Maximum=90
+	// +kubebuilder:validation:Minimum=7
+	// +kubebuilder:validation:Maximum=35
 	BackupRetentionDays *int `json:"backupRetentionDays,omitempty"`
 }
 
