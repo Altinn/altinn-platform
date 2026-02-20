@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.2.0...dis-pgsql-v0.3.0) (2026-02-20)
+
+
+### Features
+
+* **dis-pgsql:** enable backupRetentionDays in the spec ([#3128](https://github.com/Altinn/altinn-platform/issues/3128)) ([ead9527](https://github.com/Altinn/altinn-platform/commit/ead95275e6e468d5f6ab3ddaa1ce32d16d675573))
+
 ## [0.2.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.1.1...dis-pgsql-v0.2.0) (2026-02-19)
 
 
