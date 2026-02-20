@@ -24,6 +24,7 @@ const (
 	azureExtensionsConfigName        = "azure.extensions"
 	sharedPreloadLibrariesConfigName = "shared_preload_libraries"
 	configSourceUserOverride         = "user-override"
+	databaseNameLabelKey             = "dis.altinn.cloud/database-name"
 )
 
 func extensionsConfigResourceName(dbName string) string {
@@ -206,7 +207,7 @@ func desiredFlexibleServerConfiguration(
 	}
 
 	desiredLabels := map[string]string{
-		"dis.altinn.cloud/database-name": db.Name,
+		databaseNameLabelKey: db.Name,
 	}
 
 	return desiredSpec, desiredLabels

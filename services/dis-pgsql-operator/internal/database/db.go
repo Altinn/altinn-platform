@@ -2,6 +2,11 @@ package database
 
 import dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 
+const (
+	defaultBackupRetentionDaysNonProd = 14
+	defaultBackupRetentionDaysProd    = 30
+)
+
 type Profile struct {
 	SkuName string
 	SkuTier dbforpostgresqlv1.Sku_Tier
@@ -25,5 +30,18 @@ func GetProfile(serverType string) Profile {
 		return prodProfile
 	default:
 		return devProfile
+	}
+}
+
+func ResolveBackupRetentionDays(serverType string, requested *int) int {
+	if requested != nil {
+		return *requested
+	}
+
+	switch serverType {
+	case "prod", "production":
+		return defaultBackupRetentionDaysProd
+	default:
+		return defaultBackupRetentionDaysNonProd
 	}
 }

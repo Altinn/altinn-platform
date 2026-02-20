@@ -53,6 +53,14 @@ func desiredStorage(db *storagev1alpha1.Database) *dbforpostgresqlv1.Storage {
 	}
 }
 
+func desiredBackup(db *storagev1alpha1.Database) *dbforpostgresqlv1.Backup {
+	geoRedundantBackup := dbforpostgresqlv1.Backup_GeoRedundantBackup_Disabled
+	return &dbforpostgresqlv1.Backup{
+		BackupRetentionDays: to.Ptr(dbUtil.ResolveBackupRetentionDays(db.Spec.ServerType, db.Spec.BackupRetentionDays)),
+		GeoRedundantBackup:  &geoRedundantBackup,
+	}
+}
+
 // subnetARMID builds the ARM ID for a subnet in the DB VNet.
 func (r *DatabaseReconciler) subnetARMIDResourceReference(subnetName string) *genruntime.ResourceReference {
 
@@ -100,6 +108,7 @@ func (r *DatabaseReconciler) ensurePostgresServer(
 
 	// define storage size and tier
 	storage := desiredStorage(db)
+	backup := desiredBackup(db)
 
 	versionStr := fmt.Sprintf("%d", db.Spec.Version)
 	version := dbforpostgresqlv1.ServerVersion(versionStr)
@@ -148,6 +157,7 @@ func (r *DatabaseReconciler) ensurePostgresServer(
 		Version: &version,
 		Network: network,
 		Storage: storage,
+		Backup:  backup,
 		Sku: &dbforpostgresqlv1.Sku{
 			Name: to.Ptr(profile.SkuName),
 			Tier: to.Ptr(profile.SkuTier),

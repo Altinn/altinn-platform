@@ -6,6 +6,7 @@ metadata:
 spec:
   version: 16
   serverType: prod
+  backupRetentionDays: 30
   storage:
     sizeGB: 128
     tier: P10
