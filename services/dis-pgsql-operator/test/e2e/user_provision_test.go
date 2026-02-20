@@ -30,19 +30,25 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
+	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/test/utils"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/yaml"
 )
 
 var _ = Describe("User provisioning", Ordered, func() {
 	const (
-		dbName           = "e2e-user-provision"
-		namespace        = "default"
-		adminIdentityRef = "adminidentity"
-		adminIdentity    = "adminidentity"
-		adminPrincipal   = "adminidentity-principal-id"
-		userIdentityRef  = "useridentity"
-		userIdentity     = "user1"
-		userPrincipalId  = "user1-principal-id"
+		dbName                     = "e2e-user-provision"
+		explicitRetentionDBName    = "e2e-backup-retention-explicit"
+		namespace                  = "default"
+		adminIdentityRef           = "adminidentity"
+		adminIdentity              = "adminidentity"
+		adminPrincipal             = "adminidentity-principal-id"
+		userIdentityRef            = "useridentity"
+		userIdentity               = "user1"
+		userPrincipalId            = "user1-principal-id"
+		explicitBackupRetentionDay = 21
 	)
 
 	var manifestPath string
@@ -50,8 +56,9 @@ var _ = Describe("User provisioning", Ordered, func() {
 	BeforeAll(func() {
 		By("cleaning up stale Database and Job resources from previous runs")
 		deleteDatabaseAndProvisionJobs(dbName, namespace)
+		deleteDatabaseAndProvisionJobs(explicitRetentionDBName, namespace)
 
-		manifestPath = writeDatabaseManifest(
+		manifestPath = writeTestManifest(
 			dbName,
 			namespace,
 			adminIdentityRef,
@@ -167,44 +174,158 @@ var _ = Describe("User provisioning", Ordered, func() {
 				tier: "P50",
 			}))
 	})
+
+	It("defaults backupRetentionDays to 14 for dev server types", func() {
+		By("verifying the FlexibleServer backup retention default")
+		Eventually(func(g Gomega) string {
+			cmd := exec.Command(
+				"kubectl", "get",
+				"flexibleservers.dbforpostgresql.azure.com",
+				dbName,
+				"-n", namespace,
+				"-o", "jsonpath={.spec.backup.backupRetentionDays}",
+			)
+			output, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			return strings.TrimSpace(output)
+		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).
+			Should(Equal("14"))
+	})
+
+	It("applies explicit backupRetentionDays when set on Database", func() {
+		manifestPath := writeTestManifestWithBackupRetention(
+			explicitRetentionDBName,
+			namespace,
+			adminIdentityRef,
+			userIdentityRef,
+			explicitBackupRetentionDay,
+		)
+
+		defer func() {
+			cmd := exec.Command("kubectl", "delete", "-f", manifestPath, "--ignore-not-found=true")
+			_, _ = utils.Run(cmd)
+			_ = os.Remove(manifestPath)
+			deleteDatabaseAndProvisionJobs(explicitRetentionDBName, namespace)
+		}()
+
+		By("creating a Database custom resource with explicit backup retention")
+		cmd := exec.Command("kubectl", "apply", "-f", manifestPath)
+		_, err := utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed to apply Database manifest with explicit backup retention")
+
+		By("verifying the Database spec keeps the explicit backup retention")
+		Eventually(func(g Gomega) string {
+			cmd := exec.Command(
+				"kubectl", "get",
+				"databases.storage.dis.altinn.cloud",
+				explicitRetentionDBName,
+				"-n", namespace,
+				"-o", "jsonpath={.spec.backupRetentionDays}",
+			)
+			output, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			return strings.TrimSpace(output)
+		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).
+			Should(Equal(fmt.Sprintf("%d", explicitBackupRetentionDay)))
+
+		By("verifying the explicit backup retention is applied to FlexibleServer")
+		Eventually(func(g Gomega) string {
+			cmd := exec.Command(
+				"kubectl", "get",
+				"flexibleservers.dbforpostgresql.azure.com",
+				explicitRetentionDBName,
+				"-n", namespace,
+				"-o", "jsonpath={.spec.backup.backupRetentionDays}",
+			)
+			output, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			return strings.TrimSpace(output)
+		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).
+			Should(Equal(fmt.Sprintf("%d", explicitBackupRetentionDay)))
+	})
 })
 
-func writeDatabaseManifest(dbName, namespace, adminIdentityRef, userIdentityRef string) string {
-	content := fmt.Sprintf(`apiVersion: application.dis.altinn.cloud/v1alpha1
-kind: ApplicationIdentity
-metadata:
-  name: %s
-  namespace: %s
-spec: {}
----
-apiVersion: application.dis.altinn.cloud/v1alpha1
-kind: ApplicationIdentity
-metadata:
-  name: %s
-  namespace: %s
-spec: {}
----
-apiVersion: storage.dis.altinn.cloud/v1alpha1
-kind: Database
-metadata:
-  name: %s
-  namespace: %s
-spec:
-  version: 17
-  serverType: dev
-  storage:
-    sizeGB: 32
-    tier: P80
-  auth:
-    admin:
-      identity:
-        identityRef:
-          name: %s
-    user:
-      identity:
-        identityRef:
-          name: %s
-`, adminIdentityRef, namespace, userIdentityRef, namespace, dbName, namespace, adminIdentityRef, userIdentityRef)
+func writeTestManifest(dbName, namespace, adminIdentityRef, userIdentityRef string) string {
+	return writeTestManifestWithBackupRetention(dbName, namespace, adminIdentityRef, userIdentityRef, 0)
+}
+
+func writeTestManifestWithBackupRetention(
+	dbName, namespace, adminIdentityRef, userIdentityRef string,
+	backupRetentionDays int,
+) string {
+	sizeGB := int32(32)
+	tier := "P80"
+
+	database := &storagev1alpha1.Database{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "storage.dis.altinn.cloud/v1alpha1",
+			Kind:       "Database",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      dbName,
+			Namespace: namespace,
+		},
+		Spec: storagev1alpha1.DatabaseSpec{
+			Version:    17,
+			ServerType: "dev",
+			Storage: &storagev1alpha1.DatabaseStorageSpec{
+				SizeGB: &sizeGB,
+				Tier:   &tier,
+			},
+			Auth: storagev1alpha1.DatabaseAuth{
+				Admin: storagev1alpha1.AdminIdentitySpec{
+					Identity: storagev1alpha1.IdentitySource{
+						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: adminIdentityRef},
+					},
+				},
+				User: storagev1alpha1.UserIdentitySpec{
+					Identity: storagev1alpha1.IdentitySource{
+						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: userIdentityRef},
+					},
+				},
+			},
+		},
+	}
+	if backupRetentionDays > 0 {
+		database.Spec.BackupRetentionDays = &backupRetentionDays
+	}
+
+	adminIdentity := &identityv1alpha1.ApplicationIdentity{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "application.dis.altinn.cloud/v1alpha1",
+			Kind:       "ApplicationIdentity",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      adminIdentityRef,
+			Namespace: namespace,
+		},
+		Spec: identityv1alpha1.ApplicationIdentitySpec{},
+	}
+
+	userIdentity := &identityv1alpha1.ApplicationIdentity{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "application.dis.altinn.cloud/v1alpha1",
+			Kind:       "ApplicationIdentity",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      userIdentityRef,
+			Namespace: namespace,
+		},
+		Spec: identityv1alpha1.ApplicationIdentitySpec{},
+	}
+
+	resources := []interface{}{adminIdentity, userIdentity, database}
+	docs := make([]string, 0, len(resources))
+	for i := range resources {
+		content, err := yaml.Marshal(resources[i])
+		Expect(err).NotTo(HaveOccurred(), "Failed to marshal test manifest resource")
+		docs = append(docs, string(content))
+	}
+
+	content := strings.Join(docs, "---\n")
+	if !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
 
 	dir := os.TempDir()
 	path := filepath.Join(dir, fmt.Sprintf("db-%s.yaml", dbName))

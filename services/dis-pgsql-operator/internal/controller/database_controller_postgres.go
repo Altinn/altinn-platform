@@ -100,6 +100,9 @@ func (r *DatabaseReconciler) ensurePostgresServer(
 
 	// define storage size and tier
 	storage := desiredStorage(db)
+	backup := &dbforpostgresqlv1.Backup{
+		BackupRetentionDays: to.Ptr(dbUtil.ResolveBackupRetentionDays(db.Spec.ServerType, db.Spec.BackupRetentionDays)),
+	}
 
 	versionStr := fmt.Sprintf("%d", db.Spec.Version)
 	version := dbforpostgresqlv1.ServerVersion(versionStr)
@@ -148,6 +151,7 @@ func (r *DatabaseReconciler) ensurePostgresServer(
 		Version: &version,
 		Network: network,
 		Storage: storage,
+		Backup:  backup,
 		Sku: &dbforpostgresqlv1.Sku{
 			Name: to.Ptr(profile.SkuName),
 			Tier: to.Ptr(profile.SkuTier),

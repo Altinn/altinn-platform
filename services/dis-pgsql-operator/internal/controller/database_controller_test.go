@@ -480,6 +480,82 @@ var _ = Describe("Database controller", func() {
 
 		Expect(s.Spec.Storage.Tier).NotTo(BeNil())
 		Expect(string(*s.Spec.Storage.Tier)).To(Equal("P10"))
+
+		Expect(s.Spec.Backup).NotTo(BeNil())
+		Expect(s.Spec.Backup.BackupRetentionDays).NotTo(BeNil())
+		Expect(*s.Spec.Backup.BackupRetentionDays).To(Equal(14))
+	})
+
+	It("uses explicit backupRetentionDays when set", func() {
+		requestedRetentionDays := 21
+		db := &storagev1alpha1.Database{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-app-db-psql-backup-retention",
+				Namespace: "default",
+			},
+			Spec: storagev1alpha1.DatabaseSpec{
+				Version:             17,
+				ServerType:          "dev",
+				BackupRetentionDays: &requestedRetentionDays,
+				Auth: directAuth(
+					"admin-mi",
+					"admin-mi-id",
+					"admin-mi",
+					"user-mi",
+					"user-mi-id",
+				),
+			},
+		}
+
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		expectedServerName := db.Name
+
+		Eventually(func(g Gomega) int {
+			var s dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      expectedServerName,
+				Namespace: db.Namespace,
+			}, &s)).To(Succeed())
+			g.Expect(s.Spec.Backup).NotTo(BeNil())
+			g.Expect(s.Spec.Backup.BackupRetentionDays).NotTo(BeNil())
+			return *s.Spec.Backup.BackupRetentionDays
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(requestedRetentionDays))
+	})
+
+	It("defaults backupRetentionDays to 30 for prod server types", func() {
+		db := &storagev1alpha1.Database{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-app-db-psql-backup-retention-prod-default",
+				Namespace: "default",
+			},
+			Spec: storagev1alpha1.DatabaseSpec{
+				Version:    17,
+				ServerType: "prod",
+				Auth: directAuth(
+					"admin-mi",
+					"admin-mi-id",
+					"admin-mi",
+					"user-mi",
+					"user-mi-id",
+				),
+			},
+		}
+
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		expectedServerName := db.Name
+
+		Eventually(func(g Gomega) int {
+			var s dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      expectedServerName,
+				Namespace: db.Namespace,
+			}, &s)).To(Succeed())
+			g.Expect(s.Spec.Backup).NotTo(BeNil())
+			g.Expect(s.Spec.Backup.BackupRetentionDays).NotTo(BeNil())
+			return *s.Spec.Backup.BackupRetentionDays
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(30))
 	})
 
 	It("does not create FlexibleServersConfiguration resources when enableExtensions is omitted", func() {
