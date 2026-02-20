@@ -127,15 +127,13 @@ make fmt
 
 #### 8) Make manifests
 
-Generates Kubernetes and Flux manifests for **Lakmus** using [cdk8s](https://cdk8s.io/).  
-The output is written to `flux/lakmus/` in the monorepo.
+Generates Kubernetes manifests for **Lakmus** using [cdk8s](https://cdk8s.io/).  
+The output is written to `services/lakmus/config/` (`lakmus.yaml` and `kustomization.yaml`) in the monorepo.
+The workload image in this file is intentionally a placeholder (`controller:latest`) and should be overridden in the final Flux kustomization via `images`.
 
 ```bash
-# Generate manifests with default image (latest tag)
+# Generate manifests
 make manifests
-
-# Generate manifests with a specific tag
-make manifests IMAGE_TAG=v1.0.0
 ```
 
 ---
