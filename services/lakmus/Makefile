@@ -35,7 +35,10 @@ manifests-bootstrap:
 		echo ">> Manifest dependencies already present in $(MANIFESTS_DIR)/node_modules"; \
 	else \
 		echo ">> Installing manifest dependencies in $(MANIFESTS_DIR)"; \
-		npm ci --prefix "$(MANIFESTS_DIR)"; \
+		npm ci --prefix "$(MANIFESTS_DIR)" --no-audit --no-fund || { \
+			echo ">> npm ci failed, retrying with npm install (legacy peer deps)"; \
+			npm install --prefix "$(MANIFESTS_DIR)" --no-audit --no-fund --legacy-peer-deps; \
+		}; \
 	fi
 
 ## Re-generate manifests and fail if generated files were not committed
