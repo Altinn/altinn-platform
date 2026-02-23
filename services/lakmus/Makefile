@@ -48,8 +48,7 @@ manifests-verify: manifests-bootstrap manifests
 	fi
 
 ## Unit tests
-test: manifests-verify
-	@echo ">> make test runs manifests-verify first"
+test:
 	$(GO) test -v ./...
 
 ## Build the container image

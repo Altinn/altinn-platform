@@ -71,7 +71,7 @@ CONTAINER_RUNTIME ?= podman   # override with CONTAINER_RUNTIME=docker
 make test
 ```
 
-`make test` runs `make manifests-verify` first, so generated files in `services/lakmus/config/` must already match what CDK8s produces.
+`make test` runs Go unit tests only. In CI, manifest drift is checked separately with `make manifests-verify`.
 
 #### 2) Build the container image
 

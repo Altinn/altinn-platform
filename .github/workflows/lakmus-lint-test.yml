@@ -47,6 +47,9 @@ jobs:
           version: v2.4.0
           working-directory: services/lakmus
 
+      - name: Verify generated manifests
+        run: make manifests-verify
+
       - name: Running Tests
         run: |
           make tidy
