@@ -13,7 +13,7 @@ INTEG_WAIT_S    ?= 5
 GO ?= go
 CONTAINER_RUNTIME ?= podman   # override with CONTAINER_RUNTIME=docker
 
-.PHONY: all test test-integration build clean docker-build docker-run fmt lint tidy manifests
+.PHONY: all test test-integration build clean docker-build docker-run fmt lint tidy manifests manifests-bootstrap manifests-verify
 
 all: fmt lint tidy test test-integration
 
@@ -29,8 +29,27 @@ manifests:
 	  --app "npx ts-node main.ts" \
 	  --output "$(CONFIG_DIR)"
 
+## Install manifest generator dependencies
+manifests-bootstrap:
+	@if [ -d "$(MANIFESTS_DIR)/node_modules" ]; then \
+		echo ">> Manifest dependencies already present in $(MANIFESTS_DIR)/node_modules"; \
+	else \
+		echo ">> Installing manifest dependencies in $(MANIFESTS_DIR)"; \
+		npm ci --prefix "$(MANIFESTS_DIR)"; \
+	fi
+
+## Re-generate manifests and fail if generated files were not committed
+manifests-verify: manifests-bootstrap manifests
+	@echo ">> Verifying generated manifests are committed under $(CONFIG_DIR)"
+	@if [ -n "$$(git status --porcelain -- "$(CONFIG_DIR)")" ]; then \
+		echo "Generated manifests are out of date. Run 'make manifests' and commit config changes."; \
+		git --no-pager diff -- "$(CONFIG_DIR)"; \
+		exit 1; \
+	fi
+
 ## Unit tests
-test:
+test: manifests-verify
+	@echo ">> make test runs manifests-verify first"
 	$(GO) test -v ./...
 
 ## Build the container image

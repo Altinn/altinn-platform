@@ -71,6 +71,8 @@ CONTAINER_RUNTIME ?= podman   # override with CONTAINER_RUNTIME=docker
 make test
 ```
 
+`make test` runs `make manifests-verify` first, so generated files in `services/lakmus/config/` must already match what CDK8s produces.
+
 #### 2) Build the container image
 
 ```bash
@@ -134,6 +136,9 @@ The workload image in this file is intentionally a placeholder (`controller:late
 ```bash
 # Generate manifests
 make manifests
+
+# Regenerate and fail if config/ is not up to date (CI-friendly)
+make manifests-verify
 ```
 
 ---
