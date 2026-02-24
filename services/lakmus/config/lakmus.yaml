@@ -26,6 +26,8 @@ spec:
       owner: platform
   template:
     metadata:
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
       labels:
         app: lakmus
         azure.workload.identity/use: "true"
@@ -38,7 +40,7 @@ spec:
           env:
             - name: AZURE_SUBSCRIPTION_ID
               value: ${AZURE_SUBSCRIPTION_ID}
-          image: ghcr.io/altinn/altinn-platform/lakmus
+          image: controller:latest
           name: lakmus
           ports:
             - containerPort: 8080

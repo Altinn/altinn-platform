@@ -71,6 +71,8 @@ CONTAINER_RUNTIME ?= podman   # override with CONTAINER_RUNTIME=docker
 make test
 ```
 
+`make test` runs Go unit tests only. In CI, manifest drift is checked separately with `make manifests-verify`.
+
 #### 2) Build the container image
 
 ```bash
@@ -127,15 +129,17 @@ make fmt
 
 #### 8) Make manifests
 
-Generates Kubernetes and Flux manifests for **Lakmus** using [cdk8s](https://cdk8s.io/).  
-The output is written to `flux/lakmus/` in the monorepo.
+Generates Kubernetes manifests for **Lakmus** using [cdk8s](https://cdk8s.io/).  
+The output is written to `services/lakmus/config/` (`lakmus.yaml` and `kustomization.yaml`) in the monorepo.
+The workload image in this file is intentionally a placeholder (`controller:latest`) and should be overridden in the final Flux kustomization via `images`.
+`make manifests` automatically runs `manifests-bootstrap` first (`npm ci` in `services/lakmus/manifests/`).
 
 ```bash
-# Generate manifests with default image (latest tag)
+# Generate manifests
 make manifests
 
-# Generate manifests with a specific tag
-make manifests IMAGE_TAG=v1.0.0
+# Regenerate and fail if config/ is not up to date (CI-friendly)
+make manifests-verify
 ```
 
 ---

@@ -13,33 +13,35 @@ INTEG_WAIT_S    ?= 5
 GO ?= go
 CONTAINER_RUNTIME ?= podman   # override with CONTAINER_RUNTIME=docker
 
-.PHONY: all test test-integration build clean docker-build docker-run fmt lint tidy manifests
+.PHONY: all test test-integration build clean docker-build docker-run fmt lint tidy manifests manifests-bootstrap manifests-verify
 
 all: fmt lint tidy test test-integration
 
 ROOT_DIR_REPO := $(shell git rev-parse --show-toplevel)
 PROJECT_DIR   ?= $(ROOT_DIR_REPO)/services/lakmus
-FLUX_OUT      := $(ROOT_DIR_REPO)/flux/lakmus
 MANIFESTS_DIR := $(PROJECT_DIR)/manifests
-IMAGE_TAG  ?= latest
+CONFIG_DIR    := $(PROJECT_DIR)/config
 
-## Generate Kubernetes and Flux manifests
-manifests:
-	@if [ ! -d "$(FLUX_OUT)" ]; then \
-	  echo "$(FLUX_OUT) does not exist. Please create the flux folder first."; \
-	  exit 1; \
-	fi
-
-	@echo ">> Cleaning old cdk8s imports"
-	rm -rf $(MANIFESTS_DIR)/imports
-
-	@echo ">> Updating cdk8s imports"
-	cd $(MANIFESTS_DIR) && npx cdk8s import
-
-	@echo ">> Synthesizing all manifests into $(FLUX_OUT)"
+## Generate Kubernetes manifests in config
+manifests: manifests-bootstrap
+	@echo ">> Synthesizing Kubernetes manifests into $(CONFIG_DIR)"
 	cd "$(MANIFESTS_DIR)" && npx cdk8s synth \
 	  --app "npx ts-node main.ts" \
-	  --output "$(FLUX_OUT)"
+	  --output "$(CONFIG_DIR)"
+
+## Install manifest generator dependencies
+manifests-bootstrap:
+	@echo ">> Installing manifest dependencies in $(MANIFESTS_DIR)"
+	npm ci --prefix "$(MANIFESTS_DIR)"
+
+## Re-generate manifests and fail if generated files were not committed
+manifests-verify: manifests
+	@echo ">> Verifying generated manifests are committed under $(CONFIG_DIR)"
+	@if [ -n "$$(git status --porcelain -- "$(CONFIG_DIR)")" ]; then \
+		echo "Generated manifests are out of date. Run 'make manifests' and commit config changes."; \
+		git --no-pager diff -- "$(CONFIG_DIR)"; \
+		exit 1; \
+	fi
 
 ## Unit tests
 test:
