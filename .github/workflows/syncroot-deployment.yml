@@ -110,3 +110,54 @@ jobs:
           arm_client_id: ${{ env.ARM_CLIENT_ID }}
           arm_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
           tf_state_name: ${{ env.TF_STATE_NAME }}
+
+  syncroot-images:
+    name: Syncroot Images
+    environment: prod
+    if: github.ref == 'refs/heads/main'
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_ALTINNACR_APP_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_ALTINNACR_SUBSCRIPTION_ID }}
+
+      - name: Process Syncroot Images
+        shell: bash
+        run: |
+          TAGS=("at22" "at23" "at24" "tt02" "yt01" "prod")
+          ACR_NAME="altinncr"
+          SOURCE_IMAGE="dis/default-syncroot:latest"
+          
+          # Extract product keys from terraform.tfvars
+          # Matches lines starting with " (2 spaces followed by double quote) followed by name
+          PRODUCTS=$(grep -oP '(?<=^  ")[^"]+' infrastructure/syncroots/terraform.tfvars)
+          
+          for PRODUCT in $PRODUCTS; do
+            TARGET_REPO="${PRODUCT}/syncroot"
+            echo "Checking product: ${PRODUCT}"
+            
+            for TAG in "${TAGS[@]}"; do
+              echo "  Target tag: ${TAG}"
+              
+              # Check if tag exists
+              TAG_EXISTS=$(az acr repository show-tags --name "$ACR_NAME" --repository "$TARGET_REPO" --output table 2>/dev/null | grep -q "^${TAG}$" && echo "true" || echo "false")
+              
+              if [ "$TAG_EXISTS" == "true" ]; then
+                echo "    Tag ${TAG} already exists for ${TARGET_REPO}. Skipping."
+              else
+                echo "    Tag ${TAG} not found. Importing from ${SOURCE_IMAGE}..."
+                az acr import \
+                  --name "$ACR_NAME" \
+                  --source "$SOURCE_IMAGE" \
+                  --image "${TARGET_REPO}:${TAG}" \
+                  --ref "$SOURCE_IMAGE"
+              fi
+            done
+          done
