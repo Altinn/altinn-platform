@@ -23,7 +23,7 @@ MANIFESTS_DIR := $(PROJECT_DIR)/manifests
 CONFIG_DIR    := $(PROJECT_DIR)/config
 
 ## Generate Kubernetes manifests in config
-manifests:
+manifests: manifests-bootstrap
 	@echo ">> Synthesizing Kubernetes manifests into $(CONFIG_DIR)"
 	cd "$(MANIFESTS_DIR)" && npx cdk8s synth \
 	  --app "npx ts-node main.ts" \
@@ -31,15 +31,15 @@ manifests:
 
 ## Install manifest generator dependencies
 manifests-bootstrap:
-	@if [ -d "$(MANIFESTS_DIR)/node_modules" ]; then \
-		echo ">> Manifest dependencies already present in $(MANIFESTS_DIR)/node_modules"; \
+	@if [ -f "$(MANIFESTS_DIR)/node_modules/cdk8s/package.json" ] && [ -f "$(MANIFESTS_DIR)/node_modules/ts-node/package.json" ]; then \
+		echo ">> Manifest dependencies already installed in $(MANIFESTS_DIR)/node_modules"; \
 	else \
 		echo ">> Installing manifest dependencies in $(MANIFESTS_DIR)"; \
 		npm ci --prefix "$(MANIFESTS_DIR)"; \
 	fi
 
 ## Re-generate manifests and fail if generated files were not committed
-manifests-verify: manifests-bootstrap manifests
+manifests-verify: manifests
 	@echo ">> Verifying generated manifests are committed under $(CONFIG_DIR)"
 	@if [ -n "$$(git status --porcelain -- "$(CONFIG_DIR)")" ]; then \
 		echo "Generated manifests are out of date. Run 'make manifests' and commit config changes."; \
