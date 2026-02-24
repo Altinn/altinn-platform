@@ -31,12 +31,8 @@ manifests: manifests-bootstrap
 
 ## Install manifest generator dependencies
 manifests-bootstrap:
-	@if [ -f "$(MANIFESTS_DIR)/node_modules/cdk8s/package.json" ] && [ -f "$(MANIFESTS_DIR)/node_modules/ts-node/package.json" ]; then \
-		echo ">> Manifest dependencies already installed in $(MANIFESTS_DIR)/node_modules"; \
-	else \
-		echo ">> Installing manifest dependencies in $(MANIFESTS_DIR)"; \
-		npm ci --prefix "$(MANIFESTS_DIR)"; \
-	fi
+	@echo ">> Installing manifest dependencies in $(MANIFESTS_DIR)"
+	npm ci --prefix "$(MANIFESTS_DIR)"
 
 ## Re-generate manifests and fail if generated files were not committed
 manifests-verify: manifests
