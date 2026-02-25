@@ -1,6 +1,6 @@
 name: VPN Access Request
 description: Request VPN and ACL access (Headscale / Tailscale)
-title: "[VPN Access] <Full Name>"
+title: "[VPN Access]"
 labels:
   - area/access-mgmt
   - kind/toil
@@ -12,17 +12,12 @@ body:
       value: |
         ## VPN Access Request
 
-        ⚠️ This repository is public.
-        Do NOT include sensitive information such as:
-        - Email addresses
-        - Internal identifiers
-
         Access requires documented approval from:
         - Product Owner
         - Team Lead
         - Team Architect
 
-        Do not grant access before approval is written in this issue.
+        Do not grant access before the approver has confirmed in a comment on this issue.
 
   - type: input
     id: full_name
@@ -32,22 +27,31 @@ body:
     validations:
       required: true
 
+  - type: input
+    id: team
+    attributes:
+      label: Team
+      placeholder: e.g. Team Core
+    validations:
+      required: true
+
   - type: textarea
     id: requested_access
     attributes:
-      label: Requested access
-      description: |
-        Specify required access clearly.
-
-        Examples:
-        - VPN authentication
-        - ACL group: group:team-core
-        - ACL group: group:altinn-platform
-        - Exit node access (test / prod)
+      label: Products to access
       placeholder: |
-        - VPN authentication
-        - group:team-core
-        - Exit node: test
+        - Product A
+        - Product B
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environments
+    attributes:
+      label: Environments
+      options:
+        - test
+        - test and prod
     validations:
       required: true
 
@@ -63,7 +67,8 @@ body:
     id: approver
     attributes:
       label: Approver (Product Owner / Team Lead / Architect)
-      placeholder: Name + role
+      description: Name and role of the person who approved this request. The approver must confirm by commenting on this issue before access is granted.
+      placeholder: Jane Smith, Product Owner
     validations:
       required: true
 
@@ -73,11 +78,13 @@ body:
         ---
         ### For Admins
 
-        Before closing this issue:
+        Before closing this issue, paste the following checklist in a comment and complete each item:
 
-        - [ ] Approval explicitly documented in this issue
+        ```
+        - [ ] Approver has confirmed in a comment on this issue
         - [ ] User added to Entra ID group: headscale-vpn-access (if requested)
         - [ ] User added to correct ACL group(s)
         - [ ] Exit-node access confirmed (if requested)
         - [ ] status/triage label updated as appropriate
         - [ ] Comment confirming completion
+        ```
