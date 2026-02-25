@@ -1,0 +1,64 @@
+name: VPN Access Request
+description: Request access to Altinn VPN (Headscale / Tailscale)
+title: "[VPN Access] <Full Name>"
+labels: ["access-request", "vpn"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## VPN Access Request
+
+        All VPN and ACL access must be approved by:
+        - Product Owner
+        - Team Lead
+        - Team Architect
+
+        Approval must be documented in this issue before access is granted.
+
+  - type: input
+    id: full_name
+    attributes:
+      label: Full name
+      placeholder: John Doe
+    validations:
+      required: true
+
+  - type: input
+    id: email
+    attributes:
+      label: Email address (Entra ID)
+      placeholder: user@altinn.cloud
+    validations:
+      required: true
+
+  - type: textarea
+    id: access_scope
+    attributes:
+      label: Requested access
+      description: |
+        Specify required access:
+        - VPN authentication
+        - ACL group (e.g. developers / platform-admins)
+        - Exit node access (test / prod)
+      placeholder: |
+        - headscale-vpn-access
+        - group:developers
+        - exit-node: test
+    validations:
+      required: true
+
+  - type: textarea
+    id: justification
+    attributes:
+      label: Business justification
+      placeholder: Explain why access is required
+    validations:
+      required: true
+
+  - type: input
+    id: approver
+    attributes:
+      label: Approver (Product Owner / Team Lead / Architect)
+      placeholder: Name of approver
+    validations:
+      required: true
