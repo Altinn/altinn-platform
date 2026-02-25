@@ -1,7 +1,7 @@
 - Feature Name: `cosign-oci-gitops`
 - Start Date: 2026-02-25
-- RFC PR: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/pull/0000)
-- Github Issue: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/issues/0000)
+- RFC PR: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/pull/3151)
+- Github Issue: N/A
 - Product/Category: Platform / SRE
 - State: **REVIEW** (possible states are: **REVIEW**, **ACCEPTED** and **REJECTED**)
 
@@ -298,5 +298,6 @@ Digest-pinning in Flux requires updating the `OCIRepository` manifest for every 
 
 - **SLSA provenance attestations:** extend the CI workflow to attach a signed SLSA provenance attestation to each immutable artifact using `cosign attest`, enabling `cosign verify-attestation` checks in policy engines.
 - **Notation support in Flux:** once Flux adds Notation verification support, we could evaluate migrating to the CNCF Notary v2 stack for compatibility with the broader CNCF ecosystem.
+- **Automated promotion pipelines:** build an opinionated "ring deployment" workflow that automatically promotes from `at22` → `at23` → `at24` → `yt01` → `tt02` based on test gate results, with a manual approval gate for `prod`.
 - **Policy engine integration:** feed Flux verification events into OPA/Gatekeeper or Kyverno policies for additional admission-time checks beyond what Flux enforces at the source level.
 - **Multi-registry mirroring:** mirror signed artifacts to a secondary registry for disaster recovery, with digest preservation and re-verification after copy.
