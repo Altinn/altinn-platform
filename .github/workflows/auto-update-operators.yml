@@ -17,6 +17,7 @@ jobs:
         operators:
           - dis-apim-operator
           - dis-identity-operator
+          - dis-pgsql-operator
     uses: ./.github/workflows/reusable-auto-update-kubebuilder.yml
     with:
       workdir: services/${{ matrix.operators }}
