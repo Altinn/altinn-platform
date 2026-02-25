@@ -1,19 +1,22 @@
 name: VPN Access Request
-description: Request access to Altinn VPN (Headscale / Tailscale)
+description: Request VPN and ACL access (Headscale / Tailscale)
 title: "[VPN Access] <Full Name>"
 labels: ["access-request", "vpn"]
+
 body:
   - type: markdown
     attributes:
       value: |
         ## VPN Access Request
 
-        All VPN and ACL access must be approved by:
+        Access to VPN and ACL groups requires documented approval.
+
+        Approval must be given by:
         - Product Owner
         - Team Lead
         - Team Architect
 
-        Approval must be documented in this issue before access is granted.
+        Do not grant access before approval is written in this issue.
 
   - type: input
     id: full_name
@@ -26,24 +29,28 @@ body:
   - type: input
     id: email
     attributes:
-      label: Email address (Entra ID)
+      label: Entra ID email (@altinn.cloud)
       placeholder: user@altinn.cloud
+      description: Must match the user’s Entra ID account.
     validations:
       required: true
 
   - type: textarea
-    id: access_scope
+    id: requested_access
     attributes:
       label: Requested access
       description: |
-        Specify required access:
-        - VPN authentication
-        - ACL group (e.g. developers / platform-admins)
+        Specify required access clearly.
+
+        Examples:
+        - VPN authentication (headscale-vpn-access)
+        - ACL group: group:team-core
+        - ACL group: group:altinn-platform
         - Exit node access (test / prod)
       placeholder: |
         - headscale-vpn-access
-        - group:developers
-        - exit-node: test
+        - group:team-core
+        - Exit node: test
     validations:
       required: true
 
@@ -51,7 +58,7 @@ body:
     id: justification
     attributes:
       label: Business justification
-      placeholder: Explain why access is required
+      placeholder: Explain why this access is required
     validations:
       required: true
 
@@ -59,6 +66,19 @@ body:
     id: approver
     attributes:
       label: Approver (Product Owner / Team Lead / Architect)
-      placeholder: Name of approver
+      placeholder: Name + role
     validations:
       required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        ### For Admins
+
+        Before closing this issue:
+
+        - [ ] User added to Entra ID group: headscale-vpn-access (if requested)
+        - [ ] User added to correct ACL group(s)
+        - [ ] Exit-node access confirmed (if requested)
+        - [ ] Comment confirming completion
