@@ -12,6 +12,8 @@ body:
       value: |
         ## VPN Access Request
 
+        See the [VPN Altinn Cloud User Guide](https://digdir.atlassian.net/wiki/x/aoDN7w) for setup instructions.
+
         Access requires documented approval from:
         - Product Owner
         - Team Lead
