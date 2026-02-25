@@ -6,7 +6,7 @@ import (
 )
 
 // GeneratePolicyFromTemplate generates a policy from a template
-func GeneratePolicyFromTemplate(templateContent string, data interface{}) (string, error) {
+func GeneratePolicyFromTemplate(templateContent string, data any) (string, error) {
 	tmpl, err := template.New("policy").Parse(templateContent)
 	if err != nil {
 		return "", err
