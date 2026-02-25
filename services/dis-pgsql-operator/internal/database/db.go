@@ -3,8 +3,9 @@ package database
 import dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 
 const (
-	defaultBackupRetentionDaysNonProd = 14
-	defaultBackupRetentionDaysProd    = 30
+	defaultBackupRetentionDaysNonProd  = 14
+	defaultBackupRetentionDaysProd     = 30
+	defaultHighAvailabilityEnabledProd = true
 )
 
 type Profile struct {
@@ -25,12 +26,10 @@ var prodProfile = Profile{
 }
 
 func GetProfile(serverType string) Profile {
-	switch serverType {
-	case "prod", "production":
+	if isProdServerType(serverType) {
 		return prodProfile
-	default:
-		return devProfile
 	}
+	return devProfile
 }
 
 func ResolveBackupRetentionDays(serverType string, requested *int) int {
@@ -38,10 +37,30 @@ func ResolveBackupRetentionDays(serverType string, requested *int) int {
 		return *requested
 	}
 
-	switch serverType {
-	case "prod", "production":
+	if isProdServerType(serverType) {
 		return defaultBackupRetentionDaysProd
-	default:
-		return defaultBackupRetentionDaysNonProd
 	}
+	return defaultBackupRetentionDaysNonProd
+}
+
+func ResolveHighAvailabilityEnabled(serverType string, requested *bool) bool {
+	if requested != nil {
+		return *requested
+	}
+
+	if isProdServerType(serverType) {
+		return defaultHighAvailabilityEnabledProd
+	}
+	return false
+}
+
+func ResolveHighAvailabilityMode(serverType string, requested *bool) dbforpostgresqlv1.HighAvailability_Mode {
+	if ResolveHighAvailabilityEnabled(serverType, requested) {
+		return dbforpostgresqlv1.HighAvailability_Mode_ZoneRedundant
+	}
+	return dbforpostgresqlv1.HighAvailability_Mode_Disabled
+}
+
+func isProdServerType(serverType string) bool {
+	return serverType == "prod" || serverType == "production"
 }

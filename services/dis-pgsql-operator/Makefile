@@ -1,4 +1,6 @@
-# Image URL to use all building/pushing image targets
+# Image URL to use for build/deploy targets.
+# Keep the localhost/ prefix: in local Kind flows we load this image directly,
+# and this avoids accidental registry lookups when the image name is overridden.
 IMG ?= localhost/controller:latest
 KIND_IMAGE_ARCHIVE := bin/dis-pgsql-operator_image.tar
 
@@ -258,9 +260,11 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 
 .PHONY: build-installer
 build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.
-	mkdir -p dist
-	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
-	"$(KUSTOMIZE)" build config/default > dist/install.yaml
+	@set -e; \
+		trap '$(MAKE) -C "$(CURDIR)" restore-kustomize >/dev/null' EXIT; \
+		mkdir -p dist; \
+		( cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG} ); \
+		"$(KUSTOMIZE)" build config/default > dist/install.yaml
 
 ##@ Deployment
 
@@ -286,13 +290,17 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
-	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" apply -f -
+	@set -e; \
+		trap '$(MAKE) -C "$(CURDIR)" restore-kustomize >/dev/null' EXIT; \
+		( cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG} ); \
+		"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" apply -f -
 
 .PHONY: deploy-kind
 deploy-kind: manifests kustomize ## Deploy controller to a Kind cluster (IfNotPresent pull policy).
-	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
-	"$(KUSTOMIZE)" build config/kind | "$(KUBECTL)" apply -f -
+	@set -e; \
+		trap '$(MAKE) -C "$(CURDIR)" restore-kustomize >/dev/null' EXIT; \
+		( cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG} ); \
+		"$(KUSTOMIZE)" build config/kind | "$(KUBECTL)" apply -f -
 
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
@@ -300,7 +308,7 @@ undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.
 
 .PHONY: restore-kustomize
 restore-kustomize: ## Restore kustomize edits made by deploy/build targets.
-	git restore -- config/manager/kustomization.yaml
+	git restore --source=HEAD --staged --worktree -- config/manager/kustomization.yaml
 
 ##@ Dependencies
 

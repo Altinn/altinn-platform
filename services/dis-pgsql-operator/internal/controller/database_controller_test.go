@@ -481,11 +481,212 @@ var _ = Describe("Database controller", func() {
 		Expect(s.Spec.Storage.Tier).NotTo(BeNil())
 		Expect(string(*s.Spec.Storage.Tier)).To(Equal("P10"))
 
+		Expect(s.Spec.HighAvailability).NotTo(BeNil())
+		Expect(s.Spec.HighAvailability.Mode).NotTo(BeNil())
+		Expect(*s.Spec.HighAvailability.Mode).To(Equal(dbforpostgresqlv1.HighAvailability_Mode_Disabled))
+		Expect(s.Spec.HighAvailability.StandbyAvailabilityZone).To(BeNil())
+
 		Expect(s.Spec.Backup).NotTo(BeNil())
 		Expect(s.Spec.Backup.BackupRetentionDays).NotTo(BeNil())
 		Expect(*s.Spec.Backup.BackupRetentionDays).To(Equal(14))
 		Expect(s.Spec.Backup.GeoRedundantBackup).NotTo(BeNil())
 		Expect(*s.Spec.Backup.GeoRedundantBackup).To(Equal(dbforpostgresqlv1.Backup_GeoRedundantBackup_Disabled))
+	})
+
+	It("defaults highAvailabilityEnabled to true for prod server types", func() {
+		db := &storagev1alpha1.Database{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-app-db-psql-ha-prod-default",
+				Namespace: "default",
+			},
+			Spec: storagev1alpha1.DatabaseSpec{
+				Version:    17,
+				ServerType: "prod",
+				Auth: directAuth(
+					"admin-mi",
+					"admin-mi-id",
+					"admin-mi",
+					"user-mi",
+					"user-mi-id",
+				),
+			},
+		}
+
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		Eventually(func(g Gomega) struct {
+			mode        dbforpostgresqlv1.HighAvailability_Mode
+			standbyZone string
+		} {
+			var s dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &s)).To(Succeed())
+			g.Expect(s.Spec.HighAvailability).NotTo(BeNil())
+			g.Expect(s.Spec.HighAvailability.Mode).NotTo(BeNil())
+			g.Expect(s.Spec.HighAvailability.StandbyAvailabilityZone).NotTo(BeNil())
+			return struct {
+				mode        dbforpostgresqlv1.HighAvailability_Mode
+				standbyZone string
+			}{
+				mode:        *s.Spec.HighAvailability.Mode,
+				standbyZone: *s.Spec.HighAvailability.StandbyAvailabilityZone,
+			}
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(struct {
+				mode        dbforpostgresqlv1.HighAvailability_Mode
+				standbyZone string
+			}{
+				mode:        dbforpostgresqlv1.HighAvailability_Mode_ZoneRedundant,
+				standbyZone: "2",
+			}))
+	})
+
+	It("uses explicit highAvailabilityEnabled false when set", func() {
+		highAvailabilityEnabled := false
+
+		db := &storagev1alpha1.Database{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-app-db-psql-ha-explicit-false",
+				Namespace: "default",
+			},
+			Spec: storagev1alpha1.DatabaseSpec{
+				Version:                 17,
+				ServerType:              "prod",
+				HighAvailabilityEnabled: &highAvailabilityEnabled,
+				Auth: directAuth(
+					"admin-mi",
+					"admin-mi-id",
+					"admin-mi",
+					"user-mi",
+					"user-mi-id",
+				),
+			},
+		}
+
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		Eventually(func(g Gomega) struct {
+			mode        dbforpostgresqlv1.HighAvailability_Mode
+			standbyZone string
+		} {
+			var s dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &s)).To(Succeed())
+			g.Expect(s.Spec.HighAvailability).NotTo(BeNil())
+			g.Expect(s.Spec.HighAvailability.Mode).NotTo(BeNil())
+			standbyZone := ""
+			if s.Spec.HighAvailability.StandbyAvailabilityZone != nil {
+				standbyZone = *s.Spec.HighAvailability.StandbyAvailabilityZone
+			}
+			return struct {
+				mode        dbforpostgresqlv1.HighAvailability_Mode
+				standbyZone string
+			}{
+				mode:        *s.Spec.HighAvailability.Mode,
+				standbyZone: standbyZone,
+			}
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(struct {
+				mode        dbforpostgresqlv1.HighAvailability_Mode
+				standbyZone string
+			}{
+				mode:        dbforpostgresqlv1.HighAvailability_Mode_Disabled,
+				standbyZone: "",
+			}))
+	})
+
+	It("updates the FlexibleServer when highAvailabilityEnabled changes", func() {
+		highAvailabilityEnabled := true
+
+		db := &storagev1alpha1.Database{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-app-db-psql-ha-update",
+				Namespace: "default",
+			},
+			Spec: storagev1alpha1.DatabaseSpec{
+				Version:                 17,
+				ServerType:              "dev",
+				HighAvailabilityEnabled: &highAvailabilityEnabled,
+				Auth: directAuth(
+					"admin-mi",
+					"admin-mi-id",
+					"admin-mi",
+					"user-mi",
+					"user-mi-id",
+				),
+			},
+		}
+
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		Eventually(func(g Gomega) struct {
+			mode        dbforpostgresqlv1.HighAvailability_Mode
+			standbyZone string
+		} {
+			var s dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &s)).To(Succeed())
+			g.Expect(s.Spec.HighAvailability).NotTo(BeNil())
+			g.Expect(s.Spec.HighAvailability.Mode).NotTo(BeNil())
+			g.Expect(s.Spec.HighAvailability.StandbyAvailabilityZone).NotTo(BeNil())
+			return struct {
+				mode        dbforpostgresqlv1.HighAvailability_Mode
+				standbyZone string
+			}{
+				mode:        *s.Spec.HighAvailability.Mode,
+				standbyZone: *s.Spec.HighAvailability.StandbyAvailabilityZone,
+			}
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(struct {
+				mode        dbforpostgresqlv1.HighAvailability_Mode
+				standbyZone string
+			}{
+				mode:        dbforpostgresqlv1.HighAvailability_Mode_ZoneRedundant,
+				standbyZone: "2",
+			}))
+
+		highAvailabilityDisabled := false
+		var updated storagev1alpha1.Database
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
+		updated.Spec.HighAvailabilityEnabled = &highAvailabilityDisabled
+		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
+
+		Eventually(func(g Gomega) struct {
+			mode        dbforpostgresqlv1.HighAvailability_Mode
+			standbyZone string
+		} {
+			var s dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &s)).To(Succeed())
+			g.Expect(s.Spec.HighAvailability).NotTo(BeNil())
+			g.Expect(s.Spec.HighAvailability.Mode).NotTo(BeNil())
+			standbyZone := ""
+			if s.Spec.HighAvailability.StandbyAvailabilityZone != nil {
+				standbyZone = *s.Spec.HighAvailability.StandbyAvailabilityZone
+			}
+			return struct {
+				mode        dbforpostgresqlv1.HighAvailability_Mode
+				standbyZone string
+			}{
+				mode:        *s.Spec.HighAvailability.Mode,
+				standbyZone: standbyZone,
+			}
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(struct {
+				mode        dbforpostgresqlv1.HighAvailability_Mode
+				standbyZone string
+			}{
+				mode:        dbforpostgresqlv1.HighAvailability_Mode_Disabled,
+				standbyZone: "",
+			}))
 	})
 
 	It("uses explicit backupRetentionDays when set", func() {
