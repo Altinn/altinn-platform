@@ -41,6 +41,7 @@ var _ = Describe("User provisioning", Ordered, func() {
 	const (
 		dbName                     = "e2e-user-provision"
 		explicitRetentionDBName    = "e2e-backup-retention-explicit"
+		explicitHADBName           = "e2e-ha-explicit"
 		namespace                  = "default"
 		adminIdentityRef           = "adminidentity"
 		adminIdentity              = "adminidentity"
@@ -57,6 +58,7 @@ var _ = Describe("User provisioning", Ordered, func() {
 		By("cleaning up stale Database and Job resources from previous runs")
 		deleteDatabaseAndProvisionJobs(dbName, namespace)
 		deleteDatabaseAndProvisionJobs(explicitRetentionDBName, namespace)
+		deleteDatabaseAndProvisionJobs(explicitHADBName, namespace)
 
 		manifestPath = writeTestManifest(
 			dbName,
@@ -243,6 +245,77 @@ var _ = Describe("User provisioning", Ordered, func() {
 		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).
 			Should(Equal(fmt.Sprintf("%d", explicitBackupRetentionDay)))
 	})
+
+	It("applies explicit highAvailabilityEnabled to the FlexibleServer", func() {
+		manifestPath := writeTestManifestWithHighAvailability(
+			explicitHADBName,
+			namespace,
+			adminIdentityRef,
+			userIdentityRef,
+			true,
+		)
+
+		defer func() {
+			cmd := exec.Command("kubectl", "delete", "-f", manifestPath, "--ignore-not-found=true")
+			_, _ = utils.Run(cmd)
+			_ = os.Remove(manifestPath)
+			deleteDatabaseAndProvisionJobs(explicitHADBName, namespace)
+		}()
+
+		By("creating a Database custom resource with explicit HA enabled")
+		cmd := exec.Command("kubectl", "apply", "-f", manifestPath)
+		_, err := utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed to apply Database manifest with explicit HA")
+
+		By("verifying the Database spec keeps explicit highAvailabilityEnabled")
+		Eventually(func(g Gomega) string {
+			cmd := exec.Command(
+				"kubectl", "get",
+				"databases.storage.dis.altinn.cloud",
+				explicitHADBName,
+				"-n", namespace,
+				"-o", "jsonpath={.spec.highAvailabilityEnabled}",
+			)
+			output, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			return strings.TrimSpace(output)
+		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).
+			Should(Equal("true"))
+
+		By("verifying explicit HA maps to ZoneRedundant mode and standby zone 2")
+		Eventually(func(g Gomega) struct {
+			mode        string
+			standbyZone string
+		} {
+			cmd := exec.Command(
+				"kubectl", "get",
+				"flexibleservers.dbforpostgresql.azure.com",
+				explicitHADBName,
+				"-n", namespace,
+				"-o", "jsonpath={.spec.highAvailability.mode},{.spec.highAvailability.standbyAvailabilityZone}",
+			)
+			output, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			parts := strings.Split(strings.TrimSpace(output), ",")
+			g.Expect(parts).To(HaveLen(2))
+
+			return struct {
+				mode        string
+				standbyZone string
+			}{
+				mode:        parts[0],
+				standbyZone: parts[1],
+			}
+		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).
+			Should(Equal(struct {
+				mode        string
+				standbyZone string
+			}{
+				mode:        "ZoneRedundant",
+				standbyZone: "2",
+			}))
+	})
 })
 
 func writeTestManifest(dbName, namespace, adminIdentityRef, userIdentityRef string) string {
@@ -290,6 +363,56 @@ func writeTestManifestWithBackupRetention(
 		database.Spec.BackupRetentionDays = &backupRetentionDays
 	}
 
+	return writeManifestWithApplicationIdentities(database, namespace, adminIdentityRef, userIdentityRef)
+}
+
+func writeTestManifestWithHighAvailability(
+	dbName, namespace, adminIdentityRef, userIdentityRef string,
+	highAvailabilityEnabled bool,
+) string {
+	sizeGB := int32(32)
+	tier := "P80"
+
+	database := &storagev1alpha1.Database{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "storage.dis.altinn.cloud/v1alpha1",
+			Kind:       "Database",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      dbName,
+			Namespace: namespace,
+		},
+		Spec: storagev1alpha1.DatabaseSpec{
+			Version:                 17,
+			ServerType:              "dev",
+			HighAvailabilityEnabled: &highAvailabilityEnabled,
+			Storage: &storagev1alpha1.DatabaseStorageSpec{
+				SizeGB: &sizeGB,
+				Tier:   &tier,
+			},
+			Auth: storagev1alpha1.DatabaseAuth{
+				Admin: storagev1alpha1.AdminIdentitySpec{
+					Identity: storagev1alpha1.IdentitySource{
+						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: adminIdentityRef},
+					},
+				},
+				User: storagev1alpha1.UserIdentitySpec{
+					Identity: storagev1alpha1.IdentitySource{
+						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: userIdentityRef},
+					},
+				},
+			},
+		},
+	}
+
+	return writeManifestWithApplicationIdentities(database, namespace, adminIdentityRef, userIdentityRef)
+}
+
+func writeManifestWithApplicationIdentities(
+	database *storagev1alpha1.Database,
+	namespace, adminIdentityRef, userIdentityRef string,
+) string {
+
 	adminIdentity := &identityv1alpha1.ApplicationIdentity{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "application.dis.altinn.cloud/v1alpha1",
@@ -328,7 +451,7 @@ func writeTestManifestWithBackupRetention(
 	}
 
 	dir := os.TempDir()
-	path := filepath.Join(dir, fmt.Sprintf("db-%s.yaml", dbName))
+	path := filepath.Join(dir, fmt.Sprintf("db-%s.yaml", database.Name))
 	err := os.WriteFile(path, []byte(content), 0o600)
 	Expect(err).NotTo(HaveOccurred(), "Failed to write temp manifest")
 	return path

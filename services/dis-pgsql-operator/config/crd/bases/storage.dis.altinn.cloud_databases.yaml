@@ -155,6 +155,11 @@ spec:
                   type: string
                 type: array
                 x-kubernetes-list-type: set
+              highAvailabilityEnabled:
+                description: |-
+                  highAvailabilityEnabled controls whether PostgreSQL high availability is enabled.
+                  If omitted, it defaults to true for prod/production server types and false otherwise.
+                type: boolean
               serverType:
                 description: serverType selects the size/profile of the database server
                   (e.g. "dev", "prod").

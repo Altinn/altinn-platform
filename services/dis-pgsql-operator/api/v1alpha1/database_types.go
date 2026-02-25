@@ -92,6 +92,11 @@ type DatabaseSpec struct {
 	// +optional
 	Storage *DatabaseStorageSpec `json:"storage,omitempty"`
 
+	// highAvailabilityEnabled controls whether PostgreSQL high availability is enabled.
+	// If omitted, it defaults to true for prod/production server types and false otherwise.
+	// +optional
+	HighAvailabilityEnabled *bool `json:"highAvailabilityEnabled,omitempty"`
+
 	// backupRetentionDays controls backup retention for the server.
 	// If omitted, it defaults to 14 for non-prod server types and 30 for prod/production.
 	// +optional

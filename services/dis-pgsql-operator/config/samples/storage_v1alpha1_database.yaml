@@ -6,6 +6,7 @@ metadata:
 spec:
   version: 16
   serverType: prod
+  highAvailabilityEnabled: true
   backupRetentionDays: 30
   storage:
     sizeGB: 128
@@ -28,6 +29,7 @@ metadata:
 spec:
   version: 17
   serverType: dev
+  highAvailabilityEnabled: false
   enableExtensions:
     - hstore
     - pg_cron

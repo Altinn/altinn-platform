@@ -146,6 +146,11 @@ func (in *DatabaseSpec) DeepCopyInto(out *DatabaseSpec) {
 		*out = new(DatabaseStorageSpec)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.HighAvailabilityEnabled != nil {
+		in, out := &in.HighAvailabilityEnabled, &out.HighAvailabilityEnabled
+		*out = new(bool)
+		**out = **in
+	}
 	if in.BackupRetentionDays != nil {
 		in, out := &in.BackupRetentionDays, &out.BackupRetentionDays
 		*out = new(int)

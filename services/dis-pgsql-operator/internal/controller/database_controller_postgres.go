@@ -24,8 +24,9 @@ import (
 // The defaults for storage size and tier are also hardcoded
 // until we release the beta version.
 const (
-	defaultStorageGB int32 = 32
-	loc                    = "norwayeast"
+	defaultStorageGB     int32 = 32
+	loc                        = "norwayeast"
+	defaultHAStandbyZone       = "2"
 )
 
 // Reuse the defaults for now
@@ -59,6 +60,19 @@ func desiredBackup(db *storagev1alpha1.Database) *dbforpostgresqlv1.Backup {
 		BackupRetentionDays: to.Ptr(dbUtil.ResolveBackupRetentionDays(db.Spec.ServerType, db.Spec.BackupRetentionDays)),
 		GeoRedundantBackup:  &geoRedundantBackup,
 	}
+}
+
+func desiredHighAvailability(db *storagev1alpha1.Database) *dbforpostgresqlv1.HighAvailability {
+	mode := dbUtil.ResolveHighAvailabilityMode(db.Spec.ServerType, db.Spec.HighAvailabilityEnabled)
+	highAvailability := &dbforpostgresqlv1.HighAvailability{
+		Mode: &mode,
+	}
+
+	if mode != dbforpostgresqlv1.HighAvailability_Mode_Disabled {
+		highAvailability.StandbyAvailabilityZone = to.Ptr(defaultHAStandbyZone)
+	}
+
+	return highAvailability
 }
 
 // subnetARMID builds the ARM ID for a subnet in the DB VNet.
@@ -109,6 +123,7 @@ func (r *DatabaseReconciler) ensurePostgresServer(
 	// define storage size and tier
 	storage := desiredStorage(db)
 	backup := desiredBackup(db)
+	highAvailability := desiredHighAvailability(db)
 
 	versionStr := fmt.Sprintf("%d", db.Spec.Version)
 	version := dbforpostgresqlv1.ServerVersion(versionStr)
@@ -154,10 +169,11 @@ func (r *DatabaseReconciler) ensurePostgresServer(
 			ARMID: fmt.Sprintf("/subscriptions/%s/resourceGroups/%s", r.Config.SubscriptionId, r.Config.ResourceGroup),
 		},
 
-		Version: &version,
-		Network: network,
-		Storage: storage,
-		Backup:  backup,
+		Version:          &version,
+		Network:          network,
+		Storage:          storage,
+		Backup:           backup,
+		HighAvailability: highAvailability,
 		Sku: &dbforpostgresqlv1.Sku{
 			Name: to.Ptr(profile.SkuName),
 			Tier: to.Ptr(profile.SkuTier),
