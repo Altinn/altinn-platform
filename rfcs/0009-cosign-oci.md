@@ -1,6 +1,6 @@
 - Feature Name: `cosign-oci-gitops`
 - Start Date: 2026-02-25
-- RFC PR: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/pull/3151)
+- RFC PR: [altinn/altinn-platform#3151](https://github.com/altinn/altinn-platform/pull/3151)
 - Github Issue: N/A
 - Product/Category: Platform / SRE
 - State: **REVIEW** (possible states are: **REVIEW**, **ACCEPTED** and **REJECTED**)
