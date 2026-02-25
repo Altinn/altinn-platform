@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.3.0...dis-pgsql-v0.4.0) (2026-02-25)
+
+
+### Features
+
+* **dis-pgsql:** enable ha on spec ([#3143](https://github.com/Altinn/altinn-platform/issues/3143)) ([295a3ed](https://github.com/Altinn/altinn-platform/commit/295a3ed12f8a08e415f2da0bff8af70c5dc79909))
+
 ## [0.3.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.2.0...dis-pgsql-v0.3.0) (2026-02-20)
 
 
