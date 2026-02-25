@@ -58,13 +58,18 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
+      - name: Get GitHub Organization
+        id: get_org
+        shell: bash
+        run: echo "org=$(jq -r '.github_org_name' infrastructure/syncroots/terraform.tfvars.json)" >> $GITHUB_OUTPUT
+
       - name: Generate GitHub App Token
         id: generate_token
         uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
         with:
           app-id: ${{ vars.GH_ADMIN_APP_ID }}
           private-key: ${{ secrets.GH_ADMIN_PEM_PRIVATE_KEY }}
-          owner: Altinn
+          owner: ${{ steps.get_org.outputs.org }}
 
       - name: Terraform Plan
         uses: Altinn/altinn-platform/actions/terraform/plan@0be6bf2f191006bb8011ebe55071c6796945cafa # main
@@ -90,13 +95,18 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
+      - name: Get GitHub Organization
+        id: get_org
+        shell: bash
+        run: echo "org=$(jq -r '.github_org_name' infrastructure/syncroots/terraform.tfvars.json)" >> $GITHUB_OUTPUT
+
       - name: Generate GitHub App Token
         id: generate_token
         uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
         with:
           app-id: ${{ vars.GH_ADMIN_APP_ID }}
           private-key: ${{ secrets.GH_ADMIN_PEM_PRIVATE_KEY }}
-          owner: Altinn
+          owner: ${{ steps.get_org.outputs.org }}
 
       - name: Terraform Apply
         uses: Altinn/altinn-platform/actions/terraform/apply@0be6bf2f191006bb8011ebe55071c6796945cafa # main
@@ -122,7 +132,7 @@ jobs:
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
       - name: Login to Azure
-        uses: azure/login@v2
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
         with:
           client-id: ${{ secrets.AZURE_ALTINNACR_APP_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -133,11 +143,11 @@ jobs:
         run: |
           TAGS=("at22" "at23" "at24" "tt02" "yt01" "prod")
           ACR_NAME="altinncr"
+          ACR_LOGIN_SERVER="${ACR_NAME}.azurecr.io"
           SOURCE_IMAGE="dis/default-syncroot:latest"
           
-          # Extract product keys from terraform.tfvars
-          # Matches lines starting with " (2 spaces followed by double quote) followed by name
-          PRODUCTS=$(grep -oP '(?<=^  ")[^"]+' infrastructure/syncroots/terraform.tfvars)
+          # Extract product keys from terraform.tfvars.json
+          PRODUCTS=$(jq -r '.product_syncroot_source_repos | keys[]' infrastructure/syncroots/terraform.tfvars.json)
           
           for PRODUCT in $PRODUCTS; do
             TARGET_REPO="${PRODUCT}/syncroot"
@@ -147,17 +157,14 @@ jobs:
               echo "  Target tag: ${TAG}"
               
               # Check if tag exists
-              TAG_EXISTS=$(az acr repository show-tags --name "$ACR_NAME" --repository "$TARGET_REPO" --output table 2>/dev/null | grep -q "^${TAG}$" && echo "true" || echo "false")
-              
-              if [ "$TAG_EXISTS" == "true" ]; then
+              if az acr repository show --name "$ACR_NAME" --image "${TARGET_REPO}:${TAG}" &>/dev/null; then
                 echo "    Tag ${TAG} already exists for ${TARGET_REPO}. Skipping."
               else
                 echo "    Tag ${TAG} not found. Importing from ${SOURCE_IMAGE}..."
                 az acr import \
                   --name "$ACR_NAME" \
-                  --source "$SOURCE_IMAGE" \
-                  --image "${TARGET_REPO}:${TAG}" \
-                  --ref "$SOURCE_IMAGE"
+                  --source "${ACR_LOGIN_SERVER}/${SOURCE_IMAGE}" \
+                  --image "${TARGET_REPO}:${TAG}"
               fi
             done
           done

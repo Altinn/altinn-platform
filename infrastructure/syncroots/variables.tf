@@ -12,6 +12,11 @@ variable "product_syncroot_source_repos" {
   type = map(object({
     repo_name    = string
     environments = set(string)
-    refs         = set(string)
+    branches     = set(string)
   }))
+
+  validation {
+    condition     = alltrue([for k, v in var.product_syncroot_source_repos : can(regex("^[a-zA-Z0-9]+$", k))])
+    error_message = "Product names (map keys) must be alphanumeric characters only."
+  }
 }

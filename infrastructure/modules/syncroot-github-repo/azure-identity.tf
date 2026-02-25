@@ -18,12 +18,12 @@ resource "azurerm_federated_identity_credential" "syncroot_pusher_envs" {
   subject             = "repo:${var.github_org_name}/${var.github_repo_name}:environment:${each.value}"
 }
 
-resource "azurerm_federated_identity_credential" "syncroot_pusher_refs" {
-  for_each            = var.github_refs
+resource "azurerm_federated_identity_credential" "syncroot_pusher_branches" {
+  for_each            = var.github_branches
   name                = "${var.github_org_name}-${var.github_repo_name}-ref-${each.value}"
   resource_group_name = var.resource_group_name
   parent_id           = azurerm_user_assigned_identity.syncroot_pusher.id
   issuer              = "https://token.actions.githubusercontent.com"
   audience            = ["api://AzureADTokenExchange"]
-  subject             = "repo:${var.github_org_name}/${var.github_repo_name}:ref:${each.value}"
+  subject             = "repo:${var.github_org_name}/${var.github_repo_name}:ref:refs/heads/${each.value}"
 }

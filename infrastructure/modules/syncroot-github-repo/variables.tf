@@ -14,9 +14,9 @@ variable "github_environments" {
   description = "Github action environments with matching federation"
 }
 
-variable "github_refs" {
+variable "github_branches" {
   type        = set(string)
-  description = "Github refs with matching federation"
+  description = "Github branches with matching federation"
 }
 
 variable "product_name" {

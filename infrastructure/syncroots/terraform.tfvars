@@ -1,8 +1,0 @@
-github_org_name = "Altinn"
-product_syncroot_source_repos = {
-  "dialogporten" = {
-    repo_name = "dialogporten-manifests"
-    environments = []
-    refs = ["main"]
-  }
-}
