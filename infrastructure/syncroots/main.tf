@@ -1,5 +1,5 @@
 resource "azurerm_resource_group" "syncroot_pushers" {
-  name     = "${var.github_org_name}-oidc-syncroot-pushers"
+  name     = "DIS_github_${lower(var.github_org_name)}_uami-rg"
   location = "norwayeast"
 }
 
