@@ -1,0 +1,90 @@
+name: VPN Access Request
+description: Request VPN and ACL access (Headscale / Tailscale)
+title: "[VPN Access]"
+labels:
+  - area/access-mgmt
+  - kind/toil
+  - status/triage
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## VPN Access Request
+
+        Access requires documented approval from:
+        - Product Owner
+        - Team Lead
+        - Team Architect
+
+        Do not grant access before the approver has confirmed in a comment on this issue.
+
+  - type: input
+    id: full_name
+    attributes:
+      label: Full name
+      placeholder: John Doe
+    validations:
+      required: true
+
+  - type: input
+    id: team
+    attributes:
+      label: Team
+      placeholder: e.g. Team Core
+    validations:
+      required: true
+
+  - type: textarea
+    id: requested_access
+    attributes:
+      label: Products to access
+      placeholder: |
+        - Product A
+        - Product B
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environments
+    attributes:
+      label: Environments
+      options:
+        - test
+        - test and prod
+    validations:
+      required: true
+
+  - type: textarea
+    id: justification
+    attributes:
+      label: Business justification
+      placeholder: Explain why this access is required
+    validations:
+      required: true
+
+  - type: input
+    id: approver
+    attributes:
+      label: Approver (Product Owner / Team Lead / Architect)
+      description: Name and role of the person who approved this request. The approver must confirm by commenting on this issue before access is granted.
+      placeholder: Jane Smith, Product Owner
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        ### For Admins
+
+        Before closing this issue, paste the following checklist in a comment and complete each item:
+
+        ```
+        - [ ] Approver has confirmed in a comment on this issue
+        - [ ] User added to Entra ID group: headscale-vpn-access (if requested)
+        - [ ] User added to correct ACL group(s)
+        - [ ] Exit-node access confirmed (if requested)
+        - [ ] status/triage label updated as appropriate
+        - [ ] Comment confirming completion
+        ```
