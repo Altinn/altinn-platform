@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.0](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.4.1...ghrunner-0.5.0) (2026-02-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* Install Node.js 24 in GH runner Dockerfile ([#3147](https://github.com/Altinn/altinn-platform/issues/3147))
+
+### Features
+
+* Install Node.js 24 in GH runner Dockerfile ([#3147](https://github.com/Altinn/altinn-platform/issues/3147)) ([2ff313c](https://github.com/Altinn/altinn-platform/commit/2ff313c27b0094a892f7e352d5bc704885ed9275))
+
 ## [0.4.1](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.4.0...ghrunner-0.4.1) (2026-01-22)
 
 
