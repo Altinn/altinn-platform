@@ -66,33 +66,18 @@ var _ = Describe("User provisioning", Ordered, func() {
 			adminIdentityRef,
 			userIdentityRef,
 		)
-		By("creating a Database custom resource")
-		cmd := exec.Command("kubectl", "apply", "-f", manifestPath)
-		_, err := utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Failed to apply Database manifest")
-
-		By("patching ApplicationIdentity status fields")
-		cmd = exec.Command(
-			"kubectl", "patch",
-			"applicationidentity", adminIdentityRef,
-			"-n", namespace,
-			"--subresource=status",
-			"--type=merge",
-			"-p", fmt.Sprintf(`{"status":{"managedIdentityName":"%s","principalId":"%s"}}`, adminIdentity, adminPrincipal),
+		By("creating a Database custom resource with identity prerequisites")
+		applyManifestWithIdentityPrerequisites(
+			manifestPath,
+			namespace,
+			adminIdentityRef,
+			adminIdentity,
+			adminPrincipal,
+			userIdentityRef,
+			userIdentity,
+			userPrincipalId,
+			"Failed to apply Database manifest",
 		)
-		_, err = utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Failed to patch admin ApplicationIdentity status")
-
-		cmd = exec.Command(
-			"kubectl", "patch",
-			"applicationidentity", userIdentityRef,
-			"-n", namespace,
-			"--subresource=status",
-			"--type=merge",
-			"-p", fmt.Sprintf(`{"status":{"managedIdentityName":"%s","principalId":"%s"}}`, userIdentity, userPrincipalId),
-		)
-		_, err = utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Failed to patch user ApplicationIdentity status")
 
 	})
 
@@ -211,9 +196,17 @@ var _ = Describe("User provisioning", Ordered, func() {
 		}()
 
 		By("creating a Database custom resource with explicit backup retention")
-		cmd := exec.Command("kubectl", "apply", "-f", manifestPath)
-		_, err := utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Failed to apply Database manifest with explicit backup retention")
+		applyManifestWithIdentityPrerequisites(
+			manifestPath,
+			namespace,
+			adminIdentityRef,
+			adminIdentity,
+			adminPrincipal,
+			userIdentityRef,
+			userIdentity,
+			userPrincipalId,
+			"Failed to apply Database manifest with explicit backup retention",
+		)
 
 		By("verifying the Database spec keeps the explicit backup retention")
 		Eventually(func(g Gomega) string {
@@ -263,9 +256,17 @@ var _ = Describe("User provisioning", Ordered, func() {
 		}()
 
 		By("creating a Database custom resource with explicit HA enabled")
-		cmd := exec.Command("kubectl", "apply", "-f", manifestPath)
-		_, err := utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Failed to apply Database manifest with explicit HA")
+		applyManifestWithIdentityPrerequisites(
+			manifestPath,
+			namespace,
+			adminIdentityRef,
+			adminIdentity,
+			adminPrincipal,
+			userIdentityRef,
+			userIdentity,
+			userPrincipalId,
+			"Failed to apply Database manifest with explicit HA",
+		)
 
 		By("verifying the Database spec keeps explicit highAvailabilityEnabled")
 		Eventually(func(g Gomega) string {
@@ -455,6 +456,33 @@ func writeManifestWithApplicationIdentities(
 	err := os.WriteFile(path, []byte(content), 0o600)
 	Expect(err).NotTo(HaveOccurred(), "Failed to write temp manifest")
 	return path
+}
+
+func patchApplicationIdentityStatus(identityRef, namespace, managedIdentityName, principalID string) {
+	cmd := exec.Command(
+		"kubectl", "patch",
+		"applicationidentity", identityRef,
+		"-n", namespace,
+		"--subresource=status",
+		"--type=merge",
+		"-p", fmt.Sprintf(`{"status":{"managedIdentityName":"%s","principalId":"%s"}}`, managedIdentityName, principalID),
+	)
+	_, err := utils.Run(cmd)
+	Expect(err).NotTo(HaveOccurred(), "Failed to patch ApplicationIdentity status for %s", identityRef)
+}
+
+func applyManifestWithIdentityPrerequisites(
+	manifestPath, namespace,
+	adminIdentityRef, adminManagedIdentityName, adminPrincipalID,
+	userIdentityRef, userManagedIdentityName, userPrincipalID,
+	applyFailureMessage string,
+) {
+	cmd := exec.Command("kubectl", "apply", "-f", manifestPath)
+	_, err := utils.Run(cmd)
+	Expect(err).NotTo(HaveOccurred(), applyFailureMessage)
+
+	patchApplicationIdentityStatus(adminIdentityRef, namespace, adminManagedIdentityName, adminPrincipalID)
+	patchApplicationIdentityStatus(userIdentityRef, namespace, userManagedIdentityName, userPrincipalID)
 }
 
 func runPostgresQuery(query string) string {
