@@ -18,12 +18,8 @@ package v1alpha1
 
 import (
 	"context"
-<<<<<<< HEAD
-=======
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
->>>>>>> tmp-original-24-02-26-00-20
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -56,19 +52,7 @@ type BackendCustomDefaulter struct {
 }
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind Backend.
-<<<<<<< HEAD
-func (d *BackendCustomDefaulter) Default(_ context.Context, obj *apimv1alpha1.Backend) error {
-	backendlog.Info("Defaulting for Backend", "name", obj.GetName())
-
-	// TODO(user): fill in your defaulting logic.
-
-=======
-func (d *BackendCustomDefaulter) Default(_ context.Context, obj runtime.Object) error {
-	backend, ok := obj.(*apimv1alpha1.Backend)
-
-	if !ok {
-		return fmt.Errorf("expected an Backend object but got %T", obj)
-	}
+func (d *BackendCustomDefaulter) Default(_ context.Context, backend *apimv1alpha1.Backend) error {
 	backendlog.Info("Defaulting for Backend", "name", backend.GetName())
 	if backend.Spec.AzureResourcePrefix == nil {
 		randomString, err := generateRandomString(8)
@@ -77,7 +61,6 @@ func (d *BackendCustomDefaulter) Default(_ context.Context, obj runtime.Object) 
 		}
 		backend.Spec.AzureResourcePrefix = &randomString
 	}
->>>>>>> tmp-original-24-02-26-00-20
 	return nil
 }
 
