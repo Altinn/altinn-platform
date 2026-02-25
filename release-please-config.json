@@ -1,9 +1,5 @@
 {
   "packages": {
-    "flux/lakmus": {
-      "release-type": "simple",
-      "component": "flux-oci-lakmus"
-    },
     "services/dis-pgsql-operator": {
       "release-type": "simple",
       "component": "dis-pgsql"
