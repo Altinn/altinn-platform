@@ -8,7 +8,7 @@
 # Summary
 [summary]: #summary
 
-Secure the GitOps supply chain by publishing Kubernetes manifests (plain YAML / Kustomize) as OCI artifacts into Azure Container Registry (ACR) and enforcing that Flux only deploys artifacts that are keyless Cosign signed by our GitHub Actions OIDC identity. Environment promotion is performed by retagging a known immutable digest to an environment tag (`at22`, `at23`, `at24`, `yt01`, `tt02`, `prod`) and re-signing it, without rebuilding the artifact.
+Secure the GitOps supply chain by publishing Kubernetes manifests (plain YAML / Kustomize) as OCI artifacts into Azure Container Registry (ACR) and enforcing that Flux only deploys artifacts that are keyless Cosign signed by our GitHub Actions OIDC identity. Environment promotion is performed by retagging a known immutable digest to a deployment group tag (`at_ring1`, `at_ring2`, `tt_ring1`, `tt_ring2`, `prod_ring1`, `prod_ring2`) and re-signing it, without rebuilding the artifact.
 
 # Motivation
 [motivation]: #motivation
@@ -31,7 +31,7 @@ Expected outcome: only manifests built and signed by a trusted GitHub Actions wo
 
 **Immutable tag** — `sha-<shortsha>` — written once per commit, never moved.
 
-**Environment tag** — `at22`, `at23`, `at24`, `yt01`, `tt02`, `prod` — a mutable pointer to a digest. Moving this tag is promotion.
+**Deployment group tag** — `at_ring1`, `at_ring2`, `tt_ring1`, `tt_ring2`, `prod_ring1`, `prod_ring2` — a mutable pointer to a digest. Moving this tag is promotion.
 
 **Keyless Cosign signing** — instead of a long-lived key pair, the CI job obtains a short-lived certificate from Sigstore's Fulcio CA, bound to the GitHub OIDC token. The certificate encodes the workflow identity. Signatures are stored as OCI objects in the same registry.
 
@@ -44,7 +44,7 @@ Expected outcome: only manifests built and signed by a trusted GitHub Actions wo
 3. **Flux enforces the policy.** Even if someone manually pushes to ACR, Flux will refuse to deploy it unless it carries a valid Cosign signature matching the trusted issuer and subject.
 4. **Signatures are digest-anchored.** Moving an env tag to a new digest invalidates the old signature for that tag. The new digest must be independently signed before Flux will deploy it.
 
-## Example: promoting `at22` to a new version
+## Example: promoting `at_ring1` to a new version
 
 ```
 # 1. CI pushes immutable artifact on merge
@@ -52,12 +52,12 @@ flux push artifact oci://altinncr.azurecr.io/manifests/myapp:sha-abc1234 ...
 
 # 2. Promote workflow retags
 flux tag artifact oci://altinncr.azurecr.io/manifests/myapp:sha-abc1234 \
-  --tag at22
+  --tag at_ring1
 
 # 3. Promote workflow signs
-cosign sign --yes altinncr.azurecr.io/manifests/myapp:at22
+cosign sign --yes altinncr.azurecr.io/manifests/myapp:at_ring1
 
-# 4. Flux detects the new digest on :at22, verifies signature, applies manifests
+# 4. Flux detects the new digest on :at_ring1, verifies signature, applies manifests
 ```
 
 # Reference-level explanation
@@ -70,7 +70,7 @@ altinncr.azurecr.io/manifests/<app>:sha-<shortsha>   # immutable
 altinncr.azurecr.io/manifests/<app>:<env>             # mutable, env tag
 ```
 
-Environment tags: `at22`, `at23`, `at24`, `yt01`, `tt02`, `prod`.
+Deployment group tags: `at_ring1`, `at_ring2`, `tt_ring1`, `tt_ring2`, `prod_ring1`, `prod_ring2`.
 
 ## End-to-end flow
 
@@ -116,10 +116,10 @@ on:
   workflow_dispatch:
     inputs:
       env_tag:
-        description: "Environment tag to move (at22/at23/at24/yt01/tt02/prod)"
+        description: "Deployment group tag to move"
         required: true
         type: choice
-        options: [at22, at23, at24, yt01, tt02, prod]
+        options: [at_ring1, at_ring2, tt_ring1, tt_ring2, prod_ring1, prod_ring2]
 
 permissions:
   id-token: write
@@ -186,13 +186,13 @@ jobs:
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: OCIRepository
 metadata:
-  name: <app>-manifests-at22
+  name: <app>-manifests-at-ring1
   namespace: flux-system
 spec:
   interval: 2m
   url: oci://altinncr.azurecr.io/manifests/<app>
   ref:
-    tag: at22
+    tag: at_ring1
   verify:
     provider: cosign
     matchOIDCIdentity:
@@ -202,19 +202,19 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: <app>-at22
+  name: <app>-at-ring1
   namespace: flux-system
 spec:
   interval: 5m
   sourceRef:
     kind: OCIRepository
-    name: <app>-manifests-at22
+    name: <app>-manifests-at-ring1
   path: "./"
   prune: true
   wait: true
 ```
 
-Repeat for `at23`, `at24`, `yt01`, `tt02`, `prod` (changing `ref.tag` and resource names).
+Repeat for `at_ring2`, `tt_ring1`, `tt_ring2`, `prod_ring1`, `prod_ring2` (changing `ref.tag` and resource names).
 
 **Verification semantics:**
 - `issuer` must match the GitHub Actions OIDC issuer exactly.
@@ -230,7 +230,7 @@ The stricter the subject, the stronger the supply chain policy. The example YAML
 
 ## Promotion models
 
-**Option 1 — Manual (`workflow_dispatch`):** a team member selects the env tag. Suitable for `at22`–`yt01`.
+**Option 1 — Manual (`workflow_dispatch`):** a team member selects the deployment group tag.
 
 **Option 2 — Automated pipeline with approvals:** a separate workflow gates higher environments (e.g. `prod`) behind required reviewers using GitHub Environments. Signs only after all gates pass.
 
@@ -238,7 +238,7 @@ The stricter the subject, the stronger the supply chain policy. The example YAML
 
 **In-cluster:**
 ```bash
-kubectl -n flux-system get ocirepository <app>-manifests-at22 -o yaml
+kubectl -n flux-system get ocirepository <app>-manifests-at-ring1 -o yaml
 # Look for Ready condition and SourceVerified condition
 ```
 
@@ -247,7 +247,7 @@ kubectl -n flux-system get ocirepository <app>-manifests-at22 -o yaml
 COSIGN_EXPERIMENTAL=1 cosign verify \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
   --certificate-identity-regexp "https://github.com/<ORG>/<REPO>.*" \
-  altinncr.azurecr.io/manifests/<app>:at22
+  altinncr.azurecr.io/manifests/<app>:at_ring1
 ```
 
 # Drawbacks
@@ -290,7 +290,7 @@ Digest-pinning in Flux requires updating the `OCIRepository` manifest for every 
 [unresolved-questions]: #unresolved-questions
 
 - **Do we sign immutable tags (`sha-*`) as well as env tags?** Signing both is ideal for full provenance; at minimum we sign env tags. Decision needed.
-- **Where is the canonical list of env tags maintained?** Options: a repo-level config file, enforced in CI input validation, or a central platform config. Recommend: repo-level config validated in CI.
+- **Where is the canonical list of deployment group tags maintained?** Options: a repo-level config file, enforced in CI input validation, or a central platform config. Recommend: repo-level config validated in CI.
 - **Alerting ownership:** who configures and owns alerts for `OCIRepository` verification failures?
 
 # Future possibilities
@@ -298,6 +298,6 @@ Digest-pinning in Flux requires updating the `OCIRepository` manifest for every 
 
 - **SLSA provenance attestations:** extend the CI workflow to attach a signed SLSA provenance attestation to each immutable artifact using `cosign attest`, enabling `cosign verify-attestation` checks in policy engines.
 - **Notation support in Flux:** once Flux adds Notation verification support, we could evaluate migrating to the CNCF Notary v2 stack for compatibility with the broader CNCF ecosystem.
-- **Automated promotion pipelines:** build an opinionated "ring deployment" workflow that automatically promotes from `at22` → `at23` → `at24` → `yt01` → `tt02` based on test gate results, with a manual approval gate for `prod`.
+- **Automated promotion pipelines:** build an opinionated workflow that automatically promotes from `at_ring1` → `at_ring2` → `tt_ring1` → `tt_ring2` based on test gate results, with a manual approval gate for `prod_ring1`/`prod_ring2`.
 - **Policy engine integration:** feed Flux verification events into OPA/Gatekeeper or Kyverno policies for additional admission-time checks beyond what Flux enforces at the source level.
 - **Multi-registry mirroring:** mirror signed artifacts to a secondary registry for disaster recovery, with digest preservation and re-verification after copy.
