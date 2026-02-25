@@ -1,7 +1,10 @@
 name: VPN Access Request
 description: Request VPN and ACL access (Headscale / Tailscale)
 title: "[VPN Access] <Full Name>"
-labels: ["access-request", "vpn"]
+labels:
+  - area/access-mgmt
+  - kind/toil
+  - status/triage
 
 body:
   - type: markdown
@@ -9,9 +12,12 @@ body:
       value: |
         ## VPN Access Request
 
-        Access to VPN and ACL groups requires documented approval.
+        ⚠️ This repository is public.
+        Do NOT include sensitive information such as:
+        - Email addresses
+        - Internal identifiers
 
-        Approval must be given by:
+        Access requires documented approval from:
         - Product Owner
         - Team Lead
         - Team Architect
@@ -26,15 +32,6 @@ body:
     validations:
       required: true
 
-  - type: input
-    id: email
-    attributes:
-      label: Entra ID email (@altinn.cloud)
-      placeholder: user@altinn.cloud
-      description: Must match the user’s Entra ID account.
-    validations:
-      required: true
-
   - type: textarea
     id: requested_access
     attributes:
@@ -43,12 +40,12 @@ body:
         Specify required access clearly.
 
         Examples:
-        - VPN authentication (headscale-vpn-access)
+        - VPN authentication
         - ACL group: group:team-core
         - ACL group: group:altinn-platform
         - Exit node access (test / prod)
       placeholder: |
-        - headscale-vpn-access
+        - VPN authentication
         - group:team-core
         - Exit node: test
     validations:
@@ -78,7 +75,9 @@ body:
 
         Before closing this issue:
 
+        - [ ] Approval explicitly documented in this issue
         - [ ] User added to Entra ID group: headscale-vpn-access (if requested)
         - [ ] User added to correct ACL group(s)
         - [ ] Exit-node access confirmed (if requested)
+        - [ ] status/triage label updated as appropriate
         - [ ] Comment confirming completion
