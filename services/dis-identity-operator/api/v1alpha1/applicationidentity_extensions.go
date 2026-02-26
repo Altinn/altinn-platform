@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 
 	managedidentity "github.com/Azure/azure-service-operator/v2/api/managedidentity/v1api20230131"
@@ -36,9 +37,7 @@ func (a *ApplicationIdentity) GenerateUserAssignedIdentity(ownerARMID string) *m
 
 func (a *ApplicationIdentity) GetUserAssignedIdentityTags() map[string]string {
 	result := make(map[string]string)
-	for k, v := range a.Spec.Tags {
-		result[k] = v
-	}
+	maps.Copy(result, a.Spec.Tags)
 	// Add the managed-by tag to the tags map
 	result[managedByDisIdentityTag] = "true"
 	return result
