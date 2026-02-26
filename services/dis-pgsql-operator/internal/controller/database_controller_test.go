@@ -936,8 +936,8 @@ var _ = Describe("Database controller", func() {
 				standbyZone:      "2",
 				storageType:      dbforpostgresqlv1.Storage_Type_Premium_LRS,
 				geoBackup:        dbforpostgresqlv1.Backup_GeoRedundantBackup_Disabled,
-				maintenanceDay:   6,
-				maintenanceHour:  2,
+				maintenanceDay:   0,
+				maintenanceHour:  3,
 				maintenanceMin:   0,
 			}))
 	})
