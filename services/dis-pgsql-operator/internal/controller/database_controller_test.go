@@ -11,14 +11,17 @@ import (
 
 	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
+	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
 	asoconditions "github.com/Azure/azure-service-operator/v2/pkg/genruntime/conditions"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 var _ = Describe("Database controller", func() {
@@ -853,6 +856,274 @@ var _ = Describe("Database controller", func() {
 			}{
 				retention: requestedRetentionDays,
 				geo:       dbforpostgresqlv1.Backup_GeoRedundantBackup_Disabled,
+			}))
+	})
+
+	It("sets fixed server defaults on FlexibleServer", func() {
+		db := &storagev1alpha1.Database{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-app-db-server-defaults",
+				Namespace: "default",
+			},
+			Spec: storagev1alpha1.DatabaseSpec{
+				Version:    17,
+				ServerType: "prod",
+				Auth: directAuth(
+					"admin-mi",
+					"admin-mi-id",
+					"admin-mi",
+					"user-mi",
+					"user-mi-id",
+				),
+			},
+		}
+
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		Eventually(func(g Gomega) struct {
+			availabilityZone string
+			standbyZone      string
+			storageType      dbforpostgresqlv1.Storage_Type
+			geoBackup        dbforpostgresqlv1.Backup_GeoRedundantBackup
+			maintenanceDay   int
+			maintenanceHour  int
+			maintenanceMin   int
+		} {
+			var s dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &s)).To(Succeed())
+			g.Expect(s.Spec.Storage).NotTo(BeNil())
+			g.Expect(s.Spec.Storage.Type).NotTo(BeNil())
+			g.Expect(s.Spec.Backup).NotTo(BeNil())
+			g.Expect(s.Spec.Backup.GeoRedundantBackup).NotTo(BeNil())
+			g.Expect(s.Spec.AvailabilityZone).NotTo(BeNil())
+			g.Expect(s.Spec.HighAvailability).NotTo(BeNil())
+			g.Expect(s.Spec.HighAvailability.StandbyAvailabilityZone).NotTo(BeNil())
+			g.Expect(s.Spec.MaintenanceWindow).NotTo(BeNil())
+			g.Expect(s.Spec.MaintenanceWindow.DayOfWeek).NotTo(BeNil())
+			g.Expect(s.Spec.MaintenanceWindow.StartHour).NotTo(BeNil())
+			g.Expect(s.Spec.MaintenanceWindow.StartMinute).NotTo(BeNil())
+			return struct {
+				availabilityZone string
+				standbyZone      string
+				storageType      dbforpostgresqlv1.Storage_Type
+				geoBackup        dbforpostgresqlv1.Backup_GeoRedundantBackup
+				maintenanceDay   int
+				maintenanceHour  int
+				maintenanceMin   int
+			}{
+				availabilityZone: *s.Spec.AvailabilityZone,
+				standbyZone:      *s.Spec.HighAvailability.StandbyAvailabilityZone,
+				storageType:      *s.Spec.Storage.Type,
+				geoBackup:        *s.Spec.Backup.GeoRedundantBackup,
+				maintenanceDay:   *s.Spec.MaintenanceWindow.DayOfWeek,
+				maintenanceHour:  *s.Spec.MaintenanceWindow.StartHour,
+				maintenanceMin:   *s.Spec.MaintenanceWindow.StartMinute,
+			}
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(struct {
+				availabilityZone string
+				standbyZone      string
+				storageType      dbforpostgresqlv1.Storage_Type
+				geoBackup        dbforpostgresqlv1.Backup_GeoRedundantBackup
+				maintenanceDay   int
+				maintenanceHour  int
+				maintenanceMin   int
+			}{
+				availabilityZone: "1",
+				standbyZone:      "2",
+				storageType:      dbforpostgresqlv1.Storage_Type_Premium_LRS,
+				geoBackup:        dbforpostgresqlv1.Backup_GeoRedundantBackup_Disabled,
+				maintenanceDay:   6,
+				maintenanceHour:  2,
+				maintenanceMin:   0,
+			}))
+	})
+
+	It("creates fixed and user-defined server parameter configurations", func() {
+		db := &storagev1alpha1.Database{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-app-db-server-params",
+				Namespace: "default",
+			},
+			Spec: storagev1alpha1.DatabaseSpec{
+				Version:    17,
+				ServerType: "dev",
+				Auth: directAuth(
+					"admin-mi",
+					"admin-mi-id",
+					"admin-mi",
+					"user-mi",
+					"user-mi-id",
+				),
+				ServerParams: []storagev1alpha1.DatabaseServerParameter{
+					{
+						Name:  "autovacuum_naptime",
+						Value: intstr.FromInt(15),
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		maxConnections, err := dbUtil.ResolveMaxConnections(dbUtil.GetProfile("dev"))
+		Expect(err).NotTo(HaveOccurred())
+
+		expectedValues := map[string]string{
+			dbUtil.ServerParameterPgBouncerEnabled:     "true",
+			dbUtil.ServerParameterPgBouncerMaxPrepared: "5000",
+			dbUtil.ServerParameterPgBouncerPoolMode:    "transaction",
+			dbUtil.ServerParameterMaxConnections:       fmt.Sprintf("%d", maxConnections),
+			"autovacuum_naptime":                       "15",
+		}
+
+		for parameterName, expectedValue := range expectedValues {
+			parameterName := parameterName
+			expectedValue := expectedValue
+			resourceName := serverParameterConfigResourceName(db.Name, parameterName)
+
+			Eventually(func(g Gomega) struct {
+				azureName string
+				value     string
+			} {
+				var configuration dbforpostgresqlv1.FlexibleServersConfiguration
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+					Name:      resourceName,
+					Namespace: db.Namespace,
+				}, &configuration)).To(Succeed())
+				g.Expect(configuration.Spec.Value).NotTo(BeNil())
+				return struct {
+					azureName string
+					value     string
+				}{
+					azureName: configuration.Spec.AzureName,
+					value:     *configuration.Spec.Value,
+				}
+			}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+				Should(Equal(struct {
+					azureName string
+					value     string
+				}{
+					azureName: parameterName,
+					value:     expectedValue,
+				}))
+		}
+
+		var updated storagev1alpha1.Database
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
+		updated.Spec.ServerParams = nil
+		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
+
+		customParamName := serverParameterConfigResourceName(db.Name, "autovacuum_naptime")
+		Eventually(func() bool {
+			var configuration dbforpostgresqlv1.FlexibleServersConfiguration
+			err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      customParamName,
+				Namespace: db.Namespace,
+			}, &configuration)
+			return apierrors.IsNotFound(err)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(BeTrue())
+	})
+
+	It("writes ASO server parameter errors to Database status", func() {
+		db := &storagev1alpha1.Database{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-app-db-server-params-status",
+				Namespace: "default",
+			},
+			Spec: storagev1alpha1.DatabaseSpec{
+				Version:    17,
+				ServerType: "dev",
+				Auth: directAuth(
+					"admin-mi",
+					"admin-mi-id",
+					"admin-mi",
+					"user-mi",
+					"user-mi-id",
+				),
+				ServerParams: []storagev1alpha1.DatabaseServerParameter{
+					{
+						Name:  "autovacuum_naptime",
+						Value: intstr.FromInt(15),
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		parameterName := "autovacuum_naptime"
+		resourceName := serverParameterConfigResourceName(db.Name, parameterName)
+
+		Eventually(func(g Gomega) {
+			var configuration dbforpostgresqlv1.FlexibleServersConfiguration
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      resourceName,
+				Namespace: db.Namespace,
+			}, &configuration)).To(Succeed())
+
+			configuration.Status.Conditions = []asoconditions.Condition{
+				{
+					Type:               asoconditions.ConditionTypeReady,
+					Status:             metav1.ConditionFalse,
+					Reason:             "InvalidParameterValue",
+					Message:            "Parameter value is not valid",
+					LastTransitionTime: metav1.Now(),
+					ObservedGeneration: configuration.Generation,
+				},
+			}
+			g.Expect(k8sClient.Status().Update(ctx, &configuration)).To(Succeed())
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func(g Gomega) struct {
+			errorReason string
+			errorMsg    string
+			condReason  string
+			condStatus  metav1.ConditionStatus
+		} {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &updated)).To(Succeed())
+
+			var parameterError *storagev1alpha1.DatabaseServerParameterError
+			for i := range updated.Status.ServerParameterErrors {
+				if updated.Status.ServerParameterErrors[i].Name == parameterName {
+					parameterError = &updated.Status.ServerParameterErrors[i]
+					break
+				}
+			}
+			g.Expect(parameterError).NotTo(BeNil())
+
+			condition := meta.FindStatusCondition(updated.Status.Conditions, serverParametersReadyConditionType)
+			g.Expect(condition).NotTo(BeNil())
+
+			return struct {
+				errorReason string
+				errorMsg    string
+				condReason  string
+				condStatus  metav1.ConditionStatus
+			}{
+				errorReason: parameterError.Reason,
+				errorMsg:    parameterError.Message,
+				condReason:  condition.Reason,
+				condStatus:  condition.Status,
+			}
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(struct {
+				errorReason string
+				errorMsg    string
+				condReason  string
+				condStatus  metav1.ConditionStatus
+			}{
+				errorReason: "InvalidParameterValue",
+				errorMsg:    "Parameter value is not valid",
+				condReason:  "ApplyFailed",
+				condStatus:  metav1.ConditionFalse,
 			}))
 	})
 

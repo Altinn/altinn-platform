@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // DatabaseAuth contains the identities that should get access to the database.
@@ -70,6 +71,17 @@ const (
 	DatabaseExtensionUUIDOSSP         DatabaseExtension = "uuid-ossp"
 )
 
+// +kubebuilder:validation:XValidation:rule="self.name != 'azure.extensions' && self.name != 'shared_preload_libraries' && self.name != 'pgbouncer.enabled' && self.name != 'pgbouncer.max_prepared_statements' && self.name != 'pgbouncer.pool_mode' && self.name != 'max_connections'",message="azure.extensions/shared_preload_libraries are managed via enableExtensions, and pgbouncer/max_connections are managed by the operator."
+// DatabaseServerParameter is a PostgreSQL server parameter with a scalar value.
+type DatabaseServerParameter struct {
+	// name is the PostgreSQL server parameter name.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// value is the desired parameter value.
+	Value intstr.IntOrString `json:"value"`
+}
+
 // DatabaseSpec defines the desired state of Database.
 type DatabaseSpec struct {
 	// version is the major version of PostgreSQL to run (e.g. 17).
@@ -88,6 +100,14 @@ type DatabaseSpec struct {
 	// +optional
 	// +listType=set
 	EnableExtensions []DatabaseExtension `json:"enableExtensions,omitempty"`
+
+	// serverParams configures allowed PostgreSQL server parameters.
+	// azure.extensions and shared_preload_libraries are managed via enableExtensions.
+	// pgbouncer settings and max_connections are managed by the operator.
+	// +optional
+	// +listType=map
+	// +listMapKey=name
+	ServerParams []DatabaseServerParameter `json:"serverParams,omitempty"`
 
 	// +optional
 	Storage *DatabaseStorageSpec `json:"storage,omitempty"`
@@ -117,6 +137,21 @@ type DatabaseStorageSpec struct {
 	Tier *string `json:"tier,omitempty"`
 }
 
+// DatabaseServerParameterError captures a failed server parameter reconciliation.
+type DatabaseServerParameterError struct {
+	// name is the PostgreSQL server parameter name that failed.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// reason is the ASO/Azure reason for the failure, when available.
+	// +optional
+	Reason string `json:"reason,omitempty"`
+
+	// message is a human-readable error from ASO/Azure.
+	// +optional
+	Message string `json:"message,omitempty"`
+}
+
 // DatabaseStatus defines the observed state of Database.
 type DatabaseStatus struct {
 	// subnetCIDR is the /28 network block allocated for this database's subnet.
@@ -137,6 +172,13 @@ type DatabaseStatus struct {
 	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// serverParameterErrors contains per-parameter reconciliation failures reported
+	// from owned FlexibleServersConfiguration resources.
+	// +listType=map
+	// +listMapKey=name
+	// +optional
+	ServerParameterErrors []DatabaseServerParameterError `json:"serverParameterErrors,omitempty"`
 }
 
 // +kubebuilder:object:root=true

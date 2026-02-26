@@ -24,15 +24,21 @@ import (
 // The defaults for storage size and tier are also hardcoded
 // until we release the beta version.
 const (
-	defaultStorageGB     int32 = 32
-	loc                        = "norwayeast"
-	defaultHAStandbyZone       = "2"
+	defaultStorageGB               int32 = 32
+	loc                                  = "norwayeast"
+	defaultAvailabilityZone              = "1"
+	defaultHAStandbyZone                 = "2"
+	defaultMaintenanceDayOfWeek          = 6
+	defaultMaintenanceStartHour          = 2
+	defaultMaintenanceStartMinute        = 0
+	maintenanceCustomWindowEnabled       = "Enabled"
 )
 
 // Reuse the defaults for now
 func desiredStorage(db *storagev1alpha1.Database) *dbforpostgresqlv1.Storage {
 	sizeGB := defaultStorageGB
 	autoGrow := dbforpostgresqlv1.Storage_AutoGrow_Enabled
+	storageType := dbforpostgresqlv1.Storage_Type_Premium_LRS
 
 	var requestedTier *string
 
@@ -51,6 +57,7 @@ func desiredStorage(db *storagev1alpha1.Database) *dbforpostgresqlv1.Storage {
 		AutoGrow:      &autoGrow,
 		StorageSizeGB: to.Ptr(int(sizeGB)),
 		Tier:          &asoTier,
+		Type:          &storageType,
 	}
 }
 
@@ -73,6 +80,15 @@ func desiredHighAvailability(db *storagev1alpha1.Database) *dbforpostgresqlv1.Hi
 	}
 
 	return highAvailability
+}
+
+func desiredMaintenanceWindow() *dbforpostgresqlv1.MaintenanceWindow {
+	return &dbforpostgresqlv1.MaintenanceWindow{
+		CustomWindow: to.Ptr(maintenanceCustomWindowEnabled),
+		DayOfWeek:    to.Ptr(defaultMaintenanceDayOfWeek),
+		StartHour:    to.Ptr(defaultMaintenanceStartHour),
+		StartMinute:  to.Ptr(defaultMaintenanceStartMinute),
+	}
 }
 
 // subnetARMID builds the ARM ID for a subnet in the DB VNet.
@@ -124,6 +140,7 @@ func (r *DatabaseReconciler) ensurePostgresServer(
 	storage := desiredStorage(db)
 	backup := desiredBackup(db)
 	highAvailability := desiredHighAvailability(db)
+	maintenanceWindow := desiredMaintenanceWindow()
 
 	versionStr := fmt.Sprintf("%d", db.Spec.Version)
 	version := dbforpostgresqlv1.ServerVersion(versionStr)
@@ -169,11 +186,13 @@ func (r *DatabaseReconciler) ensurePostgresServer(
 			ARMID: fmt.Sprintf("/subscriptions/%s/resourceGroups/%s", r.Config.SubscriptionId, r.Config.ResourceGroup),
 		},
 
-		Version:          &version,
-		Network:          network,
-		Storage:          storage,
-		Backup:           backup,
-		HighAvailability: highAvailability,
+		Version:           &version,
+		Network:           network,
+		Storage:           storage,
+		Backup:            backup,
+		HighAvailability:  highAvailability,
+		AvailabilityZone:  to.Ptr(defaultAvailabilityZone),
+		MaintenanceWindow: maintenanceWindow,
 		Sku: &dbforpostgresqlv1.Sku{
 			Name: to.Ptr(profile.SkuName),
 			Tier: to.Ptr(profile.SkuTier),

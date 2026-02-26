@@ -34,6 +34,7 @@ import (
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/test/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/yaml"
 )
 
@@ -42,6 +43,7 @@ var _ = Describe("User provisioning", Ordered, func() {
 		dbName                     = "e2e-user-provision"
 		explicitRetentionDBName    = "e2e-backup-retention-explicit"
 		explicitHADBName           = "e2e-ha-explicit"
+		explicitServerParamsDBName = "e2e-server-params-explicit"
 		namespace                  = "default"
 		adminIdentityRef           = "adminidentity"
 		adminIdentity              = "adminidentity"
@@ -50,6 +52,8 @@ var _ = Describe("User provisioning", Ordered, func() {
 		userIdentity               = "user1"
 		userPrincipalId            = "user1-principal-id"
 		explicitBackupRetentionDay = 21
+		explicitCustomServerParam  = "autovacuum_naptime"
+		explicitCustomServerValue  = "15"
 	)
 
 	var manifestPath string
@@ -59,6 +63,7 @@ var _ = Describe("User provisioning", Ordered, func() {
 		deleteDatabaseAndProvisionJobs(dbName, namespace)
 		deleteDatabaseAndProvisionJobs(explicitRetentionDBName, namespace)
 		deleteDatabaseAndProvisionJobs(explicitHADBName, namespace)
+		deleteDatabaseAndProvisionJobs(explicitServerParamsDBName, namespace)
 
 		manifestPath = writeTestManifest(
 			dbName,
@@ -317,6 +322,68 @@ var _ = Describe("User provisioning", Ordered, func() {
 				standbyZone: "2",
 			}))
 	})
+
+	It("creates fixed and user-defined server parameter configurations", func() {
+		manifestPath := writeTestManifestWithServerParameters(
+			explicitServerParamsDBName,
+			namespace,
+			adminIdentityRef,
+			userIdentityRef,
+		)
+
+		defer func() {
+			cmd := exec.Command("kubectl", "delete", "-f", manifestPath, "--ignore-not-found=true")
+			_, _ = utils.Run(cmd)
+			_ = os.Remove(manifestPath)
+			deleteDatabaseAndProvisionJobs(explicitServerParamsDBName, namespace)
+		}()
+
+		By("creating a Database custom resource with explicit server parameters")
+		applyManifestWithIdentityPrerequisites(
+			manifestPath,
+			namespace,
+			adminIdentityRef,
+			adminIdentity,
+			adminPrincipal,
+			userIdentityRef,
+			userIdentity,
+			userPrincipalId,
+			"Failed to apply Database manifest with explicit server parameters",
+		)
+
+		By("verifying fixed and explicit server parameter configurations are created")
+		expected := map[string]string{
+			"pgbouncer.enabled":                 "true",
+			"pgbouncer.max_prepared_statements": "5000",
+			"pgbouncer.pool_mode":               "transaction",
+			"max_connections":                   "50",
+			explicitCustomServerParam:           explicitCustomServerValue,
+		}
+
+		Eventually(func(g Gomega) {
+			cmd := exec.Command(
+				"kubectl", "get",
+				"flexibleserversconfigurations.dbforpostgresql.azure.com",
+				"-n", namespace,
+				"-l",
+				fmt.Sprintf(
+					"dis.altinn.cloud/database-name=%s,dis.altinn.cloud/configuration-kind=server-parameter",
+					explicitServerParamsDBName,
+				),
+				"-o",
+				"jsonpath={range .items[*]}{.spec.azureName}={.spec.value}{\"\\n\"}{end}",
+			)
+			output, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			actual := parseAzureConfigurationValues(output)
+			g.Expect(actual).To(HaveLen(len(expected)))
+			for name, value := range expected {
+				g.Expect(actual).To(HaveKeyWithValue(name, value))
+			}
+		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).
+			Should(Succeed())
+	})
 })
 
 func writeTestManifest(dbName, namespace, adminIdentityRef, userIdentityRef string) string {
@@ -387,6 +454,52 @@ func writeTestManifestWithHighAvailability(
 			Version:                 17,
 			ServerType:              "dev",
 			HighAvailabilityEnabled: &highAvailabilityEnabled,
+			Storage: &storagev1alpha1.DatabaseStorageSpec{
+				SizeGB: &sizeGB,
+				Tier:   &tier,
+			},
+			Auth: storagev1alpha1.DatabaseAuth{
+				Admin: storagev1alpha1.AdminIdentitySpec{
+					Identity: storagev1alpha1.IdentitySource{
+						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: adminIdentityRef},
+					},
+				},
+				User: storagev1alpha1.UserIdentitySpec{
+					Identity: storagev1alpha1.IdentitySource{
+						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: userIdentityRef},
+					},
+				},
+			},
+		},
+	}
+
+	return writeManifestWithApplicationIdentities(database, namespace, adminIdentityRef, userIdentityRef)
+}
+
+func writeTestManifestWithServerParameters(
+	dbName, namespace, adminIdentityRef, userIdentityRef string,
+) string {
+	sizeGB := int32(32)
+	tier := "P80"
+
+	database := &storagev1alpha1.Database{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "storage.dis.altinn.cloud/v1alpha1",
+			Kind:       "Database",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      dbName,
+			Namespace: namespace,
+		},
+		Spec: storagev1alpha1.DatabaseSpec{
+			Version:    17,
+			ServerType: "dev",
+			ServerParams: []storagev1alpha1.DatabaseServerParameter{
+				{
+					Name:  "autovacuum_naptime",
+					Value: intstr.FromInt(15),
+				},
+			},
 			Storage: &storagev1alpha1.DatabaseStorageSpec{
 				SizeGB: &sizeGB,
 				Tier:   &tier,
@@ -509,6 +622,25 @@ func runPostgresQueryAsUser(user, query string) (string, error) {
 func quoteIdentifier(value string) string {
 	escaped := strings.ReplaceAll(value, `"`, `""`)
 	return `"` + escaped + `"`
+}
+
+func parseAzureConfigurationValues(output string) map[string]string {
+	result := map[string]string{}
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		result[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+	}
+	return result
 }
 
 func deleteDatabaseAndProvisionJobs(dbName, namespace string) {
