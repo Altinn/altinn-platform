@@ -980,8 +980,6 @@ var _ = Describe("Database controller", func() {
 		}
 
 		for parameterName, expectedValue := range expectedValues {
-			parameterName := parameterName
-			expectedValue := expectedValue
 			resourceName := serverParameterConfigResourceName(db.Name, parameterName)
 
 			Eventually(func(g Gomega) struct {
