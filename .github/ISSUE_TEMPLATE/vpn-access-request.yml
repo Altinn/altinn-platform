@@ -84,13 +84,8 @@ body:
         ---
         ### For Admins
 
-        Before closing this issue, paste the following checklist in a comment and complete each item:
-
-        ```
-        - [ ] Approver has confirmed in a comment on this issue
-        - [ ] User added to Entra ID group: headscale-vpn-access (if requested)
+        - [ ] Approver has confirmed this issue
+        - [ ] User added to Entra ID group: headscale-vpn-access (Allow user to register node)
         - [ ] User added to correct ACL group(s)
-        - [ ] Exit-node access confirmed (if requested)
         - [ ] status/triage label updated as appropriate
         - [ ] Comment confirming completion
-        ```
