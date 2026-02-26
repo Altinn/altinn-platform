@@ -12,6 +12,10 @@
       "release-type": "simple",
       "component": "dis-apim"
     },
+    "services/lakmus": {
+      "release-type": "simple",
+      "component": "lakmus"
+    },
     "infrastructure/images/azure-devops-agent": {
       "release-type": "simple",
       "component": "azdevops-agent",

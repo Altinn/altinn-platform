@@ -33,6 +33,11 @@
         {"filename": "dis-apim-release.yml"}
       ]
     },
+    "services/lakmus": {
+      "dispatch-pipelines": [
+        {"filename": "lakmus-release.yml"}
+      ]
+    },
     "infrastructure/images/azure-devops-agent": {
       "dispatch-pipelines": [
         {"filename": "azdevops-agent-release.yml"}
