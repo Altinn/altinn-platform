@@ -160,6 +160,40 @@ spec:
                   highAvailabilityEnabled controls whether PostgreSQL high availability is enabled.
                   If omitted, it defaults to true for prod/production server types and false otherwise.
                 type: boolean
+              serverParams:
+                description: |-
+                  serverParams configures allowed PostgreSQL server parameters.
+                  azure.extensions and shared_preload_libraries are managed via enableExtensions.
+                  pgbouncer settings and max_connections are managed by the operator.
+                items:
+                  description: DatabaseServerParameter is a PostgreSQL server parameter
+                    with a scalar value.
+                  properties:
+                    name:
+                      description: name is the PostgreSQL server parameter name.
+                      minLength: 1
+                      type: string
+                    value:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: value is the desired parameter value.
+                      x-kubernetes-int-or-string: true
+                  required:
+                  - name
+                  - value
+                  type: object
+                  x-kubernetes-validations:
+                  - message: azure.extensions/shared_preload_libraries are managed
+                      via enableExtensions, and pgbouncer/max_connections are managed
+                      by the operator.
+                    rule: self.name != 'azure.extensions' && self.name != 'shared_preload_libraries'
+                      && self.name != 'pgbouncer.enabled' && self.name != 'pgbouncer.max_prepared_statements'
+                      && self.name != 'pgbouncer.pool_mode' && self.name != 'max_connections'
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
               serverType:
                 description: serverType selects the size/profile of the database server
                   (e.g. "dev", "prod").
@@ -260,6 +294,33 @@ spec:
                 type: array
                 x-kubernetes-list-map-keys:
                 - type
+                x-kubernetes-list-type: map
+              serverParameterErrors:
+                description: |-
+                  serverParameterErrors contains per-parameter reconciliation failures reported
+                  from owned FlexibleServersConfiguration resources.
+                items:
+                  description: DatabaseServerParameterError captures a failed server
+                    parameter reconciliation.
+                  properties:
+                    message:
+                      description: message is a human-readable error from ASO/Azure.
+                      type: string
+                    name:
+                      description: name is the PostgreSQL server parameter name that
+                        failed.
+                      minLength: 1
+                      type: string
+                    reason:
+                      description: reason is the ASO/Azure reason for the failure,
+                        when available.
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
                 x-kubernetes-list-type: map
               subnetCIDR:
                 description: |-

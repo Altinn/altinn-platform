@@ -33,6 +33,10 @@ spec:
   enableExtensions:
     - hstore
     - pg_cron
+  serverParams:
+    # azure.extensions and shared_preload_libraries are managed by enableExtensions.
+    - name: autovacuum_naptime
+      value: 15
   storage:
     sizeGB: 32
     tier: P10

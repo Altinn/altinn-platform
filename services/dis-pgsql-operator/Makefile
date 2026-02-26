@@ -187,6 +187,10 @@ install-aso-crds-kind: aso-crds
 	--type='json' \
 	-p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'
 
+	kubectl patch crd flexibleserversconfigurations.dbforpostgresql.azure.com \
+	--type='json' \
+	-p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'
+
 	kubectl patch crd flexibleserversadministrators.dbforpostgresql.azure.com \
 	--type='json' \
 	-p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'

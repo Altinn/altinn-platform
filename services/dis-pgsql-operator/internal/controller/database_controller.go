@@ -180,6 +180,11 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
+	if err := r.ensurePostgresServerParameters(ctx, logger, &db); err != nil {
+		logger.Error(err, "failed to ensure PostgreSQL server parameters for database")
+		return ctrl.Result{}, err
+	}
+
 	adminIdentity, requeue, err := r.resolveAdminIdentity(ctx, logger, &db)
 	if err != nil {
 		logger.Error(err, "failed to resolve admin identity")
