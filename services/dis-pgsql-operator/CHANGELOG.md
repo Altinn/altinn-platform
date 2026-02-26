@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.4.0...dis-pgsql-v0.5.0) (2026-02-26)
+
+
+### Features
+
+* **dis-pgsql:** enable server parms in spec ([#3167](https://github.com/Altinn/altinn-platform/issues/3167)) ([448293d](https://github.com/Altinn/altinn-platform/commit/448293d3f09b380576d51ef98cafcdc92a43d9b3))
+
+
+### Dependency Updates
+
+* update gcr.io/distroless/static:nonroot docker digest to 0376b51 ([#3131](https://github.com/Altinn/altinn-platform/issues/3131)) ([4b1a7bf](https://github.com/Altinn/altinn-platform/commit/4b1a7bff67199a92ebc3ca9506eef388e0b5062d))
+
 ## [0.4.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.3.0...dis-pgsql-v0.4.0) (2026-02-25)
 
 
