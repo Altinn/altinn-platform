@@ -82,10 +82,12 @@ body:
     attributes:
       value: |
         ---
+        > You can follow the progress of your request in the checklist below.
+
         ### For Admins
 
         - [ ] Approver has confirmed this issue
-        - [ ] User added to Entra ID group: headscale-vpn-access (Allow user to register node)
-        - [ ] User added to correct ACL group(s)
+        - [ ] User added to Entra ID group: headscale-vpn-access (required before user can register their node)
+        - [ ] User added to correct ACL group(s) (required before VPN access is functional)
         - [ ] status/triage label updated as appropriate
         - [ ] Comment confirming completion
