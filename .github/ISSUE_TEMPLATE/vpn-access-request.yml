@@ -1,6 +1,6 @@
 name: VPN Access Request
 description: Request VPN and ACL access (Headscale / Tailscale)
-title: "[VPN Access]"
+title: "[VPN Access] Your Name"
 labels:
   - area/access-mgmt
   - kind/toil
@@ -40,10 +40,13 @@ body:
   - type: textarea
     id: requested_access
     attributes:
-      label: Products to access
+      label: Requested access
+      description: |
+        List each resource you need access to. For each entry, include the product/area and the service type so admins can locate it in the infrastructure.
+        Service types: keyvault, storage, database, vm, kubernetes
       placeholder: |
-        - Product A
-        - Product B
+        - Product A – database (server: foo-db)
+        - Product B – keyvault (vault: bar-kv)
     validations:
       required: true
 
@@ -53,6 +56,7 @@ body:
       label: Environments
       options:
         - test
+        - prod
         - test and prod
     validations:
       required: true
@@ -69,7 +73,7 @@ body:
     id: approver
     attributes:
       label: Approver (Product Owner / Team Lead / Architect)
-      description: Name and role of the person who approved this request. The approver must confirm by commenting on this issue before access is granted.
+      description: Name and role of the approving person.
       placeholder: Jane Smith, Product Owner
     validations:
       required: true
@@ -78,15 +82,12 @@ body:
     attributes:
       value: |
         ---
+        > You can follow the progress of your request in the checklist below.
+
         ### For Admins
 
-        Before closing this issue, paste the following checklist in a comment and complete each item:
-
-        ```
-        - [ ] Approver has confirmed in a comment on this issue
-        - [ ] User added to Entra ID group: headscale-vpn-access (if requested)
-        - [ ] User added to correct ACL group(s)
-        - [ ] Exit-node access confirmed (if requested)
+        - [ ] Approver has confirmed this issue
+        - [ ] User added to Entra ID group: headscale-vpn-access (required before user can register their node)
+        - [ ] User added to correct ACL group(s) (required before VPN access is functional)
         - [ ] status/triage label updated as appropriate
         - [ ] Comment confirming completion
-        ```
