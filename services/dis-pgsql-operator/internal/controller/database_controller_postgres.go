@@ -28,8 +28,8 @@ const (
 	loc                                  = "norwayeast"
 	defaultAvailabilityZone              = "1"
 	defaultHAStandbyZone                 = "2"
-	defaultMaintenanceDayOfWeek          = 6
-	defaultMaintenanceStartHour          = 2
+	defaultMaintenanceDayOfWeek          = 0
+	defaultMaintenanceStartHour          = 3
 	defaultMaintenanceStartMinute        = 0
 	maintenanceCustomWindowEnabled       = "Enabled"
 )
