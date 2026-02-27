@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.1](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.1.0...dis-identity-v0.1.1) (2026-02-27)
+
+
+### Bug Fixes
+
+* **dis-identity:** add correct client-id annotation to service account ([#3171](https://github.com/Altinn/altinn-platform/issues/3171)) ([73ac799](https://github.com/Altinn/altinn-platform/commit/73ac799003ce7c5327a3379c5a28cfef171b0f11))
+
+
+### Dependency Updates
+
+* update gcr.io/distroless/static:nonroot docker digest to 0376b51 ([#3131](https://github.com/Altinn/altinn-platform/issues/3131)) ([4b1a7bf](https://github.com/Altinn/altinn-platform/commit/4b1a7bff67199a92ebc3ca9506eef388e0b5062d))
+
 ## [0.1.0](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.0.4...dis-identity-v0.1.0) (2026-02-26)
 
 
