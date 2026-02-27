@@ -14,6 +14,7 @@ import (
 	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
+	"github.com/Azure/azure-service-operator/v2/pkg/genruntime"
 	asoconditions "github.com/Azure/azure-service-operator/v2/pkg/genruntime/conditions"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -425,6 +426,68 @@ var _ = Describe("Database controller", func() {
 			Namespace: ns,
 		}, &dbLink)).To(Succeed())
 		Expect(dbLink.Namespace).To(Equal(ns))
+	})
+
+	It("reconciles existing Private DNS AKS VNet link when ARM ID drifts", func() {
+		db := &storagev1alpha1.Database{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-app-db-vnet-drift",
+				Namespace: ns,
+			},
+			Spec: storagev1alpha1.DatabaseSpec{
+				Version:    17,
+				ServerType: "dev",
+				Auth: directAuth(
+					"admin-mi",
+					"admin-mi-id",
+					"admin-mi",
+					"user-mi",
+					"user-mi-id",
+				),
+			},
+		}
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		expectedAKSLinkName := vnetLinkNameForAKS(db)
+		expectedAKSVNetARMID := "/subscriptions/my-subscription-id/resourceGroups/aks-vnet-rg/providers/Microsoft.Network/virtualNetworks/aks-vnet-dis-dev-001"
+
+		Eventually(func(g Gomega) string {
+			var link networkv1.PrivateDnsZonesVirtualNetworkLink
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      expectedAKSLinkName,
+				Namespace: ns,
+			}, &link)).To(Succeed())
+			if link.Spec.VirtualNetwork == nil || link.Spec.VirtualNetwork.Reference == nil {
+				return ""
+			}
+			return link.Spec.VirtualNetwork.Reference.ARMID
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(expectedAKSVNetARMID))
+
+		var link networkv1.PrivateDnsZonesVirtualNetworkLink
+		Expect(k8sClient.Get(ctx, types.NamespacedName{
+			Name:      expectedAKSLinkName,
+			Namespace: ns,
+		}, &link)).To(Succeed())
+		link.Spec.VirtualNetwork = &networkv1.SubResource{
+			Reference: &genruntime.ResourceReference{
+				ARMID: "/subscriptions/another-sub/resourceGroups/wrong-rg/providers/Microsoft.Network/virtualNetworks/wrong-vnet",
+			},
+		}
+		Expect(k8sClient.Update(ctx, &link)).To(Succeed())
+
+		Eventually(func(g Gomega) string {
+			var current networkv1.PrivateDnsZonesVirtualNetworkLink
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      expectedAKSLinkName,
+				Namespace: ns,
+			}, &current)).To(Succeed())
+			if current.Spec.VirtualNetwork == nil || current.Spec.VirtualNetwork.Reference == nil {
+				return ""
+			}
+			return current.Spec.VirtualNetwork.Reference.ARMID
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(expectedAKSVNetARMID))
 	})
 
 	// Database testing

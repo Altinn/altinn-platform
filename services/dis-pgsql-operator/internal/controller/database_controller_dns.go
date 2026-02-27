@@ -11,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
+	k8sutil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/k8s"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
 	"github.com/Azure/azure-service-operator/v2/pkg/genruntime"
 )
@@ -118,6 +119,32 @@ func (r *DatabaseReconciler) ensurePrivateDNSVNetLink(
 	vnetID string,
 ) error {
 	ns := db.Namespace
+	loc := "global"
+	regFalse := false
+	desiredLabels := map[string]string{
+		"dis.altinn.cloud/database-name": db.Name,
+	}
+	desiredSpec := networkv1.PrivateDnsZonesVirtualNetworkLink_Spec{
+		AzureName: linkName,
+		Location:  &loc,
+
+		// REQUIRED: owner is the PrivateDnsZone CR
+		Owner: &genruntime.KnownResourceReference{
+			Name: zoneName,
+		},
+
+		RegistrationEnabled: &regFalse,
+
+		VirtualNetwork: &networkv1.SubResource{
+			Reference: &genruntime.ResourceReference{
+				ARMID: vnetID,
+			},
+		},
+
+		Tags: map[string]string{
+			"dis-database": db.Name,
+		},
+	}
 
 	key := types.NamespacedName{
 		Name:      linkName,
@@ -126,43 +153,36 @@ func (r *DatabaseReconciler) ensurePrivateDNSVNetLink(
 
 	var existing networkv1.PrivateDnsZonesVirtualNetworkLink
 	if err := r.Get(ctx, key, &existing); err == nil {
+		var updated bool
+		existing.Labels, updated = k8sutil.SyncSpecAndLabels(
+			&existing.Spec,
+			desiredSpec,
+			existing.Labels,
+			desiredLabels,
+		)
+		if updated {
+			logger.Info("updating private DNS VNet link",
+				"linkName", existing.Name,
+				"zoneName", zoneName,
+				"vnetName", targetVNetName,
+				"vnetID", vnetID,
+			)
+			if err := r.Update(ctx, &existing); err != nil {
+				return fmt.Errorf("update PrivateDnsZonesVirtualNetworkLink %s/%s: %w", existing.Namespace, existing.Name, err)
+			}
+		}
 		return nil
 	} else if err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("get PrivateDnsZonesVirtualNetworkLink %s/%s: %w", key.Namespace, key.Name, err)
 	}
 
-	loc := "global"
-	regFalse := false
-
 	link := &networkv1.PrivateDnsZonesVirtualNetworkLink{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      linkName,
 			Namespace: ns,
-			Labels: map[string]string{
-				"dis.altinn.cloud/database-name": db.Name,
-			},
+			Labels:    desiredLabels,
 		},
-		Spec: networkv1.PrivateDnsZonesVirtualNetworkLink_Spec{
-			AzureName: linkName,
-			Location:  &loc,
-
-			// REQUIRED: owner is the PrivateDnsZone CR
-			Owner: &genruntime.KnownResourceReference{
-				Name: zoneName,
-			},
-
-			RegistrationEnabled: &regFalse,
-
-			VirtualNetwork: &networkv1.SubResource{
-				Reference: &genruntime.ResourceReference{
-					ARMID: vnetID,
-				},
-			},
-
-			Tags: map[string]string{
-				"dis-database": db.Name,
-			},
-		},
+		Spec: desiredSpec,
 	}
 
 	logger.Info("creating private DNS VNet link",
