@@ -204,6 +204,7 @@ var _ = Describe("ApplicationIdentity Controller", func() {
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(serviceAccount.Annotations).NotTo(BeEmpty())
 				g.Expect(serviceAccount.Annotations["serviceaccount.azure.com/azure-identity"]).To(Equal(*appIdentity.Status.ClientID))
+				g.Expect(serviceAccount.Annotations["azure.workload.identity/client-id"]).To(Equal(*appIdentity.Status.ClientID))
 				err = k8sClient.Get(ctx, typeNamespacedName, appIdentity)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(appIdentity.Status.Conditions).NotTo(BeEmpty())
