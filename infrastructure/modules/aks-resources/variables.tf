@@ -8,6 +8,11 @@ variable "aks_node_resource_group" {
   description = "AKS node resource group name"
 }
 
+variable "aks_resource_group" {
+  type        = string
+  description = "AKS resource group name"
+}
+
 variable "azurerm_kubernetes_cluster_id" {
   type        = string
   description = "AKS cluster resource id"

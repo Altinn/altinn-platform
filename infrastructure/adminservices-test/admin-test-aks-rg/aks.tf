@@ -64,4 +64,5 @@ module "aks_resources" {
   dis_pgsql_uami_client_id                   = module.test-pgsql-vnet.dispgsql_uami_client_id
   enable_dis_pgsql_operator                  = true
   aks_workpool_vnet_name                     = module.aks.aks_workpool_vnet_name
+  aks_resource_group                         = module.aks.aks_workpool_vnet_resource_group_name
 }
