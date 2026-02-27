@@ -24,6 +24,7 @@ func (r *ApplicationIdentityReconciler) createServiceAccount(ctx context.Context
 			Annotations: map[string]string{
 				"serviceaccount.azure.com/azure-identity": *applicationIdentity.Status.ClientID,
 				"azure.workload.identity/client-id":       *applicationIdentity.Status.ClientID,
+				"azure.workload.identity/tenant-id":       r.Config.TargetTenantID,
 			},
 		},
 		Secrets:                      nil,
@@ -42,11 +43,12 @@ func (r *ApplicationIdentityReconciler) createServiceAccount(ctx context.Context
 func (r *ApplicationIdentityReconciler) updateServiceAccount(ctx context.Context, applicationIdentity *v1alpha1.ApplicationIdentity, serviceAccount *corev1.ServiceAccount) error {
 	orig := serviceAccount.DeepCopy()
 	patch := client.MergeFrom(orig)
-	if applicationIdentity.OutdatedServiceAccount(serviceAccount) {
+	if applicationIdentity.OutdatedServiceAccount(serviceAccount) || serviceAccount.Annotations["azure.workload.identity/tenant-id"] != r.Config.TargetTenantID {
 		serviceAccount.Labels = applicationIdentity.Spec.Tags
 		serviceAccount.Annotations = map[string]string{
 			"serviceaccount.azure.com/azure-identity": *applicationIdentity.Status.ClientID,
 			"azure.workload.identity/client-id":       *applicationIdentity.Status.ClientID,
+			"azure.workload.identity/tenant-id":       r.Config.TargetTenantID,
 		}
 		if err := r.Patch(ctx, serviceAccount, patch); err != nil {
 			return fmt.Errorf("unable to update ServiceAccount: %w", err)

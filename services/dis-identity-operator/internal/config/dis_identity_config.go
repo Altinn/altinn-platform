@@ -19,6 +19,8 @@ type DisIdentityConfig struct {
 	IssuerURL string `json:"issuerUrl" koanf:"issuerUrl" toml:"issuerUrl"`
 	// TargetResourceGroup the armID of the resource group where the managed identity will be created.
 	TargetResourceGroup string `json:"targetResourceGroup" koanf:"targetResourceGroup" toml:"targetResourceGroup"`
+	// TargetTenantID the tenant ID where the managed identity will be created.
+	TargetTenantID string `json:"targetTenantId" koanf:"targetTenantId" toml:"targetTenantId"`
 }
 
 const CONFIG_PREFIX = "DISID_"
