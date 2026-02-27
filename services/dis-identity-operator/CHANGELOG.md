@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.1.1...dis-identity-v0.2.0) (2026-02-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* add configuration and code to add tenant-id annotation to service account ([#3175](https://github.com/Altinn/altinn-platform/issues/3175))
+
+### Features
+
+* add configuration and code to add tenant-id annotation to service account ([#3175](https://github.com/Altinn/altinn-platform/issues/3175)) ([ffbff40](https://github.com/Altinn/altinn-platform/commit/ffbff408efd2bb9af1be418e5920418b06581f2c))
+
 ## [0.1.1](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.1.0...dis-identity-v0.1.1) (2026-02-27)
 
 
