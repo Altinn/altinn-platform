@@ -1,5 +1,5 @@
 {
-  "services/dis-pgsql-operator": "0.5.0",
+  "services/dis-pgsql-operator": "0.5.1",
   "services/dis-identity-operator": "0.2.0",
   "services/dis-apim-operator": "0.0.0",
   "services/lakmus": "1.1.0",
