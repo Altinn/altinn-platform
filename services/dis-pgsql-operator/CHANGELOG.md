@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.5.0...dis-pgsql-v0.5.1) (2026-02-27)
+
+
+### Bug Fixes
+
+* **dis-pgsql:** reconcile existent pdvnet links ([#3178](https://github.com/Altinn/altinn-platform/issues/3178)) ([56eb60d](https://github.com/Altinn/altinn-platform/commit/56eb60da28d3758e2b9d7f519087097aa9591457))
+
 ## [0.5.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.4.0...dis-pgsql-v0.5.0) (2026-02-26)
 
 
