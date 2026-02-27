@@ -96,7 +96,7 @@ func (a *ApplicationIdentity) OutdatedServiceAccount(serviceAccount *corev1.Serv
 	if serviceAccount == nil {
 		return true
 	}
-	id, ok := serviceAccount.Annotations["serviceaccount.azure.com/azure-identity"]
+	id, ok := serviceAccount.Annotations["azure.workload.identity/client-id"]
 	if !ok && a.Status.ClientID != nil {
 		return true
 	}

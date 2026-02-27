@@ -23,6 +23,7 @@ func (r *ApplicationIdentityReconciler) createServiceAccount(ctx context.Context
 			Labels:    applicationIdentity.Spec.Tags,
 			Annotations: map[string]string{
 				"serviceaccount.azure.com/azure-identity": *applicationIdentity.Status.ClientID,
+				"azure.workload.identity/client-id":       *applicationIdentity.Status.ClientID,
 			},
 		},
 		Secrets:                      nil,
@@ -45,6 +46,7 @@ func (r *ApplicationIdentityReconciler) updateServiceAccount(ctx context.Context
 		serviceAccount.Labels = applicationIdentity.Spec.Tags
 		serviceAccount.Annotations = map[string]string{
 			"serviceaccount.azure.com/azure-identity": *applicationIdentity.Status.ClientID,
+			"azure.workload.identity/client-id":       *applicationIdentity.Status.ClientID,
 		}
 		if err := r.Patch(ctx, serviceAccount, patch); err != nil {
 			return fmt.Errorf("unable to update ServiceAccount: %w", err)
