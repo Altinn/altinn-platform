@@ -92,15 +92,20 @@ func (a *ApplicationIdentity) OutdatedFederatedCredentials(credential *managedid
 	return !reflect.DeepEqual(expectedAudiences, credential.Spec.Audiences)
 }
 
-func (a *ApplicationIdentity) OutdatedServiceAccount(serviceAccount *corev1.ServiceAccount) bool {
+func (a *ApplicationIdentity) OutdatedServiceAccount(serviceAccount *corev1.ServiceAccount, tenantID string) bool {
 	if serviceAccount == nil {
 		return true
 	}
-	id, ok := serviceAccount.Annotations["azure.workload.identity/client-id"]
-	if !ok && a.Status.ClientID != nil {
+	if a.Status.ClientID == nil {
+		return false
+	}
+	if serviceAccount.Annotations["serviceaccount.azure.com/azure-identity"] != *a.Status.ClientID {
 		return true
 	}
-	if a.Status.ClientID != nil && *a.Status.ClientID != id {
+	if serviceAccount.Annotations["azure.workload.identity/client-id"] != *a.Status.ClientID {
+		return true
+	}
+	if serviceAccount.Annotations["azure.workload.identity/tenant-id"] != tenantID {
 		return true
 	}
 	return false

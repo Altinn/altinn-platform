@@ -5,3 +5,5 @@
       value: "${DISID_ISSUER_URL}"
     - name: DISID_TARGET_RESOURCE_GROUP
       value: "${DISID_TARGET_RESOURCE_GROUP}"
+    - name: DISID_TARGET_TENANT_ID
+      value: "${DISID_TARGET_TENANT_ID}"
