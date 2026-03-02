@@ -95,6 +95,25 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'issues' && github.event.action == 'edited' && startsWith(github.event.issue.title, 'Gitops OCI image promotion:') && github.event.issue.draft == false && github.event.issue.state == 'open'
     steps:
+      - name: Authorize user
+        id: check_user_auth
+        run: |
+          AUTHORIZED_USERS=("arealmaas" "khanrn" "sduranc" "borgethommesen" "bengtfredh" "monteiro-renato" "ootneim" "annerisbakk" "Herskis" "simon-ellefsen" "EivindBRisa" "tjololo")
+          EDIT_AUTHOR=${{ github.actor }}
+          IS_AUTHORIZED="false"
+          for user in "${AUTHORIZED_USERS[@]}"; do
+            if [ "$user" == "$EDIT_AUTHOR" ]; then
+              IS_AUTHORIZED="true"
+              break
+            fi
+          done
+
+          if [ "$IS_AUTHORIZED" == "false" ]; then
+            echo "User $EDIT_AUTHOR is not authorized to trigger this workflow. Exiting."
+            exit 1 # Fails the step and the entire job
+          else
+            echo "User $EDIT_AUTHOR is authorized. Proceeding."
+          fi
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - name: Promote release
