@@ -97,6 +97,10 @@ jobs:
     steps:
       - name: Authorize user
         id: check_user_auth
+        env:
+          ISSUE_ACTOR_ID: ${{ github.actor_id }}
+          ISSUE_ACTOR: ${{ github.actor }}
+          TRIGGER_ACTOR: ${{ github.triggering_actor }}
         run: |
           # Using actor_id as github reccomends using the immutable actor_id
           # Add record here to map between username and actor_id (Found by using github api: https://api.github.com/users/<username>)
@@ -113,9 +117,9 @@ jobs:
           # EivindBRisa 164244096
           # tjololo 1145298
           AUTHORIZED_USER_IDS=("1777366" "6243408" "8321743" "12184124" "32734566" "45536168" "49302758" "56063468" "62640845" "89203237" "164244096" "1145298")
-          EDIT_AUTHOR=${{ github.actor_id }}
-          ACTOR=${{ github.actor }}
-          TRIGGER_AUTHOR=${{ github.triggering_actor }}
+          EDIT_AUTHOR="${ISSUE_ACTOR_ID}"
+          ACTOR="${ISSUE_ACTOR}"
+          TRIGGER_AUTHOR="${TRIGGER_ACTOR}"
           if [ "$ACTOR" != "$TRIGGER_AUTHOR" ]; then
           echo "Actor ($ACTOR) and triggering actor ($TRIGGER_AUTHOR) differ. Exiting."
           exit 1
