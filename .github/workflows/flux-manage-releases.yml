@@ -95,6 +95,49 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'issues' && github.event.action == 'edited' && startsWith(github.event.issue.title, 'Gitops OCI image promotion:') && github.event.issue.draft == false && github.event.issue.state == 'open'
     steps:
+      - name: Authorize user
+        id: check_user_auth
+        env:
+          ISSUE_ACTOR_ID: ${{ github.actor_id }}
+          ISSUE_ACTOR: ${{ github.actor }}
+          TRIGGER_ACTOR: ${{ github.triggering_actor }}
+        run: |
+          # Using actor_id as github reccomends using the immutable actor_id
+          # Add record here to map between username and actor_id (Found by using github api: https://api.github.com/users/<username>)
+          # arealmaas 1777366
+          # khanrn 6243408
+          # sduranc 8321743
+          # borgethommesen 12184124
+          # bengtfredh 32734566
+          # monteiro-renato 45536168
+          # ootneim 49302758
+          # annerisbakk 56063468
+          # Herskis 62640845
+          # simon-ellefsen 89203237
+          # EivindBRisa 164244096
+          # tjololo 1145298
+          AUTHORIZED_USER_IDS=("1777366" "6243408" "8321743" "12184124" "32734566" "45536168" "49302758" "56063468" "62640845" "89203237" "164244096" "1145298")
+          EDIT_AUTHOR="${ISSUE_ACTOR_ID}"
+          ACTOR="${ISSUE_ACTOR}"
+          TRIGGER_AUTHOR="${TRIGGER_ACTOR}"
+          if [ "$ACTOR" != "$TRIGGER_AUTHOR" ]; then
+          echo "Actor ($ACTOR) and triggering actor ($TRIGGER_AUTHOR) differ. Exiting."
+          exit 1
+          fi
+          IS_AUTHORIZED="false"
+          for user in "${AUTHORIZED_USER_IDS[@]}"; do
+            if [ "$user" == "$EDIT_AUTHOR" ]; then
+              IS_AUTHORIZED="true"
+              break
+            fi
+          done
+
+          if [ "$IS_AUTHORIZED" == "false" ]; then
+            echo "User $EDIT_AUTHOR is not authorized to trigger this workflow. Exiting."
+            exit 1 # Fails the step and the entire job
+          else
+            echo "User $EDIT_AUTHOR is authorized. Proceeding."
+          fi
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - name: Promote release
