@@ -98,10 +98,24 @@ jobs:
       - name: Authorize user
         id: check_user_auth
         run: |
-          AUTHORIZED_USERS=("arealmaas" "khanrn" "sduranc" "borgethommesen" "bengtfredh" "monteiro-renato" "ootneim" "annerisbakk" "Herskis" "simon-ellefsen" "EivindBRisa" "tjololo")
-          EDIT_AUTHOR=${{ github.actor }}
+          # Using actor_id as github reccomends using the immutable actor_id
+          # Add record here to map between username and actor_id (Found by using github api: https://api.github.com/users/<username>)
+          # arealmaas 1777366
+          # khanrn 6243408
+          # sduranc 8321743
+          # borgethommesen 12184124
+          # bengtfredh 32734566
+          # monteiro-renato 45536168
+          # ootneim 49302758
+          # annerisbakk 56063468
+          # Herskis 62640845
+          # simon-ellefsen 89203237
+          # EivindBRisa 164244096
+          # tjololo 1145298
+          AUTHORIZED_USER_IDS=("1777366" "6243408" "8321743" "12184124" "32734566" "45536168" "49302758" "56063468" "62640845" "89203237" "164244096" "1145298")
+          EDIT_AUTHOR=${{ github.actor_id }}
           IS_AUTHORIZED="false"
-          for user in "${AUTHORIZED_USERS[@]}"; do
+          for user in "${AUTHORIZED_USER_IDS[@]}"; do
             if [ "$user" == "$EDIT_AUTHOR" ]; then
               IS_AUTHORIZED="true"
               break
