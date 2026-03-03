@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -135,6 +136,12 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
+<<<<<<< HEAD
+	cancel()
+	Eventually(func() error {
+		return testEnv.Stop()
+	}, time.Minute, time.Second).Should(Succeed())
+=======
 	if testEnv == nil {
 		return
 	}
@@ -143,6 +150,7 @@ var _ = AfterSuite(func() {
 	}
 	err := testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())
+>>>>>>> tmp-original-03-03-26-00-20
 })
 
 // getFirstFoundEnvTestBinaryDir locates the first binary in the specified path.
