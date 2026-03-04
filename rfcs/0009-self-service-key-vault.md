@@ -7,7 +7,7 @@
 
 # Summary
 
-This RFC proposes a new Kubernetes operator, `dis-vault-operator`, that provides self-service Azure Key Vault (AKV) provisioning for DIS applications. App teams declare a `Vault` custom resource in Kubernetes, and the operator reconciles it into Azure resources through Azure Service Operator (ASO). The proposal is opinionated: one vault per app per environment, non-multitenant assumptions, Azure RBAC authorization, and strict subnet-based network allowlisting.
+This RFC proposes a new Kubernetes operator, `dis-vault-operator`, that provides self-service Azure Key Vault (AKV) provisioning for DIS applications. App teams declare a `Vault` custom resource in Kubernetes, and the operator reconciles it into Azure resources through Azure Service Operator (ASO). The proposal is opinionated: one vault per app per environment, non-multitenant assumptions, Azure RBAC authorization, and strict subnet-based network allowlisting. The `Vault` API also optionally enables External Secrets integration via `spec.externalSecrets`.
 
 # Motivation
 
@@ -35,6 +35,7 @@ metadata:
 spec:
   identityRef:
     name: my-app-identity
+  externalSecrets: true
   sku: standard
   softDeleteRetentionDays: 90
   purgeProtectionEnabled: true
@@ -48,9 +49,12 @@ The operator then:
 2. Waits until identity is ready and has a `principalId`.
 3. Creates/reconciles AKV via ASO.
 4. Creates/reconciles a role assignment granting the identity data-plane access.
-5. Publishes readiness and resulting values (resource ID, vault URI) in `status`.
+5. If `spec.externalSecrets=true`, creates/reconciles a namespaced `SecretStore` named `<vault-name>-kv`.
+6. If `spec.externalSecrets=false`, ensures any previously managed `SecretStore` for that `Vault` is removed.
+7. Publishes readiness and resulting values (resource ID, vault URI, and external secrets integration readiness) in `status`.
 
 Teams should think of vaults as app owned, environment scoped resources managed declaratively in GitOps, not manually in Azure.
+Teams that want synchronized Kubernetes secrets then define `ExternalSecret` resources targeting the managed `SecretStore`.
 
 ## Security and network defaults in v1
 
@@ -73,6 +77,7 @@ This creates a default-deny posture with explicit network allowlist.
 - `softDeleteRetentionDays` (optional): default `90`, range `7..90`.
 - `purgeProtectionEnabled` (optional): default `true`.
 - `tags` (optional): additional tags.
+- `externalSecrets` (optional `boolean`, default `false`): enables operator-managed namespaced `SecretStore` for this vault.
 
 ### Potential Status (v1)
 - `conditions[]`:
@@ -81,11 +86,13 @@ This creates a default-deny posture with explicit network allowlist.
   - `VaultReady`
   - `RoleAssignmentReady`
   - `NetworkPolicyReady`
+  - `ExternalSecretsReady`
 - `azureName`
 - `resourceId`
 - `vaultUri`
 - `ownerPrincipalId`
 - `ownerRoleAssignmentId`
+- `externalSecretStoreName`
 - `observedGeneration`
 
 ### Simplified CRD example
@@ -122,6 +129,9 @@ spec:
                   properties:
                     name:
                       type: string
+                externalSecrets:
+                  type: boolean
+                  default: false
                 sku:
                   type: string
                   enum: ["standard", "premium"]
@@ -146,6 +156,8 @@ spec:
                 resourceId:
                   type: string
                 vaultUri:
+                  type: string
+                externalSecretStoreName:
                   type: string
 ```
 
@@ -180,6 +192,7 @@ participant dev as App Team
 participant kapi as Kubernetes API
 participant vaultop as dis-vault-operator
 participant aso as Azure Service Operator
+participant eso as External Secrets Operator
 participant azure as Azure Key Vault/RBAC
 
 dev->>kapi: Create/Update Vault CR
@@ -192,9 +205,29 @@ else Identity ready
   kapi->>aso: Reconcile ASO resources
   aso->>azure: Provision/Update AKV + RBAC
   aso->>kapi: Update ASO status/conditions
+  alt spec.externalSecrets == true
+    vaultop->>kapi: Create/Update SecretStore (<vault-name>-kv)
+    alt SecretStore name conflict (non-owned)
+      vaultop->>kapi: Set ExternalSecretsReady=False (NameConflict)
+    else SecretStore reconciled
+      kapi->>eso: Reconcile SecretStore
+      vaultop->>kapi: Set ExternalSecretsReady=True
+    end
+  else spec.externalSecrets == false
+    vaultop->>kapi: Ensure managed SecretStore absent
+    vaultop->>kapi: Set ExternalSecretsReady=False (Disabled)
+  end
   vaultop->>kapi: Project status to Vault + set Ready
 end
 ```
+
+### External Secrets integration contract
+- `externalSecrets` is optional and defaults to `false`.
+- When enabled, operator-managed `SecretStore` scope is namespaced only in v1.
+- Managed `SecretStore` name is deterministic: `<vault-name>-kv`.
+- `SecretStore` auth is derived from the vault owner identity (`spec.identityRef.name`) using workload identity.
+- If `<vault-name>-kv` already exists and is not operator-managed for that `Vault`, the operator sets `ExternalSecretsReady=False` with reason `NameConflict` and does not overwrite it.
+- Teams define `ExternalSecret` resources themselves and target the managed `SecretStore`.
 
 ## Naming strategy
 
@@ -220,11 +253,28 @@ Startup validation fails fast on missing/invalid required values as usual.
 
 - No direct migration impact for existing workloads because this introduces a new CRD/operator path.
 - Teams adopting this model move from Terraform-based AKV provisioning to declarative `Vault` resources.
+- `spec.externalSecrets` defaults to `false`, so existing users keep current behavior without automatic `SecretStore` management.
+
+## Acceptance scenarios (RFC intent)
+
+1. `externalSecrets` omitted is treated as disabled (`false`).
+2. `externalSecrets=true` results in an operator-managed namespaced `SecretStore`.
+3. Toggling `externalSecrets` from `true` to `false` removes the managed `SecretStore`.
+4. If a non-owned `SecretStore` with the expected name already exists, reconciliation sets `ExternalSecretsReady=False` (`NameConflict`) and does not take ownership.
+5. Vault provisioning and readiness behavior remain unchanged when `externalSecrets=false`.
+
+## Assumptions and defaults for this RFC update
+
+- This change only updates the RFC text.
+- No implementation changes are part of this task.
+- `SecretStore` scope is namespaced in v1.
+- Managed `SecretStore` name defaults to `<vault-name>-kv`.
 
 # Drawbacks
 
 - Adds another platform operator to maintain.
 - Depends on ASO API versions and behavior.
+- Optional External Secrets integration adds coupling to ESO CRD availability in clusters where `spec.externalSecrets=true` is used.
 - Strong defaults can require exceptions for some advanced workloads.
 - Misconfigured subnet allowlists can block legitimate traffic until corrected.
 
@@ -278,3 +328,4 @@ Dis related:
 - Add per vault network override policy with guardrails.
 - Support additional vault managed resources (e.g certificates).
 - Add policy integration (Kyverno, CEL, azure policies?) for compliance checks (tagging, naming, soft delete, purge protection).
+- Support/migrate to [Secrets Store CSI Driver providers](https://secrets-store-csi-driver.sigs.k8s.io/providers/) as an alternative consumption path that could possibly remove the need for ESO.
