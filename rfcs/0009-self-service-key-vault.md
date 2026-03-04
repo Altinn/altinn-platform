@@ -255,21 +255,6 @@ Startup validation fails fast on missing/invalid required values as usual.
 - Teams adopting this model move from Terraform-based AKV provisioning to declarative `Vault` resources.
 - `spec.externalSecrets` defaults to `false`, so existing users keep current behavior without automatic `SecretStore` management.
 
-## Acceptance scenarios (RFC intent)
-
-1. `externalSecrets` omitted is treated as disabled (`false`).
-2. `externalSecrets=true` results in an operator-managed namespaced `SecretStore`.
-3. Toggling `externalSecrets` from `true` to `false` removes the managed `SecretStore`.
-4. If a non-owned `SecretStore` with the expected name already exists, reconciliation sets `ExternalSecretsReady=False` (`NameConflict`) and does not take ownership.
-5. Vault provisioning and readiness behavior remain unchanged when `externalSecrets=false`.
-
-## Assumptions and defaults for this RFC update
-
-- This change only updates the RFC text.
-- No implementation changes are part of this task.
-- `SecretStore` scope is namespaced in v1.
-- Managed `SecretStore` name defaults to `<vault-name>-kv`.
-
 # Drawbacks
 
 - Adds another platform operator to maintain.
