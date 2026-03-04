@@ -145,6 +145,7 @@ jobs:
           TAGS=("at22" "at23" "at24" "tt02" "yt01" "prod")
           ACR_NAME="altinncr"
           ACR_LOGIN_SERVER="${ACR_NAME}.azurecr.io"
+          ACR_RESOURCE_GROUP="acr"
           SOURCE_IMAGE="dis/default-syncroot:latest"
 
           # Extract product keys from terraform.tfvars.json
@@ -163,10 +164,11 @@ jobs:
               else
                 echo "    Tag ${TAG} not found. Importing from ${SOURCE_IMAGE}..."
                 az acr import \
-                  --name "$ACR_NAME" \
+                  --name "${ACR_NAME}" \
+                  --resource-group "${ACR_RESOURCE_GROUP}" \
                   --source "${ACR_LOGIN_SERVER}/${SOURCE_IMAGE}" \
                   --image "${TARGET_REPO}:${TAG}" \
-                  --subscription "$ACR_SUBSCRIPTION_ID"
+                  --subscription "${ACR_SUBSCRIPTION_ID}"
               fi
             done
           done
