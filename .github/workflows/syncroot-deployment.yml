@@ -139,31 +139,34 @@ jobs:
 
       - name: Process Syncroot Images
         shell: bash
+        env:
+          ACR_SUBSCRIPTION_ID: ${{ secrets.AZURE_ALTINNACR_SUBSCRIPTION_ID }}
         run: |
           TAGS=("at22" "at23" "at24" "tt02" "yt01" "prod")
           ACR_NAME="altinncr"
           ACR_LOGIN_SERVER="${ACR_NAME}.azurecr.io"
           SOURCE_IMAGE="dis/default-syncroot:latest"
-          
+
           # Extract product keys from terraform.tfvars.json
           PRODUCTS=$(jq -r '.product_syncroot_source_repos | keys[]' infrastructure/syncroots/terraform.tfvars.json)
-          
+
           for PRODUCT in $PRODUCTS; do
             TARGET_REPO="${PRODUCT}/syncroot"
             echo "Checking product: ${PRODUCT}"
-            
+
             for TAG in "${TAGS[@]}"; do
               echo "  Target tag: ${TAG}"
-              
+
               # Check if tag exists
-              if az acr repository show --name "$ACR_NAME" --image "${TARGET_REPO}:${TAG}" &>/dev/null; then
+              if az acr repository show --name "$ACR_NAME" --image "${TARGET_REPO}:${TAG}" --subscription "$ACR_SUBSCRIPTION_ID" &>/dev/null; then
                 echo "    Tag ${TAG} already exists for ${TARGET_REPO}. Skipping."
               else
                 echo "    Tag ${TAG} not found. Importing from ${SOURCE_IMAGE}..."
                 az acr import \
                   --name "$ACR_NAME" \
                   --source "${ACR_LOGIN_SERVER}/${SOURCE_IMAGE}" \
-                  --image "${TARGET_REPO}:${TAG}"
+                  --image "${TARGET_REPO}:${TAG}" \
+                  --subscription "$ACR_SUBSCRIPTION_ID"
               fi
             done
           done
