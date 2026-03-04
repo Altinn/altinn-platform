@@ -49,7 +49,7 @@ The operator then:
 2. Waits until identity is ready and has a `principalId`.
 3. Creates/reconciles AKV via ASO.
 4. Creates/reconciles a role assignment granting the identity data-plane access.
-5. If `spec.externalSecrets=true`, creates/reconciles a namespaced `SecretStore` named `<vault-name>-kv`.
+5. If `spec.externalSecrets=true`, creates/reconciles a namespaced `SecretStore` named `<vault-name>-secret-store`.
 6. If `spec.externalSecrets=false`, ensures any previously managed `SecretStore` for that `Vault` is removed.
 7. Publishes readiness and resulting values (resource ID, vault URI, and external secrets integration readiness) in `status`.
 
@@ -206,7 +206,7 @@ else Identity ready
   aso->>azure: Provision/Update AKV + RBAC
   aso->>kapi: Update ASO status/conditions
   alt spec.externalSecrets == true
-    vaultop->>kapi: Create/Update SecretStore (<vault-name>-kv)
+    vaultop->>kapi: Create/Update SecretStore (<vault-name>-secret-store)
     alt SecretStore name conflict (non-owned)
       vaultop->>kapi: Set ExternalSecretsReady=False (NameConflict)
     else SecretStore reconciled
@@ -224,9 +224,10 @@ end
 ### External Secrets integration contract
 - `externalSecrets` is optional and defaults to `false`.
 - When enabled, operator-managed `SecretStore` scope is namespaced only in v1.
-- Managed `SecretStore` name is deterministic: `<vault-name>-kv`.
+- Managed `SecretStore` name is deterministic and defaults to `<vault-name>-secret-store`.
+- If the default name exceeds Kubernetes DNS label limits (63 chars), operator may use a shorter deterministic suffix (`-secstore` or `-ss`) with truncation/hash as needed.
 - `SecretStore` auth is derived from the vault owner identity (`spec.identityRef.name`) using workload identity.
-- If `<vault-name>-kv` already exists and is not operator-managed for that `Vault`, the operator sets `ExternalSecretsReady=False` with reason `NameConflict` and does not overwrite it.
+- If the resolved managed name (for example `<vault-name>-secret-store`, or a shortened deterministic variant) already exists and is not operator-managed for that `Vault`, the operator sets `ExternalSecretsReady=False` with reason `NameConflict` and does not overwrite it.
 - Teams define `ExternalSecret` resources themselves and target the managed `SecretStore`.
 
 ## Naming strategy
