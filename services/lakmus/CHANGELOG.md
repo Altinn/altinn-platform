@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/Altinn/altinn-platform/compare/lakmus-v1.1.0...lakmus-v1.1.1) (2026-03-05)
+
+
+### Dependency Updates
+
+* pin gcr.io/distroless/static docker tag to 0376b51 ([#3156](https://github.com/Altinn/altinn-platform/issues/3156)) ([bcec942](https://github.com/Altinn/altinn-platform/commit/bcec942accd274699f3dd8dccf50a89f58aa1b11))
+
 ## [1.1.0](https://github.com/Altinn/altinn-platform/compare/lakmus-v1.0.0...lakmus-v1.1.0) (2026-02-26)
 
 
