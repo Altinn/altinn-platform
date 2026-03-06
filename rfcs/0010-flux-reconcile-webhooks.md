@@ -46,7 +46,7 @@ The GitHub repository and event type a product wants triggered on deployment. Pr
 │ Flux         │     │ flux-dispatch    │     │ GitHub                          │
 │ notification │────>│ (platform svc)   │────>│                                 │
 │ controller   │     │                  │     │  Altinn/dialogporten            │
-└─────────────┘     │  - dedup         │     │    └── .github/workflows/       │
+└─────────────┘     │  - HMAC verify   │     │    └── .github/workflows/       │
                     │  - GitHub App    │     │        └── e2e-on-deploy.yml    │
                     │    auth          │     │                                 │
                     │  - dispatch      │────>│  Altinn/correspondence          │
@@ -57,11 +57,12 @@ The GitHub repository and event type a product wants triggered on deployment. Pr
 
 1. Product CI pushes a new app OCI artifact (already happens today)
 2. Flux detects the new artifact and reconciles the app Kustomization
-3. Flux notification-controller fires a webhook to the `flux-dispatch` service (on success or failure, depending on the Alert's `eventSeverity`)
-4. The service deduplicates (skips routine reconciles where nothing changed)
-5. The service reads `dispatch_repo` and `dispatch_event` from the event metadata
-6. The service authenticates as a GitHub App and sends `repository_dispatch` to the target repo, including the reconciliation `reason` in the payload
-7. The product's GitHub Actions workflow runs (e.g., e2e tests on success, incident response on failure)
+3. Flux notification-controller fires an HMAC-signed webhook to the `flux-dispatch` service
+4. The service verifies the HMAC signature, validates `dispatch_repo` format and org prefix
+5. The service deduplicates (skips routine reconciles where nothing changed)
+6. The service reads `dispatch_repo` and `dispatch_event` from the event metadata
+7. The service authenticates as a GitHub App and sends `repository_dispatch` to the target repo, including the reconciliation `reason` in the payload
+8. The product's GitHub Actions workflow runs (e.g., e2e tests on success, incident response on failure)
 
 ## What product teams do
 
@@ -73,6 +74,8 @@ The platform provides a base Provider manifest. Products include it and add an A
 
 **Success alert** — triggers on successful reconciliation (e.g., run e2e tests):
 
+> **Note on `eventSeverity`:** Flux's `eventSeverity: info` forwards **all** events (including errors) — it is not a success-only filter. The `flux-dispatch` service filters events server-side by the `reason` field: only reasons indicating success (e.g., `ReconciliationSucceeded`) are dispatched for Alerts using `dispatch_event: "flux-deploy"`. Products wanting only failure events should use `eventSeverity: error`, which Flux filters at the Alert level.
+
 ```yaml
 apiVersion: notification.toolkit.fluxcd.io/v1beta3
 kind: Alert
@@ -82,7 +85,7 @@ metadata:
 spec:
   providerRef:
     name: deploy-webhook           # references the platform-provided Provider
-  eventSeverity: info
+  eventSeverity: info              # forwards all events; service filters by reason
   eventSources:
     - kind: Kustomization
       name: {product}-apps-{env}   # the app Kustomization (NOT the syncroot)
@@ -171,6 +174,8 @@ jobs:
           # trigger incident workflow, notify Slack, initiate rollback, etc.
 ```
 
+> **Important:** `repository_dispatch` only triggers workflows on the repository's **default branch** (usually `main`). Workflow files must be merged to the default branch before they can receive dispatches. This means product teams cannot test their dispatch workflows on a feature branch using real events — use `workflow_dispatch` with manual test payloads for pre-merge testing.
+
 That's it. No platform team involvement to onboard, no PRs to altinn-platform.
 
 ## What the platform team manages
@@ -248,31 +253,40 @@ The `repository_dispatch` event payload available to workflows:
 ```
 POST /flux-events (from Flux notification-controller)
   │
-  ├── 1. Parse JSON body into FluxEvent struct
-  ├── 2. Validate: reason is a recognized reconciliation event and required metadata present
+  ├── 1. Verify HMAC-SHA256 signature from X-Signature header against shared secret
+  │      └── Invalid/missing signature → 401 Unauthorized (logged, not retried)
+  ├── 2. Parse JSON body into FluxEvent struct (request body limited to 64 KB via http.MaxBytesReader)
+  ├── 3. Validate: reason is a recognized reconciliation event and required metadata present
   │      ├── Accepted reasons: "ReconciliationSucceeded", "ReconciliationFailed",
   │      │   "ValidationFailed", "DependencyNotReady", "ArtifactFailed"
   │      └── Unrecognized reason → 200 OK (non-retryable, Flux should not retry)
-  ├── 3. Reject if dispatch_repo missing → 200 OK + log warning
-  ├── 4. Dedup check: has this (product, env, reason, OCI-digest) been seen before?
+  ├── 4. Reject if dispatch_repo missing → 200 OK + log warning
+  ├── 5. Validate dispatch_repo format and org prefix
+  │      ├── Must match `^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$` (strict owner/repo format)
+  │      ├── Must start with `Altinn/` (reject cross-org dispatch attempts)
+  │      └── Invalid → 200 OK + log warning (non-retryable config issue)
+  ├── 6. Construct GitHub API URL using url.JoinPath (prevents path traversal)
+  ├── 7. Dedup check: has this (product, env, reason, OCI-digest, dispatch_repo) been seen before?
   │      └── Yes → 200 OK + log "skipping duplicate event"
-  ├── 5. Extract commit SHA from originRevision ("main/abc123" → "abc123")
-  ├── 6. Authenticate as GitHub App (cached installation token)
-  ├── 7. POST /repos/{dispatch_repo}/dispatches with client_payload (includes reason + message)
-  │      ├── Success → record in dedup tracker, increment metrics → 200 OK
-  │      └── Failure → log error, increment error metric → 502 (Flux retries on 5xx)
+  ├── 8. Extract commit SHA from originRevision ("main/abc123" → "abc123")
+  ├── 9. Authenticate as GitHub App (cached installation token)
+  ├── 10. POST /repos/{dispatch_repo}/dispatches with client_payload (includes reason + message)
+  │       ├── Success → record in dedup tracker, increment metrics → 200 OK
+  │       └── Failure → log error, increment error metric → 502 (Flux retries on 5xx)
   └── Done
 ```
 
 **Return code strategy:** Always 2xx for validation/config errors (retrying won't help). Only 5xx for transient failures (GitHub API down) so Flux retries.
 
-**Event routing:** The service does not decide which events to dispatch — Flux Alerts do. A product configuring `eventSeverity: info` receives only successes. A product configuring `eventSeverity: error` receives only failures. The service accepts both and dispatches whatever Flux sends, using the `dispatch_event` from metadata as the `event_type`.
+**Event routing:** Flux's `eventSeverity: error` filters at the Alert level (only error events are sent). However, `eventSeverity: info` forwards **all** events, including errors. To avoid dispatching failure events through a success Alert, the service filters by the `reason` field: for Alerts using `dispatch_event: "flux-deploy"` (or the default), only success reasons (`ReconciliationSucceeded`) are dispatched. For Alerts using a failure-specific `dispatch_event` (e.g., `flux-deploy-failed`), only failure reasons are dispatched. This ensures products get the correct event type regardless of the Alert's `eventSeverity` setting.
 
 ## Deduplication
 
 Flux reconciles on an interval (e.g., every 10 minutes) even when nothing changed, emitting `ReconciliationSucceeded` each time. Without dedup, every product would get a `repository_dispatch` every 10 minutes.
 
-**Design:** In-memory map keyed by `{product}/{env}/{reason}/{sha256-digest}`. Including `reason` in the key ensures that a success and a failure for the same digest are treated as distinct events (both get dispatched). Background goroutine evicts entries older than a configurable TTL (default 24h).
+**Design:** In-memory map keyed by `{product}/{env}/{reason}/{sha256-digest}/{dispatch_repo}`. Including `reason` in the key ensures that a success and a failure for the same digest are treated as distinct events (both get dispatched). Including `dispatch_repo` ensures that a single Kustomization dispatching to multiple repos (e.g., one for e2e tests and one for a dashboard) does not incorrectly deduplicate the second dispatch. Background goroutine evicts entries older than a configurable TTL (default 24h).
+
+**Capacity limit:** The dedup map is capped at a configurable maximum number of entries (default 10,000). When the cap is reached, the oldest entry is evicted. This prevents unbounded memory growth from crafted or high-volume events. The `flux_dispatch_dedup_entries` gauge metric tracks the current map size for monitoring.
 
 **Pod restart:** Dedup state is lost — at worst one extra dispatch per environment. Acceptable because workflows are idempotent (running e2e tests twice is harmless).
 
@@ -297,9 +311,21 @@ kind: Provider
 metadata:
   name: deploy-webhook
 spec:
-  type: generic
+  type: generic-hmac
   address: http://flux-dispatch.dis-platform.svc.cluster.local:8080/flux-events
+  secretRef:
+    name: flux-dispatch-hmac-token
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: flux-dispatch-hmac-token
+type: Opaque
+stringData:
+  token: "${HMAC_TOKEN}"  # provisioned by platform; shared between Provider and service
 ```
+
+The `generic-hmac` provider type causes Flux to sign each webhook payload with an HMAC-SHA256 signature sent in the `X-Signature` header. The `flux-dispatch` service verifies this signature before processing, ensuring only authentic Flux notifications are accepted.
 
 Products include this in their syncroot base and reference it from their Alerts with `providerRef.name: deploy-webhook`. The namespace is set by the product's Kustomization `targetNamespace`.
 
@@ -323,6 +349,22 @@ The service exposes metrics on `GET /metrics` (port 9090) using the standard Pro
 - A separate sidecar or metrics aggregation service would add deployment complexity for little benefit. The metrics are intrinsic to the dispatch logic — the service already knows when it dispatches, deduplicates, or errors. Exposing them directly is simpler and more reliable.
 - The `/metrics` endpoint runs on a separate port (9090) from the webhook handler (8080) so it can be scraped by Prometheus without exposing it to Flux's notification-controller.
 
+## HTTP server hardening
+
+The Go HTTP server is configured with explicit timeouts and limits to prevent resource exhaustion:
+
+```go
+server := &http.Server{
+    Addr:              ":8080",
+    ReadTimeout:       10 * time.Second,
+    ReadHeaderTimeout: 5 * time.Second,
+    WriteTimeout:      30 * time.Second,
+    MaxHeaderBytes:    1 << 16, // 64 KB
+}
+```
+
+Request bodies are limited to 64 KB via `http.MaxBytesReader` before JSON parsing (see request flow step 2). This prevents oversized payloads from consuming memory.
+
 ## Kubernetes deployment
 
 - Single-replica Deployment in `dis-platform` namespace
@@ -330,7 +372,56 @@ The service exposes metrics on `GET /metrics` (port 9090) using the standard Pro
 - Metrics port: `9090` (scraped by Prometheus via `PodMonitor` or `ServiceMonitor`)
 - Health endpoints: `GET /healthz` (liveness), `GET /readyz` (readiness)
 - GitHub App private key from Kubernetes Secret (sourced from Azure Key Vault)
+- HMAC shared secret from Kubernetes Secret (sourced from Azure Key Vault, shared with Flux Provider)
 - No external ingress — cluster-internal only
+
+### NetworkPolicy
+
+Following existing patterns (`dis-pgsql-operator`, `dis-apim-operator`, `dis-identity-operator`), the service defines NetworkPolicies to restrict network access:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: flux-dispatch-allow-webhook-traffic
+  namespace: dis-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: flux-dispatch
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: flux-system
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: flux-dispatch-allow-metrics-traffic
+  namespace: dis-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: flux-dispatch
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9090
+```
+
+This ensures only the Flux notification-controller can reach the webhook handler (port 8080) and only Prometheus can scrape metrics (port 9090).
 
 ## Interaction with existing features
 
@@ -343,11 +434,17 @@ The service exposes metrics on `GET /metrics` (port 9090) using the standard Pro
 | Scenario | Behavior |
 |---|---|
 | Product omits `dispatch_repo` in eventMetadata | 200 OK, log warning, no dispatch |
+| `dispatch_repo` has invalid format or non-Altinn org | 200 OK, log warning, no dispatch (non-retryable config issue) |
 | GitHub App not installed on target repo | GitHub returns 404, service logs error, returns 200 (non-retryable config issue) |
+| Invalid or missing HMAC signature | 401 Unauthorized, log warning, no dispatch |
+| Request body exceeds 64 KB | 413 Request Entity Too Large, no parsing attempted |
 | Rapid consecutive deploys (different digests) | Each has unique OCI digest, dedup correctly allows each through |
+| Same Kustomization dispatches to two different repos | Both dispatched — dedup key includes `dispatch_repo` |
 | Reconciliation failure event | Dispatched with `reason: "ReconciliationFailed"` and the error `message` from Flux |
 | Same digest fails then succeeds | Both dispatched — dedup key includes `reason`, so they are distinct events |
 | Repeated failures with same digest | Deduplicated — only the first failure for a given digest triggers dispatch |
+| `eventSeverity: info` Alert receives error event | Service filters by `reason` field — error reasons are not dispatched through success-type Alerts |
+| Dedup map reaches capacity (10,000 entries) | Oldest entry evicted, new event processed normally |
 | Service pod restarts | Dedup state lost, at most one duplicate dispatch per env (harmless) |
 | GitHub API downtime | Service returns 502, Flux retries with backoff |
 
@@ -355,7 +452,7 @@ The service exposes metrics on `GET /metrics` (port 9090) using the standard Pro
 [drawbacks]: #drawbacks
 
 - **New service to maintain.** Another pod in the cluster, another GitHub App to manage. However, the service is small (~500 LoC Go), stateless, and follows existing patterns (`lakmus`).
-- **Trusts product-provided `dispatch_repo`.** A product could target another product's repo. Mitigated by GitHub App installation scope (can only dispatch to installed repos), but worth noting.
+- **Trusts product-provided `dispatch_repo`.** A product could target another product's repo within the `Altinn/` org. Mitigated by strict format validation (owner/repo regex), `Altinn/` org prefix enforcement, and GitHub App installation scope (can only dispatch to installed repos). A per-product allowlist can be added later if needed.
 - **Single point of failure.** If the service is down, no dispatches fire. Flux will retry on 5xx, so brief outages self-heal. For extended outages, dispatches queue in Flux and fire when the service recovers.
 
 # Rationale and alternatives
@@ -392,9 +489,10 @@ Teams would either run e2e tests on a timer (wasteful, delayed feedback), build 
 # Unresolved questions
 [unresolved-questions]: #unresolved-questions
 
-- Should we maintain an allowlist of permitted `dispatch_repo` values in addition to the GitHub App installation scope?
+- ~~Should we maintain an allowlist of permitted `dispatch_repo` values?~~ **Resolved:** The service enforces an `Altinn/` org prefix and strict format validation. A per-product allowlist is deferred to "Future possibilities" until there is evidence of cross-product dispatch being a concern.
 - What naming convention for the GitHub App? (e.g., `dis-flux-dispatch`)
 - Should the platform-provided Provider manifest live in a shared OCI artifact or be documented for products to copy?
+- What Kubernetes namespace label should be used for the Flux notification-controller namespace in the NetworkPolicy? (e.g., `kubernetes.io/metadata.name: flux-system`)
 
 # Future possibilities
 [future-possibilities]: #future-possibilities
@@ -403,4 +501,4 @@ Teams would either run e2e tests on a timer (wasteful, delayed feedback), build 
 - **GitHub Deployment Statuses.** The service could create GitHub Deployment + Deployment Status objects, giving teams a deployment history view in the GitHub UI.
 - **Multi-event support.** Products could configure multiple dispatch targets from a single Alert (e.g., trigger e2e tests AND update a deployment dashboard).
 - **Cross-cluster aggregation.** If products deploy to multiple clusters, the service could aggregate events and only trigger workflows when all clusters for an environment are reconciled.
-- **HMAC webhook verification.** Start with `generic` Provider for simplicity, evolve to `generic-hmac` for tamper-proof webhooks once stable.
+- **Per-product `dispatch_repo` allowlist.** The current design validates the `Altinn/` org prefix. A more granular allowlist mapping product namespaces to specific permitted repos could be added if cross-product dispatch becomes a concern.
