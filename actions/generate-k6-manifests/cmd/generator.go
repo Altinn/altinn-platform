@@ -261,6 +261,19 @@ func (r K8sManifestGenerator) HandleConfigFileOverride(base map[string]any, over
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	_, okst := base["stages"]
+	_, oksc := base["scenarios"]
+
+	_, okit := override["iterations"]
+	_, okvus := override["vus"]
+	_, okduration := override["duration"]
+
+	if (okit || okvus || okduration) && (okst || oksc) {
+		delete(base, "stages")
+		delete(base, "scenarios")
+	}
+
 	maps.Copy(base, override)
 
 	return base

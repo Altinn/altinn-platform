@@ -146,6 +146,9 @@ func (cFile *ConfigFile) SetDefaults() {
 				defaultId := fmt.Sprintf("%s-%s%s", c.Environment, *tempString, suffix)
 				c.TestRun.Id = &defaultId
 			}
+			if c.TestTypeDefinition.ConfigFile != "" && !strings.HasPrefix(c.TestTypeDefinition.ConfigFile, cFile.BaseDir) {
+				c.TestTypeDefinition.ConfigFile = filepath.Join(cFile.BaseDir, c.TestTypeDefinition.ConfigFile)
+			}
 			if c.TestRun.Parallelism == nil || *c.TestRun.Parallelism <= 0 {
 				tempInt := 1
 				c.TestRun.Parallelism = &tempInt
