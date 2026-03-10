@@ -10,7 +10,7 @@ resource "azurerm_user_assigned_identity" "syncroot_pusher" {
 
 resource "azurerm_federated_identity_credential" "syncroot_pusher_envs" {
   for_each            = var.github_environments
-  name                = "${var.github_org_name}-${var.github_repo_name}-env-${each.value}"
+  name                = "${var.github_org_name}-${replace(var.github_repo_name, ".", "_")}-env-${each.value}"
   resource_group_name = var.resource_group_name
   parent_id           = azurerm_user_assigned_identity.syncroot_pusher.id
   issuer              = "https://token.actions.githubusercontent.com"
@@ -20,7 +20,7 @@ resource "azurerm_federated_identity_credential" "syncroot_pusher_envs" {
 
 resource "azurerm_federated_identity_credential" "syncroot_pusher_branches" {
   for_each            = var.github_branches
-  name                = "${var.github_org_name}-${var.github_repo_name}-ref-${each.value}"
+  name                = "${var.github_org_name}-${replace(var.github_repo_name, ".", "_")}-ref-${each.value}"
   resource_group_name = var.resource_group_name
   parent_id           = azurerm_user_assigned_identity.syncroot_pusher.id
   issuer              = "https://token.actions.githubusercontent.com"
