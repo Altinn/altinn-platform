@@ -1,5 +1,5 @@
 resource "azurerm_user_assigned_identity" "syncroot_pusher" {
-  name                = "${var.github_org_name}-${var.github_repo_name}-${var.product_name}-syncroot"
+  name                = "${var.github_org_name}-${replace(var.github_repo_name, ".", "_")}-${var.product_name}-syncroot"
   location            = var.location
   resource_group_name = var.resource_group_name
   tags = merge(var.tags, {
