@@ -27,6 +27,7 @@
 - Generate manifests (CRDs/RBAC/webhooks): `make manifests-cache`
 - Unit tests: `make test-cache`
 - Build manager binary: `make build-cache`
+- Vulnerability scan: `make govulncheck-cache`
 
 ## Required verification for code changes
 If you modify any files under:
