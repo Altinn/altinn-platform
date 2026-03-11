@@ -13,7 +13,6 @@ RUN go mod download
 
 # Copy the Go source
 COPY cmd/main.go cmd/main.go
-COPY internal/ internal/
 
 # Build
 # the GOARCH has no default value to allow the binary to be built according to the host where the command
