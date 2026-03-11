@@ -30,7 +30,7 @@
 
 ## Required verification for code changes
 If you modify any files under:
-- `api/**`, `cmd/**`, `internal/**`, `test/**`
+- `api/**`, `cmd/**`, `internal/**`, `test/**`, `config/**`
 
 You MUST run these commands before producing a final answer/patch:
 1. `make fmt-cache`
