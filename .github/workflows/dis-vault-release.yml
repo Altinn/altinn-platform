@@ -70,7 +70,7 @@ jobs:
       - name: Setup vars
         id: vars
         run: |
-          tag=${GITHUB_REF/refs\/tags\/dis-vault-/}
+          tag="${GITHUB_REF/refs\/tags\/dis-vault-/}"
           echo "tag=${tag}" >> ${GITHUB_OUTPUT}
       - name: Push flux oci image from release tag
         uses: ./actions/flux/build-push-image
