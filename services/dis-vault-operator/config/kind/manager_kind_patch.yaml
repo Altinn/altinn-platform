@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dis-vault-operator-controller-manager
+  namespace: dis-vault-operator-system
+spec:
+  template:
+    spec:
+      containers:
+        - name: manager
+          imagePullPolicy: Never
+          args:
+            - --leader-elect
+            - --health-probe-bind-address=:8081
+            - --metrics-bind-address=:8080
+            - --metrics-secure=false
+          env:
+            - name: DISVAULT_AZURE_SUBSCRIPTION_ID
+              value: "fake-subscription"
+            - name: DISVAULT_RESOURCE_GROUP
+              value: "fake-resource-group"
+            - name: DISVAULT_AZURE_TENANT_ID
+              value: "00000000-0000-0000-0000-000000000000"
+            - name: DISVAULT_LOCATION
+              value: "westeurope"
+            - name: DISVAULT_ENV
+              value: "dev"
+            - name: DISVAULT_AKS_SUBNET_IDS
+              value: "/subscriptions/fake-subscription/resourceGroups/fake-network-rg/providers/Microsoft.Network/virtualNetworks/fake-vnet/subnets/fake-aks-subnet"

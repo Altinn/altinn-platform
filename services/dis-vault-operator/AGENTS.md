@@ -64,6 +64,19 @@ Before opening a PR, ensure:
 - Never run git push by yourself
 - Always suggest to create a new branch in case we are working on main by mistake
 
+## PR description file
+- When working on a branch and making changes, always create or update `pr_description.md` in the repository root.
+- `pr_description.md` must contain:
+  1. `Feature Behavior (BDD)`
+  2. `ASCII Diagram`
+- The BDD section must be based on implemented behavior and use explicit BDD keywords highlighted in text:
+  - `**Given**`
+  - `**When**`
+  - `**Then**`
+  - `**And**`
+- Do not add extra sections (for example test-delta summaries) unless explicitly requested by the user.
+- Keep this file in sync as the branch evolves so it is ready to use in the PR.
+
 ## Code organization
 - `internal/controller` should only contain high-level controller duties and orchestration.
 - Domain logic should live in dedicated packages (for example `internal/pkg`, `internal/vault`).

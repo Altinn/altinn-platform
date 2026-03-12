@@ -1,0 +1,17 @@
+apiVersion: vault.dis.altinn.cloud/v1alpha1
+kind: Vault
+metadata:
+  labels:
+    app.kubernetes.io/name: dis-vault-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: vault-sample
+spec:
+  identityRef:
+    name: app-identity-sample
+  sku: standard
+  publicNetworkAccess: Enabled
+  softDeleteRetentionDays: 90
+  purgeProtectionEnabled: true
+  tags:
+    app: sample
+    env: dev
