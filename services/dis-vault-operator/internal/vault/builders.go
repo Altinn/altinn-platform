@@ -76,10 +76,9 @@ func BuildASOKeyVaultResource(v *vaultv1alpha1.Vault, cfg config.OperatorConfig,
 	}
 	properties.SoftDeleteRetentionInDays = &retentionDays
 
-	purgeProtection := v.Spec.PurgeProtectionEnabled
-	if !v.Spec.PurgeProtectionEnabled {
-		// kubebuilder default for CRD is true; keep true when unset in tests.
-		purgeProtection = true
+	purgeProtection := true
+	if v.Spec.PurgeProtectionEnabled != nil {
+		purgeProtection = *v.Spec.PurgeProtectionEnabled
 	}
 	properties.EnablePurgeProtection = &purgeProtection
 	tags := maps.Clone(v.Spec.Tags)

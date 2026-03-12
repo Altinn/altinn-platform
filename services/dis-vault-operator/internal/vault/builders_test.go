@@ -61,6 +61,40 @@ func TestBuildASOKeyVaultResource(t *testing.T) {
 		props.NetworkAcls.VirtualNetworkRules[0].Reference.ARMID != subnetID {
 		t.Fatalf("expected first virtual network rule to reference configured subnet")
 	}
+	if props.EnablePurgeProtection == nil || !*props.EnablePurgeProtection {
+		t.Fatalf("expected EnablePurgeProtection=true when spec value is unset")
+	}
+}
+
+func TestBuildASOKeyVaultResourcePreservesExplicitPurgeProtectionFalse(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.OperatorConfig{
+		SubscriptionID: "sub-123",
+		ResourceGroup:  "rg-dis-dev",
+		Location:       "westeurope",
+	}
+
+	disabled := false
+	v := &vaultv1alpha1.Vault{}
+	v.Name = "my-app-vault"
+	v.Namespace = "default"
+	v.Spec.IdentityRef.Name = "my-app-identity"
+	v.Spec.PurgeProtectionEnabled = &disabled
+
+	resource, err := BuildASOKeyVaultResource(v, cfg, "myappdevabc123")
+	if err != nil {
+		t.Fatalf("expected key vault builder to succeed, got error: %v", err)
+	}
+	if resource == nil || resource.Spec.Properties == nil {
+		t.Fatalf("expected key vault properties to be set")
+	}
+	if resource.Spec.Properties.EnablePurgeProtection == nil {
+		t.Fatalf("expected EnablePurgeProtection to be set")
+	}
+	if *resource.Spec.Properties.EnablePurgeProtection {
+		t.Fatalf("expected EnablePurgeProtection=false when explicitly configured")
+	}
 }
 
 func TestBuildOwnerRoleAssignmentResource(t *testing.T) {

@@ -72,7 +72,7 @@ type VaultSpec struct {
 	// PurgeProtectionEnabled controls purge protection. Defaults to true.
 	// +optional
 	// +kubebuilder:default=true
-	PurgeProtectionEnabled bool `json:"purgeProtectionEnabled,omitempty"`
+	PurgeProtectionEnabled *bool `json:"purgeProtectionEnabled,omitempty"`
 
 	// Tags are optional user-provided tags propagated to Azure resources.
 	// +optional

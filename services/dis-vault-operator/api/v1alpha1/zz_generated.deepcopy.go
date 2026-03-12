@@ -103,6 +103,11 @@ func (in *VaultList) DeepCopyObject() runtime.Object {
 func (in *VaultSpec) DeepCopyInto(out *VaultSpec) {
 	*out = *in
 	out.IdentityRef = in.IdentityRef
+	if in.PurgeProtectionEnabled != nil {
+		in, out := &in.PurgeProtectionEnabled, &out.PurgeProtectionEnabled
+		*out = new(bool)
+		**out = **in
+	}
 	if in.Tags != nil {
 		in, out := &in.Tags, &out.Tags
 		*out = make(map[string]string, len(*in))
