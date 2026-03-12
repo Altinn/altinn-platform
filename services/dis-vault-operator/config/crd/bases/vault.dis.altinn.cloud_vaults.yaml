@@ -59,6 +59,7 @@ spec:
                 - name
                 type: object
               publicNetworkAccess:
+                default: Enabled
                 description: PublicNetworkAccess is constrained to Enabled in v1.
                 enum:
                 - Enabled

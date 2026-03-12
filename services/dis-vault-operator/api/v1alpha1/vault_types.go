@@ -59,6 +59,7 @@ type VaultSpec struct {
 
 	// PublicNetworkAccess is constrained to Enabled in v1.
 	// +optional
+	// +kubebuilder:default=Enabled
 	PublicNetworkAccess VaultPublicNetworkAccess `json:"publicNetworkAccess,omitempty"`
 
 	// SoftDeleteRetentionDays controls soft-delete retention period.
