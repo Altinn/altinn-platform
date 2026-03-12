@@ -181,8 +181,11 @@ test-e2e-kind: cleanup-test-e2e setup-test-e2e docker-build kind-load install in
 
 .PHONY: test-e2e-kind-ci
 test-e2e-kind-ci: cleanup-test-e2e setup-test-e2e manifests generate fmt vet install-aso-crds-kind install-dis-identity-crd-kind ## Run the e2e tests on Kind and cleanup (CI).
-	KUBECONFIG=$(KIND_KUBECONFIG) CERT_MANAGER_INSTALL_SKIP=$(CERT_MANAGER_INSTALL_SKIP) KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
-	$(MAKE) cleanup-test-e2e
+	@test_status=0; cleanup_status=0; \
+	KUBECONFIG=$(KIND_KUBECONFIG) CERT_MANAGER_INSTALL_SKIP=$(CERT_MANAGER_INSTALL_SKIP) KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v || test_status=$$?; \
+	$(MAKE) cleanup-test-e2e || cleanup_status=$$?; \
+	if [ $$test_status -ne 0 ]; then exit $$test_status; fi; \
+	exit $$cleanup_status
 
 .PHONY: cleanup-test-e2e
 cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
