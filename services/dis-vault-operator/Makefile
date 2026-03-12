@@ -127,6 +127,7 @@ run-checks-ci: ## Run CI checks with local Go caches.
 # CertManager is installed by default; skip with:
 # - CERT_MANAGER_INSTALL_SKIP=true
 KIND_CLUSTER ?= dis-vault-operator-test-e2e
+KIND_KUBECONFIG ?= $(LOCALBIN)/kubeconfig-$(KIND_CLUSTER)
 
 .PHONY: setup-test-e2e
 setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
@@ -141,51 +142,52 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 			echo "Creating Kind cluster '$(KIND_CLUSTER)'..."; \
 			$(KIND) create cluster --name $(KIND_CLUSTER) ;; \
 	esac
-	@$(KIND) export kubeconfig --name $(KIND_CLUSTER) >/dev/null
-	@$(KUBECTL) config use-context kind-$(KIND_CLUSTER) >/dev/null
+	@mkdir -p "$(LOCALBIN)"
+	@$(KIND) get kubeconfig --name $(KIND_CLUSTER) > "$(KIND_KUBECONFIG)"
 
 .PHONY: test-e2e
 test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
 	@test_status=0; cleanup_status=0; \
-	CERT_MANAGER_INSTALL_SKIP=$(CERT_MANAGER_INSTALL_SKIP) KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v || test_status=$$?; \
+	KUBECONFIG=$(KIND_KUBECONFIG) CERT_MANAGER_INSTALL_SKIP=$(CERT_MANAGER_INSTALL_SKIP) KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v || test_status=$$?; \
 	$(MAKE) cleanup-test-e2e || cleanup_status=$$?; \
 	if [ $$test_status -ne 0 ]; then exit $$test_status; fi; \
 	exit $$cleanup_status
 
 .PHONY: install-aso-crds-kind
 install-aso-crds-kind: setup-test-e2e aso-crds ## Install ASO CRDs and disable conversion webhooks for Kind e2e.
-	$(KUBECTL) --context kind-$(KIND_CLUSTER) apply --server-side --force-conflicts -f $(LOCALBIN)/aso-crds/
-	@if $(KUBECTL) --context kind-$(KIND_CLUSTER) get crd vaults.keyvault.azure.com >/dev/null 2>&1; then \
-		$(KUBECTL) --context kind-$(KIND_CLUSTER) patch crd vaults.keyvault.azure.com --type='json' -p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'; \
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) --context kind-$(KIND_CLUSTER) apply --server-side --force-conflicts -f $(LOCALBIN)/aso-crds/
+	@if KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) --context kind-$(KIND_CLUSTER) get crd vaults.keyvault.azure.com >/dev/null 2>&1; then \
+		KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) --context kind-$(KIND_CLUSTER) patch crd vaults.keyvault.azure.com --type='json' -p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'; \
 	fi
-	@if $(KUBECTL) --context kind-$(KIND_CLUSTER) get crd roleassignments.authorization.azure.com >/dev/null 2>&1; then \
-		$(KUBECTL) --context kind-$(KIND_CLUSTER) patch crd roleassignments.authorization.azure.com --type='json' -p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'; \
+	@if KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) --context kind-$(KIND_CLUSTER) get crd roleassignments.authorization.azure.com >/dev/null 2>&1; then \
+		KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) --context kind-$(KIND_CLUSTER) patch crd roleassignments.authorization.azure.com --type='json' -p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'; \
 	fi
 
 .PHONY: install-dis-identity-crd-kind
 install-dis-identity-crd-kind: setup-test-e2e dis-identity-crd ## Install ApplicationIdentity CRD for Kind e2e.
-	$(KUBECTL) --context kind-$(KIND_CLUSTER) apply --server-side --force-conflicts -f $(DIS_IDENTITY_CRD_FILE)
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) --context kind-$(KIND_CLUSTER) apply --server-side --force-conflicts -f $(DIS_IDENTITY_CRD_FILE)
 
 .PHONY: seed-dis-identity-kind
 seed-dis-identity-kind: setup-test-e2e ## Seed ApplicationIdentity and ready status for sample-based Kind e2e.
-	$(KUBECTL) --context kind-$(KIND_CLUSTER) apply -f config/kind/applicationidentities.yaml
-	$(KUBECTL) --context kind-$(KIND_CLUSTER) patch applicationidentity app-identity-sample -n default \
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) --context kind-$(KIND_CLUSTER) apply -f config/kind/applicationidentities.yaml
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) --context kind-$(KIND_CLUSTER) patch applicationidentity app-identity-sample -n default \
 		--subresource=status --type=merge \
 		-p '{"status":{"managedIdentityName":"app-identity-sample-managed","principalId":"app-identity-sample-principal","conditions":[{"type":"Ready","status":"True","reason":"Ready","message":"Seeded for Kind e2e","lastTransitionTime":"2026-01-01T00:00:00Z"}]}}'
 
 .PHONY: test-e2e-kind
 test-e2e-kind: cleanup-test-e2e setup-test-e2e docker-build kind-load install install-aso-crds-kind install-dis-identity-crd-kind deploy-kind ## Setup Kind e2e env and apply samples.
 	$(MAKE) seed-dis-identity-kind
-	$(KUBECTL) --context kind-$(KIND_CLUSTER) apply -k config/samples
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) --context kind-$(KIND_CLUSTER) apply -k config/samples
 
 .PHONY: test-e2e-kind-ci
 test-e2e-kind-ci: cleanup-test-e2e setup-test-e2e manifests generate fmt vet install-aso-crds-kind install-dis-identity-crd-kind ## Run the e2e tests on Kind and cleanup (CI).
-	CERT_MANAGER_INSTALL_SKIP=$(CERT_MANAGER_INSTALL_SKIP) KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
+	KUBECONFIG=$(KIND_KUBECONFIG) CERT_MANAGER_INSTALL_SKIP=$(CERT_MANAGER_INSTALL_SKIP) KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
 	$(MAKE) cleanup-test-e2e
 
 .PHONY: cleanup-test-e2e
 cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
 	@$(KIND) delete cluster --name $(KIND_CLUSTER)
+	@rm -f "$(KIND_KUBECONFIG)"
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
@@ -292,7 +294,7 @@ deploy-kind: setup-test-e2e manifests kustomize ## Deploy controller to a Kind c
 		cp "$$kustomize_file" "$$kustomize_backup"; \
 		trap 'cp "$$kustomize_backup" "$$kustomize_file"; rm -f "$$kustomize_backup"' EXIT; \
 		( cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG} ); \
-		"$(KUSTOMIZE)" build config/kind | "$(KUBECTL)" apply -f -
+		"$(KUSTOMIZE)" build config/kind | KUBECONFIG=$(KIND_KUBECONFIG) "$(KUBECTL)" --context kind-$(KIND_CLUSTER) apply -f -
 
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.

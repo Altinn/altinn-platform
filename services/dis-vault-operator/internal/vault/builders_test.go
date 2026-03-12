@@ -10,6 +10,12 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	testVaultName    = "my-app-vault"
+	testNamespace    = "default"
+	testIdentityName = "my-app-identity"
+)
+
 func TestBuildASOKeyVaultResource(t *testing.T) {
 	t.Parallel()
 
@@ -24,9 +30,9 @@ func TestBuildASOKeyVaultResource(t *testing.T) {
 	}
 
 	v := &vaultv1alpha1.Vault{}
-	v.Name = "my-app-vault"
-	v.Namespace = "default"
-	v.Spec.IdentityRef.Name = "my-app-identity"
+	v.Name = testVaultName
+	v.Namespace = testNamespace
+	v.Spec.IdentityRef.Name = testIdentityName
 
 	resource, err := BuildASOKeyVaultResource(v, cfg, "myappdevabc123")
 	if err != nil {
@@ -78,9 +84,9 @@ func TestBuildASOKeyVaultResourcePreservesExplicitPurgeProtectionFalse(t *testin
 
 	disabled := false
 	v := &vaultv1alpha1.Vault{}
-	v.Name = "my-app-vault"
-	v.Namespace = "default"
-	v.Spec.IdentityRef.Name = "my-app-identity"
+	v.Name = testVaultName
+	v.Namespace = testNamespace
+	v.Spec.IdentityRef.Name = testIdentityName
 	v.Spec.PurgeProtectionEnabled = &disabled
 
 	resource, err := BuildASOKeyVaultResource(v, cfg, "myappdevabc123")
@@ -102,8 +108,8 @@ func TestBuildOwnerRoleAssignmentResource(t *testing.T) {
 	t.Parallel()
 
 	v := &vaultv1alpha1.Vault{}
-	v.Name = "my-app-vault"
-	v.Namespace = "default"
+	v.Name = testVaultName
+	v.Namespace = testNamespace
 
 	roleAssignment, err := BuildOwnerRoleAssignmentResource(v, nil, "principal-123")
 	if err != nil {
