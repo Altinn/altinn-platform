@@ -78,14 +78,14 @@ var _ = BeforeSuite(func() {
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to install ApplicationIdentity CRD on Kind")
 
 	By("creating manager namespace")
-	cmd = exec.Command("kubectl", "create", "ns", namespace)
+	cmd = utils.Kubectl("create", "ns", namespace)
 	_, err = utils.Run(cmd)
 	if err != nil && !strings.Contains(err.Error(), "AlreadyExists") {
 		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to create namespace")
 	}
 
 	By("labeling the namespace to enforce the restricted security policy")
-	cmd = exec.Command("kubectl", "label", "--overwrite", "ns", namespace,
+	cmd = utils.Kubectl("label", "--overwrite", "ns", namespace,
 		"pod-security.kubernetes.io/enforce=restricted")
 	_, err = utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to label namespace with restricted policy")
@@ -123,7 +123,7 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	By("cleaning up the curl pod for metrics")
-	cmd := exec.Command("kubectl", "delete", "pod", "curl-metrics", "-n", namespace, "--ignore-not-found")
+	cmd := utils.Kubectl("delete", "pod", "curl-metrics", "-n", namespace, "--ignore-not-found")
 	_, _ = utils.Run(cmd)
 
 	By("undeploying the controller-manager")
@@ -135,7 +135,7 @@ var _ = AfterSuite(func() {
 	_, _ = utils.Run(cmd)
 
 	By("removing manager namespace")
-	cmd = exec.Command("kubectl", "delete", "ns", namespace, "--ignore-not-found")
+	cmd = utils.Kubectl("delete", "ns", namespace, "--ignore-not-found")
 	_, _ = utils.Run(cmd)
 
 	// Teardown CertManager after the suite if not skipped and if it was not already installed

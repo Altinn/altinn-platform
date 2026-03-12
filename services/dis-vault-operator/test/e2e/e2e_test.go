@@ -21,7 +21,6 @@ package e2e
 
 import (
 	"fmt"
-	"os/exec"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -45,7 +44,7 @@ var _ = Describe("Manager", Ordered, func() {
 
 		if controllerPodName != "" {
 			By("Fetching controller manager pod logs")
-			cmd := exec.Command("kubectl", "logs", controllerPodName, "-n", namespace)
+			cmd := utils.Kubectl("logs", controllerPodName, "-n", namespace)
 			controllerLogs, err := utils.Run(cmd)
 			if err == nil {
 				_, _ = fmt.Fprintf(GinkgoWriter, "Controller logs:\n %s", controllerLogs)
@@ -55,7 +54,7 @@ var _ = Describe("Manager", Ordered, func() {
 		}
 
 		By("Fetching Kubernetes events")
-		cmd := exec.Command("kubectl", "get", "events", "-n", namespace, "--sort-by=.lastTimestamp")
+		cmd := utils.Kubectl("get", "events", "-n", namespace, "--sort-by=.lastTimestamp")
 		eventsOutput, err := utils.Run(cmd)
 		if err == nil {
 			_, _ = fmt.Fprintf(GinkgoWriter, "Kubernetes events:\n%s", eventsOutput)
@@ -65,7 +64,7 @@ var _ = Describe("Manager", Ordered, func() {
 
 		if controllerPodName != "" {
 			By("Fetching controller manager pod description")
-			cmd = exec.Command("kubectl", "describe", "pod", controllerPodName, "-n", namespace)
+			cmd = utils.Kubectl("describe", "pod", controllerPodName, "-n", namespace)
 			podDescription, err := utils.Run(cmd)
 			if err == nil {
 				fmt.Println("Pod description:\n", podDescription)
@@ -82,7 +81,7 @@ var _ = Describe("Manager", Ordered, func() {
 		It("should run successfully", func() {
 			By("validating that the controller-manager pod is running as expected")
 			verifyControllerUp := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get",
+				cmd := utils.Kubectl("get",
 					"pods", "-l", "control-plane=controller-manager",
 					"-o", "go-template={{ range .items }}"+
 						"{{ if not .metadata.deletionTimestamp }}"+
@@ -98,7 +97,7 @@ var _ = Describe("Manager", Ordered, func() {
 				controllerPodName = podNames[0]
 				g.Expect(controllerPodName).To(ContainSubstring("controller-manager"))
 
-				cmd = exec.Command("kubectl", "get",
+				cmd = utils.Kubectl("get",
 					"pods", controllerPodName, "-o", "jsonpath={.status.phase}",
 					"-n", namespace,
 				)

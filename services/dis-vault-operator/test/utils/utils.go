@@ -32,11 +32,25 @@ const (
 	certmanagerURLTmpl = "https://github.com/cert-manager/cert-manager/releases/download/%s/cert-manager.yaml"
 
 	defaultKindBinary  = "kind"
-	defaultKindCluster = "kind"
+	defaultKindCluster = "dis-vault-operator-test-e2e"
 )
 
 func warnError(err error) {
 	_, _ = fmt.Fprintf(GinkgoWriter, "warning: %v\n", err)
+}
+
+func kindContextName() string {
+	cluster := defaultKindCluster
+	if v, ok := os.LookupEnv("KIND_CLUSTER"); ok && strings.TrimSpace(v) != "" {
+		cluster = v
+	}
+	return "kind-" + cluster
+}
+
+// Kubectl returns a kubectl command pinned to the Kind context used by e2e tests.
+func Kubectl(args ...string) *exec.Cmd {
+	cmdArgs := append([]string{"--context", kindContextName()}, args...)
+	return exec.Command("kubectl", cmdArgs...)
 }
 
 // Run executes the provided command within this context
@@ -62,7 +76,7 @@ func Run(cmd *exec.Cmd) (string, error) {
 // UninstallCertManager uninstalls the cert manager
 func UninstallCertManager() {
 	url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
-	cmd := exec.Command("kubectl", "delete", "-f", url)
+	cmd := Kubectl("delete", "-f", url)
 	if _, err := Run(cmd); err != nil {
 		warnError(err)
 	}
@@ -73,7 +87,7 @@ func UninstallCertManager() {
 		"cert-manager-controller",
 	}
 	for _, lease := range kubeSystemLeases {
-		cmd = exec.Command("kubectl", "delete", "lease", lease,
+		cmd = Kubectl("delete", "lease", lease,
 			"-n", "kube-system", "--ignore-not-found", "--force", "--grace-period=0")
 		if _, err := Run(cmd); err != nil {
 			warnError(err)
@@ -84,13 +98,13 @@ func UninstallCertManager() {
 // InstallCertManager installs the cert manager bundle.
 func InstallCertManager() error {
 	url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
-	cmd := exec.Command("kubectl", "apply", "-f", url)
+	cmd := Kubectl("apply", "-f", url)
 	if _, err := Run(cmd); err != nil {
 		return err
 	}
 	// Wait for cert-manager-webhook to be ready, which can take time if cert-manager
 	// was re-installed after uninstalling on a cluster.
-	cmd = exec.Command("kubectl", "wait", "deployment.apps/cert-manager-webhook",
+	cmd = Kubectl("wait", "deployment.apps/cert-manager-webhook",
 		"--for", "condition=Available",
 		"--namespace", "cert-manager",
 		"--timeout", "5m",
@@ -114,7 +128,7 @@ func IsCertManagerCRDsInstalled() bool {
 	}
 
 	// Execute the kubectl command to get all CRDs
-	cmd := exec.Command("kubectl", "get", "crds")
+	cmd := Kubectl("get", "crds")
 	output, err := Run(cmd)
 	if err != nil {
 		return false

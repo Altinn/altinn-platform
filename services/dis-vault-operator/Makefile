@@ -68,7 +68,7 @@ workspace-clean: ## Remove local go.work/go.work.sum (dev only).
 	@rm -f "$(WORKSPACE_ROOT)/go.work" "$(WORKSPACE_ROOT)/go.work.sum"
 
 .PHONY: clean
-clean: restore-kustomize workspace-clean tidy lint test ## Clean local dev artifacts before pushing.
+clean: workspace-clean tidy lint test ## Clean local dev artifacts before pushing.
 
 .PHONY: tidy
 tidy: ## Run go mod tidy.
@@ -141,6 +141,8 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 			echo "Creating Kind cluster '$(KIND_CLUSTER)'..."; \
 			$(KIND) create cluster --name $(KIND_CLUSTER) ;; \
 	esac
+	@$(KIND) export kubeconfig --name $(KIND_CLUSTER) >/dev/null
+	@$(KUBECTL) config use-context kind-$(KIND_CLUSTER) >/dev/null
 
 .PHONY: test-e2e
 test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
@@ -151,30 +153,30 @@ test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expect
 	exit $$cleanup_status
 
 .PHONY: install-aso-crds-kind
-install-aso-crds-kind: aso-crds ## Install ASO CRDs and disable conversion webhooks for Kind e2e.
-	kubectl apply --server-side --force-conflicts -f $(LOCALBIN)/aso-crds/
-	@if kubectl get crd vaults.keyvault.azure.com >/dev/null 2>&1; then \
-		kubectl patch crd vaults.keyvault.azure.com --type='json' -p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'; \
+install-aso-crds-kind: setup-test-e2e aso-crds ## Install ASO CRDs and disable conversion webhooks for Kind e2e.
+	$(KUBECTL) --context kind-$(KIND_CLUSTER) apply --server-side --force-conflicts -f $(LOCALBIN)/aso-crds/
+	@if $(KUBECTL) --context kind-$(KIND_CLUSTER) get crd vaults.keyvault.azure.com >/dev/null 2>&1; then \
+		$(KUBECTL) --context kind-$(KIND_CLUSTER) patch crd vaults.keyvault.azure.com --type='json' -p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'; \
 	fi
-	@if kubectl get crd roleassignments.authorization.azure.com >/dev/null 2>&1; then \
-		kubectl patch crd roleassignments.authorization.azure.com --type='json' -p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'; \
+	@if $(KUBECTL) --context kind-$(KIND_CLUSTER) get crd roleassignments.authorization.azure.com >/dev/null 2>&1; then \
+		$(KUBECTL) --context kind-$(KIND_CLUSTER) patch crd roleassignments.authorization.azure.com --type='json' -p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'; \
 	fi
 
 .PHONY: install-dis-identity-crd-kind
-install-dis-identity-crd-kind: dis-identity-crd ## Install ApplicationIdentity CRD for Kind e2e.
-	kubectl apply --server-side --force-conflicts -f $(DIS_IDENTITY_CRD_FILE)
+install-dis-identity-crd-kind: setup-test-e2e dis-identity-crd ## Install ApplicationIdentity CRD for Kind e2e.
+	$(KUBECTL) --context kind-$(KIND_CLUSTER) apply --server-side --force-conflicts -f $(DIS_IDENTITY_CRD_FILE)
 
 .PHONY: seed-dis-identity-kind
-seed-dis-identity-kind: ## Seed ApplicationIdentity and ready status for sample-based Kind e2e.
-	kubectl apply -f config/kind/applicationidentities.yaml
-	kubectl patch applicationidentity app-identity-sample -n default \
+seed-dis-identity-kind: setup-test-e2e ## Seed ApplicationIdentity and ready status for sample-based Kind e2e.
+	$(KUBECTL) --context kind-$(KIND_CLUSTER) apply -f config/kind/applicationidentities.yaml
+	$(KUBECTL) --context kind-$(KIND_CLUSTER) patch applicationidentity app-identity-sample -n default \
 		--subresource=status --type=merge \
 		-p '{"status":{"managedIdentityName":"app-identity-sample-managed","principalId":"app-identity-sample-principal","conditions":[{"type":"Ready","status":"True","reason":"Ready","message":"Seeded for Kind e2e","lastTransitionTime":"2026-01-01T00:00:00Z"}]}}'
 
 .PHONY: test-e2e-kind
 test-e2e-kind: cleanup-test-e2e setup-test-e2e docker-build kind-load install install-aso-crds-kind install-dis-identity-crd-kind deploy-kind ## Setup Kind e2e env and apply samples.
 	$(MAKE) seed-dis-identity-kind
-	kubectl apply -k config/samples
+	$(KUBECTL) --context kind-$(KIND_CLUSTER) apply -k config/samples
 
 .PHONY: test-e2e-kind-ci
 test-e2e-kind-ci: cleanup-test-e2e setup-test-e2e manifests generate fmt vet install-aso-crds-kind install-dis-identity-crd-kind ## Run the e2e tests on Kind and cleanup (CI).
@@ -242,7 +244,10 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 .PHONY: build-installer
 build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.
 	@set -e; \
-		trap '$(MAKE) -C "$(CURDIR)" restore-kustomize >/dev/null' EXIT; \
+		kustomize_file="config/manager/kustomization.yaml"; \
+		kustomize_backup="$$(mktemp)"; \
+		cp "$$kustomize_file" "$$kustomize_backup"; \
+		trap 'cp "$$kustomize_backup" "$$kustomize_file"; rm -f "$$kustomize_backup"' EXIT; \
 		mkdir -p dist; \
 		( cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG} ); \
 		"$(KUSTOMIZE)" build config/default > dist/install.yaml
@@ -251,7 +256,7 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 
 ## Kind load target to load the controller image into a kind cluster.
 .PHONY: kind-load
-kind-load:
+kind-load: setup-test-e2e
 	$(CONTAINER_TOOL) save -o $(KIND_IMAGE_ARCHIVE) $(IMG)
 	$(KIND) load image-archive --name $(KIND_CLUSTER) $(KIND_IMAGE_ARCHIVE)
 
@@ -272,24 +277,26 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	@set -e; \
-		trap '$(MAKE) -C "$(CURDIR)" restore-kustomize >/dev/null' EXIT; \
+		kustomize_file="config/manager/kustomization.yaml"; \
+		kustomize_backup="$$(mktemp)"; \
+		cp "$$kustomize_file" "$$kustomize_backup"; \
+		trap 'cp "$$kustomize_backup" "$$kustomize_file"; rm -f "$$kustomize_backup"' EXIT; \
 		( cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG} ); \
 		"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" apply -f -
 
 .PHONY: deploy-kind
-deploy-kind: manifests kustomize ## Deploy controller to a Kind cluster (IfNotPresent pull policy).
+deploy-kind: setup-test-e2e manifests kustomize ## Deploy controller to a Kind cluster (IfNotPresent pull policy).
 	@set -e; \
-		trap '$(MAKE) -C "$(CURDIR)" restore-kustomize >/dev/null' EXIT; \
+		kustomize_file="config/manager/kustomization.yaml"; \
+		kustomize_backup="$$(mktemp)"; \
+		cp "$$kustomize_file" "$$kustomize_backup"; \
+		trap 'cp "$$kustomize_backup" "$$kustomize_file"; rm -f "$$kustomize_backup"' EXIT; \
 		( cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG} ); \
 		"$(KUSTOMIZE)" build config/kind | "$(KUBECTL)" apply -f -
 
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" delete --ignore-not-found=$(ignore-not-found) -f -
-
-.PHONY: restore-kustomize
-restore-kustomize: ## Restore kustomize edits made by deploy/build targets.
-	git restore --source=HEAD --staged --worktree -- config/manager/kustomization.yaml
 
 ##@ Dependencies
 
