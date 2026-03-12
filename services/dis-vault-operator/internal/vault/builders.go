@@ -12,6 +12,7 @@ import (
 	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	keyvaultv1 "github.com/Azure/azure-service-operator/v2/api/keyvault/v1api20230701"
 	"github.com/Azure/azure-service-operator/v2/pkg/genruntime"
+	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 )
@@ -120,15 +121,16 @@ func BuildOwnerRoleAssignmentResource(v *vaultv1alpha1.Vault, keyVault *keyvault
 	principalType := authorizationv1.RoleAssignmentProperties_PrincipalType_ServicePrincipal
 	roleDef := "Key Vault Secrets Officer"
 	roleAssignmentName := deterministicKubernetesName(v.Name, "owner-ra")
-	azureName := stableHexHash(v.Namespace + "/" + v.Name + "/" + principalID)[:24]
+	ownerName := deterministicKubernetesName(v.Name, "akv")
+	if keyVault != nil {
+		ownerName = keyVault.Name
+	}
+	azureName := deterministicRoleAssignmentAzureName(v.Namespace, ownerName, principalID, roleDef)
 
 	owner := genruntime.ArbitraryOwnerReference{
 		Group: keyvaultv1.GroupVersion.Group,
 		Kind:  "Vault",
-		Name:  deterministicKubernetesName(v.Name, "akv"),
-	}
-	if keyVault != nil {
-		owner.Name = keyVault.Name
+		Name:  ownerName,
 	}
 
 	roleAssignment := &authorizationv1.RoleAssignment{
@@ -207,4 +209,9 @@ func sanitizeKubernetesName(s string) string {
 func stableHexHash(input string) string {
 	sum := sha1.Sum([]byte(input))
 	return hex.EncodeToString(sum[:])
+}
+
+func deterministicRoleAssignmentAzureName(namespace, ownerName, principalID, roleDefinition string) string {
+	seed := strings.Join([]string{namespace, ownerName, principalID, roleDefinition}, "/")
+	return uuid.NewSHA1(uuid.NameSpaceURL, []byte(seed)).String()
 }

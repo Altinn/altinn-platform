@@ -7,6 +7,7 @@ import (
 	"github.com/Altinn/altinn-platform/services/dis-vault-operator/internal/config"
 	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	keyvaultv1 "github.com/Azure/azure-service-operator/v2/api/keyvault/v1api20230701"
+	"github.com/google/uuid"
 )
 
 func TestBuildASOKeyVaultResource(t *testing.T) {
@@ -119,5 +120,16 @@ func TestBuildOwnerRoleAssignmentResource(t *testing.T) {
 	if roleAssignment.Spec.RoleDefinitionReference == nil ||
 		roleAssignment.Spec.RoleDefinitionReference.WellKnownName != "Key Vault Secrets Officer" {
 		t.Fatalf("expected RoleDefinitionReference.WellKnownName=Key Vault Secrets Officer")
+	}
+	if _, err := uuid.Parse(roleAssignment.Spec.AzureName); err != nil {
+		t.Fatalf("expected AzureName to be a GUID, got %q: %v", roleAssignment.Spec.AzureName, err)
+	}
+
+	roleAssignment2, err := BuildOwnerRoleAssignmentResource(v, nil, "principal-123")
+	if err != nil {
+		t.Fatalf("expected second build to succeed, got error: %v", err)
+	}
+	if roleAssignment.Spec.AzureName != roleAssignment2.Spec.AzureName {
+		t.Fatalf("expected deterministic AzureName across builds")
 	}
 }
