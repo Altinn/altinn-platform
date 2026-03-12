@@ -384,9 +384,12 @@ $(shell go list -m -f '{{if .Replace}}{{.Replace.Version}}{{else}}{{.Version}}{{
 endef
 
 ASO_CRD_VERSION ?= v2.17.0
-DIS_IDENTITY_CRD_URL ?= https://raw.githubusercontent.com/Altinn/altinn-platform/main/services/dis-identity-operator/config/crd/bases/application.dis.altinn.cloud_applicationidentities.yaml
+DIS_IDENTITY_CRD_NAME ?= application.dis.altinn.cloud_applicationidentities.yaml
+DIS_IDENTITY_MODULE ?= github.com/Altinn/altinn-platform/services/dis-identity-operator
+DIS_IDENTITY_CRD_REL_PATH ?= config/crd/bases/$(DIS_IDENTITY_CRD_NAME)
+DIS_IDENTITY_CRD_LOCAL_FILE ?= $(WORKSPACE_ROOT)/services/dis-identity-operator/$(DIS_IDENTITY_CRD_REL_PATH)
 DIS_IDENTITY_CRD_DIR ?= $(LOCALBIN)/dis-identity-crds
-DIS_IDENTITY_CRD_FILE ?= $(DIS_IDENTITY_CRD_DIR)/application.dis.altinn.cloud_applicationidentities.yaml
+DIS_IDENTITY_CRD_FILE ?= $(DIS_IDENTITY_CRD_DIR)/$(DIS_IDENTITY_CRD_NAME)
 
 .PHONY: aso-crds
 aso-crds: ## Download the ASO CRDs locally if necessary.
@@ -394,14 +397,28 @@ aso-crds: ## Download the ASO CRDs locally if necessary.
 	@if [ -f "$(LOCALBIN)/aso-crds/azureserviceoperator_customresourcedefinitions_$(ASO_CRD_VERSION).yaml" ]; then \
 		echo "ASO CRDs already present; skipping download."; \
 	else \
-		curl -sSL https://github.com/Azure/azure-service-operator/releases/download/$(ASO_CRD_VERSION)/azureserviceoperator_customresourcedefinitions_$(ASO_CRD_VERSION).yaml -o $(LOCALBIN)/aso-crds/azureserviceoperator_customresourcedefinitions_$(ASO_CRD_VERSION).yaml; \
+		curl -fsSL https://github.com/Azure/azure-service-operator/releases/download/$(ASO_CRD_VERSION)/azureserviceoperator_customresourcedefinitions_$(ASO_CRD_VERSION).yaml -o $(LOCALBIN)/aso-crds/azureserviceoperator_customresourcedefinitions_$(ASO_CRD_VERSION).yaml; \
 	fi
 
 .PHONY: dis-identity-crd
 dis-identity-crd: ## Download the ApplicationIdentity CRD locally if necessary.
 	@mkdir -p $(DIS_IDENTITY_CRD_DIR)
-	@if [ -f "$(DIS_IDENTITY_CRD_FILE)" ]; then \
-		echo "ApplicationIdentity CRD already present; skipping download."; \
+	@if [ -f "$(DIS_IDENTITY_CRD_LOCAL_FILE)" ]; then \
+		cp "$(DIS_IDENTITY_CRD_LOCAL_FILE)" "$(DIS_IDENTITY_CRD_FILE)"; \
+		echo "ApplicationIdentity CRD copied from local workspace: $(DIS_IDENTITY_CRD_LOCAL_FILE)"; \
 	else \
-		curl -fsSL $(DIS_IDENTITY_CRD_URL) -o $(DIS_IDENTITY_CRD_FILE); \
+		module_dir="$$(go list -m -f '{{.Dir}}' $(DIS_IDENTITY_MODULE) 2>/dev/null || true)"; \
+		if [ -z "$$module_dir" ] || [ ! -f "$$module_dir/$(DIS_IDENTITY_CRD_REL_PATH)" ]; then \
+			go mod download $(DIS_IDENTITY_MODULE) >/dev/null; \
+			module_dir="$$(go list -m -f '{{.Dir}}' $(DIS_IDENTITY_MODULE) 2>/dev/null || true)"; \
+		fi; \
+		if [ -n "$$module_dir" ] && [ -f "$$module_dir/$(DIS_IDENTITY_CRD_REL_PATH)" ]; then \
+			cp "$$module_dir/$(DIS_IDENTITY_CRD_REL_PATH)" "$(DIS_IDENTITY_CRD_FILE)"; \
+			echo "ApplicationIdentity CRD copied from module source: $$module_dir/$(DIS_IDENTITY_CRD_REL_PATH)"; \
+		elif [ -f "$(DIS_IDENTITY_CRD_FILE)" ]; then \
+			echo "ApplicationIdentity CRD already present; skipping download."; \
+		else \
+			echo "Failed to resolve ApplicationIdentity CRD from workspace or module source." >&2; \
+			exit 1; \
+		fi; \
 	fi
