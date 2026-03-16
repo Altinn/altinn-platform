@@ -37,15 +37,15 @@ func TestResolveOwnerIdentity(t *testing.T) {
 
 	resolved, requeue, err := ResolveOwnerIdentity(context.Background(), client, "default", "app-ready")
 	if err != nil {
-		t.Fatalf("TODO: expected identity resolver to succeed, got error: %v", err)
+		t.Fatalf("expected identity resolver to succeed, got error: %v", err)
 	}
 	if requeue {
-		t.Fatalf("TODO: expected requeue=false for ready identity")
+		t.Fatalf("expected requeue=false for ready identity")
 	}
 	if resolved.PrincipalID != readyPrincipalID {
-		t.Fatalf("TODO: expected principalId %q, got %q", readyPrincipalID, resolved.PrincipalID)
+		t.Fatalf("expected principalID %q, got %q", readyPrincipalID, resolved.PrincipalID)
 	}
 	if resolved.Name != readyName {
-		t.Fatalf("TODO: expected identity name %q, got %q", readyName, resolved.Name)
+		t.Fatalf("expected identity name %q, got %q", readyName, resolved.Name)
 	}
 }

@@ -18,19 +18,19 @@ func TestProjectReadinessStatus(t *testing.T) {
 		ASOReadyCondition{Found: true, Status: metav1.ConditionTrue, Reason: "Ready"},
 	)
 	if !updated {
-		t.Fatalf("TODO: expected status projection to update status")
+		t.Fatalf("expected status projection to update status")
 	}
 
 	if v.Status.ObservedGeneration != v.Generation {
-		t.Fatalf("TODO: expected observedGeneration=%d, got %d", v.Generation, v.Status.ObservedGeneration)
+		t.Fatalf("expected observedGeneration=%d, got %d", v.Generation, v.Status.ObservedGeneration)
 	}
 
 	ready := findCondition(v.Status.Conditions, string(vaultv1alpha1.ConditionReady))
 	if ready == nil {
-		t.Fatalf("TODO: expected Ready condition to be projected")
+		t.Fatalf("expected Ready condition to be projected")
 	}
 	if ready.Status != metav1.ConditionTrue {
-		t.Fatalf("TODO: expected Ready=True, got %s", ready.Status)
+		t.Fatalf("expected Ready=True, got %s", ready.Status)
 	}
 }
 
