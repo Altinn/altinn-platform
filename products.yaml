@@ -1,3 +1,12 @@
+########################################################################################################################
+#
+#          IMPORTANT! 
+#
+# The Products pipeline is disabled and deprecated. Additions and Changes needs to be filed as issues in this repo.
+# Any changes to this file will have no effect and it is only kept for historic reasons
+#
+########################################################################################################################
+
 admin:
   github:
     owner: Altinn

@@ -1,41 +1,41 @@
-name: Altinn Products
+name: Altinn Products !DISABLED!
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ !contains(github.ref, 'refs/heads/main')}}
 
-on:
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/products-deploy.yml
-      - actions/terraform/apply/**
-      - actions/terraform/plan/**
-      - infrastructure/products/**
-      - products.yaml
-  pull_request:
-    branches:
-      - main
-    paths:
-      - .github/workflows/products-deploy.yml
-      - actions/terraform/apply/**
-      - actions/terraform/plan/**
-      - infrastructure/products/**
-      - products.yaml
-  workflow_dispatch:
-    inputs:
-      log_level:
-        required: true
-        description: Terraform Log Level
-        default: INFO
-        type: choice
-        options:
-          - TRACE
-          - DEBUG
-          - INFO
-          - WARN
-          - ERROR
+on: []
+  # push:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - .github/workflows/products-deploy.yml
+  #     - actions/terraform/apply/**
+  #     - actions/terraform/plan/**
+  #     - infrastructure/products/**
+  #     - products.yaml
+  # pull_request:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - .github/workflows/products-deploy.yml
+  #     - actions/terraform/apply/**
+  #     - actions/terraform/plan/**
+  #     - infrastructure/products/**
+  #     - products.yaml
+  # workflow_dispatch:
+  #   inputs:
+  #     log_level:
+  #       required: true
+  #       description: Terraform Log Level
+  #       default: INFO
+  #       type: choice
+  #       options:
+  #         - TRACE
+  #         - DEBUG
+  #         - INFO
+  #         - WARN
+  #         - ERROR
 
 env:
   ENVIRONMENT: prod
