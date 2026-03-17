@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 
@@ -451,9 +452,7 @@ func desiredFlexibleServerConfiguration(
 	desiredLabels := map[string]string{
 		databaseNameLabelKey: db.Name,
 	}
-	for key, labelValue := range extraLabels {
-		desiredLabels[key] = labelValue
-	}
+	maps.Copy(desiredLabels, extraLabels)
 
 	return desiredSpec, desiredLabels
 }

@@ -177,7 +177,7 @@ func disIdentityCRDPath() string {
 
 func buildTestSubnets(count int) []network.SubnetInfo {
 	out := make([]network.SubnetInfo, 0, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		thirdOctet := (i / 16) + 1
 		fourthOctet := (i % 16) * 16
 		out = append(out, network.SubnetInfo{
