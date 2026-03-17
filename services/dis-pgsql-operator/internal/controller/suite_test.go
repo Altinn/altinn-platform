@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -141,8 +142,9 @@ var _ = AfterSuite(func() {
 	if cancel != nil {
 		cancel()
 	}
-	err := testEnv.Stop()
-	Expect(err).NotTo(HaveOccurred())
+	Eventually(func() error {
+		return testEnv.Stop()
+	}, time.Minute, time.Second).Should(Succeed())
 })
 
 // getFirstFoundEnvTestBinaryDir locates the first binary in the specified path.
@@ -175,7 +177,7 @@ func disIdentityCRDPath() string {
 
 func buildTestSubnets(count int) []network.SubnetInfo {
 	out := make([]network.SubnetInfo, 0, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		thirdOctet := (i / 16) + 1
 		fourthOctet := (i % 16) * 16
 		out = append(out, network.SubnetInfo{

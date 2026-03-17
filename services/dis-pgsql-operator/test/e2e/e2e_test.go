@@ -36,7 +36,8 @@ const namespace = "dis-pgsql-operator-system"
 var _ = Describe("Manager", Ordered, func() {
 	var controllerPodName string
 
-	// After each test, check for failures and collect logs/events for debugging.
+	// After each test, check for failures and collect logs, events,
+	// and pod descriptions for debugging.
 	AfterEach(func() {
 		specReport := CurrentSpecReport()
 		if !specReport.Failed() {

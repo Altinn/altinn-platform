@@ -63,3 +63,20 @@ Before opening a PR, ensure:
 - internal/controller should only contain high level code that reflects the controller duties and operation, all other code needs to go in another pkg, e.g see internal/pkg, internal/database for reference
 - Tests for internal/controller code must go in database_controller_test.go (gingko), and these are aimed for high level testing of capabilities
 - All remaining tests (pkgs that aren't controller) should follow the standard unit test go practice, ie. mycode.go + mycode_test.go
+
+## References
+
+### Essential Reading
+- **Kubebuilder Book**: https://book.kubebuilder.io (comprehensive guide)
+- **controller-runtime FAQ**: https://github.com/kubernetes-sigs/controller-runtime/blob/main/FAQ.md (common patterns and questions)
+- **Good Practices**: https://book.kubebuilder.io/reference/good-practices.html (why reconciliation is idempotent, status conditions, etc.)
+
+### API Design & Implementation
+- **API Conventions**: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md
+- **Operator Pattern**: https://kubernetes.io/docs/concepts/extend-kubernetes/operator/
+- **Markers Reference**: https://book.kubebuilder.io/reference/markers.html
+
+### Tools & Libraries
+- **controller-runtime**: https://github.com/kubernetes-sigs/controller-runtime
+- **controller-tools**: https://github.com/kubernetes-sigs/controller-tools
+- **Kubebuilder Repo**: https://github.com/kubernetes-sigs/kubebuilder
