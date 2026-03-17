@@ -36,7 +36,6 @@ const namespace = "dis-pgsql-operator-system"
 var _ = Describe("Manager", Ordered, func() {
 	var controllerPodName string
 
-<<<<<<< HEAD
 	// Before running the tests, set up the environment by creating the namespace,
 	// enforce the restricted security policy to the namespace, installing CRDs,
 	// and deploying the controller.
@@ -85,9 +84,6 @@ var _ = Describe("Manager", Ordered, func() {
 
 	// After each test, check for failures and collect logs, events,
 	// and pod descriptions for debugging.
-=======
-	// After each test, check for failures and collect logs/events for debugging.
->>>>>>> tmp-original-03-03-26-00-20
 	AfterEach(func() {
 		specReport := CurrentSpecReport()
 		if !specReport.Failed() {

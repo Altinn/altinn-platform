@@ -32,24 +32,14 @@ import (
 )
 
 var (
-<<<<<<< HEAD
 	// managerImage is the manager image to be built and loaded for testing.
 	managerImage = "example.com/dis-pgsql-operator:v0.0.1"
 	// shouldCleanupCertManager tracks whether CertManager was installed by this suite.
 	shouldCleanupCertManager = false
-=======
-	// Optional Environment Variables:
-	// - CERT_MANAGER_INSTALL_SKIP=true: Skips CertManager installation during test setup.
-	// These variables are useful if CertManager is already installed, avoiding
-	// re-installation and conflicts.
-	skipCertManagerInstall = os.Getenv("CERT_MANAGER_INSTALL_SKIP") == "true"
-	// isCertManagerAlreadyInstalled will be set true when CertManager CRDs be found on the cluster
-	isCertManagerAlreadyInstalled = false
-
+	
 	// projectImage is the name of the image which will be build and loaded
 	// with the code source changes to be tested.
 	projectImage = "localhost/dis-pgsql-operator:v0.0.1"
->>>>>>> tmp-original-03-03-26-00-20
 )
 
 // TestE2E runs the e2e test suite to validate the solution in an isolated environment.
@@ -68,22 +58,8 @@ var _ = BeforeSuite(func() {
 	_, err := utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the manager image")
 
-<<<<<<< HEAD
-	// TODO(user): If you want to change the e2e test vendor from Kind,
-	// ensure the image is built and available, then remove the following block.
-	By("loading the manager image on Kind")
-	err = utils.LoadImageToKindClusterWithName(managerImage)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the manager image into Kind")
-
-	setupCertManager()
-})
-
-var _ = AfterSuite(func() {
-	teardownCertManager()
-=======
 	By("loading the manager(Operator) image on Kind")
-	cmd = exec.Command("make", "kind-load", fmt.Sprintf("IMG=%s", projectImage))
-	_, err = utils.Run(cmd)
+	err = utils.LoadImageToKindClusterWithName(projectImage)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the manager(Operator) image into Kind")
 
 	By("installing ASO CRDs")
@@ -150,7 +126,6 @@ var _ = AfterSuite(func() {
 		_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling CertManager...\n")
 		utils.UninstallCertManager()
 	}
->>>>>>> tmp-original-03-03-26-00-20
 })
 
 // setupCertManager installs CertManager if needed for webhook tests.

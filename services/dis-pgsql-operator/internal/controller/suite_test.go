@@ -136,21 +136,15 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
-<<<<<<< HEAD
-	cancel()
-	Eventually(func() error {
-		return testEnv.Stop()
-	}, time.Minute, time.Second).Should(Succeed())
-=======
 	if testEnv == nil {
 		return
 	}
 	if cancel != nil {
 		cancel()
 	}
-	err := testEnv.Stop()
-	Expect(err).NotTo(HaveOccurred())
->>>>>>> tmp-original-03-03-26-00-20
+	Eventually(func() error {
+		return testEnv.Stop()
+	}, time.Minute, time.Second).Should(Succeed())
 })
 
 // getFirstFoundEnvTestBinaryDir locates the first binary in the specified path.
