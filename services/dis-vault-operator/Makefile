@@ -67,23 +67,19 @@ workspace: ## Create local go.work for dev across dis-vault-operator and dis-ide
 workspace-clean: ## Remove local go.work/go.work.sum (dev only).
 	@rm -f "$(WORKSPACE_ROOT)/go.work" "$(WORKSPACE_ROOT)/go.work.sum"
 
-.PHONY: setup-local-env
-setup-local-env: ## Bootstrap local dev environment (shared by Codex/Claude/Gemini).
-	$(MAKE) workspace
-	$(MAKE) cache-setup
-	$(MAKE) kustomize
-	$(MAKE) controller-gen
-	$(MAKE) golangci-lint
-	$(MAKE) setup-envtest
-	@mkdir -p "$(CACHE_DIR)/golangci-lint"
-	@echo "Local environment bootstrap completed."
-
 .PHONY: clean
-clean: workspace-clean tidy lint test ## Clean local dev artifacts before pushing.
+clean: workspace-clean tidy verify-deps lint test ## Clean local dev artifacts before pushing.
 
 .PHONY: tidy
 tidy: ## Run go mod tidy.
 	go mod tidy
+
+.PHONY: verify-deps
+verify-deps: ## Verify go.mod/go.sum resolve from a clean module cache.
+	@tmp_modcache="$$(mktemp -d)"; \
+	trap 'rm -rf "$$tmp_modcache"' EXIT INT TERM; \
+	echo "Verifying module pins with clean module cache: $$tmp_modcache"; \
+	GOFLAGS=-mod=readonly GOMODCACHE="$$tmp_modcache" go mod download
 
 ##@ Cache
 
