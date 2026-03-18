@@ -79,7 +79,7 @@ verify-deps: ## Verify go.mod/go.sum resolve from a clean module cache.
 	@tmp_modcache="$$(mktemp -d)"; \
 	trap 'rm -rf "$$tmp_modcache"' EXIT INT TERM; \
 	echo "Verifying module pins with clean module cache: $$tmp_modcache"; \
-	GOFLAGS=-mod=readonly GOMODCACHE="$$tmp_modcache" go mod download
+	GOWORK=off GOFLAGS=-mod=readonly GOMODCACHE="$$tmp_modcache" go mod download
 
 ##@ Cache
 
