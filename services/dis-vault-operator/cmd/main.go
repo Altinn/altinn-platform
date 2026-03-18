@@ -21,6 +21,13 @@ import (
 	"flag"
 	"os"
 
+	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
+	vaultv1alpha1 "github.com/Altinn/altinn-platform/services/dis-vault-operator/api/v1alpha1"
+	"github.com/Altinn/altinn-platform/services/dis-vault-operator/internal/config"
+	"github.com/Altinn/altinn-platform/services/dis-vault-operator/internal/controller"
+	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
+	keyvaultv1 "github.com/Azure/azure-service-operator/v2/api/keyvault/v1api20230701"
+
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -44,6 +51,10 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(vaultv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(identityv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(keyvaultv1.AddToScheme(scheme))
+	utilruntime.Must(authorizationv1.AddToScheme(scheme))
 
 	// +kubebuilder:scaffold:scheme
 }
@@ -57,6 +68,12 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var subscriptionID string
+	var resourceGroup string
+	var tenantID string
+	var location string
+	var environment string
+	var aksSubnetIDs string
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -75,6 +92,42 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.StringVar(
+		&subscriptionID,
+		"subscription-id",
+		os.Getenv("DISVAULT_AZURE_SUBSCRIPTION_ID"),
+		"Azure subscription ID (required)",
+	)
+	flag.StringVar(
+		&resourceGroup,
+		"resource-group",
+		os.Getenv("DISVAULT_RESOURCE_GROUP"),
+		"Azure resource group for Key Vault resources (required)",
+	)
+	flag.StringVar(
+		&tenantID,
+		"tenant-id",
+		os.Getenv("DISVAULT_AZURE_TENANT_ID"),
+		"Azure tenant ID (required)",
+	)
+	flag.StringVar(
+		&location,
+		"location",
+		os.Getenv("DISVAULT_LOCATION"),
+		"Azure location for Key Vault resources (required)",
+	)
+	flag.StringVar(
+		&environment,
+		"env",
+		os.Getenv("DISVAULT_ENV"),
+		"DIS environment identifier (required)",
+	)
+	flag.StringVar(
+		&aksSubnetIDs,
+		"aks-subnet-ids",
+		os.Getenv("DISVAULT_AKS_SUBNET_IDS"),
+		"Comma-separated AKS subnet ARM IDs (required)",
+	)
 	opts := zap.Options{
 		Development: true,
 	}
@@ -171,6 +224,28 @@ func main() {
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
+		os.Exit(1)
+	}
+
+	opCfg, err := config.NewOperatorConfig(
+		subscriptionID,
+		resourceGroup,
+		tenantID,
+		location,
+		environment,
+		aksSubnetIDs,
+	)
+	if err != nil {
+		setupLog.Error(err, "invalid operator configuration")
+		os.Exit(1)
+	}
+
+	if err = (&controller.VaultReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+		Config: *opCfg,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Vault")
 		os.Exit(1)
 	}
 

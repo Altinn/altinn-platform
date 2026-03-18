@@ -30,3 +30,6 @@ go.work.sum
 
 # Kubeconfig might contain secrets
 *.kubeconfig
+
+# Local PR drafting notes
+pr_description.md
