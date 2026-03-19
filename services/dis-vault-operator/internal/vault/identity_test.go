@@ -43,7 +43,7 @@ func TestResolveOwnerIdentity(t *testing.T) {
 		t.Fatalf("expected requeue=false for ready identity")
 	}
 	if resolved.PrincipalID != readyPrincipalID {
-		t.Fatalf("expected principalID %q, got %q", readyPrincipalID, resolved.PrincipalID)
+		t.Fatalf("expected principalId %q, got %q", readyPrincipalID, resolved.PrincipalID)
 	}
 	if resolved.Name != readyName {
 		t.Fatalf("expected identity name %q, got %q", readyName, resolved.Name)
