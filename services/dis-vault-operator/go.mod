@@ -3,7 +3,7 @@ module github.com/Altinn/altinn-platform/services/dis-vault-operator
 go 1.25.3
 
 require (
-	github.com/Altinn/altinn-platform/services/dis-identity-operator v0.0.0-20260227100134-53261af45dd6
+	github.com/Altinn/altinn-platform/services/dis-identity-operator v0.0.0-20260319083500-bd4f5f84c472
 	github.com/Azure/azure-service-operator/v2 v2.17.0
 	github.com/google/uuid v1.6.0
 	github.com/onsi/ginkgo/v2 v2.27.2
