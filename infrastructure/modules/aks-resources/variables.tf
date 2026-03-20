@@ -248,3 +248,13 @@ variable "dis_resource_group_name" {
   type        = string
   description = "Name of the resource group for DIS resources"
 }
+
+variable "aks_vnet_ipv4_cidr" {
+  type        = string
+  description = "IPv4 CIDR of the AKS VNet"
+}
+
+variable "aks_vnet_ipv6_cidr" {
+  type        = string
+  description = "IPv6 CIDR of the AKS VNet"
+}

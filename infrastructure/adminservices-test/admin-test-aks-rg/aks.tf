@@ -5,6 +5,9 @@ locals {
   tenant_id   = sensitive(data.azurerm_client_config.current.tenant_id)
   team_name   = "admin"
   environment = "test"
+
+  aks_vnet_ipv4_cidr = [for cidr in var.vnet_address_space : cidr if can(cidrhost(cidr, 0)) && !strcontains(cidr, ":")][0]
+  aks_vnet_ipv6_cidr = [for cidr in var.vnet_address_space : cidr if can(cidrhost(cidr, 0)) && strcontains(cidr, ":")][0]
 }
 
 module "aks" {
@@ -65,4 +68,6 @@ module "aks_resources" {
   enable_dis_pgsql_operator                  = true
   aks_workpool_vnet_name                     = module.aks.aks_workpool_vnet_name
   aks_resource_group                         = module.aks.aks_workpool_vnet_resource_group_name
+  aks_vnet_ipv4_cidr                         = local.aks_vnet_ipv4_cidr
+  aks_vnet_ipv6_cidr                         = local.aks_vnet_ipv6_cidr
 }
