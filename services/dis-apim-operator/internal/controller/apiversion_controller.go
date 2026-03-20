@@ -267,6 +267,9 @@ func (r *ApiVersionReconciler) createUpdateApimApiVersion(ctx context.Context, a
 	status, _, token, err := azure.StartResumeOperation[apim.APIClientCreateOrUpdateResponse](ctx, poller)
 	if err != nil {
 		logger.Error(err, "Failed to watch LR operation")
+		apiVersion.Status.ResumeToken = ""
+		apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateFailed
+		_ = r.Status().Update(ctx, &apiVersion)
 		return ctrl.Result{}, err
 	}
 
