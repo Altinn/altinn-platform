@@ -13,7 +13,7 @@ INTEG_WAIT_S    ?= 5
 GO ?= go
 CONTAINER_RUNTIME ?= podman   # override with CONTAINER_RUNTIME=docker
 
-.PHONY: all test test-integration build clean docker-build docker-run fmt lint tidy manifests manifests-imports manifests-imports-prune manifests-verify
+.PHONY: all test test-integration build clean docker-build docker-run fmt lint tidy manifests manifests-imports manifests-verify
 
 all: fmt lint tidy test test-integration
 
@@ -22,7 +22,7 @@ PROJECT_DIR   ?= $(ROOT_DIR_REPO)/services/lakmus
 CONFIG_DIR    := $(PROJECT_DIR)/config
 
 ## Generate Kubernetes manifests in config
-manifests: manifests-imports-prune
+manifests:
 	@echo ">> Synthesizing Kubernetes manifests into $(CONFIG_DIR)"
 	cd "$(PROJECT_DIR)" && $(GO) run ./manifests
 
@@ -30,12 +30,6 @@ manifests: manifests-imports-prune
 manifests-imports:
 	@echo ">> Refreshing Go cdk8s imports into $(PROJECT_DIR)/imports"
 	cd "$(PROJECT_DIR)" && cdk8s import k8s --language go --output imports
-	$(MAKE) manifests-imports-prune
-
-## Prune generated Go imports down to the transitive closure used by manifests/main.go
-manifests-imports-prune:
-	@echo ">> Pruning generated Go cdk8s imports to the types Lakmus actually uses"
-	cd "$(PROJECT_DIR)" && $(GO) run ./tools/prune-cdk8s-imports
 
 ## Re-generate manifests and fail if generated files were not committed
 manifests-verify: manifests

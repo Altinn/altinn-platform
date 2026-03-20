@@ -134,7 +134,7 @@ The output is written to `services/lakmus/config/` (`lakmus.yaml` and `kustomiza
 The workload image in this file is intentionally a placeholder (`controller:latest`) and should be overridden in the final Flux kustomization via `images`.
 `make manifests` runs `go run ./manifests` from `services/lakmus/`.
 This service no longer carries a local TS/npm cdk8s project or `node_modules`, but `node` must still be available in `PATH` because cdk8s uses jsii at runtime.
-Core Kubernetes resources are modeled through the generated Go imports in `services/lakmus/imports/k8s`, following the official cdk8s Go pattern. `make manifests-imports` refreshes those bindings and then prunes them to the transitive closure actually referenced by `services/lakmus/manifests/main.go`. You can rerun only the local trim step with `make manifests-imports-prune`.
+Core Kubernetes resources are modeled through generated Go imports in `services/lakmus/imports/k8s`, following the official cdk8s Go pattern. Those files are generated bindings and intentionally include many Kubernetes types that Lakmus does not reference directly. Use `make manifests-imports` to refresh the generated imports when needed.
 
 ```bash
 # Generate manifests
