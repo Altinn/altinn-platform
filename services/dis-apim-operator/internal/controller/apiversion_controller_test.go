@@ -42,7 +42,7 @@ var _ = Describe("ApiVersion Controller", func() {
 		}
 
 		It("should successfully reconcile the ApiVersion resource", func() {
-			resource := newTestApiVersion(resourceName, resourceNamespace, "/test-api", "the default version")
+			resource := newTestApiVersion(resourceName, "/test-api", "the default version")
 			resource.Spec.Content = ptr.To(`{"openapi": "3.0.0","info": {"title": "Minimal API v1","version": "1.0.0"},"paths": {}}`)
 			resource.Spec.Contact = &apimv1alpha1.APIContactInformation{
 				Name:  ptr.To("Test Contact"),
@@ -121,7 +121,7 @@ var _ = Describe("ApiVersion Controller", func() {
 			const localName = "test-apiversion-stale-token"
 			localNamespacedName := types.NamespacedName{Name: localName, Namespace: resourceNamespace}
 
-			resource := newTestApiVersion(localName, resourceNamespace, "/test-stale-token", "stale token test version")
+			resource := newTestApiVersion(localName, "/test-stale-token", "stale token test version")
 			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 
 			By("waiting for the resource to reach Succeeded state")
@@ -155,7 +155,7 @@ var _ = Describe("ApiVersion Controller", func() {
 			const localName = "test-apiversion-lro-create-fail"
 			localNamespacedName := types.NamespacedName{Name: localName, Namespace: resourceNamespace}
 
-			resource := newTestApiVersion(localName, resourceNamespace, "/test-lro-create-fail", "lro create fail test version")
+			resource := newTestApiVersion(localName, "/test-lro-create-fail", "lro create fail test version")
 			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 
 			By("waiting for the resource to reach Succeeded state")
@@ -208,7 +208,7 @@ var _ = Describe("ApiVersion Controller", func() {
 			const localName = "test-apiversion-lro-delete-fail"
 			localNamespacedName := types.NamespacedName{Name: localName, Namespace: resourceNamespace}
 
-			resource := newTestApiVersion(localName, resourceNamespace, "/test-lro-delete-fail", "lro delete fail test version")
+			resource := newTestApiVersion(localName, "/test-lro-delete-fail", "lro delete fail test version")
 			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 
 			By("waiting for the resource to reach Succeeded state")
@@ -242,11 +242,11 @@ var _ = Describe("ApiVersion Controller", func() {
 	})
 })
 
-func newTestApiVersion(name string, namespace string, path string, displayName string) *apimv1alpha1.ApiVersion {
+func newTestApiVersion(name string, path string, displayName string) *apimv1alpha1.ApiVersion {
 	return &apimv1alpha1.ApiVersion{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: namespace,
+			Namespace: "default-test",
 		},
 		Spec: apimv1alpha1.ApiVersionSpec{
 			Path: path,
