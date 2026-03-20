@@ -158,6 +158,9 @@ func (r *ApiVersionReconciler) deleteApiVersion(ctx context.Context, apiVersion 
 	status, _, token, err := azure.StartResumeOperation[apim.APIClientDeleteResponse](ctx, poller)
 	if err != nil {
 		logger.Error(err, "Failed to watch LR operation for deletion")
+		apiVersion.Status.ResumeToken = ""
+		apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateFailed
+		_ = r.Status().Update(ctx, &apiVersion)
 		return ctrl.Result{}, err
 	}
 	orig := apiVersion.DeepCopy()
