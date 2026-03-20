@@ -11,10 +11,16 @@ import (
 )
 
 func NewKubeDeployment(scope constructs.Construct, id *string, props *k8s.KubeDeploymentProps) cdk8s.ApiObject {
+	if props == nil {
+		panic("k8scompat.NewKubeDeployment: props must not be nil")
+	}
 	return newPatchedApiObject(scope, id, "apps/v1", "Deployment", props.Metadata, props)
 }
 
 func NewKubeServiceAccount(scope constructs.Construct, id *string, props *k8s.KubeServiceAccountProps) cdk8s.ApiObject {
+	if props == nil {
+		panic("k8scompat.NewKubeServiceAccount: props must not be nil")
+	}
 	return newPatchedApiObject(scope, id, "v1", "ServiceAccount", props.Metadata, props)
 }
 
