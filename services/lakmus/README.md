@@ -47,11 +47,11 @@ A simple dashboard/alert query:
 ## Prerequisites
 
 - **Go** (for local builds/tests)
+- **Node.js** in `PATH` for jsii-backed Go cdk8s synthesis
 - **Container runtime**: Podman (default) or Docker
 - Access to Azure if running against a real Key Vault (Workload Identity recommended)
 - curl for integration tests
 - golangci-lint for make lint
-- [cdk8s](https://cdk8s.io/) to generate manifests/yaml
 
 ---
 
@@ -129,10 +129,12 @@ make fmt
 
 #### 8) Make manifests
 
-Generates Kubernetes manifests for **Lakmus** using [cdk8s](https://cdk8s.io/).  
+Generates Kubernetes manifests for **Lakmus** using Go-based [cdk8s](https://cdk8s.io/).  
 The output is written to `services/lakmus/config/` (`lakmus.yaml` and `kustomization.yaml`) in the monorepo.
 The workload image in this file is intentionally a placeholder (`controller:latest`) and should be overridden in the final Flux kustomization via `images`.
-`make manifests` automatically runs `manifests-bootstrap` first (`npm ci` in `services/lakmus/manifests/`).
+`make manifests` runs `go run ./manifests` from `services/lakmus/`.
+This service no longer carries a local TS/npm cdk8s project or `node_modules`, but `node` must still be available in `PATH` because cdk8s uses jsii at runtime.
+Core Kubernetes resources are modeled through the generated Go imports in `services/lakmus/imports/k8s`, following the official cdk8s Go pattern. `make manifests-imports` refreshes those bindings and then prunes them to the transitive closure actually referenced by `services/lakmus/manifests/main.go`. You can rerun only the local trim step with `make manifests-imports-prune`.
 
 ```bash
 # Generate manifests
