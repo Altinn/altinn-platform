@@ -130,6 +130,9 @@ func (r *ApiVersionReconciler) deleteApiVersion(ctx context.Context, apiVersion 
 		return ctrl.Result{}, nil
 	}
 	resumeToken := apiVersion.Status.ResumeToken
+	if apiVersion.Status.ProvisioningState != apimv1alpha1.ProvisioningStateDeleting {
+		resumeToken = ""
+	}
 	options := &apim.APIClientBeginDeleteOptions{ResumeToken: resumeToken}
 	poller, err := r.apimClient.DeleteApi(ctx, apiVersion.GetApiVersionAzureFullName(), "*", options)
 	if err != nil {
