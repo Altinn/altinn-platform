@@ -26,6 +26,8 @@ type AzureApimFake struct {
 	createUpdateServerError bool
 	getServerError          bool
 	deleteServerError       bool
+	CreateUpdateApiLROFail  bool
+	DeleteApiLROFail        bool
 }
 
 type SimpleApimApiVersionSet struct {
@@ -46,8 +48,8 @@ type SimpleApimBackend struct {
 }
 
 // NewFakeAPIMClient creates a new APIMClient
-func NewFakeAPIMClientStruct() AzureApimFake {
-	aaf := AzureApimFake{
+func NewFakeAPIMClientStruct() *AzureApimFake {
+	aaf := &AzureApimFake{
 		APIMVersionSets:         map[string]apim.APIVersionSetContract{},
 		APIMVersions:            map[string]apim.APIContract{},
 		Backends:                map[string]apim.BackendContract{},
@@ -155,6 +157,8 @@ func (a *AzureApimFake) GetFakeApiServer() apimfake.APIServer {
 			errResponder := azfake.ErrorResponder{}
 			if a.createUpdateServerError {
 				errResponder.SetResponseError(http.StatusInternalServerError, "Some fake internal server error occurred")
+			} else if a.CreateUpdateApiLROFail {
+				errResponder.SetResponseError(http.StatusInternalServerError, "Simulated LRO failure")
 			} else {
 				response := apim.APIClientCreateOrUpdateResponse{
 					APIContract: apim.APIContract{
@@ -196,6 +200,8 @@ func (a *AzureApimFake) GetFakeApiServer() apimfake.APIServer {
 			errResponder := azfake.ErrorResponder{}
 			if a.deleteServerError {
 				errResponder.SetResponseError(http.StatusInternalServerError, "Some fake internal server error occurred")
+			} else if a.DeleteApiLROFail {
+				errResponder.SetResponseError(http.StatusInternalServerError, "Simulated LRO failure")
 			} else {
 				response := apim.APIClientDeleteResponse{}
 				delete(a.APIMVersions, apiID)
