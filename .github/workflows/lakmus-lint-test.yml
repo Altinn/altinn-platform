@@ -40,7 +40,7 @@ jobs:
           node-version: '20'
 
       - name: Install cdk8s CLI
-        run: npm install -g cdk8s-cli
+        run: npm install -g cdk8s-cli@2.201.15
 
       - name: Refresh generated cdk8s imports
         run: make manifests-imports
