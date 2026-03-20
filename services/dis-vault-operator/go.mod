@@ -3,7 +3,7 @@ module github.com/Altinn/altinn-platform/services/dis-vault-operator
 go 1.25.3
 
 require (
-	github.com/Altinn/altinn-platform/services/dis-identity-operator v0.0.0-20260227100134-53261af45dd6
+	github.com/Altinn/altinn-platform/services/dis-identity-operator v0.0.0-20260319083500-bd4f5f84c472
 	github.com/Azure/azure-service-operator/v2 v2.17.0
 	github.com/google/uuid v1.6.0
 	github.com/onsi/ginkgo/v2 v2.27.2
@@ -15,7 +15,7 @@ require (
 )
 
 require (
-	cel.dev/expr v0.24.0 // indirect
+	cel.dev/expr v0.25.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.20.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.2 // indirect
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
@@ -90,7 +90,7 @@ require (
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260128011058-8636f8732409 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260128011058-8636f8732409 // indirect
-	google.golang.org/grpc v1.78.0 // indirect
+	google.golang.org/grpc v1.79.3 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
