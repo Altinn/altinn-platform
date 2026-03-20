@@ -6,8 +6,8 @@ locals {
   team_name   = "admin"
   environment = "test"
 
-  aks_vnet_ipv4_cidr = [for cidr in var.vnet_address_space : cidr if can(cidrhost(cidr, 0)) && !strcontains(cidr, ":")][0]
-  aks_vnet_ipv6_cidr = [for cidr in var.vnet_address_space : cidr if strcontains(cidr, ":")][0]
+  aks_vnet_ipv4_cidr = one([for cidr in var.vnet_address_space : cidr if can(cidrhost(cidr, 0)) && !strcontains(cidr, ":")])
+  aks_vnet_ipv6_cidr = one([for cidr in var.vnet_address_space : cidr if can(cidrhost(cidr, 0)) && strcontains(cidr, ":")])
 }
 
 module "aks" {
