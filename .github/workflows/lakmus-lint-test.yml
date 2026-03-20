@@ -50,6 +50,7 @@ jobs:
         with:
           version: v2.7.2
           working-directory: services/lakmus
+          args: ./cmd/... ./internal/... ./manifests/... ./pkg/... ./test/azfakes/...
 
       - name: Verify generated manifests
         run: make manifests-verify

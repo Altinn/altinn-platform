@@ -22,8 +22,8 @@ github.com/AzureAD/microsoft-authentication-library-for-go v1.6.0 h1:XRzhVemXdgv
 github.com/AzureAD/microsoft-authentication-library-for-go v1.6.0/go.mod h1:HKpQxkWaGLJ+D/5H8QRpyQXA1eKjxkFlOMwck5+33Jk=
 github.com/Masterminds/semver/v3 v3.4.0 h1:Zog+i5UMtVoCU8oKka5P7i9q9HgrJeGzI9SA1Xbatp0=
 github.com/Masterminds/semver/v3 v3.4.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
-github.com/aws/constructs-go/constructs/v10 v10.3.0 h1:LsjBIMiaDX/vqrXWhzTquBJ9pPdi02/H+z1DCwg0PEM=
-github.com/aws/constructs-go/constructs/v10 v10.3.0/go.mod h1:GgzwIwoRJ2UYsr3SU+JhAl+gq5j39bEMYf8ev3J+s9s=
+github.com/aws/constructs-go/constructs/v10 v10.5.1 h1:GYyCMb2QmJl/o4EMbS3LVqh/kRlLLBVsxzmV40jxOKY=
+github.com/aws/constructs-go/constructs/v10 v10.5.1/go.mod h1:ZvLfkgiTKlbQhPYkZhWk+hPkevdX55ZeXQ2XqfC3xTw=
 github.com/aws/jsii-runtime-go v1.127.0 h1:eWnSOt0oR70WD0MA4nIBdBCykJpnfsYhVxA9hIhfv+U=
 github.com/aws/jsii-runtime-go v1.127.0/go.mod h1:gun/1AY7mrOnd/oVbAGxETnU8iXoPzr8AO2eyGvnCx8=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=

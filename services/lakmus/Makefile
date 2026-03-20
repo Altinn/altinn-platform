@@ -92,7 +92,7 @@ fmt:
 	$(GO) fmt ./...
 
 lint:
-	golangci-lint run
+	golangci-lint run ./cmd/... ./internal/... ./manifests/... ./pkg/... ./test/azfakes/...
 
 tidy:
 	${GO} mod tidy
