@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.2.0...dis-identity-v0.2.1) (2026-03-20)
+
+
+### Dependency Updates
+
+* update actions/checkout digest to de0fac2 ([#3062](https://github.com/Altinn/altinn-platform/issues/3062)) ([9bc47e2](https://github.com/Altinn/altinn-platform/commit/9bc47e2988c19a2a3d945b6dab755bd9c468b847))
+
 ## [0.2.0](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.1.1...dis-identity-v0.2.0) (2026-02-27)
 
 
