@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.2](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.5.1...dis-pgsql-v0.5.2) (2026-03-25)
+
+
+### Dependency Updates
+
+* bump grpc-GO to 1.79.3 ([#3269](https://github.com/Altinn/altinn-platform/issues/3269)) ([9166356](https://github.com/Altinn/altinn-platform/commit/916635673abdde61b55ebb24addd51ff4b159f85))
+* kubebuilder update services/dis pgsql operator to 4.11.1 ([#3255](https://github.com/Altinn/altinn-platform/issues/3255)) ([9bfa8d4](https://github.com/Altinn/altinn-platform/commit/9bfa8d48fef346a3736d23ff5db1bc910fa1785d))
+
 ## [0.5.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.5.0...dis-pgsql-v0.5.1) (2026-02-27)
 
 
