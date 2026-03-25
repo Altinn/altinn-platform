@@ -4,6 +4,6 @@ export {
   EnterpriseTokenGenerator,
   EnterpriseTokenGeneratorOptions,
   PlatformTokenGenerator,
-  PlatformTokenGeneratorOptions
+  PlatformTokenGeneratorOptions,
 } from './token_generator/token_generator.js';
 export { MaskinportenAccessTokenGenerator } from './maskinporten/maskinporten.js';
