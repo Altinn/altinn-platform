@@ -121,7 +121,7 @@ class PersonalTokenGenerator {
  * Validates allowed query parameters for personal tokens.
  * Extends native Map to store key/value pairs.
  */
-class PersonalTokenGeneratorOptions extends Map {
+export class PersonalTokenGeneratorOptions extends Map {
   static getPersonalTokenValidOptions = [
     'env',
     'scopes',
@@ -266,7 +266,7 @@ class EnterpriseTokenGenerator {
 /**
  * Validates allowed enterprise-specific query options.
  */
-class EnterpriseTokenGeneratorOptions extends Map {
+export class EnterpriseTokenGeneratorOptions extends Map {
   static getEnterpriseTokenValidOptions = [
     'env',
     'scopes',
@@ -422,7 +422,7 @@ class PlatformTokenGenerator {
 /**
  * Internal validation for allowed platform token options.
  */
-class PlatformTokenGeneratorOptions extends Map {
+export class PlatformTokenGeneratorOptions extends Map {
   static getPlatformAccessTokenValidOptions = ['env', 'app', 'ttl'];
 
   constructor(options) {
