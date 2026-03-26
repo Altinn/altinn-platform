@@ -12,6 +12,10 @@
       "release-type": "simple",
       "component": "dis-apim"
     },
+    "services/dis-vault-operator": {
+      "release-type": "simple",
+      "component": "dis-vault"
+    },
     "services/lakmus": {
       "release-type": "simple",
       "component": "lakmus"
