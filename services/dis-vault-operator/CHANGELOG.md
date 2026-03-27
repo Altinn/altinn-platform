@@ -1,0 +1,19 @@
+# Changelog
+
+## 1.0.0 (2026-03-27)
+
+
+### Features
+
+* **dis-vault:** create a vault with initial conditions ([#3243](https://github.com/Altinn/altinn-platform/issues/3243)) ([8582ac7](https://github.com/Altinn/altinn-platform/commit/8582ac74e748dae0732c976948686188d314d26b))
+* **dis-vault:** init project ([#3242](https://github.com/Altinn/altinn-platform/issues/3242)) ([9ab5906](https://github.com/Altinn/altinn-platform/commit/9ab5906e1fca77e6175546fd5440aef1594717c6))
+
+
+### Bug Fixes
+
+* **dis-vault:** ensure reconciles happen for update/delete ([#3267](https://github.com/Altinn/altinn-platform/issues/3267)) ([bd4f5f8](https://github.com/Altinn/altinn-platform/commit/bd4f5f84c472dc3907137106698dec0bee999ee4))
+
+
+### Dependency Updates
+
+* bump grpc-GO to 1.79.3 ([#3269](https://github.com/Altinn/altinn-platform/issues/3269)) ([9166356](https://github.com/Altinn/altinn-platform/commit/916635673abdde61b55ebb24addd51ff4b159f85))
