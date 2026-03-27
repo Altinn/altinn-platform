@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.2.1...dis-identity-v0.2.2) (2026-03-27)
+
+
+### Dependency Updates
+
+* bump grpc-GO to 1.79.3 ([#3269](https://github.com/Altinn/altinn-platform/issues/3269)) ([9166356](https://github.com/Altinn/altinn-platform/commit/916635673abdde61b55ebb24addd51ff4b159f85))
+
 ## [0.2.1](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.2.0...dis-identity-v0.2.1) (2026-03-20)
 
 
