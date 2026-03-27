@@ -33,6 +33,11 @@
         {"filename": "dis-apim-release.yml"}
       ]
     },
+    "services/dis-vault-operator": {
+      "dispatch-pipelines": [
+        {"filename": "dis-vault-release.yml"}
+      ]
+    },
     "services/lakmus": {
       "dispatch-pipelines": [
         {"filename": "lakmus-release.yml"}
