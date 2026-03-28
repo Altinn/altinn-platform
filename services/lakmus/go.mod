@@ -7,9 +7,9 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.1
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault v1.5.0
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets v1.4.0
-	github.com/aws/constructs-go/constructs/v10 v10.5.1
+	github.com/aws/constructs-go/constructs/v10 v10.6.0
 	github.com/aws/jsii-runtime-go v1.127.0
-	github.com/cdk8s-team/cdk8s-core-go/cdk8s/v2 v2.70.51
+	github.com/cdk8s-team/cdk8s-core-go/cdk8s/v2 v2.70.52
 	github.com/prometheus/client_golang v1.23.2
 )
 
