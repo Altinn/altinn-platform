@@ -1,3 +1,11 @@
 # More info: https://docs.docker.com/engine/reference/builder/#dockerignore-file
-# Ignore build and test binaries.
-bin/
+# Send only the files needed by the Dockerfile build.
+**
+!go.mod
+!go.sum
+!cmd/
+!cmd/**
+!api/
+!api/**
+!internal/
+!internal/**
