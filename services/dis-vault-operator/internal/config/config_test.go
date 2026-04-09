@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+const testTenantUUID = "00000000-0000-0000-0000-000000000000"
+
 func TestParseSubnetIDs(t *testing.T) {
 	t.Parallel()
 
@@ -43,19 +45,55 @@ func TestParseSubnetIDs(t *testing.T) {
 func TestNewOperatorConfig(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewOperatorConfig(
+	cfg, err := NewOperatorConfig(
 		"sub",
 		"rg",
-		"tenant",
+		testTenantUUID,
 		"westeurope",
 		"dev",
 		"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/snet",
+		"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/vpn-exit",
 	)
 	if err != nil {
 		t.Fatalf("expected config to be valid, got error: %v", err)
 	}
+	if len(cfg.AKSSubnetIDs) != 2 {
+		t.Fatalf("expected config subnet list to include optional vpn exit subnet, got %v", cfg.AKSSubnetIDs)
+	}
 
-	if _, err := NewOperatorConfig("", "rg", "tenant", "westeurope", "dev", "x"); err == nil {
+	cfg, err = NewOperatorConfig(
+		"sub",
+		"rg",
+		testTenantUUID,
+		"westeurope",
+		"dev",
+		"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/snet,/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/vpn-exit",
+		"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/vpn-exit",
+	)
+	if err != nil {
+		t.Fatalf("expected duplicate vpn exit subnet to be accepted, got error: %v", err)
+	}
+	if len(cfg.AKSSubnetIDs) != 2 {
+		t.Fatalf("expected duplicate vpn exit subnet not to be appended twice, got %v", cfg.AKSSubnetIDs)
+	}
+
+	if _, err := NewOperatorConfig("", "rg", "tenant", "westeurope", "dev", "x", ""); err == nil {
 		t.Fatalf("expected error for missing required fields")
+	}
+
+	if _, err := NewOperatorConfig("sub", "rg", "tenant", "westeurope", "dev", "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/snet", ""); err == nil {
+		t.Fatalf("expected error for invalid tenant UUID")
+	}
+
+	if _, err := NewOperatorConfig(
+		"sub",
+		"rg",
+		testTenantUUID,
+		"westeurope",
+		"dev",
+		"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/snet",
+		"not-an-arm-id",
+	); err == nil {
+		t.Fatalf("expected error for invalid vpn exit node subnet id")
 	}
 }

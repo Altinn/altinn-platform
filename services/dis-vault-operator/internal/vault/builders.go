@@ -17,6 +17,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 )
 
+const defaultManagedResourceBaseName = "vault"
+
 // BuildASOKeyVaultResource builds the desired ASO Key Vault resource.
 func BuildASOKeyVaultResource(v *vaultv1alpha1.Vault, cfg config.OperatorConfig, azureName string) (*keyvaultv1.Vault, error) {
 	if v == nil {
@@ -69,6 +71,9 @@ func BuildASOKeyVaultResource(v *vaultv1alpha1.Vault, cfg config.OperatorConfig,
 			Family: &skuFamily,
 		},
 	}
+	if tenantID := strings.TrimSpace(cfg.TenantID); tenantID != "" {
+		properties.TenantId = &tenantID
+	}
 
 	// Respect Vault defaults even if they were not applied by API server in tests.
 	retentionDays := v.Spec.SoftDeleteRetentionDays
@@ -120,7 +125,7 @@ func BuildOwnerRoleAssignmentResource(v *vaultv1alpha1.Vault, keyVault *keyvault
 
 	principalType := authorizationv1.RoleAssignmentProperties_PrincipalType_ServicePrincipal
 	roleDef := "Key Vault Secrets Officer"
-	roleAssignmentName := deterministicKubernetesName(v.Name, "owner-ra")
+	roleAssignmentName := BuildOwnerRoleAssignmentName(v.Name)
 	ownerName := deterministicKubernetesName(v.Name, "akv")
 	if keyVault != nil {
 		ownerName = keyVault.Name
@@ -155,10 +160,14 @@ func BuildOwnerRoleAssignmentResource(v *vaultv1alpha1.Vault, keyVault *keyvault
 	return roleAssignment, nil
 }
 
+func BuildOwnerRoleAssignmentName(vaultName string) string {
+	return deterministicKubernetesName(vaultName, "owner-ra")
+}
+
 func deterministicKubernetesName(base, suffix string) string {
 	base = sanitizeKubernetesName(base)
 	if base == "" {
-		base = "vault"
+		base = defaultManagedResourceBaseName
 	}
 	suffix = sanitizeKubernetesName(suffix)
 	if suffix == "" {

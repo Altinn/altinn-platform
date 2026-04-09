@@ -26,6 +26,7 @@
 - Generate code: `make generate-cache`
 - Generate manifests (CRDs/RBAC/webhooks): `make manifests-cache`
 - Unit tests: `make test-cache`
+- Default test entrypoint: use `make test` / `make test-cache`, not raw `go test`, unless you are isolating a narrow debugging case.
 - Build manager binary: `make build-cache`
 - Vulnerability scan: `make govulncheck-cache`
 
@@ -41,6 +42,10 @@ You MUST run these commands before producing a final answer/patch:
 5. `make lint-cache`
 
 You can run all these by running `make run-checks-ci-cache`
+
+Use the Make targets above as the primary verification path.
+Do not substitute ad hoc `go test` commands for the required Make targets.
+Direct `go test` is acceptable only for narrow debugging during development, and does not replace final verification.
 
 In the final response, include the command(s) you ran and whether they passed.
 If you cannot run them, you MUST say so explicitly and explain why.

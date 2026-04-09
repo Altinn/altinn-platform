@@ -33,6 +33,24 @@ rules:
   - patch
   - update
 - apiGroups:
+  - external-secrets.io
+  resources:
+  - secretstores
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - external-secrets.io
+  resources:
+  - secretstores/status
+  verbs:
+  - get
+- apiGroups:
   - keyvault.azure.com
   - vault.dis.altinn.cloud
   resources:

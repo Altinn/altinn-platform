@@ -3,10 +3,12 @@ package config
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
 var subnetARMIDPattern = regexp.MustCompile(`^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\.Network/virtualNetworks/[^/]+/subnets/[^/]+$`)
+var tenantIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$`)
 
 // OperatorConfig is runtime configuration for the Vault operator.
 type OperatorConfig struct {
@@ -39,7 +41,15 @@ func ParseSubnetIDs(raw string) ([]string, error) {
 }
 
 // NewOperatorConfig validates and returns operator config values.
-func NewOperatorConfig(subscriptionID, resourceGroup, tenantID, location, environment, rawSubnetIDs string) (*OperatorConfig, error) {
+func NewOperatorConfig(
+	subscriptionID,
+	resourceGroup,
+	tenantID,
+	location,
+	environment,
+	rawSubnetIDs,
+	rawVPNExitNodeSubnetID string,
+) (*OperatorConfig, error) {
 	var missing []string
 
 	subscriptionID = strings.TrimSpace(subscriptionID)
@@ -67,10 +77,22 @@ func NewOperatorConfig(subscriptionID, resourceGroup, tenantID, location, enviro
 	if len(missing) > 0 {
 		return nil, fmt.Errorf("missing required configuration: %s", strings.Join(missing, ", "))
 	}
+	if !tenantIDPattern.MatchString(tenantID) {
+		return nil, fmt.Errorf("invalid tenant-id: must be a UUID")
+	}
 
 	subnetIDs, err := ParseSubnetIDs(rawSubnetIDs)
 	if err != nil {
 		return nil, err
+	}
+	vpnExitNodeSubnetID := strings.TrimSpace(rawVPNExitNodeSubnetID)
+	if vpnExitNodeSubnetID != "" {
+		if !subnetARMIDPattern.MatchString(vpnExitNodeSubnetID) {
+			return nil, fmt.Errorf("invalid vpn-exit-node-subnet-id: %s", vpnExitNodeSubnetID)
+		}
+		if !slices.Contains(subnetIDs, vpnExitNodeSubnetID) {
+			subnetIDs = append(subnetIDs, vpnExitNodeSubnetID)
+		}
 	}
 
 	return &OperatorConfig{

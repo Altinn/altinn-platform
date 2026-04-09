@@ -27,6 +27,7 @@ import (
 	"github.com/Altinn/altinn-platform/services/dis-vault-operator/internal/controller"
 	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	keyvaultv1 "github.com/Azure/azure-service-operator/v2/api/keyvault/v1api20230701"
+	esov1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -55,6 +56,7 @@ func init() {
 	utilruntime.Must(identityv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(keyvaultv1.AddToScheme(scheme))
 	utilruntime.Must(authorizationv1.AddToScheme(scheme))
+	utilruntime.Must(esov1.AddToScheme(scheme))
 
 	// +kubebuilder:scaffold:scheme
 }
@@ -74,6 +76,7 @@ func main() {
 	var location string
 	var environment string
 	var aksSubnetIDs string
+	var vpnExitNodeSubnetID string
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -127,6 +130,12 @@ func main() {
 		"aks-subnet-ids",
 		os.Getenv("DISVAULT_AKS_SUBNET_IDS"),
 		"Comma-separated AKS subnet ARM IDs (required)",
+	)
+	flag.StringVar(
+		&vpnExitNodeSubnetID,
+		"vpn-exit-node-subnet-id",
+		os.Getenv("DISVAULT_VPN_EXIT_NODE_SUBNET_ID"),
+		"Optional Azure subnet ARM ID to add to the Key Vault firewall allowlist",
 	)
 	opts := zap.Options{
 		Development: true,
@@ -234,6 +243,7 @@ func main() {
 		location,
 		environment,
 		aksSubnetIDs,
+		vpnExitNodeSubnetID,
 	)
 	if err != nil {
 		setupLog.Error(err, "invalid operator configuration")

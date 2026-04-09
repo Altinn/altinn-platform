@@ -11,8 +11,10 @@ COPY go.sum go.sum
 # and so that source changes don't invalidate our downloaded layer
 RUN go mod download
 
-# Copy the Go source (relies on .dockerignore to filter)
-COPY . .
+# Copy the Go source
+COPY cmd/ cmd/
+COPY api/ api/
+COPY internal/ internal/
 
 # Build
 # the GOARCH has no default value to allow the binary to be built according to the host where the command
@@ -20,7 +22,7 @@ COPY . .
 # the docker BUILDPLATFORM arg will be linux/arm64 when for Apple x86 it will be linux/amd64. Therefore,
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w" -o manager cmd/main.go
+    go build -trimpath -ldflags="-s -w" -o manager ./cmd/main.go
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details

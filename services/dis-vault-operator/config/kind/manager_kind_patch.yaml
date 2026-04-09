@@ -27,3 +27,5 @@ spec:
               value: "dev"
             - name: DISVAULT_AKS_SUBNET_IDS
               value: "/subscriptions/fake-subscription/resourceGroups/fake-network-rg/providers/Microsoft.Network/virtualNetworks/fake-vnet/subnets/fake-aks-subnet"
+            - name: DISVAULT_VPN_EXIT_NODE_SUBNET_ID
+              value: "/subscriptions/fake-subscription/resourceGroups/fake-network-rg/providers/Microsoft.Network/virtualNetworks/fake-vnet/subnets/fake-vpn-exit-subnet"
