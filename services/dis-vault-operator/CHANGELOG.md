@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.0.0...dis-vault-v1.1.0) (2026-04-09)
+
+
+### Features
+
+* **dis-vault:** add vault status projection and managed SecretStore ([#3311](https://github.com/Altinn/altinn-platform/issues/3311)) ([32dd5ae](https://github.com/Altinn/altinn-platform/commit/32dd5aef0625339cca1bc647a80ddc36ad6fcc2c))
+
 ## 1.0.0 (2026-03-27)
 
 
