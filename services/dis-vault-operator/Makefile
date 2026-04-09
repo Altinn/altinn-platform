@@ -139,6 +139,7 @@ run-checks-ci: ## Run CI checks with local Go caches.
 	$(MAKE) generate
 	$(MAKE) manifests
 	$(MAKE) test-ci
+	$(MAKE) lint
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
