@@ -1,6 +1,8 @@
 package vault
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -32,7 +34,7 @@ func DeterministicSecretStoreName(base string) string {
 		return short
 	}
 
-	hash := stableHexHash(preferred)[:8]
+	hash := secretStoreHash(short)[:8]
 	maxBase := max(secretStoreNameMaxLength-len(secretStoreShortSuffix)-len(hash)-2, 1)
 	base = strings.Trim(base[:min(len(base), maxBase)], "-")
 	if base == "" {
@@ -82,4 +84,9 @@ func BuildManagedSecretStore(v *vaultv1alpha1.Vault, tenantID, vaultURI string) 
 	}
 
 	return store, nil
+}
+
+func secretStoreHash(input string) string {
+	sum := sha256.Sum256([]byte(input))
+	return hex.EncodeToString(sum[:])
 }
