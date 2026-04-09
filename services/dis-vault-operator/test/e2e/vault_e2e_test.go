@@ -242,7 +242,7 @@ var _ = Describe("Vault e2e", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred(), "Failed to patch Vault sample spec")
 
 		By("verifying ASO Key Vault spec reflects updated Vault spec")
-			waitForJSONPath("vaults.keyvault.azure.com", expectedASOVaultName, "{.spec.properties.sku.name}", "premium")
+		waitForJSONPath("vaults.keyvault.azure.com", expectedASOVaultName, "{.spec.properties.sku.name}", "premium")
 		waitForJSONPath("vaults.keyvault.azure.com", expectedASOVaultName, "{.spec.properties.softDeleteRetentionInDays}", "30")
 		waitForJSONPath("vaults.keyvault.azure.com", expectedASOVaultName, "{.spec.properties.enablePurgeProtection}", "true")
 		waitForJSONPath("vaults.keyvault.azure.com", expectedASOVaultName, "{.spec.tags.team}", "platform")
