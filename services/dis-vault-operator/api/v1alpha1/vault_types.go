@@ -52,6 +52,11 @@ type VaultSpec struct {
 	// IdentityRef points to the owning ApplicationIdentity in the same namespace.
 	IdentityRef ApplicationIdentityRef `json:"identityRef"`
 
+	// ExternalSecrets enables operator-managed namespaced SecretStore integration.
+	// +optional
+	// +kubebuilder:default=false
+	ExternalSecrets bool `json:"externalSecrets,omitempty"`
+
 	// SKU is the Key Vault SKU. Defaults to standard.
 	// +optional
 	// +kubebuilder:default=standard
@@ -107,6 +112,10 @@ type VaultStatus struct {
 	// +optional
 	OwnerRoleAssignmentID string `json:"ownerRoleAssignmentId,omitempty"`
 
+	// ExternalSecretStoreName is the name of the managed SecretStore when enabled.
+	// +optional
+	ExternalSecretStoreName string `json:"externalSecretStoreName,omitempty"`
+
 	// ObservedGeneration is the latest generation reconciled by the controller.
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
@@ -116,11 +125,12 @@ type VaultStatus struct {
 type ConditionType string
 
 const (
-	ConditionReady               ConditionType = "Ready"
-	ConditionIdentityReady       ConditionType = "IdentityReady"
-	ConditionVaultReady          ConditionType = "VaultReady"
-	ConditionRoleAssignmentReady ConditionType = "RoleAssignmentReady"
-	ConditionNetworkPolicyReady  ConditionType = "NetworkPolicyReady"
+	ConditionReady                ConditionType = "Ready"
+	ConditionIdentityReady        ConditionType = "IdentityReady"
+	ConditionVaultReady           ConditionType = "VaultReady"
+	ConditionRoleAssignmentReady  ConditionType = "RoleAssignmentReady"
+	ConditionNetworkPolicyReady   ConditionType = "NetworkPolicyReady"
+	ConditionExternalSecretsReady ConditionType = "ExternalSecretsReady"
 )
 
 // +kubebuilder:object:root=true

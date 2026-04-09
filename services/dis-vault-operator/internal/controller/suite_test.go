@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -28,6 +29,7 @@ import (
 	"github.com/Altinn/altinn-platform/services/dis-vault-operator/internal/config"
 	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	keyvaultv1 "github.com/Azure/azure-service-operator/v2/api/keyvault/v1api20230701"
+	esov1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
 )
 
 var (
@@ -58,27 +60,26 @@ var _ = BeforeSuite(func() {
 	Expect(identityv1alpha1.AddToScheme(scheme)).To(Succeed())
 	Expect(keyvaultv1.AddToScheme(scheme)).To(Succeed())
 	Expect(authorizationv1.AddToScheme(scheme)).To(Succeed())
+	Expect(esov1.AddToScheme(scheme)).To(Succeed())
 
 	By("bootstrapping test environment")
-	crdPaths := []string{
-		filepath.Join("..", "..", "config", "crd", "bases"),
-	}
-	if path := asoCRDPath(); path != "" {
-		crdPaths = append(crdPaths, path)
-	}
-	if path := disIdentityCRDPath(); path != "" {
-		crdPaths = append(crdPaths, path)
+	crds := []*apiextensionsv1.CustomResourceDefinition{
+		mustLoadCRD(filepath.Join("..", "..", "config", "crd", "bases"), "vault.dis.altinn.cloud", "Vault"),
+		mustLoadCRD(disIdentityCRDPath(), "application.dis.altinn.cloud", "ApplicationIdentity"),
+		mustLoadCRD(asoCRDPath(), "keyvault.azure.com", "Vault"),
+		mustLoadCRD(asoCRDPath(), "authorization.azure.com", "RoleAssignment"),
+		mustLoadCRD(externalSecretsCRDPath(), "external-secrets.io", "SecretStore"),
 	}
 
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     crdPaths,
-		Scheme:                scheme,
-		ErrorIfCRDPathMissing: true,
+		Scheme: scheme,
+		CRDInstallOptions: envtest.CRDInstallOptions{
+			CRDs:         crds,
+			Scheme:       scheme,
+			MaxTime:      30 * time.Second,
+			PollInterval: 250 * time.Millisecond,
+		},
 	}
-	Expect(ensureCRD(crdPaths, "vault.dis.altinn.cloud", "Vault")).To(Succeed())
-	Expect(ensureCRD(crdPaths, "application.dis.altinn.cloud", "ApplicationIdentity")).To(Succeed())
-	Expect(ensureCRD(crdPaths, "keyvault.azure.com", "Vault")).To(Succeed())
-	Expect(ensureCRD(crdPaths, "authorization.azure.com", "RoleAssignment")).To(Succeed())
 
 	if getFirstFoundEnvTestBinaryDir() != "" {
 		testEnv.BinaryAssetsDirectory = getFirstFoundEnvTestBinaryDir()
@@ -99,7 +100,7 @@ var _ = BeforeSuite(func() {
 		Config: config.OperatorConfig{
 			SubscriptionID: "sub-123",
 			ResourceGroup:  "rg-dis-dev",
-			TenantID:       "tenant-123",
+			TenantID:       "00000000-0000-0000-0000-000000000000",
 			Location:       "westeurope",
 			Environment:    "dev",
 			AKSSubnetIDs: []string{
@@ -167,45 +168,82 @@ func disIdentityCRDPath() string {
 	return ""
 }
 
-func ensureCRD(paths []string, targetGroup, targetKind string) error {
-	for _, dir := range paths {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			return fmt.Errorf("failed to read CRD directory %s: %w", dir, err)
+func externalSecretsCRDPath() string {
+	path := filepath.Join("..", "..", "bin", "external-secrets-crds", "current")
+	if info, err := os.Stat(path); err == nil && info.IsDir() {
+		return path
+	}
+	return ""
+}
+
+func mustLoadCRD(path, targetGroup, targetKind string) *apiextensionsv1.CustomResourceDefinition {
+	crd, err := loadCRD(path, targetGroup, targetKind)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(crd).NotTo(BeNil())
+	return crd
+}
+
+func loadCRD(path, targetGroup, targetKind string) (*apiextensionsv1.CustomResourceDefinition, error) {
+	if path == "" {
+		return nil, fmt.Errorf("CRD (%s/%s) path is empty; run `make setup-envtest`", targetGroup, targetKind)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("stat CRD path %s: %w", path, err)
+	}
+	if !info.IsDir() {
+		return loadCRDFromFile(path, targetGroup, targetKind)
+	}
+
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CRD directory %s: %w", path, err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
 		}
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			ext := strings.ToLower(filepath.Ext(entry.Name()))
-			if ext != ".yaml" && ext != ".yml" {
-				continue
-			}
-			filePath := filepath.Join(dir, entry.Name())
-			file, err := os.Open(filePath)
-			if err != nil {
-				return fmt.Errorf("open CRD file %s: %w", filePath, err)
-			}
-			decoder := yaml.NewYAMLOrJSONDecoder(file, 4096)
-			for {
-				var crd apiextensionsv1.CustomResourceDefinition
-				if err := decoder.Decode(&crd); err != nil {
-					if errors.Is(err, io.EOF) {
-						break
-					}
-					_ = file.Close()
-					return fmt.Errorf("decode CRD file %s: %w", filePath, err)
-				}
-				if crd.Kind == "CustomResourceDefinition" &&
-					crd.Spec.Group == targetGroup &&
-					crd.Spec.Names.Kind == targetKind {
-					_ = file.Close()
-					return nil
-				}
-			}
-			_ = file.Close()
+		ext := strings.ToLower(filepath.Ext(entry.Name()))
+		if ext != ".yaml" && ext != ".yml" {
+			continue
+		}
+		crd, err := loadCRDFromFile(filepath.Join(path, entry.Name()), targetGroup, targetKind)
+		if err != nil {
+			return nil, err
+		}
+		if crd != nil {
+			return crd, nil
 		}
 	}
 
-	return fmt.Errorf("CRD (%s/%s) not found; run `make setup-envtest`", targetGroup, targetKind)
+	return nil, fmt.Errorf("CRD (%s/%s) not found in %s; run `make setup-envtest`", targetGroup, targetKind, path)
+}
+
+func loadCRDFromFile(filePath, targetGroup, targetKind string) (*apiextensionsv1.CustomResourceDefinition, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("open CRD file %s: %w", filePath, err)
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	decoder := yaml.NewYAMLOrJSONDecoder(file, 4096)
+	for {
+		var crd apiextensionsv1.CustomResourceDefinition
+		if err := decoder.Decode(&crd); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, fmt.Errorf("decode CRD file %s: %w", filePath, err)
+		}
+		if crd.Kind == "CustomResourceDefinition" &&
+			crd.Spec.Group == targetGroup &&
+			crd.Spec.Names.Kind == targetKind {
+			return crd.DeepCopy(), nil
+		}
+	}
+
+	return nil, nil
 }

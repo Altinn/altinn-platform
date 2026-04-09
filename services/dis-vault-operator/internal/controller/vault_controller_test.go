@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -13,12 +14,30 @@ import (
 	vaultpkg "github.com/Altinn/altinn-platform/services/dis-vault-operator/internal/vault"
 	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	keyvaultv1 "github.com/Azure/azure-service-operator/v2/api/keyvault/v1api20230701"
+	asoconditions "github.com/Azure/azure-service-operator/v2/pkg/genruntime/conditions"
+	esov1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
+
+type noMatchSecretStoreClient struct {
+	client.Client
+}
+
+func (c noMatchSecretStoreClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	if _, ok := obj.(*esov1.SecretStore); ok {
+		return &meta.NoKindMatchError{
+			GroupKind: schema.GroupKind{Group: esov1.Group, Kind: esov1.SecretStoreKind},
+		}
+	}
+	return c.Client.Get(ctx, key, obj, opts...)
+}
 
 var _ = Describe("Vault controller", func() {
 	var (
@@ -42,6 +61,8 @@ var _ = Describe("Vault controller", func() {
 					return len(typed.Items)
 				case *authorizationv1.RoleAssignmentList:
 					return len(typed.Items)
+				case *esov1.SecretStoreList:
+					return len(typed.Items)
 				case *identityv1alpha1.ApplicationIdentityList:
 					return len(typed.Items)
 				default:
@@ -56,10 +77,12 @@ var _ = Describe("Vault controller", func() {
 
 		deleteAll(&authorizationv1.RoleAssignment{})
 		deleteAll(&keyvaultv1.Vault{})
+		deleteAll(&esov1.SecretStore{})
 		deleteAll(&identityv1alpha1.ApplicationIdentity{})
 
 		waitUntilEmpty(&authorizationv1.RoleAssignmentList{})
 		waitUntilEmpty(&keyvaultv1.VaultList{})
+		waitUntilEmpty(&esov1.SecretStoreList{})
 		waitUntilEmpty(&identityv1alpha1.ApplicationIdentityList{})
 	}
 
@@ -97,6 +120,61 @@ var _ = Describe("Vault controller", func() {
 			})
 			Expect(k8sClient.Status().Update(ctx, appIdentity)).To(Succeed())
 		}
+	}
+
+	setKeyVaultReadyStatus := func(ctx context.Context, name, resourceID, vaultURI string) {
+		Eventually(func(g Gomega) bool {
+			var keyVault keyvaultv1.Vault
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: ns}, &keyVault)).To(Succeed())
+
+			keyVault.Status.Id = &resourceID
+			keyVault.Status.Properties = &keyvaultv1.VaultProperties_STATUS{
+				VaultUri: &vaultURI,
+			}
+			keyVault.Status.Conditions = []asoconditions.Condition{{
+				Type:               asoconditions.ConditionTypeReady,
+				Status:             metav1.ConditionTrue,
+				Severity:           asoconditions.ConditionSeverityNone,
+				LastTransitionTime: metav1.Now(),
+				ObservedGeneration: keyVault.Generation,
+				Reason:             "Ready",
+				Message:            "Provisioned",
+			}}
+
+			if err := k8sClient.Status().Update(ctx, &keyVault); err != nil {
+				if apierrors.IsConflict(err) {
+					return false
+				}
+				g.Expect(err).NotTo(HaveOccurred())
+			}
+			return true
+		}).WithTimeout(10 * time.Second).WithPolling(300 * time.Millisecond).Should(BeTrue())
+	}
+
+	setRoleAssignmentReadyStatus := func(ctx context.Context, name, resourceID string) {
+		Eventually(func(g Gomega) bool {
+			var roleAssignment authorizationv1.RoleAssignment
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: ns}, &roleAssignment)).To(Succeed())
+
+			roleAssignment.Status.Id = &resourceID
+			roleAssignment.Status.Conditions = []asoconditions.Condition{{
+				Type:               asoconditions.ConditionTypeReady,
+				Status:             metav1.ConditionTrue,
+				Severity:           asoconditions.ConditionSeverityNone,
+				LastTransitionTime: metav1.Now(),
+				ObservedGeneration: roleAssignment.Generation,
+				Reason:             "Ready",
+				Message:            "Assigned",
+			}}
+
+			if err := k8sClient.Status().Update(ctx, &roleAssignment); err != nil {
+				if apierrors.IsConflict(err) {
+					return false
+				}
+				g.Expect(err).NotTo(HaveOccurred())
+			}
+			return true
+		}).WithTimeout(10 * time.Second).WithPolling(300 * time.Millisecond).Should(BeTrue())
 	}
 
 	BeforeEach(func() {
@@ -413,7 +491,7 @@ var _ = Describe("Vault controller", func() {
 				config.OperatorConfig{
 					SubscriptionID: "sub-123",
 					ResourceGroup:  "rg-dis-dev",
-					TenantID:       "tenant-123",
+					TenantID:       "00000000-0000-0000-0000-000000000000",
 					Location:       "westeurope",
 					Environment:    "dev",
 					AKSSubnetIDs: []string{
@@ -441,4 +519,279 @@ var _ = Describe("Vault controller", func() {
 			g.Expect(recreatedRoleAssignment.Spec).To(Equal(expectedRoleAssignment.Spec))
 		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
 	})
+
+	It("projects dependent resource readiness and identifiers onto Vault status", func() {
+		createIdentity(testCtx, "my-app-identity-status", true)
+		Expect(k8sClient.Create(testCtx, newVault("my-app-vault-status", "my-app-identity-status"))).To(Succeed())
+
+		var keyVaultName string
+		var roleAssignmentName string
+		Eventually(func(g Gomega) {
+			var keyVaults keyvaultv1.VaultList
+			g.Expect(k8sClient.List(testCtx, &keyVaults, client.InNamespace(ns))).To(Succeed())
+			g.Expect(keyVaults.Items).To(HaveLen(1))
+			keyVaultName = keyVaults.Items[0].Name
+
+			var roleAssignments authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(testCtx, &roleAssignments, client.InNamespace(ns))).To(Succeed())
+			g.Expect(roleAssignments.Items).To(HaveLen(1))
+			roleAssignmentName = roleAssignments.Items[0].Name
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		resourceID := "/subscriptions/sub-123/resourceGroups/rg-dis-dev/providers/Microsoft.KeyVault/vaults/my-app-vault-status"
+		vaultURI := "https://my-app-vault-status.vault.azure.net"
+		roleAssignmentID := resourceID + "/providers/Microsoft.Authorization/roleAssignments/role-123"
+		setKeyVaultReadyStatus(testCtx, keyVaultName, resourceID, vaultURI)
+		setRoleAssignmentReadyStatus(testCtx, roleAssignmentName, roleAssignmentID)
+
+		Eventually(func(g Gomega) {
+			var vaultObj vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: "my-app-vault-status", Namespace: ns}, &vaultObj)).To(Succeed())
+
+			g.Expect(meta.FindStatusCondition(vaultObj.Status.Conditions, string(vaultv1alpha1.ConditionVaultReady))).NotTo(BeNil())
+			g.Expect(meta.FindStatusCondition(vaultObj.Status.Conditions, string(vaultv1alpha1.ConditionRoleAssignmentReady))).NotTo(BeNil())
+			g.Expect(meta.FindStatusCondition(vaultObj.Status.Conditions, string(vaultv1alpha1.ConditionReady))).NotTo(BeNil())
+			g.Expect(vaultObj.Status.ResourceID).To(Equal(resourceID))
+			g.Expect(vaultObj.Status.VaultURI).To(Equal(vaultURI))
+			g.Expect(vaultObj.Status.OwnerRoleAssignmentID).To(Equal(roleAssignmentID))
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+	})
+
+	It("manages a SecretStore lifecycle when external secrets integration is enabled", func() {
+		const (
+			identityName = "my-app-identity-secretstore"
+			vaultName    = "my-app-vault-secretstore"
+		)
+
+		createIdentity(testCtx, identityName, true)
+		vaultObj := newVault(vaultName, identityName)
+		vaultObj.Spec.ExternalSecrets = true
+		Expect(k8sClient.Create(testCtx, vaultObj)).To(Succeed())
+
+		var keyVaultName string
+		var roleAssignmentName string
+		Eventually(func(g Gomega) {
+			var keyVaults keyvaultv1.VaultList
+			g.Expect(k8sClient.List(testCtx, &keyVaults, client.InNamespace(ns))).To(Succeed())
+			g.Expect(keyVaults.Items).To(HaveLen(1))
+			keyVaultName = keyVaults.Items[0].Name
+
+			var roleAssignments authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(testCtx, &roleAssignments, client.InNamespace(ns))).To(Succeed())
+			g.Expect(roleAssignments.Items).To(HaveLen(1))
+			roleAssignmentName = roleAssignments.Items[0].Name
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		Consistently(func(g Gomega) int {
+			var stores esov1.SecretStoreList
+			g.Expect(k8sClient.List(testCtx, &stores, client.InNamespace(ns))).To(Succeed())
+			return len(stores.Items)
+		}, 2*time.Second, 300*time.Millisecond).Should(Equal(0))
+
+		resourceID := "/subscriptions/sub-123/resourceGroups/rg-dis-dev/providers/Microsoft.KeyVault/vaults/" + vaultName
+		vaultURI := "https://" + vaultName + ".vault.azure.net"
+		roleAssignmentID := resourceID + "/providers/Microsoft.Authorization/roleAssignments/role-123"
+		setKeyVaultReadyStatus(testCtx, keyVaultName, resourceID, vaultURI)
+		setRoleAssignmentReadyStatus(testCtx, roleAssignmentName, roleAssignmentID)
+
+		expectedStoreName := vaultpkg.DeterministicSecretStoreName(vaultName)
+		Eventually(func(g Gomega) {
+			var store esov1.SecretStore
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: expectedStoreName, Namespace: ns}, &store)).To(Succeed())
+			g.Expect(store.Labels).To(HaveKeyWithValue("vault.dis.altinn.cloud/name", vaultName))
+			g.Expect(store.Spec.Provider).NotTo(BeNil())
+			g.Expect(store.Spec.Provider.AzureKV).NotTo(BeNil())
+			g.Expect(store.Spec.Provider.AzureKV.AuthType).NotTo(BeNil())
+			g.Expect(*store.Spec.Provider.AzureKV.AuthType).To(Equal(esov1.AzureWorkloadIdentity))
+			g.Expect(store.Spec.Provider.AzureKV.VaultURL).NotTo(BeNil())
+			g.Expect(*store.Spec.Provider.AzureKV.VaultURL).To(Equal(vaultURI))
+			g.Expect(store.Spec.Provider.AzureKV.TenantID).NotTo(BeNil())
+			g.Expect(*store.Spec.Provider.AzureKV.TenantID).To(Equal("00000000-0000-0000-0000-000000000000"))
+			g.Expect(store.Spec.Provider.AzureKV.ServiceAccountRef).NotTo(BeNil())
+			g.Expect(store.Spec.Provider.AzureKV.ServiceAccountRef.Name).To(Equal(identityName))
+			g.Expect(metav1.IsControlledBy(&store, vaultObj)).To(BeTrue())
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		Eventually(func(g Gomega) {
+			var current vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &current)).To(Succeed())
+
+			external := meta.FindStatusCondition(current.Status.Conditions, string(vaultv1alpha1.ConditionExternalSecretsReady))
+			g.Expect(external).NotTo(BeNil())
+			g.Expect(external.Status).To(Equal(metav1.ConditionTrue))
+			g.Expect(external.Reason).To(Equal("Ready"))
+			g.Expect(current.Status.ExternalSecretStoreName).To(Equal(expectedStoreName))
+
+			ready := meta.FindStatusCondition(current.Status.Conditions, string(vaultv1alpha1.ConditionReady))
+			g.Expect(ready).NotTo(BeNil())
+			g.Expect(ready.Status).To(Equal(metav1.ConditionTrue))
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		Eventually(func(g Gomega) bool {
+			var current vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &current)).To(Succeed())
+			current.Spec.ExternalSecrets = false
+			if err := k8sClient.Update(testCtx, &current); err != nil {
+				if apierrors.IsConflict(err) {
+					return false
+				}
+				g.Expect(err).NotTo(HaveOccurred())
+			}
+			return true
+		}).WithTimeout(10 * time.Second).WithPolling(300 * time.Millisecond).Should(BeTrue())
+
+		Eventually(func() bool {
+			var store esov1.SecretStore
+			err := k8sClient.Get(testCtx, types.NamespacedName{Name: expectedStoreName, Namespace: ns}, &store)
+			return apierrors.IsNotFound(err)
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(BeTrue())
+
+		Eventually(func(g Gomega) {
+			var current vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &current)).To(Succeed())
+
+			external := meta.FindStatusCondition(current.Status.Conditions, string(vaultv1alpha1.ConditionExternalSecretsReady))
+			g.Expect(external).NotTo(BeNil())
+			g.Expect(external.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(external.Reason).To(Equal("Disabled"))
+			g.Expect(current.Status.ExternalSecretStoreName).To(BeEmpty())
+
+			ready := meta.FindStatusCondition(current.Status.Conditions, string(vaultv1alpha1.ConditionReady))
+			g.Expect(ready).NotTo(BeNil())
+			g.Expect(ready.Status).To(Equal(metav1.ConditionTrue))
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+	})
+
+	It("surfaces SecretStore name conflicts without overwriting non-owned resources", func() {
+		const (
+			identityName = "my-app-identity-conflict"
+			vaultName    = "my-app-vault-conflict"
+		)
+
+		createIdentity(testCtx, identityName, true)
+
+		conflictOwner := newVault("other-vault", identityName)
+		conflictStore, err := vaultpkg.BuildManagedSecretStore(conflictOwner, "00000000-0000-0000-0000-000000000000", "https://other-vault.vault.azure.net")
+		Expect(err).NotTo(HaveOccurred())
+		conflictStore.Name = vaultpkg.DeterministicSecretStoreName(vaultName)
+		conflictStore.Namespace = ns
+		conflictStore.OwnerReferences = nil
+		Expect(k8sClient.Create(testCtx, conflictStore)).To(Succeed())
+
+		vaultObj := newVault(vaultName, identityName)
+		vaultObj.Spec.ExternalSecrets = true
+		Expect(k8sClient.Create(testCtx, vaultObj)).To(Succeed())
+
+		Eventually(func(g Gomega) {
+			var current vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &current)).To(Succeed())
+
+			external := meta.FindStatusCondition(current.Status.Conditions, string(vaultv1alpha1.ConditionExternalSecretsReady))
+			g.Expect(external).NotTo(BeNil())
+			g.Expect(external.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(external.Reason).To(Equal("NameConflict"))
+			g.Expect(current.Status.ExternalSecretStoreName).To(BeEmpty())
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		Consistently(func(g Gomega) {
+			var store esov1.SecretStore
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: conflictStore.Name, Namespace: ns}, &store)).To(Succeed())
+			g.Expect(store.OwnerReferences).To(BeEmpty())
+		}, 3*time.Second, 300*time.Millisecond).Should(Succeed())
+	})
 })
+
+func TestReconcileManagedSecretStoreReturnsCRDNotInstalledWhenSecretStoreCRDIsMissing(t *testing.T) {
+	t.Parallel()
+
+	scheme := newControllerUnitTestScheme(t)
+	baseClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+	reconciler := &VaultReconciler{
+		Client: noMatchSecretStoreClient{Client: baseClient},
+		Scheme: scheme,
+		Config: config.OperatorConfig{TenantID: "00000000-0000-0000-0000-000000000000"},
+	}
+
+	vaultObj := &vaultv1alpha1.Vault{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "vault-sample",
+			Namespace:  "default",
+			Generation: 7,
+		},
+		Spec: vaultv1alpha1.VaultSpec{
+			IdentityRef:     vaultv1alpha1.ApplicationIdentityRef{Name: "app-identity-sample"},
+			ExternalSecrets: true,
+		},
+	}
+
+	result, err := reconciler.reconcileManagedSecretStore(context.Background(), vaultObj, nil)
+	if err != nil {
+		t.Fatalf("expected missing SecretStore CRD to surface as status, got error: %v", err)
+	}
+	if result.Name != "" {
+		t.Fatalf("expected no managed SecretStore name, got %q", result.Name)
+	}
+	if result.Condition.Type != string(vaultv1alpha1.ConditionExternalSecretsReady) {
+		t.Fatalf("expected ExternalSecretsReady condition, got %q", result.Condition.Type)
+	}
+	if result.Condition.Status != metav1.ConditionFalse || result.Condition.Reason != "CRDNotInstalled" {
+		t.Fatalf("expected ExternalSecretsReady=False/CRDNotInstalled, got %s/%s", result.Condition.Status, result.Condition.Reason)
+	}
+}
+
+func TestBuildNetworkPolicyCondition(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.OperatorConfig{
+		SubscriptionID: "sub-123",
+		ResourceGroup:  "rg-dis-dev",
+		Location:       "westeurope",
+		Environment:    "dev",
+		AKSSubnetIDs: []string{
+			"/subscriptions/sub-123/resourceGroups/rg-net/providers/Microsoft.Network/virtualNetworks/vnet/subnets/aks-1",
+		},
+	}
+
+	vaultObj := &vaultv1alpha1.Vault{
+		ObjectMeta: metav1.ObjectMeta{Name: "vault-sample", Namespace: "default"},
+		Spec: vaultv1alpha1.VaultSpec{
+			IdentityRef: vaultv1alpha1.ApplicationIdentityRef{Name: "app-identity-sample"},
+		},
+	}
+
+	desired, err := vaultpkg.BuildASOKeyVaultResource(vaultObj, cfg, "vault-sample-akv")
+	if err != nil {
+		t.Fatalf("expected key vault builder to succeed, got error: %v", err)
+	}
+
+	ready := buildNetworkPolicyCondition(3, desired, cfg)
+	if ready.Status != metav1.ConditionTrue || ready.Reason != "Ready" {
+		t.Fatalf("expected network policy condition to be ready, got %s/%s", ready.Status, ready.Reason)
+	}
+
+	mismatched := buildNetworkPolicyCondition(3, desired, config.OperatorConfig{
+		AKSSubnetIDs: []string{
+			"/subscriptions/sub-123/resourceGroups/rg-net/providers/Microsoft.Network/virtualNetworks/vnet/subnets/aks-1",
+			"/subscriptions/sub-123/resourceGroups/rg-net/providers/Microsoft.Network/virtualNetworks/vnet/subnets/aks-2",
+		},
+	})
+	if mismatched.Status != metav1.ConditionFalse || mismatched.Reason != "InvalidPolicy" {
+		t.Fatalf("expected network policy mismatch to be InvalidPolicy, got %s/%s", mismatched.Status, mismatched.Reason)
+	}
+}
+
+func newControllerUnitTestScheme(t *testing.T) *runtime.Scheme {
+	t.Helper()
+
+	scheme := runtime.NewScheme()
+	if err := vaultv1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add Vault scheme: %v", err)
+	}
+	if err := esov1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add SecretStore scheme: %v", err)
+	}
+	if err := keyvaultv1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add Key Vault scheme: %v", err)
+	}
+	return scheme
+}

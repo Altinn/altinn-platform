@@ -23,7 +23,7 @@ func TestBuildASOKeyVaultResource(t *testing.T) {
 	cfg := config.OperatorConfig{
 		SubscriptionID: "sub-123",
 		ResourceGroup:  "rg-dis-dev",
-		TenantID:       "tenant-123",
+		TenantID:       "00000000-0000-0000-0000-000000000000",
 		Location:       "westeurope",
 		Environment:    "dev",
 		AKSSubnetIDs:   []string{subnetID},
@@ -70,6 +70,9 @@ func TestBuildASOKeyVaultResource(t *testing.T) {
 	}
 	if props.EnablePurgeProtection == nil || !*props.EnablePurgeProtection {
 		t.Fatalf("expected EnablePurgeProtection=true when spec value is unset")
+	}
+	if props.TenantId == nil || *props.TenantId != cfg.TenantID {
+		t.Fatalf("expected TenantId=%q, got %#v", cfg.TenantID, props.TenantId)
 	}
 }
 

@@ -139,6 +139,7 @@ run-checks-ci: ## Run CI checks with local Go caches.
 	$(MAKE) generate
 	$(MAKE) manifests
 	$(MAKE) test-ci
+	$(MAKE) lint
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
@@ -185,6 +186,10 @@ install-aso-crds-kind: setup-test-e2e aso-crds ## Install ASO CRDs and disable c
 install-dis-identity-crd-kind: setup-test-e2e dis-identity-crd ## Install ApplicationIdentity CRD for Kind e2e.
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) --context kind-$(KIND_CLUSTER) apply --server-side --force-conflicts -f $(DIS_IDENTITY_CRD_FILE)
 
+.PHONY: install-external-secrets-crd-kind
+install-external-secrets-crd-kind: setup-test-e2e external-secrets-crd ## Install External Secrets SecretStore CRD for Kind e2e.
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) --context kind-$(KIND_CLUSTER) apply --server-side --force-conflicts -f $(EXTERNAL_SECRETS_CRD_FILE)
+
 .PHONY: seed-dis-identity-kind
 seed-dis-identity-kind: setup-test-e2e ## Seed ApplicationIdentity and ready status for sample-based Kind e2e.
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) --context kind-$(KIND_CLUSTER) apply -f config/kind/applicationidentities.yaml
@@ -193,12 +198,12 @@ seed-dis-identity-kind: setup-test-e2e ## Seed ApplicationIdentity and ready sta
 		-p '{"status":{"managedIdentityName":"app-identity-sample-managed","principalId":"app-identity-sample-principal","conditions":[{"type":"Ready","status":"True","reason":"Ready","message":"Seeded for Kind e2e","lastTransitionTime":"2026-01-01T00:00:00Z"}]}}'
 
 .PHONY: test-e2e-kind
-test-e2e-kind: cleanup-test-e2e setup-test-e2e docker-build kind-load install install-aso-crds-kind install-dis-identity-crd-kind deploy-kind ## Setup Kind e2e env and apply samples.
+test-e2e-kind: cleanup-test-e2e setup-test-e2e docker-build kind-load install install-aso-crds-kind install-dis-identity-crd-kind install-external-secrets-crd-kind deploy-kind ## Setup Kind e2e env and apply samples.
 	$(MAKE) seed-dis-identity-kind
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) --context kind-$(KIND_CLUSTER) apply -k config/samples
 
 .PHONY: test-e2e-kind-ci
-test-e2e-kind-ci: cleanup-test-e2e setup-test-e2e manifests generate fmt vet install-aso-crds-kind install-dis-identity-crd-kind ## Run the e2e tests on Kind and cleanup (CI).
+test-e2e-kind-ci: cleanup-test-e2e setup-test-e2e manifests generate fmt vet install-aso-crds-kind install-dis-identity-crd-kind install-external-secrets-crd-kind ## Run the e2e tests on Kind and cleanup (CI).
 	@test_status=0; cleanup_status=0; \
 	KUBECONFIG=$(KIND_KUBECONFIG) CERT_MANAGER_INSTALL_SKIP=$(CERT_MANAGER_INSTALL_SKIP) KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v || test_status=$$?; \
 	$(MAKE) cleanup-test-e2e || cleanup_status=$$?; \
@@ -230,7 +235,7 @@ govulncheck: govulncheck-bin ## Run govulncheck against code and dependencies.
 
 .PHONY: build
 build: manifests generate fmt vet ## Build manager binary.
-	go build -o bin/manager cmd/main.go
+	go build -o bin/manager ./cmd/main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
@@ -351,7 +356,7 @@ ENVTEST_K8S_VERSION ?= $(shell v='$(call gomodver,k8s.io/api)'; \
   [ -n "$$v" ] || { echo "Set ENVTEST_K8S_VERSION manually (k8s.io/api replace has no tag)" >&2; exit 1; }; \
   printf '%s\n' "$$v" | sed -E 's/^v?[0-9]+\.([0-9]+).*/1.\1/')
 
-GOLANGCI_LINT_VERSION ?= v2.7.2
+GOLANGCI_LINT_VERSION ?= v2.11.3
 GOVULNCHECK_VERSION ?= latest
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -364,7 +369,7 @@ $(CONTROLLER_GEN): $(LOCALBIN)
 	$(call go-install-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen,$(CONTROLLER_TOOLS_VERSION))
 
 .PHONY: setup-envtest
-setup-envtest: aso-crds dis-identity-crd envtest ## Download the binaries required for ENVTEST in the local bin directory.
+setup-envtest: aso-crds dis-identity-crd external-secrets-crd envtest ## Download the binaries required for ENVTEST in the local bin directory.
 	@echo "Setting up envtest binaries for Kubernetes version $(ENVTEST_K8S_VERSION)..."
 	@"$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path || { \
 		echo "Error: Failed to set up envtest binaries for version $(ENVTEST_K8S_VERSION)."; \
@@ -413,6 +418,13 @@ DIS_IDENTITY_CRD_REL_PATH ?= config/crd/bases/$(DIS_IDENTITY_CRD_NAME)
 DIS_IDENTITY_CRD_LOCAL_FILE ?= $(WORKSPACE_ROOT)/services/dis-identity-operator/$(DIS_IDENTITY_CRD_REL_PATH)
 DIS_IDENTITY_CRD_DIR ?= $(LOCALBIN)/dis-identity-crds
 DIS_IDENTITY_CRD_FILE ?= $(DIS_IDENTITY_CRD_DIR)/$(DIS_IDENTITY_CRD_NAME)
+EXTERNAL_SECRETS_VERSION ?= v2.0.1
+EXTERNAL_SECRETS_CRD_NAME ?= external-secrets.io_secretstores.yaml
+EXTERNAL_SECRETS_CRD_REL_PATH ?= config/crds/bases/$(EXTERNAL_SECRETS_CRD_NAME)
+EXTERNAL_SECRETS_CRD_DIR ?= $(LOCALBIN)/external-secrets-crds
+EXTERNAL_SECRETS_CRD_FILE ?= $(EXTERNAL_SECRETS_CRD_DIR)/external-secrets.io_secretstores_$(EXTERNAL_SECRETS_VERSION).yaml
+EXTERNAL_SECRETS_CRD_ENVTEST_DIR ?= $(EXTERNAL_SECRETS_CRD_DIR)/current
+EXTERNAL_SECRETS_CRD_ENVTEST_FILE ?= $(EXTERNAL_SECRETS_CRD_ENVTEST_DIR)/$(EXTERNAL_SECRETS_CRD_NAME)
 
 .PHONY: aso-crds
 aso-crds: ## Download the ASO CRDs locally if necessary.
@@ -445,3 +457,14 @@ dis-identity-crd: ## Download the ApplicationIdentity CRD locally if necessary.
 			exit 1; \
 		fi; \
 	fi
+
+.PHONY: external-secrets-crd
+external-secrets-crd: ## Download the External Secrets SecretStore CRD locally if necessary.
+	@mkdir -p $(EXTERNAL_SECRETS_CRD_DIR)
+	@mkdir -p $(EXTERNAL_SECRETS_CRD_ENVTEST_DIR)
+	@if [ -f "$(EXTERNAL_SECRETS_CRD_FILE)" ]; then \
+		echo "External Secrets CRD already present; skipping download."; \
+	else \
+		curl -fsSL https://raw.githubusercontent.com/external-secrets/external-secrets/$(EXTERNAL_SECRETS_VERSION)/$(EXTERNAL_SECRETS_CRD_REL_PATH) -o "$(EXTERNAL_SECRETS_CRD_FILE)"; \
+	fi
+	@cp "$(EXTERNAL_SECRETS_CRD_FILE)" "$(EXTERNAL_SECRETS_CRD_ENVTEST_FILE)"

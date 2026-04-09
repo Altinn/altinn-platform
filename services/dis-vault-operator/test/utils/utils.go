@@ -49,7 +49,7 @@ func kindContextName() string {
 
 // Kubectl returns a kubectl command pinned to the Kind context used by e2e tests.
 func Kubectl(args ...string) *exec.Cmd {
-	cmdArgs := append([]string{"--context", kindContextName()}, args...)
+	cmdArgs := append([]string{"--context", kindContextName(), "--request-timeout=15s"}, args...)
 	return exec.Command("kubectl", cmdArgs...)
 }
 

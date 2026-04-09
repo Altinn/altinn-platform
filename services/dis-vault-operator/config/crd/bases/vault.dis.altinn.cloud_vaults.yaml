@@ -46,6 +46,11 @@ spec:
           spec:
             description: Spec defines the desired state of Vault.
             properties:
+              externalSecrets:
+                default: false
+                description: ExternalSecrets enables operator-managed namespaced SecretStore
+                  integration.
+                type: boolean
               identityRef:
                 description: IdentityRef points to the owning ApplicationIdentity
                   in the same namespace.
@@ -158,6 +163,10 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              externalSecretStoreName:
+                description: ExternalSecretStoreName is the name of the managed SecretStore
+                  when enabled.
+                type: string
               observedGeneration:
                 description: ObservedGeneration is the latest generation reconciled
                   by the controller.

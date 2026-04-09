@@ -77,6 +77,11 @@ var _ = BeforeSuite(func() {
 	_, err = utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to install ApplicationIdentity CRD on Kind")
 
+	By("installing SecretStore CRD")
+	cmd = exec.Command("make", "install-external-secrets-crd-kind")
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to install SecretStore CRD on Kind")
+
 	By("creating manager namespace")
 	cmd = utils.Kubectl("create", "ns", namespace)
 	_, err = utils.Run(cmd)
