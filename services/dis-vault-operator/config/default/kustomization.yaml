@@ -37,6 +37,9 @@ resources:
 patches:
 # [METRICS] The following patch will enable the metrics endpoint using HTTPS and the port :8443.
 # More info: https://book.kubebuilder.io/reference/metrics
+- path: deploy_vars_patch.yaml
+  target:
+    kind: Deployment
 - path: manager_metrics_patch.yaml
   target:
     kind: Deployment
