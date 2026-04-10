@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.1.0...dis-vault-v1.1.1) (2026-04-10)
+
+
+### Bug Fixes
+
+* **dis-vault-operator:** inject runtime env vars ([#3315](https://github.com/Altinn/altinn-platform/issues/3315)) ([32a7a71](https://github.com/Altinn/altinn-platform/commit/32a7a7169a862163c8db1c2c8a25fa0b5fa3adc6))
+
 ## [1.1.0](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.0.0...dis-vault-v1.1.0) (2026-04-09)
 
 
