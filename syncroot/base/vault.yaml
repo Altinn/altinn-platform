@@ -1,0 +1,15 @@
+apiVersion: vault.dis.altinn.cloud/v1alpha1
+kind: Vault
+metadata:
+  name: dis-sample-vault
+  namespace: dis-sample
+spec:
+  identityRef:
+    name: dis-sample-app
+  sku: standard
+  publicNetworkAccess: Enabled
+  softDeleteRetentionDays: 90
+  purgeProtectionEnabled: true
+  tags:
+    app: dis-sample
+    env: at22

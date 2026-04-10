@@ -1,0 +1,64 @@
+name: Publish DIS Syncroot Artifact
+
+env:
+  SYNCROOT_ARTIFACT_NAME: dis/syncroot
+  SYNCROOT_ENVIRONMENT: at22
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/dis-syncroot-release.yml
+      - syncroot/**
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-dis-syncroot-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish-syncroot:
+    name: Publish syncroot artifact
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Validate syncroot structure
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f "./syncroot/${SYNCROOT_ENVIRONMENT}/kustomization.yaml"
+
+          build_kustomize() {
+            local path="$1"
+            if command -v kustomize >/dev/null 2>&1; then
+              kustomize build "$path" >/dev/null
+              return
+            fi
+            if command -v kubectl >/dev/null 2>&1; then
+              kubectl kustomize "$path" >/dev/null
+              return
+            fi
+            echo "Error: Neither 'kustomize' nor 'kubectl' found in runner PATH."
+            exit 1
+          }
+
+          build_kustomize "./syncroot/${SYNCROOT_ENVIRONMENT}"
+
+      - name: Build and push syncroot artifact
+        uses: ./actions/flux/build-push-image
+        with:
+          image_name: ${{ env.SYNCROOT_ARTIFACT_NAME }}
+          tag: ${{ env.SYNCROOT_ENVIRONMENT }}
+          workdir: ./syncroot
+          azure_subscription_id: ${{ secrets.DIS_SYNCROOT_AZURE_SUBSCRIPTION_ID }}
+          azure_app_id: ${{ secrets.DIS_SYNCROOT_AZURE_CLIENT_ID }}
+          azure_tenant_id: ${{ secrets.DIS_SYNCROOT_AZURE_TENANT_ID }}

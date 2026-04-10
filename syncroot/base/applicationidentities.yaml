@@ -1,0 +1,13 @@
+apiVersion: application.dis.altinn.cloud/v1alpha1
+kind: ApplicationIdentity
+metadata:
+  name: dis-sample-admin
+  namespace: dis-sample
+spec: {}
+---
+apiVersion: application.dis.altinn.cloud/v1alpha1
+kind: ApplicationIdentity
+metadata:
+  name: dis-sample-app
+  namespace: dis-sample
+spec: {}
