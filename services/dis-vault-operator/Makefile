@@ -8,7 +8,6 @@ KIND_IMAGE_ARCHIVE := bin/dis-vault-operator_image.tar
 CACHE_DIR ?= $(CURDIR)/.cache
 GOCACHE ?= $(CACHE_DIR)/go-build
 WORKSPACE_ROOT ?= $(abspath $(CURDIR)/../..)
-WORKSPACE_GO_VERSION ?= $(shell awk '/^go /{print $$2; exit}' "$(WORKSPACE_ROOT)/services/dis-identity-operator/go.mod" 2>/dev/null)
 CERT_MANAGER_INSTALL_SKIP ?= true
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
@@ -57,9 +56,6 @@ workspace: ## Create local go.work for dev across dis-vault-operator and dis-ide
 		go work use ./services/dis-vault-operator ./services/dis-identity-operator; \
 	else \
 		go work init ./services/dis-vault-operator ./services/dis-identity-operator; \
-	fi
-	@if [ -n "$(WORKSPACE_GO_VERSION)" ]; then \
-		cd "$(WORKSPACE_ROOT)" && go work edit -go=$(WORKSPACE_GO_VERSION); \
 	fi
 	@echo "Local workspace at $(WORKSPACE_ROOT)/go.work (ignored by git)."
 
@@ -408,7 +404,7 @@ ln -sf "$$(realpath "$(1)-$(3)")" "$(1)"
 endef
 
 define gomodver
-$(shell go list -m -f '{{if .Replace}}{{.Replace.Version}}{{else}}{{.Version}}{{end}}' $(1) 2>/dev/null)
+$(shell GOWORK=off go list -m -f '{{if .Replace}}{{.Replace.Version}}{{else}}{{.Version}}{{end}}' $(1) 2>/dev/null)
 endef
 
 ASO_CRD_VERSION ?= v2.17.0
@@ -442,10 +438,10 @@ dis-identity-crd: ## Download the ApplicationIdentity CRD locally if necessary.
 		cp "$(DIS_IDENTITY_CRD_LOCAL_FILE)" "$(DIS_IDENTITY_CRD_FILE)"; \
 		echo "ApplicationIdentity CRD copied from local workspace: $(DIS_IDENTITY_CRD_LOCAL_FILE)"; \
 	else \
-		module_dir="$$(go list -m -f '{{.Dir}}' $(DIS_IDENTITY_MODULE) 2>/dev/null || true)"; \
+		module_dir="$$(GOWORK=off go list -m -f '{{.Dir}}' $(DIS_IDENTITY_MODULE) 2>/dev/null || true)"; \
 		if [ -z "$$module_dir" ] || [ ! -f "$$module_dir/$(DIS_IDENTITY_CRD_REL_PATH)" ]; then \
-			go mod download $(DIS_IDENTITY_MODULE) >/dev/null; \
-			module_dir="$$(go list -m -f '{{.Dir}}' $(DIS_IDENTITY_MODULE) 2>/dev/null || true)"; \
+			GOWORK=off go mod download $(DIS_IDENTITY_MODULE) >/dev/null; \
+			module_dir="$$(GOWORK=off go list -m -f '{{.Dir}}' $(DIS_IDENTITY_MODULE) 2>/dev/null || true)"; \
 		fi; \
 		if [ -n "$$module_dir" ] && [ -f "$$module_dir/$(DIS_IDENTITY_CRD_REL_PATH)" ]; then \
 			cp "$$module_dir/$(DIS_IDENTITY_CRD_REL_PATH)" "$(DIS_IDENTITY_CRD_FILE)"; \
