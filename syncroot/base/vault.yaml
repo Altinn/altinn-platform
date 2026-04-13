@@ -12,4 +12,3 @@ spec:
   purgeProtectionEnabled: true
   tags:
     app: dis-sample
-    env: at22
