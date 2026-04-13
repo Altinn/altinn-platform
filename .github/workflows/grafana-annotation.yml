@@ -48,11 +48,3 @@ jobs:
               ],
               \"time\": ${timestamp}
             }"
-
-      - name: Send Trace to Azure Monitor
-        uses: altinn/altinn-platform/actions/send-ci-cd-trace@cc4b775eb4d7015674bfcaac762e40f270afab87 # v1.0.1
-        with:
-            connection_string: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
-            app: "${{ github.event.inputs.app }}"
-            team: "${{ github.event.inputs.team }}"
-            repo_token: ${{ secrets.GITHUB_TOKEN }}
