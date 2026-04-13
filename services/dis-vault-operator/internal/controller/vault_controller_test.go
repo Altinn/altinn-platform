@@ -428,6 +428,80 @@ var _ = Describe("Vault controller", func() {
 		}, 3*time.Second, 500*time.Millisecond).Should(Equal(1), "expected no duplicate owner RoleAssignments")
 	})
 
+	It("clears owner role assignment status when Vault identityRef changes to an unready identity", func() {
+		const (
+			identityReady   = "identity-owner-ready"
+			identityPending = "identity-owner-pending"
+			vaultName       = "my-app-vault-identity-pending"
+		)
+
+		createIdentity(testCtx, identityReady, true)
+		createIdentity(testCtx, identityPending, false)
+		Expect(k8sClient.Create(testCtx, newVault(vaultName, identityReady))).To(Succeed())
+
+		var keyVaultName string
+		var roleAssignmentName string
+		Eventually(func(g Gomega) {
+			var keyVaults keyvaultv1.VaultList
+			g.Expect(k8sClient.List(testCtx, &keyVaults, client.InNamespace(ns))).To(Succeed())
+			g.Expect(keyVaults.Items).To(HaveLen(1))
+			keyVaultName = keyVaults.Items[0].Name
+
+			var roleAssignments authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(testCtx, &roleAssignments, client.InNamespace(ns))).To(Succeed())
+			g.Expect(roleAssignments.Items).To(HaveLen(1))
+			roleAssignmentName = roleAssignments.Items[0].Name
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		resourceID := "/subscriptions/sub-123/resourceGroups/rg-dis-dev/providers/Microsoft.KeyVault/vaults/" + vaultName
+		vaultURI := "https://" + vaultName + ".vault.azure.net"
+		roleAssignmentID := resourceID + "/providers/Microsoft.Authorization/roleAssignments/role-identity-ready"
+		setKeyVaultReadyStatus(testCtx, keyVaultName, resourceID, vaultURI)
+		setRoleAssignmentReadyStatus(testCtx, roleAssignmentName, roleAssignmentID)
+
+		Eventually(func(g Gomega) {
+			var current vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &current)).To(Succeed())
+			g.Expect(current.Status.OwnerPrincipalID).To(Equal(identityReady + "-principal"))
+			g.Expect(current.Status.OwnerRoleAssignmentID).To(Equal(roleAssignmentID))
+
+			roleCondition := meta.FindStatusCondition(current.Status.Conditions, string(vaultv1alpha1.ConditionRoleAssignmentReady))
+			g.Expect(roleCondition).NotTo(BeNil())
+			g.Expect(roleCondition.Status).To(Equal(metav1.ConditionTrue))
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		Eventually(func(g Gomega) bool {
+			var current vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &current)).To(Succeed())
+
+			current.Spec.IdentityRef.Name = identityPending
+			if err := k8sClient.Update(testCtx, &current); err != nil {
+				if apierrors.IsConflict(err) {
+					return false
+				}
+				g.Expect(err).NotTo(HaveOccurred())
+			}
+			return true
+		}).WithTimeout(10 * time.Second).WithPolling(300 * time.Millisecond).Should(BeTrue())
+
+		Eventually(func(g Gomega) {
+			var current vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &current)).To(Succeed())
+
+			identityCondition := meta.FindStatusCondition(current.Status.Conditions, string(vaultv1alpha1.ConditionIdentityReady))
+			g.Expect(identityCondition).NotTo(BeNil())
+			g.Expect(identityCondition.Status).To(Equal(metav1.ConditionFalse))
+
+			roleCondition := meta.FindStatusCondition(current.Status.Conditions, string(vaultv1alpha1.ConditionRoleAssignmentReady))
+			g.Expect(roleCondition).NotTo(BeNil())
+			g.Expect(roleCondition.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(roleCondition.Reason).To(Equal("IdentityNotReady"))
+
+			g.Expect(current.Status.OwnerPrincipalID).To(BeEmpty())
+			g.Expect(current.Status.OwnerRoleAssignmentID).To(BeEmpty())
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+	})
+
 	It("marks group role assignment ready as NotConfigured when none is specified", func() {
 		const (
 			identityName = "identity-no-groups"

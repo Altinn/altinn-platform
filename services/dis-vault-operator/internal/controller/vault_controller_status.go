@@ -54,13 +54,7 @@ func (r *VaultReconciler) updateStatus(
 		"VaultNotReady",
 		"waiting for ASO Key Vault readiness",
 	))
-	roleCondition := applyCondition(asoToStatusCondition(
-		vaultObj.Generation,
-		vaultv1alpha1.ConditionRoleAssignmentReady,
-		roleAssignmentReady,
-		"RoleAssignmentNotReady",
-		"waiting for ASO RoleAssignment readiness",
-	))
+	roleCondition := applyCondition(buildOwnerRoleAssignmentCondition(vaultObj, identityPending, roleAssignmentReady))
 	groupRoleAssignmentCondition = applyCondition(groupRoleAssignmentCondition)
 	networkCondition := applyCondition(buildNetworkPolicyCondition(vaultObj.Generation, desiredKeyVault, r.Config))
 	secretStoreCondition := applyCondition(secretStore.Condition)
@@ -81,6 +75,9 @@ func (r *VaultReconciler) updateStatus(
 	setString(&vaultObj.Status.OwnerPrincipalID, principalID)
 	setString(&vaultObj.Status.ResourceID, resourceIDFromStatus(keyVault))
 	setString(&vaultObj.Status.VaultURI, vaultURIFromStatus(keyVault))
+	if identityPending {
+		roleAssignment = nil
+	}
 	setString(&vaultObj.Status.OwnerRoleAssignmentID, roleAssignmentIDFromStatus(roleAssignment))
 	setString(&vaultObj.Status.ExternalSecretStoreName, secretStore.Name)
 	setInt64(&vaultObj.Status.ObservedGeneration, vaultObj.Generation)
@@ -108,5 +105,29 @@ func buildIdentityCondition(vaultObj *vaultv1alpha1.Vault, identityPending bool)
 		metav1.ConditionTrue,
 		"IdentityReady",
 		fmt.Sprintf("ApplicationIdentity %q is ready", vaultObj.Spec.IdentityRef.Name),
+	)
+}
+
+func buildOwnerRoleAssignmentCondition(
+	vaultObj *vaultv1alpha1.Vault,
+	identityPending bool,
+	roleAssignmentReady vaultpkg.ASOReadyCondition,
+) metav1.Condition {
+	if identityPending {
+		return vaultpkg.NewCondition(
+			vaultv1alpha1.ConditionRoleAssignmentReady,
+			vaultObj.Generation,
+			metav1.ConditionFalse,
+			"IdentityNotReady",
+			fmt.Sprintf("waiting for ApplicationIdentity %q before reconciling owner role assignment", vaultObj.Spec.IdentityRef.Name),
+		)
+	}
+
+	return asoToStatusCondition(
+		vaultObj.Generation,
+		vaultv1alpha1.ConditionRoleAssignmentReady,
+		roleAssignmentReady,
+		"RoleAssignmentNotReady",
+		"waiting for ASO RoleAssignment readiness",
 	)
 }
