@@ -9,7 +9,7 @@ resource "helm_release" "grafana_k8s_monitoring" {
   create_namespace = false
   repository       = "https://grafana.github.io/helm-charts"
   chart            = "k8s-monitoring"
-  version          = "3.8.4"
+  version          = "3.8.6"
 
   values = [
     "${templatefile(
