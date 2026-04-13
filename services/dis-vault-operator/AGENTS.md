@@ -69,6 +69,7 @@ If you touch `api/**`:
 Before opening a PR, ensure:
 - Never run git push by yourself
 - Always suggest to create a new branch in case we are working on main by mistake
+- Do not use `git add -f` / `git add --force` when preparing PRs. If a file is ignored, treat it as local-only unless the user explicitly asks to stage it.
 
 ## PR description file
 - When working on a branch and making changes, always create or update `pr_description.md` in the repository root.
@@ -86,5 +87,7 @@ Before opening a PR, ensure:
 ## Code organization
 - `internal/controller` should only contain high-level controller duties and orchestration.
 - Domain logic should live in dedicated packages (for example `internal/pkg`, `internal/vault`).
+- Role-assignment reconciliation/helper logic in `internal/controller` should live in `vault_controller_role.go`.
+- ESO SecretStore reconciliation/helper logic in `internal/controller` should live in `vault_controller_secret_store.go`.
 - Tests for `internal/controller` code should live in `vault_controller_test.go` (Ginkgo) for high-level behavior coverage.
 - All remaining tests (packages that are not controller packages) should follow standard Go unit test conventions (`x.go` + `x_test.go`).

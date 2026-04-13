@@ -52,6 +52,12 @@ type VaultSpec struct {
 	// IdentityRef points to the owning ApplicationIdentity in the same namespace.
 	IdentityRef ApplicationIdentityRef `json:"identityRef"`
 
+	// GroupObjectID grants an optional Entra group access to the Key Vault.
+	// Lowercase is required to keep the identifier canonical in GitOps.
+	// +optional
+	// +kubebuilder:validation:Pattern="^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$"
+	GroupObjectID string `json:"groupObjectId,omitempty"`
+
 	// ExternalSecrets enables operator-managed namespaced SecretStore integration.
 	// +optional
 	// +kubebuilder:default=false
@@ -129,6 +135,7 @@ const (
 	ConditionIdentityReady        ConditionType = "IdentityReady"
 	ConditionVaultReady           ConditionType = "VaultReady"
 	ConditionRoleAssignmentReady  ConditionType = "RoleAssignmentReady"
+	ConditionGroupRoleAssignment  ConditionType = "GroupRoleAssignmentReady"
 	ConditionNetworkPolicyReady   ConditionType = "NetworkPolicyReady"
 	ConditionExternalSecretsReady ConditionType = "ExternalSecretsReady"
 )

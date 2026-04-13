@@ -48,14 +48,20 @@ func NewCondition(
 
 func AggregateReadyCondition(
 	generation int64,
-	identityReady, vaultReady, roleAssignmentReady, networkPolicyReady, externalSecretsReady metav1.Condition,
+	identityReady,
+	vaultReady,
+	ownerRoleAssignmentReady,
+	networkPolicyReady,
+	externalSecretsReady metav1.Condition,
+	extraRequired ...metav1.Condition,
 ) metav1.Condition {
 	required := []metav1.Condition{
 		identityReady,
 		vaultReady,
-		roleAssignmentReady,
+		ownerRoleAssignmentReady,
 		networkPolicyReady,
 	}
+	required = append(required, extraRequired...)
 	if externalSecretsReady.Status != metav1.ConditionFalse || externalSecretsReady.Reason != "Disabled" {
 		required = append(required, externalSecretsReady)
 	}
