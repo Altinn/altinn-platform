@@ -590,19 +590,26 @@ var _ = Describe("Vault controller", func() {
 			g.Expect(k8sClient.List(testCtx, &roleAssignments, client.InNamespace(ns))).To(Succeed())
 			g.Expect(roleAssignments.Items).To(HaveLen(2))
 
-			foundGroup := false
+			groupMatches := 0
+			ownerMatches := 0
 			for i := range roleAssignments.Items {
 				assignment := roleAssignments.Items[i]
-				if assignment.Spec.PrincipalId == nil || *assignment.Spec.PrincipalId != groupObjectID {
+				if assignment.Spec.PrincipalId == nil {
 					continue
 				}
-				foundGroup = true
-				g.Expect(assignment.Spec.PrincipalType).NotTo(BeNil())
-				g.Expect(*assignment.Spec.PrincipalType).To(Equal(authorizationv1.RoleAssignmentProperties_PrincipalType_Group))
-				g.Expect(assignment.Spec.RoleDefinitionReference).NotTo(BeNil())
-				g.Expect(assignment.Spec.RoleDefinitionReference.WellKnownName).To(Equal(expectedWellKnownRole))
+				if *assignment.Spec.PrincipalId == groupObjectID {
+					groupMatches++
+					g.Expect(assignment.Spec.PrincipalType).NotTo(BeNil())
+					g.Expect(*assignment.Spec.PrincipalType).To(Equal(authorizationv1.RoleAssignmentProperties_PrincipalType_Group))
+					g.Expect(assignment.Spec.RoleDefinitionReference).NotTo(BeNil())
+					g.Expect(assignment.Spec.RoleDefinitionReference.WellKnownName).To(Equal(expectedWellKnownRole))
+				}
+				if *assignment.Spec.PrincipalId == identityName+"-principal" {
+					ownerMatches++
+				}
 			}
-			g.Expect(foundGroup).To(BeTrue(), "expected one group role assignment to be reconciled")
+			g.Expect(groupMatches).To(Equal(1), "expected exactly one group role assignment")
+			g.Expect(ownerMatches).To(Equal(1), "expected exactly one owner role assignment")
 		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
 
 		resourceID := "/subscriptions/sub-123/resourceGroups/rg-dis-dev/providers/Microsoft.KeyVault/vaults/" + vaultName
