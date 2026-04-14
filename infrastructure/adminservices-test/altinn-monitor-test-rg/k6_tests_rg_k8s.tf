@@ -90,6 +90,7 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
   }
 
   automatic_upgrade_channel = "stable"
+
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "spot" {
@@ -140,6 +141,12 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot8c28g" {
     "kubernetes.azure.com/scalesetpriority=spot:NoSchedule", # Automatically added by Azure
   ]
   temporary_name_for_rotation = "tmpd8c28g"
+
+  lifecycle {
+    ignore_changes = [
+      node_count
+    ]
+  }
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "spot2c7g" {
@@ -161,6 +168,12 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot2c7g" {
     "kubernetes.azure.com/scalesetpriority=spot:NoSchedule", # Automatically added by Azure
   ]
   temporary_name_for_rotation = "tmpd2c7g"
+
+  lifecycle {
+    ignore_changes = [
+      node_count
+    ]
+  }
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "prometheus" {
