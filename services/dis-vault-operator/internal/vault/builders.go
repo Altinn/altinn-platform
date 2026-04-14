@@ -19,6 +19,13 @@ import (
 
 const defaultManagedResourceBaseName = "vault"
 
+const (
+	roleAssignmentLabelName    = "vault.dis.altinn.cloud/name"
+	roleAssignmentLabelKind    = "vault.dis.altinn.cloud/assignment-kind"
+	roleAssignmentKindGroup    = "group"
+	keyVaultSecretsOfficerRole = "Key Vault Secrets Officer"
+)
+
 // BuildASOKeyVaultResource builds the desired ASO Key Vault resource.
 func BuildASOKeyVaultResource(v *vaultv1alpha1.Vault, cfg config.OperatorConfig, azureName string) (*keyvaultv1.Vault, error) {
 	if v == nil {
@@ -97,7 +104,7 @@ func BuildASOKeyVaultResource(v *vaultv1alpha1.Vault, cfg config.OperatorConfig,
 			Name:      keyVaultK8sName,
 			Namespace: v.Namespace,
 			Labels: map[string]string{
-				"vault.dis.altinn.cloud/name": v.Name,
+				roleAssignmentLabelName: v.Name,
 			},
 		},
 		Spec: keyvaultv1.Vault_Spec{
@@ -123,14 +130,67 @@ func BuildOwnerRoleAssignmentResource(v *vaultv1alpha1.Vault, keyVault *keyvault
 		return nil, fmt.Errorf("principalID must not be empty")
 	}
 
-	principalType := authorizationv1.RoleAssignmentProperties_PrincipalType_ServicePrincipal
-	roleDef := "Key Vault Secrets Officer"
-	roleAssignmentName := BuildOwnerRoleAssignmentName(v.Name)
+	return buildRoleAssignmentResource(
+		v,
+		keyVault,
+		BuildOwnerRoleAssignmentName(v.Name),
+		principalID,
+		authorizationv1.RoleAssignmentProperties_PrincipalType_ServicePrincipal,
+		map[string]string{
+			roleAssignmentLabelName: v.Name,
+		},
+	)
+}
+
+func BuildOwnerRoleAssignmentName(vaultName string) string {
+	return deterministicKubernetesName(vaultName, "owner-ra")
+}
+
+// BuildGroupRoleAssignmentResource builds the desired group RoleAssignment resource.
+func BuildGroupRoleAssignmentResource(
+	v *vaultv1alpha1.Vault,
+	keyVault *keyvaultv1.Vault,
+	groupObjectID string,
+) (*authorizationv1.RoleAssignment, error) {
+	if v == nil {
+		return nil, fmt.Errorf("vault must not be nil")
+	}
+
+	groupObjectID = strings.TrimSpace(groupObjectID)
+	if groupObjectID == "" {
+		return nil, fmt.Errorf("groupObjectId must not be empty")
+	}
+
+	return buildRoleAssignmentResource(
+		v,
+		keyVault,
+		BuildGroupRoleAssignmentName(v.Name),
+		groupObjectID,
+		authorizationv1.RoleAssignmentProperties_PrincipalType_Group,
+		map[string]string{
+			roleAssignmentLabelName: v.Name,
+			roleAssignmentLabelKind: roleAssignmentKindGroup,
+		},
+	)
+}
+
+func BuildGroupRoleAssignmentName(vaultName string) string {
+	return deterministicKubernetesName(vaultName, "group-ra")
+}
+
+func buildRoleAssignmentResource(
+	v *vaultv1alpha1.Vault,
+	keyVault *keyvaultv1.Vault,
+	resourceName string,
+	principalID string,
+	principalType authorizationv1.RoleAssignmentProperties_PrincipalType,
+	labels map[string]string,
+) (*authorizationv1.RoleAssignment, error) {
 	ownerName := deterministicKubernetesName(v.Name, "akv")
 	if keyVault != nil {
 		ownerName = keyVault.Name
 	}
-	azureName := deterministicRoleAssignmentAzureName(v.Namespace, ownerName, principalID, roleDef)
+	azureName := deterministicRoleAssignmentAzureName(v.Namespace, ownerName, principalID, keyVaultSecretsOfficerRole)
 
 	owner := genruntime.ArbitraryOwnerReference{
 		Group: keyvaultv1.GroupVersion.Group,
@@ -138,13 +198,11 @@ func BuildOwnerRoleAssignmentResource(v *vaultv1alpha1.Vault, keyVault *keyvault
 		Name:  ownerName,
 	}
 
-	roleAssignment := &authorizationv1.RoleAssignment{
+	return &authorizationv1.RoleAssignment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      roleAssignmentName,
+			Name:      resourceName,
 			Namespace: v.Namespace,
-			Labels: map[string]string{
-				"vault.dis.altinn.cloud/name": v.Name,
-			},
+			Labels:    labels,
 		},
 		Spec: authorizationv1.RoleAssignment_Spec{
 			AzureName:     azureName,
@@ -152,16 +210,10 @@ func BuildOwnerRoleAssignmentResource(v *vaultv1alpha1.Vault, keyVault *keyvault
 			PrincipalId:   &principalID,
 			PrincipalType: &principalType,
 			RoleDefinitionReference: &genruntime.WellKnownResourceReference{
-				WellKnownName: roleDef,
+				WellKnownName: keyVaultSecretsOfficerRole,
 			},
 		},
-	}
-
-	return roleAssignment, nil
-}
-
-func BuildOwnerRoleAssignmentName(vaultName string) string {
-	return deterministicKubernetesName(vaultName, "owner-ra")
+	}, nil
 }
 
 func deterministicKubernetesName(base, suffix string) string {

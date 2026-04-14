@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	testVaultName    = "my-app-vault"
-	testNamespace    = "default"
-	testIdentityName = "my-app-identity"
+	testVaultName     = "my-app-vault"
+	testNamespace     = "default"
+	testIdentityName  = "my-app-identity"
+	testGroupObjectID = "11111111-1111-1111-1111-111111111111"
 )
 
 func TestBuildASOKeyVaultResource(t *testing.T) {
@@ -127,8 +128,8 @@ func TestBuildOwnerRoleAssignmentResource(t *testing.T) {
 		t.Fatalf("expected PrincipalType=ServicePrincipal")
 	}
 	if roleAssignment.Spec.RoleDefinitionReference == nil ||
-		roleAssignment.Spec.RoleDefinitionReference.WellKnownName != "Key Vault Secrets Officer" {
-		t.Fatalf("expected RoleDefinitionReference.WellKnownName=Key Vault Secrets Officer")
+		roleAssignment.Spec.RoleDefinitionReference.WellKnownName != keyVaultSecretsOfficerRole {
+		t.Fatalf("expected RoleDefinitionReference.WellKnownName=%s", keyVaultSecretsOfficerRole)
 	}
 	if _, err := uuid.Parse(roleAssignment.Spec.AzureName); err != nil {
 		t.Fatalf("expected AzureName to be a GUID, got %q: %v", roleAssignment.Spec.AzureName, err)
@@ -140,5 +141,86 @@ func TestBuildOwnerRoleAssignmentResource(t *testing.T) {
 	}
 	if roleAssignment.Spec.AzureName != roleAssignment2.Spec.AzureName {
 		t.Fatalf("expected deterministic AzureName across builds")
+	}
+}
+
+func TestBuildGroupRoleAssignmentResource(t *testing.T) {
+	t.Parallel()
+
+	v := &vaultv1alpha1.Vault{}
+	v.Name = testVaultName
+	v.Namespace = testNamespace
+
+	roleAssignment, err := BuildGroupRoleAssignmentResource(v, nil, testGroupObjectID)
+	if err != nil {
+		t.Fatalf("expected group role assignment builder to succeed, got error: %v", err)
+	}
+	if roleAssignment == nil {
+		t.Fatalf("expected group role assignment builder to return resource")
+	}
+
+	if roleAssignment.Spec.PrincipalType == nil ||
+		*roleAssignment.Spec.PrincipalType != authorizationv1.RoleAssignmentProperties_PrincipalType_Group {
+		t.Fatalf("expected PrincipalType=Group")
+	}
+	if roleAssignment.Spec.RoleDefinitionReference == nil ||
+		roleAssignment.Spec.RoleDefinitionReference.WellKnownName != keyVaultSecretsOfficerRole {
+		t.Fatalf("expected RoleDefinitionReference.WellKnownName=%s", keyVaultSecretsOfficerRole)
+	}
+	if _, err := uuid.Parse(roleAssignment.Spec.AzureName); err != nil {
+		t.Fatalf("expected AzureName to be a GUID, got %q: %v", roleAssignment.Spec.AzureName, err)
+	}
+	if roleAssignment.Name != BuildGroupRoleAssignmentName(testVaultName) {
+		t.Fatalf("expected deterministic group role assignment name")
+	}
+	if roleAssignment.Labels["vault.dis.altinn.cloud/name"] != testVaultName {
+		t.Fatalf("expected vault name label to be set")
+	}
+	if roleAssignment.Labels["vault.dis.altinn.cloud/assignment-kind"] != "group" {
+		t.Fatalf("expected group assignment label to be set")
+	}
+
+	roleAssignment2, err := BuildGroupRoleAssignmentResource(v, nil, testGroupObjectID)
+	if err != nil {
+		t.Fatalf("expected second group build to succeed, got error: %v", err)
+	}
+	if roleAssignment.Spec.AzureName != roleAssignment2.Spec.AzureName {
+		t.Fatalf("expected deterministic AzureName across builds")
+	}
+}
+
+func TestBuildGroupRoleAssignmentResourceIsDeterministicForDifferentGroups(t *testing.T) {
+	t.Parallel()
+
+	v := &vaultv1alpha1.Vault{}
+	v.Name = testVaultName
+	v.Namespace = testNamespace
+
+	first, err := BuildGroupRoleAssignmentResource(v, nil, testGroupObjectID)
+	if err != nil {
+		t.Fatalf("expected first build to succeed, got error: %v", err)
+	}
+	second, err := BuildGroupRoleAssignmentResource(v, nil, "22222222-2222-2222-2222-222222222222")
+	if err != nil {
+		t.Fatalf("expected second build to succeed, got error: %v", err)
+	}
+
+	if first.Spec.AzureName == second.Spec.AzureName {
+		t.Fatalf("expected different group object IDs to produce different Azure names")
+	}
+}
+
+func TestBuildGroupRoleAssignmentName(t *testing.T) {
+	t.Parallel()
+
+	nameA := BuildGroupRoleAssignmentName(testVaultName)
+	nameB := BuildGroupRoleAssignmentName(testVaultName)
+	nameC := BuildGroupRoleAssignmentName("another-vault")
+
+	if nameA != nameB {
+		t.Fatalf("expected deterministic name generation across calls")
+	}
+	if nameA == nameC {
+		t.Fatalf("expected different vault names to produce different names")
 	}
 }

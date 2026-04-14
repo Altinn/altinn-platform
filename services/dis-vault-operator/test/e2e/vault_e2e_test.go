@@ -20,6 +20,8 @@ var _ = Describe("Vault e2e", Ordered, func() {
 		sampleVaultName                     = "vault-sample"
 		expectedASOVaultName                = "vault-sample-akv"
 		expectedRoleAssignName              = "vault-sample-owner-ra"
+		expectedGroupRoleAssignName         = "vault-sample-group-ra"
+		sampleGroupObjectID                 = "11111111-1111-1111-1111-111111111111"
 		expectedVPNExitNodeSubnetID         = "/subscriptions/fake-subscription/resourceGroups/fake-network-rg/providers/Microsoft.Network/virtualNetworks/fake-vnet/subnets/fake-vpn-exit-subnet"
 		externalSecretsSamplePath           = "config/samples/vault_v1alpha1_external_secrets_vault.yaml"
 		externalSecretsVaultName            = "vault-es-sample"
@@ -153,6 +155,7 @@ var _ = Describe("Vault e2e", Ordered, func() {
 		waitForResourceNotFound("vaults.vault.dis.altinn.cloud", sampleVaultName)
 		waitForResourceNotFound("vaults.keyvault.azure.com", expectedASOVaultName)
 		waitForResourceNotFound("roleassignments.authorization.azure.com", expectedRoleAssignName)
+		waitForResourceNotFound("roleassignments.authorization.azure.com", expectedGroupRoleAssignName)
 		waitForResourceNotFound("vaults.vault.dis.altinn.cloud", externalSecretsVaultName)
 		waitForResourceNotFound("vaults.keyvault.azure.com", expectedExternalSecretsASOVaultName)
 		waitForResourceNotFound("roleassignments.authorization.azure.com", expectedExternalSecretsRoleAssign)
@@ -170,6 +173,7 @@ var _ = Describe("Vault e2e", Ordered, func() {
 		waitForResourceNotFound("vaults.vault.dis.altinn.cloud", sampleVaultName)
 		waitForResourceNotFound("vaults.keyvault.azure.com", expectedASOVaultName)
 		waitForResourceNotFound("roleassignments.authorization.azure.com", expectedRoleAssignName)
+		waitForResourceNotFound("roleassignments.authorization.azure.com", expectedGroupRoleAssignName)
 		waitForResourceNotFound("vaults.vault.dis.altinn.cloud", externalSecretsVaultName)
 		waitForResourceNotFound("vaults.keyvault.azure.com", expectedExternalSecretsASOVaultName)
 		waitForResourceNotFound("roleassignments.authorization.azure.com", expectedExternalSecretsRoleAssign)
@@ -207,16 +211,34 @@ var _ = Describe("Vault e2e", Ordered, func() {
 			return err
 		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).Should(Succeed())
 
+		By("verifying group RoleAssignment was created with the fixed Key Vault Secrets Officer role")
+		Eventually(func() error {
+			checkCmd := utils.Kubectl("get", "roleassignments.authorization.azure.com", expectedGroupRoleAssignName, "-n", sampleNamespace)
+			_, err := utils.Run(checkCmd)
+			return err
+		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).Should(Succeed())
+		waitForJSONPath("roleassignments.authorization.azure.com", expectedGroupRoleAssignName, "{.spec.principalId}", sampleGroupObjectID)
+		waitForJSONPath("roleassignments.authorization.azure.com", expectedGroupRoleAssignName, "{.spec.principalType}", "Group")
+		waitForJSONPath(
+			"roleassignments.authorization.azure.com",
+			expectedGroupRoleAssignName,
+			"{.spec.roleDefinitionReference.wellKnownName}",
+			"Key Vault Secrets Officer",
+		)
+
 		By("patching dependent ASO resources to Ready so parent status can be projected")
 		resourceID := "/subscriptions/fake-subscription/resourceGroups/fake-resource-group/providers/Microsoft.KeyVault/vaults/vault-sample"
 		vaultURI := "https://vault-sample.vault.azure.net"
-		roleAssignmentID := resourceID + "/providers/Microsoft.Authorization/roleAssignments/role-123"
+		roleAssignmentID := resourceID + "/providers/Microsoft.Authorization/roleAssignments/role-owner-123"
+		groupRoleAssignmentID := resourceID + "/providers/Microsoft.Authorization/roleAssignments/role-group-123"
 		patchKeyVaultReadyStatus(expectedASOVaultName, resourceID, vaultURI)
 		patchRoleAssignmentReadyStatus(expectedRoleAssignName, roleAssignmentID)
+		patchRoleAssignmentReadyStatus(expectedGroupRoleAssignName, groupRoleAssignmentID)
 
 		By("verifying Vault status projects dependent readiness and identifiers")
 		waitForJSONPath("vaults.vault.dis.altinn.cloud", sampleVaultName, "{.status.conditions[?(@.type=='VaultReady')].status}", "True")
 		waitForJSONPath("vaults.vault.dis.altinn.cloud", sampleVaultName, "{.status.conditions[?(@.type=='RoleAssignmentReady')].status}", "True")
+		waitForJSONPath("vaults.vault.dis.altinn.cloud", sampleVaultName, "{.status.conditions[?(@.type=='GroupRoleAssignmentReady')].status}", "True")
 		waitForJSONPath("vaults.vault.dis.altinn.cloud", sampleVaultName, "{.status.conditions[?(@.type=='Ready')].status}", "True")
 		waitForJSONPath("vaults.vault.dis.altinn.cloud", sampleVaultName, "{.status.resourceId}", resourceID)
 		waitForJSONPath("vaults.vault.dis.altinn.cloud", sampleVaultName, "{.status.vaultUri}", vaultURI)
@@ -254,6 +276,7 @@ var _ = Describe("Vault e2e", Ordered, func() {
 		By("capturing child resource UIDs before deletion")
 		originalVaultUID := mustGetJSONPath("vaults.keyvault.azure.com", expectedASOVaultName, "{.metadata.uid}")
 		originalRoleAssignUID := mustGetJSONPath("roleassignments.authorization.azure.com", expectedRoleAssignName, "{.metadata.uid}")
+		originalGroupRoleAssignUID := mustGetJSONPath("roleassignments.authorization.azure.com", expectedGroupRoleAssignName, "{.metadata.uid}")
 
 		By("deleting ASO child resources")
 		cmd := utils.Kubectl("delete", "vaults.keyvault.azure.com", expectedASOVaultName, "-n", sampleNamespace)
@@ -264,6 +287,10 @@ var _ = Describe("Vault e2e", Ordered, func() {
 		_, err = utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to delete owner RoleAssignment")
 
+		cmd = utils.Kubectl("delete", "roleassignments.authorization.azure.com", expectedGroupRoleAssignName, "-n", sampleNamespace)
+		_, err = utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed to delete group RoleAssignment")
+
 		By("verifying deleted children are recreated by reconciliation")
 		Eventually(func() (string, error) {
 			return getJSONPath("vaults.keyvault.azure.com", expectedASOVaultName, "{.metadata.uid}")
@@ -272,6 +299,10 @@ var _ = Describe("Vault e2e", Ordered, func() {
 		Eventually(func() (string, error) {
 			return getJSONPath("roleassignments.authorization.azure.com", expectedRoleAssignName, "{.metadata.uid}")
 		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).ShouldNot(Equal(originalRoleAssignUID))
+
+		Eventually(func() (string, error) {
+			return getJSONPath("roleassignments.authorization.azure.com", expectedGroupRoleAssignName, "{.metadata.uid}")
+		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).ShouldNot(Equal(originalGroupRoleAssignUID))
 	})
 
 	It("deletes Vault sample and cascades deletion to ASO child resources", func() {
@@ -288,6 +319,9 @@ var _ = Describe("Vault e2e", Ordered, func() {
 
 		By("verifying owner RoleAssignment was deleted via ownerReference garbage collection")
 		waitForResourceNotFound("roleassignments.authorization.azure.com", expectedRoleAssignName)
+
+		By("verifying group RoleAssignment was deleted via ownerReference garbage collection")
+		waitForResourceNotFound("roleassignments.authorization.azure.com", expectedGroupRoleAssignName)
 	})
 
 	It("manages a SecretStore for the external secrets sample", func() {

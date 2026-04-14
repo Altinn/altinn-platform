@@ -98,6 +98,12 @@ var _ = Describe("Vault controller", func() {
 		}
 	}
 
+	newVaultWithGroupObjectID := func(name, identityRef, groupObjectID string) *vaultv1alpha1.Vault {
+		vaultObj := newVault(name, identityRef)
+		vaultObj.Spec.GroupObjectID = groupObjectID
+		return vaultObj
+	}
+
 	createIdentity := func(ctx context.Context, name string, ready bool) {
 		appIdentity := &identityv1alpha1.ApplicationIdentity{
 			ObjectMeta: metav1.ObjectMeta{
@@ -420,6 +426,340 @@ var _ = Describe("Vault controller", func() {
 			g.Expect(k8sClient.List(testCtx, &list, client.InNamespace(ns))).To(Succeed())
 			return len(list.Items)
 		}, 3*time.Second, 500*time.Millisecond).Should(Equal(1), "expected no duplicate owner RoleAssignments")
+	})
+
+	It("clears owner role assignment status when Vault identityRef changes to an unready identity", func() {
+		const (
+			identityReady   = "identity-owner-ready"
+			identityPending = "identity-owner-pending"
+			vaultName       = "my-app-vault-identity-pending"
+		)
+
+		createIdentity(testCtx, identityReady, true)
+		createIdentity(testCtx, identityPending, false)
+		Expect(k8sClient.Create(testCtx, newVault(vaultName, identityReady))).To(Succeed())
+
+		var keyVaultName string
+		var roleAssignmentName string
+		Eventually(func(g Gomega) {
+			var keyVaults keyvaultv1.VaultList
+			g.Expect(k8sClient.List(testCtx, &keyVaults, client.InNamespace(ns))).To(Succeed())
+			g.Expect(keyVaults.Items).To(HaveLen(1))
+			keyVaultName = keyVaults.Items[0].Name
+
+			var roleAssignments authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(testCtx, &roleAssignments, client.InNamespace(ns))).To(Succeed())
+			g.Expect(roleAssignments.Items).To(HaveLen(1))
+			roleAssignmentName = roleAssignments.Items[0].Name
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		resourceID := "/subscriptions/sub-123/resourceGroups/rg-dis-dev/providers/Microsoft.KeyVault/vaults/" + vaultName
+		vaultURI := "https://" + vaultName + ".vault.azure.net"
+		roleAssignmentID := resourceID + "/providers/Microsoft.Authorization/roleAssignments/role-identity-ready"
+		setKeyVaultReadyStatus(testCtx, keyVaultName, resourceID, vaultURI)
+		setRoleAssignmentReadyStatus(testCtx, roleAssignmentName, roleAssignmentID)
+
+		Eventually(func(g Gomega) {
+			var current vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &current)).To(Succeed())
+			g.Expect(current.Status.OwnerPrincipalID).To(Equal(identityReady + "-principal"))
+			g.Expect(current.Status.OwnerRoleAssignmentID).To(Equal(roleAssignmentID))
+
+			roleCondition := meta.FindStatusCondition(current.Status.Conditions, string(vaultv1alpha1.ConditionRoleAssignmentReady))
+			g.Expect(roleCondition).NotTo(BeNil())
+			g.Expect(roleCondition.Status).To(Equal(metav1.ConditionTrue))
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		Eventually(func(g Gomega) bool {
+			var current vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &current)).To(Succeed())
+
+			current.Spec.IdentityRef.Name = identityPending
+			if err := k8sClient.Update(testCtx, &current); err != nil {
+				if apierrors.IsConflict(err) {
+					return false
+				}
+				g.Expect(err).NotTo(HaveOccurred())
+			}
+			return true
+		}).WithTimeout(10 * time.Second).WithPolling(300 * time.Millisecond).Should(BeTrue())
+
+		Eventually(func(g Gomega) {
+			var current vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &current)).To(Succeed())
+
+			identityCondition := meta.FindStatusCondition(current.Status.Conditions, string(vaultv1alpha1.ConditionIdentityReady))
+			g.Expect(identityCondition).NotTo(BeNil())
+			g.Expect(identityCondition.Status).To(Equal(metav1.ConditionFalse))
+
+			roleCondition := meta.FindStatusCondition(current.Status.Conditions, string(vaultv1alpha1.ConditionRoleAssignmentReady))
+			g.Expect(roleCondition).NotTo(BeNil())
+			g.Expect(roleCondition.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(roleCondition.Reason).To(Equal("IdentityNotReady"))
+
+			g.Expect(current.Status.OwnerPrincipalID).To(BeEmpty())
+			g.Expect(current.Status.OwnerRoleAssignmentID).To(BeEmpty())
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+	})
+
+	It("marks group role assignment ready as NotConfigured when none is specified", func() {
+		const (
+			identityName = "identity-no-groups"
+			vaultName    = "my-app-vault-no-groups"
+		)
+
+		createIdentity(testCtx, identityName, true)
+		Expect(k8sClient.Create(testCtx, newVault(vaultName, identityName))).To(Succeed())
+
+		var keyVaultName string
+		var roleAssignmentName string
+		Eventually(func(g Gomega) {
+			var keyVaults keyvaultv1.VaultList
+			g.Expect(k8sClient.List(testCtx, &keyVaults, client.InNamespace(ns))).To(Succeed())
+			g.Expect(keyVaults.Items).To(HaveLen(1))
+			keyVaultName = keyVaults.Items[0].Name
+
+			var roleAssignments authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(testCtx, &roleAssignments, client.InNamespace(ns))).To(Succeed())
+			g.Expect(roleAssignments.Items).To(HaveLen(1))
+			roleAssignmentName = roleAssignments.Items[0].Name
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		resourceID := "/subscriptions/sub-123/resourceGroups/rg-dis-dev/providers/Microsoft.KeyVault/vaults/" + vaultName
+		vaultURI := "https://" + vaultName + ".vault.azure.net"
+		roleAssignmentID := resourceID + "/providers/Microsoft.Authorization/roleAssignments/role-none"
+		setKeyVaultReadyStatus(testCtx, keyVaultName, resourceID, vaultURI)
+		setRoleAssignmentReadyStatus(testCtx, roleAssignmentName, roleAssignmentID)
+
+		Eventually(func(g Gomega) {
+			var vaultObj vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &vaultObj)).To(Succeed())
+
+			groupCondition := meta.FindStatusCondition(vaultObj.Status.Conditions, string(vaultv1alpha1.ConditionGroupRoleAssignment))
+			g.Expect(groupCondition).NotTo(BeNil())
+			g.Expect(groupCondition.Status).To(Equal(metav1.ConditionTrue))
+			g.Expect(groupCondition.Reason).To(Equal("NotConfigured"))
+
+			ready := meta.FindStatusCondition(vaultObj.Status.Conditions, string(vaultv1alpha1.ConditionReady))
+			g.Expect(ready).NotTo(BeNil())
+			g.Expect(ready.Status).To(Equal(metav1.ConditionTrue))
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+	})
+
+	It("rejects group object IDs that are not canonical lowercase UUIDs", func() {
+		const (
+			identityName = "identity-invalid-group-id"
+			vaultName    = "my-app-vault-invalid-group-id"
+		)
+
+		createIdentity(testCtx, identityName, true)
+		err := k8sClient.Create(testCtx, newVaultWithGroupObjectID(
+			vaultName,
+			identityName,
+			"AAAAAAAA-1111-1111-1111-111111111111",
+		))
+		Expect(err).To(HaveOccurred())
+		Expect(apierrors.IsInvalid(err)).To(BeTrue())
+	})
+
+	It("creates a single group role assignment", func() {
+		const (
+			identityName          = "identity-one-group"
+			vaultName             = "my-app-vault-one-group"
+			groupObjectID         = "11111111-1111-1111-1111-111111111111"
+			expectedWellKnownRole = "Key Vault Secrets Officer"
+		)
+
+		createIdentity(testCtx, identityName, true)
+		Expect(k8sClient.Create(testCtx, newVaultWithGroupObjectID(
+			vaultName,
+			identityName,
+			groupObjectID,
+		))).To(Succeed())
+
+		var keyVaultName string
+		Eventually(func(g Gomega) {
+			var keyVaults keyvaultv1.VaultList
+			g.Expect(k8sClient.List(testCtx, &keyVaults, client.InNamespace(ns))).To(Succeed())
+			g.Expect(keyVaults.Items).To(HaveLen(1))
+			keyVaultName = keyVaults.Items[0].Name
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		Eventually(func(g Gomega) {
+			var roleAssignments authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(testCtx, &roleAssignments, client.InNamespace(ns))).To(Succeed())
+			g.Expect(roleAssignments.Items).To(HaveLen(2))
+
+			groupMatches := 0
+			ownerMatches := 0
+			for i := range roleAssignments.Items {
+				assignment := roleAssignments.Items[i]
+				if assignment.Spec.PrincipalId == nil {
+					continue
+				}
+				if *assignment.Spec.PrincipalId == groupObjectID {
+					groupMatches++
+					g.Expect(assignment.Spec.PrincipalType).NotTo(BeNil())
+					g.Expect(*assignment.Spec.PrincipalType).To(Equal(authorizationv1.RoleAssignmentProperties_PrincipalType_Group))
+					g.Expect(assignment.Spec.RoleDefinitionReference).NotTo(BeNil())
+					g.Expect(assignment.Spec.RoleDefinitionReference.WellKnownName).To(Equal(expectedWellKnownRole))
+				}
+				if *assignment.Spec.PrincipalId == identityName+"-principal" {
+					ownerMatches++
+				}
+			}
+			g.Expect(groupMatches).To(Equal(1), "expected exactly one group role assignment")
+			g.Expect(ownerMatches).To(Equal(1), "expected exactly one owner role assignment")
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		resourceID := "/subscriptions/sub-123/resourceGroups/rg-dis-dev/providers/Microsoft.KeyVault/vaults/" + vaultName
+		vaultURI := "https://" + vaultName + ".vault.azure.net"
+		Eventually(func(g Gomega) {
+			var roleAssignments authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(testCtx, &roleAssignments, client.InNamespace(ns))).To(Succeed())
+			for i := range roleAssignments.Items {
+				assignment := roleAssignments.Items[i]
+				setRoleAssignmentReadyStatus(
+					testCtx,
+					assignment.Name,
+					resourceID+"/providers/Microsoft.Authorization/roleAssignments/"+assignment.Name,
+				)
+			}
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+		setKeyVaultReadyStatus(testCtx, keyVaultName, resourceID, vaultURI)
+
+		Eventually(func(g Gomega) {
+			var vaultObj vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &vaultObj)).To(Succeed())
+
+			groupCondition := meta.FindStatusCondition(vaultObj.Status.Conditions, string(vaultv1alpha1.ConditionGroupRoleAssignment))
+			g.Expect(groupCondition).NotTo(BeNil())
+			g.Expect(groupCondition.Status).To(Equal(metav1.ConditionTrue))
+			g.Expect(groupCondition.Reason).To(Equal("Ready"))
+
+			ready := meta.FindStatusCondition(vaultObj.Status.Conditions, string(vaultv1alpha1.ConditionReady))
+			g.Expect(ready).NotTo(BeNil())
+			g.Expect(ready.Status).To(Equal(metav1.ConditionTrue))
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+	})
+
+	It("updates and removes the configured group role assignment", func() {
+		const (
+			identityName = "identity-group-switch"
+			vaultName    = "my-app-vault-group-switch"
+			groupOneID   = "11111111-1111-1111-1111-111111111111"
+			groupTwoID   = "22222222-2222-2222-2222-222222222222"
+		)
+
+		createIdentity(testCtx, identityName, true)
+		Expect(k8sClient.Create(testCtx, newVaultWithGroupObjectID(
+			vaultName,
+			identityName,
+			groupOneID,
+		))).To(Succeed())
+
+		var keyVaultName string
+		Eventually(func(g Gomega) {
+			var keyVaults keyvaultv1.VaultList
+			g.Expect(k8sClient.List(testCtx, &keyVaults, client.InNamespace(ns))).To(Succeed())
+			g.Expect(keyVaults.Items).To(HaveLen(1))
+			keyVaultName = keyVaults.Items[0].Name
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		resourceID := "/subscriptions/sub-123/resourceGroups/rg-dis-dev/providers/Microsoft.KeyVault/vaults/" + vaultName
+		vaultURI := "https://" + vaultName + ".vault.azure.net"
+		Eventually(func(g Gomega) {
+			var roleAssignments authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(testCtx, &roleAssignments, client.InNamespace(ns))).To(Succeed())
+			g.Expect(roleAssignments.Items).To(HaveLen(2))
+			for i := range roleAssignments.Items {
+				setRoleAssignmentReadyStatus(
+					testCtx,
+					roleAssignments.Items[i].Name,
+					resourceID+"/providers/Microsoft.Authorization/roleAssignments/"+roleAssignments.Items[i].Name,
+				)
+			}
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+		setKeyVaultReadyStatus(testCtx, keyVaultName, resourceID, vaultURI)
+
+		Eventually(func(g Gomega) {
+			var vaultObj vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &vaultObj)).To(Succeed())
+			groupCondition := meta.FindStatusCondition(vaultObj.Status.Conditions, string(vaultv1alpha1.ConditionGroupRoleAssignment))
+			g.Expect(groupCondition).NotTo(BeNil())
+			g.Expect(groupCondition.Status).To(Equal(metav1.ConditionTrue))
+			g.Expect(groupCondition.Reason).To(Equal("Ready"))
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		Eventually(func(g Gomega) bool {
+			var current vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &current)).To(Succeed())
+			current.Spec.GroupObjectID = groupTwoID
+			if err := k8sClient.Update(testCtx, &current); err != nil {
+				if apierrors.IsConflict(err) {
+					return false
+				}
+				g.Expect(err).NotTo(HaveOccurred())
+			}
+			return true
+		}).WithTimeout(10 * time.Second).WithPolling(300 * time.Millisecond).Should(BeTrue())
+
+		Eventually(func(g Gomega) {
+			var roleAssignments authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(testCtx, &roleAssignments, client.InNamespace(ns))).To(Succeed())
+			g.Expect(roleAssignments.Items).To(HaveLen(2))
+
+			principalIDs := make([]string, 0, len(roleAssignments.Items))
+			for i := range roleAssignments.Items {
+				if roleAssignments.Items[i].Spec.PrincipalId != nil {
+					principalIDs = append(principalIDs, *roleAssignments.Items[i].Spec.PrincipalId)
+				}
+			}
+			g.Expect(principalIDs).NotTo(ContainElement(groupOneID))
+			g.Expect(principalIDs).To(ContainElement(groupTwoID))
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		Eventually(func(g Gomega) {
+			var roleAssignments authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(testCtx, &roleAssignments, client.InNamespace(ns))).To(Succeed())
+			for i := range roleAssignments.Items {
+				setRoleAssignmentReadyStatus(
+					testCtx,
+					roleAssignments.Items[i].Name,
+					resourceID+"/providers/Microsoft.Authorization/roleAssignments/"+roleAssignments.Items[i].Name,
+				)
+			}
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		Eventually(func(g Gomega) bool {
+			var current vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &current)).To(Succeed())
+			current.Spec.GroupObjectID = ""
+			if err := k8sClient.Update(testCtx, &current); err != nil {
+				if apierrors.IsConflict(err) {
+					return false
+				}
+				g.Expect(err).NotTo(HaveOccurred())
+			}
+			return true
+		}).WithTimeout(10 * time.Second).WithPolling(300 * time.Millisecond).Should(BeTrue())
+
+		Eventually(func(g Gomega) {
+			var roleAssignments authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(testCtx, &roleAssignments, client.InNamespace(ns))).To(Succeed())
+			g.Expect(roleAssignments.Items).To(HaveLen(1))
+			g.Expect(roleAssignments.Items[0].Spec.PrincipalId).NotTo(BeNil())
+			g.Expect(*roleAssignments.Items[0].Spec.PrincipalId).To(Equal(identityName + "-principal"))
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		Eventually(func(g Gomega) {
+			var vaultObj vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &vaultObj)).To(Succeed())
+			groupCondition := meta.FindStatusCondition(vaultObj.Status.Conditions, string(vaultv1alpha1.ConditionGroupRoleAssignment))
+			g.Expect(groupCondition).NotTo(BeNil())
+			g.Expect(groupCondition.Status).To(Equal(metav1.ConditionTrue))
+			g.Expect(groupCondition.Reason).To(Equal("NotConfigured"))
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
 	})
 
 	It("recreates owned ASO resources when children are deleted", func() {

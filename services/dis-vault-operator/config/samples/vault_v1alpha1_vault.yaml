@@ -8,6 +8,7 @@ metadata:
 spec:
   identityRef:
     name: app-identity-sample
+  groupObjectId: 11111111-1111-1111-1111-111111111111
   sku: standard
   publicNetworkAccess: Enabled
   softDeleteRetentionDays: 90
