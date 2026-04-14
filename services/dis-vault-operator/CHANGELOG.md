@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.1.1...dis-vault-v1.2.0) (2026-04-14)
+
+
+### Features
+
+* **dis-vault:** add group role assignment for owners of the vault ([#3326](https://github.com/Altinn/altinn-platform/issues/3326)) ([b7a8697](https://github.com/Altinn/altinn-platform/commit/b7a86979b2d22e9de954a8aeed592ce969734431))
+
 ## [1.1.1](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.1.0...dis-vault-v1.1.1) (2026-04-10)
 
 
