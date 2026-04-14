@@ -33,18 +33,6 @@ func (r *VaultReconciler) updateStatus(
 		}
 		return condition
 	}
-	setString := func(field *string, value string) {
-		if *field != value {
-			*field = value
-			updated = true
-		}
-	}
-	setInt64 := func(field *int64, value int64) {
-		if *field != value {
-			*field = value
-			updated = true
-		}
-	}
 
 	identityCondition := applyCondition(buildIdentityCondition(vaultObj, identityPending))
 	vaultCondition := applyCondition(asoToStatusCondition(
@@ -68,19 +56,19 @@ func (r *VaultReconciler) updateStatus(
 		groupRoleAssignmentCondition,
 	))
 
-	setString(&vaultObj.Status.AzureName, azureName)
+	updated = setIfChanged(&vaultObj.Status.AzureName, azureName) || updated
 	if identityPending {
 		principalID = ""
 	}
-	setString(&vaultObj.Status.OwnerPrincipalID, principalID)
-	setString(&vaultObj.Status.ResourceID, resourceIDFromStatus(keyVault))
-	setString(&vaultObj.Status.VaultURI, vaultURIFromStatus(keyVault))
+	updated = setIfChanged(&vaultObj.Status.OwnerPrincipalID, principalID) || updated
+	updated = setIfChanged(&vaultObj.Status.ResourceID, resourceIDFromStatus(keyVault)) || updated
+	updated = setIfChanged(&vaultObj.Status.VaultURI, vaultURIFromStatus(keyVault)) || updated
 	if identityPending {
 		roleAssignment = nil
 	}
-	setString(&vaultObj.Status.OwnerRoleAssignmentID, roleAssignmentIDFromStatus(roleAssignment))
-	setString(&vaultObj.Status.ExternalSecretStoreName, secretStore.Name)
-	setInt64(&vaultObj.Status.ObservedGeneration, vaultObj.Generation)
+	updated = setIfChanged(&vaultObj.Status.OwnerRoleAssignmentID, roleAssignmentIDFromStatus(roleAssignment)) || updated
+	updated = setIfChanged(&vaultObj.Status.ExternalSecretStoreName, secretStore.Name) || updated
+	updated = setIfChanged(&vaultObj.Status.ObservedGeneration, vaultObj.Generation) || updated
 
 	if !updated {
 		return nil
@@ -130,4 +118,12 @@ func buildOwnerRoleAssignmentCondition(
 		"RoleAssignmentNotReady",
 		"waiting for ASO RoleAssignment readiness",
 	)
+}
+
+func setIfChanged[T comparable](field *T, value T) bool {
+	if *field == value {
+		return false
+	}
+	*field = value
+	return true
 }
