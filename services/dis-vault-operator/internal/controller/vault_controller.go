@@ -88,11 +88,17 @@ func (r *VaultReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			return ctrl.Result{}, err
 		}
 
-		if err := r.reconcileOwnerRoleAssignment(ctx, &vaultObj, desiredKeyVault, identity.PrincipalID); err != nil {
+		ownerReplacementPending, err := r.reconcileOwnerRoleAssignment(ctx, &vaultObj, desiredKeyVault, identity.PrincipalID)
+		if err != nil {
 			return ctrl.Result{}, err
 		}
-		if err := r.reconcileGroupRoleAssignment(ctx, &vaultObj, desiredKeyVault); err != nil {
+
+		groupReplacementPending, err := r.reconcileGroupRoleAssignment(ctx, &vaultObj, desiredKeyVault)
+		if err != nil {
 			return ctrl.Result{}, err
+		}
+		if ownerReplacementPending || groupReplacementPending {
+			return ctrl.Result{Requeue: true}, nil
 		}
 	}
 

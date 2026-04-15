@@ -72,6 +72,9 @@ var _ = BeforeSuite(func() {
 	_, err = utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to install ASO CRDs on Kind")
 
+	// This suite installs ASO CRDs only. Without ASO controllers and admission webhooks,
+	// it validates our resource wiring and status projection, not ASO write-once enforcement.
+
 	By("installing ApplicationIdentity CRD")
 	cmd = exec.Command("make", "install-dis-identity-crd-kind")
 	_, err = utils.Run(cmd)

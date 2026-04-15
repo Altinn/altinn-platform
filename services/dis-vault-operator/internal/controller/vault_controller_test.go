@@ -351,7 +351,7 @@ var _ = Describe("Vault controller", func() {
 		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
 	})
 
-	It("updates owner RoleAssignment when Vault identityRef changes", func() {
+	It("replaces a ready owner RoleAssignment when Vault identityRef changes", func() {
 		const (
 			identityA = "identity-owner-a"
 			identityB = "identity-owner-b"
@@ -362,21 +362,46 @@ var _ = Describe("Vault controller", func() {
 		createIdentity(testCtx, identityB, true)
 		Expect(k8sClient.Create(testCtx, newVault(vaultName, identityA))).To(Succeed())
 
+		var keyVaultName string
+		var roleAssignmentName string
 		var roleAssignmentUID types.UID
 		var initialRoleAssignmentAzureName string
 		Eventually(func(g Gomega) {
+			var keyVaults keyvaultv1.VaultList
+			g.Expect(k8sClient.List(testCtx, &keyVaults, client.InNamespace(ns))).To(Succeed())
+			g.Expect(keyVaults.Items).To(HaveLen(1))
+			keyVaultName = keyVaults.Items[0].Name
+
 			var list authorizationv1.RoleAssignmentList
 			g.Expect(k8sClient.List(testCtx, &list, client.InNamespace(ns))).To(Succeed())
 			g.Expect(list.Items).To(HaveLen(1))
 
 			roleAssignment := list.Items[0]
+			roleAssignmentName = roleAssignment.Name
 			roleAssignmentUID = roleAssignment.UID
 			initialRoleAssignmentAzureName = roleAssignment.Spec.AzureName
 
+			g.Expect(roleAssignmentName).NotTo(BeEmpty())
 			g.Expect(roleAssignmentUID).NotTo(BeEmpty())
 			g.Expect(initialRoleAssignmentAzureName).NotTo(BeEmpty())
 			g.Expect(roleAssignment.Spec.PrincipalId).NotTo(BeNil())
 			g.Expect(*roleAssignment.Spec.PrincipalId).To(Equal(identityA + "-principal"))
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		resourceID := "/subscriptions/sub-123/resourceGroups/rg-dis-dev/providers/Microsoft.KeyVault/vaults/" + vaultName
+		vaultURI := "https://" + vaultName + ".vault.azure.net"
+		roleAssignmentID := resourceID + "/providers/Microsoft.Authorization/roleAssignments/" + roleAssignmentName
+		setKeyVaultReadyStatus(testCtx, keyVaultName, resourceID, vaultURI)
+		setRoleAssignmentReadyStatus(testCtx, roleAssignmentName, roleAssignmentID)
+
+		Eventually(func(g Gomega) {
+			var current vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &current)).To(Succeed())
+			g.Expect(current.Status.OwnerRoleAssignmentID).To(Equal(roleAssignmentID))
+
+			roleCondition := meta.FindStatusCondition(current.Status.Conditions, string(vaultv1alpha1.ConditionRoleAssignmentReady))
+			g.Expect(roleCondition).NotTo(BeNil())
+			g.Expect(roleCondition.Status).To(Equal(metav1.ConditionTrue))
 		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
 
 		Eventually(func(g Gomega) bool {
@@ -400,7 +425,7 @@ var _ = Describe("Vault controller", func() {
 			g.Expect(roleAssignments.Items).To(HaveLen(1))
 			roleAssignment := roleAssignments.Items[0]
 
-			g.Expect(roleAssignment.UID).To(Equal(roleAssignmentUID))
+			g.Expect(roleAssignment.UID).NotTo(Equal(roleAssignmentUID))
 			g.Expect(roleAssignment.Spec.PrincipalId).NotTo(BeNil())
 			g.Expect(*roleAssignment.Spec.PrincipalId).To(Equal(expectedPrincipalID))
 			g.Expect(roleAssignment.Spec.AzureName).NotTo(Equal(initialRoleAssignmentAzureName))
@@ -643,7 +668,7 @@ var _ = Describe("Vault controller", func() {
 		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
 	})
 
-	It("updates and removes the configured group role assignment", func() {
+	It("replaces and removes the configured group role assignment", func() {
 		const (
 			identityName = "identity-group-switch"
 			vaultName    = "my-app-vault-group-switch"
@@ -691,6 +716,42 @@ var _ = Describe("Vault controller", func() {
 			g.Expect(groupCondition.Reason).To(Equal("Ready"))
 		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
 
+		findGroupAndOwnerAssignments := func(items []authorizationv1.RoleAssignment) (authorizationv1.RoleAssignment, authorizationv1.RoleAssignment) {
+			var groupAssignment authorizationv1.RoleAssignment
+			var ownerAssignment authorizationv1.RoleAssignment
+			for i := range items {
+				assignment := items[i]
+				if assignment.Labels[roleAssignmentLabelKind] == roleAssignmentKindGroup {
+					groupAssignment = assignment
+					continue
+				}
+				ownerAssignment = assignment
+			}
+
+			return groupAssignment, ownerAssignment
+		}
+
+		var initialGroupRoleAssignmentUID types.UID
+		var initialGroupRoleAssignmentAzureName string
+		var initialOwnerRoleAssignmentUID types.UID
+		Eventually(func(g Gomega) {
+			var roleAssignments authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(testCtx, &roleAssignments, client.InNamespace(ns))).To(Succeed())
+			g.Expect(roleAssignments.Items).To(HaveLen(2))
+
+			groupAssignment, ownerAssignment := findGroupAndOwnerAssignments(roleAssignments.Items)
+			g.Expect(groupAssignment.Name).NotTo(BeEmpty())
+			g.Expect(ownerAssignment.Name).NotTo(BeEmpty())
+
+			initialGroupRoleAssignmentUID = groupAssignment.UID
+			initialGroupRoleAssignmentAzureName = groupAssignment.Spec.AzureName
+			initialOwnerRoleAssignmentUID = ownerAssignment.UID
+
+			g.Expect(initialGroupRoleAssignmentUID).NotTo(BeEmpty())
+			g.Expect(initialGroupRoleAssignmentAzureName).NotTo(BeEmpty())
+			g.Expect(initialOwnerRoleAssignmentUID).NotTo(BeEmpty())
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
 		Eventually(func(g Gomega) bool {
 			var current vaultv1alpha1.Vault
 			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &current)).To(Succeed())
@@ -709,14 +770,27 @@ var _ = Describe("Vault controller", func() {
 			g.Expect(k8sClient.List(testCtx, &roleAssignments, client.InNamespace(ns))).To(Succeed())
 			g.Expect(roleAssignments.Items).To(HaveLen(2))
 
-			principalIDs := make([]string, 0, len(roleAssignments.Items))
-			for i := range roleAssignments.Items {
-				if roleAssignments.Items[i].Spec.PrincipalId != nil {
-					principalIDs = append(principalIDs, *roleAssignments.Items[i].Spec.PrincipalId)
-				}
-			}
-			g.Expect(principalIDs).NotTo(ContainElement(groupOneID))
-			g.Expect(principalIDs).To(ContainElement(groupTwoID))
+			groupAssignment, ownerAssignment := findGroupAndOwnerAssignments(roleAssignments.Items)
+			g.Expect(groupAssignment.UID).NotTo(Equal(initialGroupRoleAssignmentUID))
+			g.Expect(groupAssignment.Spec.PrincipalId).NotTo(BeNil())
+			g.Expect(*groupAssignment.Spec.PrincipalId).To(Equal(groupTwoID))
+			g.Expect(groupAssignment.Spec.AzureName).NotTo(Equal(initialGroupRoleAssignmentAzureName))
+			g.Expect(ownerAssignment.UID).To(Equal(initialOwnerRoleAssignmentUID))
+
+			var currentVault vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &currentVault)).To(Succeed())
+
+			var keyVaults keyvaultv1.VaultList
+			g.Expect(k8sClient.List(testCtx, &keyVaults, client.InNamespace(ns))).To(Succeed())
+			g.Expect(keyVaults.Items).To(HaveLen(1))
+
+			expectedRoleAssignment, err := vaultpkg.BuildGroupRoleAssignmentResource(
+				&currentVault,
+				&keyVaults.Items[0],
+				groupTwoID,
+			)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(groupAssignment.Spec.AzureName).To(Equal(expectedRoleAssignment.Spec.AzureName))
 		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
 
 		Eventually(func(g Gomega) {
