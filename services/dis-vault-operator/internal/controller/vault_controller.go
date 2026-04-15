@@ -92,15 +92,12 @@ func (r *VaultReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		if ownerReplacementPending {
-			return ctrl.Result{Requeue: true}, nil
-		}
 
 		groupReplacementPending, err := r.reconcileGroupRoleAssignment(ctx, &vaultObj, desiredKeyVault)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		if groupReplacementPending {
+		if ownerReplacementPending || groupReplacementPending {
 			return ctrl.Result{Requeue: true}, nil
 		}
 	}
