@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.2.0...dis-vault-v1.2.1) (2026-04-15)
+
+
+### Bug Fixes
+
+* **dis-vault:** replace role assignments on write-once changes ([#3337](https://github.com/Altinn/altinn-platform/issues/3337)) ([16a25d9](https://github.com/Altinn/altinn-platform/commit/16a25d95c6af271f0566a04743e3cbd2bcd871cb))
+
 ## [1.2.0](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.1.1...dis-vault-v1.2.0) (2026-04-14)
 
 
