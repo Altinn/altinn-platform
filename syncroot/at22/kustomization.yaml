@@ -8,5 +8,8 @@ patches:
       name: dis-sample-vault
     patch: |-
       - op: add
+        path: /spec/groupObjectId
+        value: 4445ace5-cc1c-401a-b02c-1af094ee2cb1
+      - op: add
         path: /spec/tags/env
         value: at22
