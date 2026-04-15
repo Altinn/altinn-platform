@@ -81,6 +81,10 @@ var _ = BeforeSuite(func() {
 		},
 	}
 
+	// Envtest installs CRDs only. It does not run ASO admission webhooks, so these
+	// controller tests must model write-once replacement behavior directly rather than
+	// relying on webhook rejections to catch invalid RoleAssignment updates.
+
 	if getFirstFoundEnvTestBinaryDir() != "" {
 		testEnv.BinaryAssetsDirectory = getFirstFoundEnvTestBinaryDir()
 	}

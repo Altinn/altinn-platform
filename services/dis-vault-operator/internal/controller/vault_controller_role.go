@@ -8,6 +8,7 @@ import (
 	vaultpkg "github.com/Altinn/altinn-platform/services/dis-vault-operator/internal/vault"
 	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	keyvaultv1 "github.com/Azure/azure-service-operator/v2/api/keyvault/v1api20230701"
+	"github.com/Azure/azure-service-operator/v2/pkg/genruntime"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -27,12 +28,13 @@ func (r *VaultReconciler) reconcileOwnerRoleAssignment(
 	vaultObj *vaultv1alpha1.Vault,
 	keyVault *keyvaultv1.Vault,
 	principalID string,
-) error {
+) (bool, error) {
 	desired, err := vaultpkg.BuildOwnerRoleAssignmentResource(vaultObj, keyVault, principalID)
 	if err != nil {
-		return err
+		return false, err
 	}
-	return r.upsertRoleAssignment(ctx, vaultObj, desired)
+
+	return r.reconcileRoleAssignment(ctx, vaultObj, desired)
 }
 
 func (r *VaultReconciler) upsertRoleAssignment(
@@ -82,30 +84,28 @@ func (r *VaultReconciler) reconcileGroupRoleAssignment(
 	ctx context.Context,
 	vaultObj *vaultv1alpha1.Vault,
 	keyVault *keyvaultv1.Vault,
-) error {
+) (bool, error) {
 	groupObjectID := strings.TrimSpace(vaultObj.Spec.GroupObjectID)
 	desiredName := ""
 	if groupObjectID != "" {
 		desiredName = vaultpkg.BuildGroupRoleAssignmentName(vaultObj.Name)
 		desired, err := vaultpkg.BuildGroupRoleAssignmentResource(vaultObj, keyVault, groupObjectID)
 		if err != nil {
-			return err
+			return false, err
 		}
 
-		current, err := r.getRoleAssignment(ctx, desired.Name, desired.Namespace)
+		replacementPending, err := r.reconcileRoleAssignment(ctx, vaultObj, desired)
 		if err != nil {
-			return err
+			return false, err
 		}
-		if current == nil || metav1.IsControlledBy(current, vaultObj) {
-			if err := r.upsertRoleAssignment(ctx, vaultObj, desired); err != nil {
-				return err
-			}
+		if replacementPending {
+			return true, nil
 		}
 	}
 
 	currentAssignments, err := r.listManagedGroupRoleAssignments(ctx, vaultObj)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	for i := range currentAssignments {
@@ -114,11 +114,58 @@ func (r *VaultReconciler) reconcileGroupRoleAssignment(
 			continue
 		}
 		if err := client.IgnoreNotFound(r.Delete(ctx, &current)); err != nil {
-			return err
+			return false, err
 		}
 	}
 
-	return nil
+	return false, nil
+}
+
+func (r *VaultReconciler) reconcileRoleAssignment(
+	ctx context.Context,
+	owner *vaultv1alpha1.Vault,
+	desired *authorizationv1.RoleAssignment,
+) (bool, error) {
+	current, err := r.getRoleAssignment(ctx, desired.Name, desired.Namespace)
+	if err != nil {
+		return false, err
+	}
+
+	if current != nil && metav1.IsControlledBy(current, owner) && roleAssignmentRequiresReplacement(current, desired) {
+		if err := client.IgnoreNotFound(r.Delete(ctx, current)); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+
+	return false, r.upsertRoleAssignment(ctx, owner, desired)
+}
+
+func roleAssignmentRequiresReplacement(current, desired *authorizationv1.RoleAssignment) bool {
+	if current == nil || desired == nil {
+		return false
+	}
+
+	// ASO rejects updates to write-once RoleAssignment properties after creation,
+	// so changes to the Azure role assignment name or extension owner must be
+	// handled as delete-and-recreate instead of an in-place update.
+	if current.Spec.AzureName != desired.Spec.AzureName {
+		return true
+	}
+
+	return !arbitraryOwnerReferenceEqual(current.Spec.Owner, desired.Spec.Owner)
+}
+
+func arbitraryOwnerReferenceEqual(left, right *genruntime.ArbitraryOwnerReference) bool {
+	// If either pointer is nil, pointer equality covers both nil cases:
+	// nil == nil is equal, and nil != non-nil is not equal.
+	if left == nil || right == nil {
+		return left == right
+	}
+
+	// ArbitraryOwnerReference is a plain value object, so direct struct equality
+	// is sufficient once both pointers are known to be non-nil.
+	return *left == *right
 }
 
 func (r *VaultReconciler) listManagedGroupRoleAssignments(
