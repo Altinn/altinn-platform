@@ -9,7 +9,7 @@ patches:
     patch: |-
       - op: add
         path: /spec/groupObjectId
-        value: ef841018-d8cf-4f79-a02f-b05a960ead9d
+        value: b736f77b-c729-4a37-ab98-9c7c4565ba6f
       - op: add
         path: /spec/tags/env
         value: at22
