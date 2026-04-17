@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -56,6 +57,7 @@ var _ = BeforeSuite(func() {
 	ctx, cancel = context.WithCancel(context.TODO())
 	scheme := runtime.NewScheme()
 
+	Expect(corev1.AddToScheme(scheme)).To(Succeed())
 	Expect(vaultv1alpha1.AddToScheme(scheme)).To(Succeed())
 	Expect(identityv1alpha1.AddToScheme(scheme)).To(Succeed())
 	Expect(keyvaultv1.AddToScheme(scheme)).To(Succeed())

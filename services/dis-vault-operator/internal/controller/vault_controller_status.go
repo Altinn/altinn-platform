@@ -24,6 +24,7 @@ func (r *VaultReconciler) updateStatus(
 	roleAssignmentReady vaultpkg.ASOReadyCondition,
 	groupRoleAssignmentCondition metav1.Condition,
 	secretStore secretStoreReconcileResult,
+	configMapResult configMapReconcileResult,
 ) error {
 	updated := false
 
@@ -46,6 +47,7 @@ func (r *VaultReconciler) updateStatus(
 	groupRoleAssignmentCondition = applyCondition(groupRoleAssignmentCondition)
 	networkCondition := applyCondition(buildNetworkPolicyCondition(vaultObj.Generation, desiredKeyVault, r.Config))
 	secretStoreCondition := applyCondition(secretStore.Condition)
+	configMapCondition := applyCondition(configMapResult.Condition)
 	applyCondition(vaultpkg.AggregateReadyCondition(
 		vaultObj.Generation,
 		identityCondition,
@@ -54,6 +56,7 @@ func (r *VaultReconciler) updateStatus(
 		networkCondition,
 		secretStoreCondition,
 		groupRoleAssignmentCondition,
+		configMapCondition,
 	))
 
 	updated = setIfChanged(&vaultObj.Status.AzureName, azureName) || updated

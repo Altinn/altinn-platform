@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	vaultpkg "github.com/Altinn/altinn-platform/services/dis-vault-operator/internal/vault"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -23,6 +24,7 @@ var _ = Describe("Vault e2e", Ordered, func() {
 		expectedGroupRoleAssignName         = "vault-sample-group-ra"
 		sampleGroupObjectID                 = "11111111-1111-1111-1111-111111111111"
 		expectedVPNExitNodeSubnetID         = "/subscriptions/fake-subscription/resourceGroups/fake-network-rg/providers/Microsoft.Network/virtualNetworks/fake-vnet/subnets/fake-vpn-exit-subnet"
+		expectedConfigMapName               = "app-identity-sample-dis-vault"
 		externalSecretsSamplePath           = "config/samples/vault_v1alpha1_external_secrets_vault.yaml"
 		externalSecretsVaultName            = "vault-es-sample"
 		expectedExternalSecretsASOVaultName = "vault-es-sample-akv"
@@ -90,13 +92,13 @@ var _ = Describe("Vault e2e", Ordered, func() {
 	waitForResourceNotFound := func(resource, name string) {
 		Eventually(func() (bool, error) {
 			return resourceExists(resource, name)
-		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).Should(BeFalse(), "expected %s/%s to be deleted", resource, name)
+		}).WithTimeout(2*time.Minute).WithPolling(2*time.Second).Should(BeFalse(), "expected %s/%s to be deleted", resource, name)
 	}
 
 	ensureResourceNotCreatedYet := func(resource, name string) {
 		Consistently(func() (bool, error) {
 			return resourceExists(resource, name)
-		}).WithTimeout(15 * time.Second).WithPolling(2 * time.Second).Should(BeFalse(), "expected %s/%s to remain absent", resource, name)
+		}).WithTimeout(15*time.Second).WithPolling(2*time.Second).Should(BeFalse(), "expected %s/%s to remain absent", resource, name)
 	}
 
 	applyManifest := func(path string) {
@@ -160,6 +162,7 @@ var _ = Describe("Vault e2e", Ordered, func() {
 		waitForResourceNotFound("vaults.keyvault.azure.com", expectedExternalSecretsASOVaultName)
 		waitForResourceNotFound("roleassignments.authorization.azure.com", expectedExternalSecretsRoleAssign)
 		waitForResourceNotFound("secretstores.external-secrets.io", expectedSecretStoreName)
+		waitForResourceNotFound("configmaps", expectedConfigMapName)
 	})
 
 	AfterAll(func() {
@@ -178,6 +181,7 @@ var _ = Describe("Vault e2e", Ordered, func() {
 		waitForResourceNotFound("vaults.keyvault.azure.com", expectedExternalSecretsASOVaultName)
 		waitForResourceNotFound("roleassignments.authorization.azure.com", expectedExternalSecretsRoleAssign)
 		waitForResourceNotFound("secretstores.external-secrets.io", expectedSecretStoreName)
+		waitForResourceNotFound("configmaps", expectedConfigMapName)
 	})
 
 	It("applies Vault sample from config and creates ASO resources", func() {
@@ -217,6 +221,9 @@ var _ = Describe("Vault e2e", Ordered, func() {
 			_, err := utils.Run(checkCmd)
 			return err
 		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).Should(Succeed())
+
+		By("verifying the ConfigMap is not created before the Vault URI is known")
+		ensureResourceNotCreatedYet("configmaps", expectedConfigMapName)
 		waitForJSONPath("roleassignments.authorization.azure.com", expectedGroupRoleAssignName, "{.spec.principalId}", sampleGroupObjectID)
 		waitForJSONPath("roleassignments.authorization.azure.com", expectedGroupRoleAssignName, "{.spec.principalType}", "Group")
 		waitForJSONPath(
@@ -243,6 +250,9 @@ var _ = Describe("Vault e2e", Ordered, func() {
 		waitForJSONPath("vaults.vault.dis.altinn.cloud", sampleVaultName, "{.status.resourceId}", resourceID)
 		waitForJSONPath("vaults.vault.dis.altinn.cloud", sampleVaultName, "{.status.vaultUri}", vaultURI)
 		waitForJSONPath("vaults.vault.dis.altinn.cloud", sampleVaultName, "{.status.ownerRoleAssignmentId}", roleAssignmentID)
+		waitForJSONPath("vaults.vault.dis.altinn.cloud", sampleVaultName, "{.status.conditions[?(@.type=='ConfigMapReady')].status}", "True")
+		waitForJSONPath("configmaps", expectedConfigMapName, "{.data.AkvName}", vaultpkg.DeterministicAzureVaultName(sampleNamespace, sampleVaultName, "dev"))
+		waitForJSONPath("configmaps", expectedConfigMapName, "{.data.AkvUri}", vaultURI)
 		waitForJSONPathContains(
 			"vaults.keyvault.azure.com",
 			expectedASOVaultName,
@@ -322,6 +332,9 @@ var _ = Describe("Vault e2e", Ordered, func() {
 
 		By("verifying group RoleAssignment was deleted via ownerReference garbage collection")
 		waitForResourceNotFound("roleassignments.authorization.azure.com", expectedGroupRoleAssignName)
+
+		By("verifying the ConfigMap was deleted via ownerReference garbage collection")
+		waitForResourceNotFound("configmaps", expectedConfigMapName)
 	})
 
 	It("manages a SecretStore for the external secrets sample", func() {
@@ -342,6 +355,7 @@ var _ = Describe("Vault e2e", Ordered, func() {
 
 		By("verifying the SecretStore is not created before the Vault URI is known")
 		ensureResourceNotCreatedYet("secretstores.external-secrets.io", expectedSecretStoreName)
+		ensureResourceNotCreatedYet("configmaps", expectedConfigMapName)
 
 		By("patching dependent ASO resources to Ready")
 		resourceID := "/subscriptions/fake-subscription/resourceGroups/fake-resource-group/providers/Microsoft.KeyVault/vaults/vault-es-sample"
@@ -355,9 +369,12 @@ var _ = Describe("Vault e2e", Ordered, func() {
 		waitForJSONPath("secretstores.external-secrets.io", expectedSecretStoreName, "{.spec.provider.azurekv.serviceAccountRef.name}", "app-identity-sample")
 		waitForJSONPath("secretstores.external-secrets.io", expectedSecretStoreName, "{.spec.provider.azurekv.vaultUrl}", vaultURI)
 		waitForJSONPath("secretstores.external-secrets.io", expectedSecretStoreName, "{.spec.provider.azurekv.tenantId}", "00000000-0000-0000-0000-000000000000")
+		waitForJSONPath("configmaps", expectedConfigMapName, "{.data.AkvName}", vaultpkg.DeterministicAzureVaultName(sampleNamespace, externalSecretsVaultName, "dev"))
+		waitForJSONPath("configmaps", expectedConfigMapName, "{.data.AkvUri}", vaultURI)
 
 		By("verifying Vault status reports External Secrets readiness")
 		waitForJSONPath("vaults.vault.dis.altinn.cloud", externalSecretsVaultName, "{.status.conditions[?(@.type=='ExternalSecretsReady')].status}", "True")
+		waitForJSONPath("vaults.vault.dis.altinn.cloud", externalSecretsVaultName, "{.status.conditions[?(@.type=='ConfigMapReady')].status}", "True")
 		waitForJSONPath("vaults.vault.dis.altinn.cloud", externalSecretsVaultName, "{.status.externalSecretStoreName}", expectedSecretStoreName)
 		waitForJSONPath("vaults.vault.dis.altinn.cloud", externalSecretsVaultName, "{.status.conditions[?(@.type=='Ready')].status}", "True")
 
@@ -384,5 +401,6 @@ var _ = Describe("Vault e2e", Ordered, func() {
 		waitForResourceNotFound("vaults.vault.dis.altinn.cloud", externalSecretsVaultName)
 		waitForResourceNotFound("vaults.keyvault.azure.com", expectedExternalSecretsASOVaultName)
 		waitForResourceNotFound("roleassignments.authorization.azure.com", expectedExternalSecretsRoleAssign)
+		waitForResourceNotFound("configmaps", expectedConfigMapName)
 	})
 })

@@ -20,7 +20,6 @@ import (
 const defaultManagedResourceBaseName = "vault"
 
 const (
-	roleAssignmentLabelName    = "vault.dis.altinn.cloud/name"
 	roleAssignmentLabelKind    = "vault.dis.altinn.cloud/assignment-kind"
 	roleAssignmentKindGroup    = "group"
 	keyVaultSecretsOfficerRole = "Key Vault Secrets Officer"
@@ -104,7 +103,7 @@ func BuildASOKeyVaultResource(v *vaultv1alpha1.Vault, cfg config.OperatorConfig,
 			Name:      keyVaultK8sName,
 			Namespace: v.Namespace,
 			Labels: map[string]string{
-				roleAssignmentLabelName: v.Name,
+				ManagedResourceOwnerLabel: v.Name,
 			},
 		},
 		Spec: keyvaultv1.Vault_Spec{
@@ -137,7 +136,7 @@ func BuildOwnerRoleAssignmentResource(v *vaultv1alpha1.Vault, keyVault *keyvault
 		principalID,
 		authorizationv1.RoleAssignmentProperties_PrincipalType_ServicePrincipal,
 		map[string]string{
-			roleAssignmentLabelName: v.Name,
+			ManagedResourceOwnerLabel: v.Name,
 		},
 	)
 }
@@ -168,8 +167,8 @@ func BuildGroupRoleAssignmentResource(
 		groupObjectID,
 		authorizationv1.RoleAssignmentProperties_PrincipalType_Group,
 		map[string]string{
-			roleAssignmentLabelName: v.Name,
-			roleAssignmentLabelKind: roleAssignmentKindGroup,
+			ManagedResourceOwnerLabel: v.Name,
+			roleAssignmentLabelKind:   roleAssignmentKindGroup,
 		},
 	)
 }

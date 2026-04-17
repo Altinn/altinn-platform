@@ -12,6 +12,7 @@ import (
 	vaultpkg "github.com/Altinn/altinn-platform/services/dis-vault-operator/internal/vault"
 	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	keyvaultv1 "github.com/Azure/azure-service-operator/v2/api/keyvault/v1api20230701"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,6 +52,9 @@ type VaultReconciler struct {
 // External Secrets
 // +kubebuilder:rbac:groups=external-secrets.io,resources=secretstores,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=external-secrets.io,resources=secretstores/status,verbs=get
+
+// Core
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
 func (r *VaultReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("vault", req.NamespacedName)
@@ -118,6 +122,10 @@ func (r *VaultReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+	configMapResult, err := r.reconcileManagedConfigMap(ctx, &vaultObj, azureName, keyVault)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	if err := r.updateStatus(
 		ctx,
 		&vaultObj,
@@ -131,6 +139,7 @@ func (r *VaultReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		roleAssignmentReady,
 		groupRoleAssignmentCondition,
 		secretStore,
+		configMapResult,
 	); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -148,6 +157,7 @@ func (r *VaultReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&vaultv1alpha1.Vault{}).
 		Owns(&keyvaultv1.Vault{}).
 		Owns(&authorizationv1.RoleAssignment{}).
+		Owns(&corev1.ConfigMap{}).
 		Watches(&identityv1alpha1.ApplicationIdentity{}, handler.EnqueueRequestsFromMapFunc(r.mapApplicationIdentityToVaults)).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,

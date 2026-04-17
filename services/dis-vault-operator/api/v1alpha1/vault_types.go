@@ -138,12 +138,15 @@ const (
 	ConditionGroupRoleAssignment  ConditionType = "GroupRoleAssignmentReady"
 	ConditionNetworkPolicyReady   ConditionType = "NetworkPolicyReady"
 	ConditionExternalSecretsReady ConditionType = "ExternalSecretsReady"
+	ConditionConfigMapReady       ConditionType = "ConfigMapReady"
 )
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].reason"
+// +kubebuilder:printcolumn:name="AzureName",type="string",JSONPath=".status.azureName"
+// +kubebuilder:printcolumn:name="VaultURI",type="string",JSONPath=".status.vaultUri"
 
 // Vault is the Schema for the vaults API.
 type Vault struct {
