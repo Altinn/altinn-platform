@@ -60,7 +60,7 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
     auto_scaling_enabled = true
     min_count            = 1
     max_count            = 10
-    vm_size              = "Standard_D3_v2"
+    vm_size              = "Standard_D4s_v6"
     upgrade_settings { # Adding these to keep plans clean
       drain_timeout_in_minutes      = 0
       max_surge                     = "10%"
@@ -96,7 +96,7 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
 resource "azurerm_kubernetes_cluster_node_pool" "spot" {
   name                  = "spot"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.k6tests.id
-  vm_size               = "Standard_D3_v2"
+  vm_size               = "Standard_D4s_v6"
   auto_scaling_enabled  = true
   node_count            = 0
   min_count             = 0
@@ -125,7 +125,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot" {
 resource "azurerm_kubernetes_cluster_node_pool" "spot8c28g" {
   name                  = "spot8c28g"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.k6tests.id
-  vm_size               = "Standard_D4_v2"
+  vm_size               = "Standard_D8s_v6"
   auto_scaling_enabled  = true
   node_count            = 0
   min_count             = 0
@@ -152,7 +152,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot8c28g" {
 resource "azurerm_kubernetes_cluster_node_pool" "spot2c7g" {
   name                  = "spot2c7g"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.k6tests.id
-  vm_size               = "Standard_D2_v2"
+  vm_size               = "Standard_D2s_v6"
   auto_scaling_enabled  = true
   node_count            = 0
   min_count             = 0
@@ -179,7 +179,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot2c7g" {
 resource "azurerm_kubernetes_cluster_node_pool" "prometheus" {
   name                  = "prometheus"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.k6tests.id
-  vm_size               = "Standard_D3_v2"
+  vm_size               = "Standard_D4s_v6"
   auto_scaling_enabled  = false
   node_count            = 1
   node_labels = {
