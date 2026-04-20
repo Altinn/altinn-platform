@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.2.1...dis-vault-v1.3.0) (2026-04-20)
+
+
+### Features
+
+* **dis-vault:** add app-scoped akv configmap ([#3344](https://github.com/Altinn/altinn-platform/issues/3344)) ([01fc691](https://github.com/Altinn/altinn-platform/commit/01fc691df2b7570ff9a988151f93d0faa5c2535d))
+
 ## [1.2.1](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.2.0...dis-vault-v1.2.1) (2026-04-15)
 
 
