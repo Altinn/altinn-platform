@@ -55,6 +55,7 @@ type VaultReconciler struct {
 
 // Core
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch
 
 func (r *VaultReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("vault", req.NamespacedName)
@@ -77,12 +78,7 @@ func (r *VaultReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	identity, identityPending, err := vaultpkg.ResolveOwnerIdentity(
-		ctx,
-		r.Client,
-		vaultObj.Namespace,
-		vaultObj.Spec.IdentityRef.Name,
-	)
+	identity, identityPending, err := vaultpkg.ResolveOwnerIdentity(ctx, r.Client, &vaultObj)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -131,8 +127,8 @@ func (r *VaultReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		&vaultObj,
 		azureName,
 		desiredKeyVault,
+		identity,
 		identityPending,
-		identity.PrincipalID,
 		keyVault,
 		keyVaultReady,
 		roleAssignment,
@@ -159,6 +155,7 @@ func (r *VaultReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&authorizationv1.RoleAssignment{}).
 		Owns(&corev1.ConfigMap{}).
 		Watches(&identityv1alpha1.ApplicationIdentity{}, handler.EnqueueRequestsFromMapFunc(r.mapApplicationIdentityToVaults)).
+		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(r.mapServiceAccountToVaults)).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,
 		})

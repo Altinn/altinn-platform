@@ -76,6 +76,8 @@ var _ = Describe("Vault controller", func() {
 					return len(typed.Items)
 				case *identityv1alpha1.ApplicationIdentityList:
 					return len(typed.Items)
+				case *corev1.ServiceAccountList:
+					return len(typed.Items)
 				default:
 					panic("unsupported list type in cleanup")
 				}
@@ -104,12 +106,14 @@ var _ = Describe("Vault controller", func() {
 		deleteAll(&keyvaultv1.Vault{})
 		deleteAll(&esov1.SecretStore{})
 		deleteAll(&identityv1alpha1.ApplicationIdentity{})
+		deleteAll(&corev1.ServiceAccount{})
 		deleteManagedConfigMaps()
 
 		waitUntilEmpty(&authorizationv1.RoleAssignmentList{})
 		waitUntilEmpty(&keyvaultv1.VaultList{})
 		waitUntilEmpty(&esov1.SecretStoreList{})
 		waitUntilEmpty(&identityv1alpha1.ApplicationIdentityList{})
+		waitUntilEmpty(&corev1.ServiceAccountList{})
 		waitUntilManagedConfigMapsEmpty()
 	}
 
@@ -120,7 +124,19 @@ var _ = Describe("Vault controller", func() {
 				Namespace: ns,
 			},
 			Spec: vaultv1alpha1.VaultSpec{
-				IdentityRef: vaultv1alpha1.ApplicationIdentityRef{Name: identityRef},
+				IdentityRef: &vaultv1alpha1.ApplicationIdentityRef{Name: identityRef},
+			},
+		}
+	}
+
+	newVaultWithServiceAccount := func(name, serviceAccountRef string) *vaultv1alpha1.Vault {
+		return &vaultv1alpha1.Vault{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: ns,
+			},
+			Spec: vaultv1alpha1.VaultSpec{
+				ServiceAccountRef: &vaultv1alpha1.ServiceAccountRef{Name: serviceAccountRef},
 			},
 		}
 	}
@@ -153,6 +169,17 @@ var _ = Describe("Vault controller", func() {
 			})
 			Expect(k8sClient.Status().Update(ctx, appIdentity)).To(Succeed())
 		}
+	}
+
+	createServiceAccount := func(ctx context.Context, name string, annotations map[string]string) {
+		serviceAccount := &corev1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        name,
+				Namespace:   ns,
+				Annotations: annotations,
+			},
+		}
+		Expect(k8sClient.Create(ctx, serviceAccount)).To(Succeed())
 	}
 
 	setKeyVaultReadyStatus := func(ctx context.Context, name, resourceID, vaultURI string) {
@@ -296,6 +323,116 @@ var _ = Describe("Vault controller", func() {
 			Should(Equal(1), "expected identity update to enqueue and reconcile dependent Vault")
 	})
 
+	It("creates ASO Vault and RoleAssignment for an annotated ServiceAccount", func() {
+		const (
+			serviceAccountName = "vault-owner-sa"
+			vaultName          = "my-app-vault-sa"
+			principalID        = "service-account-principal"
+		)
+
+		createServiceAccount(testCtx, serviceAccountName, map[string]string{
+			vaultpkg.ServiceAccountClientIDAnnotation:    "service-account-client",
+			vaultpkg.ServiceAccountPrincipalIDAnnotation: principalID,
+		})
+		Expect(k8sClient.Create(testCtx, newVaultWithServiceAccount(vaultName, serviceAccountName))).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			var list keyvaultv1.VaultList
+			g.Expect(k8sClient.List(testCtx, &list, client.InNamespace(ns))).To(Succeed())
+			return len(list.Items)
+		}).WithTimeout(20*time.Second).WithPolling(500*time.Millisecond).
+			Should(Equal(1), "expected controller to create one ASO Key Vault for ServiceAccount-backed Vault CR")
+
+		Eventually(func(g Gomega) {
+			var list authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(testCtx, &list, client.InNamespace(ns))).To(Succeed())
+			g.Expect(list.Items).To(HaveLen(1))
+			g.Expect(list.Items[0].Spec.PrincipalId).NotTo(BeNil())
+			g.Expect(*list.Items[0].Spec.PrincipalId).To(Equal(principalID))
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+	})
+
+	It("reconciles dependent Vault after ServiceAccount annotations become ready", func() {
+		const (
+			serviceAccountName = "vault-owner-sa-update"
+			vaultName          = "my-app-vault-sa-update"
+		)
+
+		createServiceAccount(testCtx, serviceAccountName, nil)
+		Expect(k8sClient.Create(testCtx, newVaultWithServiceAccount(vaultName, serviceAccountName))).To(Succeed())
+
+		Eventually(func(g Gomega) metav1.ConditionStatus {
+			var v vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &v)).To(Succeed())
+			cond := meta.FindStatusCondition(v.Status.Conditions, string(vaultv1alpha1.ConditionIdentityReady))
+			if cond == nil {
+				return metav1.ConditionUnknown
+			}
+			return cond.Status
+		}).WithTimeout(20*time.Second).WithPolling(500*time.Millisecond).
+			Should(Equal(metav1.ConditionFalse), "expected IdentityReady=False while ServiceAccount annotations are missing")
+
+		Eventually(func(g Gomega) bool {
+			var serviceAccount corev1.ServiceAccount
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: serviceAccountName, Namespace: ns}, &serviceAccount)).To(Succeed())
+			serviceAccount.Annotations = map[string]string{
+				vaultpkg.ServiceAccountClientIDAnnotation:    "service-account-client",
+				vaultpkg.ServiceAccountPrincipalIDAnnotation: "service-account-principal",
+			}
+			if err := k8sClient.Update(testCtx, &serviceAccount); err != nil {
+				if apierrors.IsConflict(err) {
+					return false
+				}
+				g.Expect(err).NotTo(HaveOccurred())
+			}
+			return true
+		}).WithTimeout(10 * time.Second).WithPolling(300 * time.Millisecond).Should(BeTrue())
+
+		Eventually(func(g Gomega) int {
+			var list keyvaultv1.VaultList
+			g.Expect(k8sClient.List(testCtx, &list, client.InNamespace(ns))).To(Succeed())
+			return len(list.Items)
+		}).WithTimeout(20*time.Second).WithPolling(500*time.Millisecond).
+			Should(Equal(1), "expected ServiceAccount update to enqueue and reconcile dependent Vault")
+
+		Eventually(func(g Gomega) {
+			var current vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &current)).To(Succeed())
+
+			identityCondition := meta.FindStatusCondition(current.Status.Conditions, string(vaultv1alpha1.ConditionIdentityReady))
+			g.Expect(identityCondition).NotTo(BeNil())
+			g.Expect(identityCondition.Status).To(Equal(metav1.ConditionTrue))
+			g.Expect(identityCondition.Message).To(Equal(`ServiceAccount "vault-owner-sa-update" is ready`))
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+	})
+
+	It("rejects Vaults that set both identityRef and serviceAccountRef", func() {
+		err := k8sClient.Create(testCtx, &vaultv1alpha1.Vault{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "invalid-vault-both-refs",
+				Namespace: ns,
+			},
+			Spec: vaultv1alpha1.VaultSpec{
+				IdentityRef:       &vaultv1alpha1.ApplicationIdentityRef{Name: "app-identity"},
+				ServiceAccountRef: &vaultv1alpha1.ServiceAccountRef{Name: "app-service-account"},
+			},
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("exactly one of identityRef or serviceAccountRef must be set"))
+	})
+
+	It("rejects Vaults that set neither identityRef nor serviceAccountRef", func() {
+		err := k8sClient.Create(testCtx, &vaultv1alpha1.Vault{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "invalid-vault-no-ref",
+				Namespace: ns,
+			},
+			Spec: vaultv1alpha1.VaultSpec{},
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("exactly one of identityRef or serviceAccountRef must be set"))
+	})
+
 	It("updates existing ASO Vault when Vault spec changes", func() {
 		createIdentity(testCtx, "my-app-identity-propagation", true)
 
@@ -435,7 +572,7 @@ var _ = Describe("Vault controller", func() {
 			var current vaultv1alpha1.Vault
 			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &current)).To(Succeed())
 
-			current.Spec.IdentityRef.Name = identityB
+			current.Spec.IdentityRef = &vaultv1alpha1.ApplicationIdentityRef{Name: identityB}
 			if err := k8sClient.Update(testCtx, &current); err != nil {
 				if apierrors.IsConflict(err) {
 					return false
@@ -478,6 +615,94 @@ var _ = Describe("Vault controller", func() {
 			g.Expect(k8sClient.List(testCtx, &list, client.InNamespace(ns))).To(Succeed())
 			return len(list.Items)
 		}, 3*time.Second, 500*time.Millisecond).Should(Equal(1), "expected no duplicate owner RoleAssignments")
+	})
+
+	It("replaces a ready owner RoleAssignment when Vault switches from ApplicationIdentity to ServiceAccount", func() {
+		const (
+			identityName              = "identity-owner-app"
+			serviceAccountName        = "identity-owner-sa"
+			serviceAccountPrincipalID = "identity-owner-sa-principal"
+			vaultName                 = "my-app-vault-source-switch"
+		)
+
+		createIdentity(testCtx, identityName, true)
+		createServiceAccount(testCtx, serviceAccountName, map[string]string{
+			vaultpkg.ServiceAccountClientIDAnnotation:    "identity-owner-sa-client",
+			vaultpkg.ServiceAccountPrincipalIDAnnotation: serviceAccountPrincipalID,
+		})
+		Expect(k8sClient.Create(testCtx, newVault(vaultName, identityName))).To(Succeed())
+
+		var keyVaultName string
+		var roleAssignmentName string
+		var roleAssignmentUID types.UID
+		var initialRoleAssignmentAzureName string
+		Eventually(func(g Gomega) {
+			var keyVaults keyvaultv1.VaultList
+			g.Expect(k8sClient.List(testCtx, &keyVaults, client.InNamespace(ns))).To(Succeed())
+			g.Expect(keyVaults.Items).To(HaveLen(1))
+			keyVaultName = keyVaults.Items[0].Name
+
+			var list authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(testCtx, &list, client.InNamespace(ns))).To(Succeed())
+			g.Expect(list.Items).To(HaveLen(1))
+
+			roleAssignment := list.Items[0]
+			roleAssignmentName = roleAssignment.Name
+			roleAssignmentUID = roleAssignment.UID
+			initialRoleAssignmentAzureName = roleAssignment.Spec.AzureName
+
+			g.Expect(roleAssignment.Spec.PrincipalId).NotTo(BeNil())
+			g.Expect(*roleAssignment.Spec.PrincipalId).To(Equal(identityName + "-principal"))
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		resourceID := "/subscriptions/sub-123/resourceGroups/rg-dis-dev/providers/Microsoft.KeyVault/vaults/" + vaultName
+		vaultURI := "https://" + vaultName + ".vault.azure.net"
+		roleAssignmentID := resourceID + "/providers/Microsoft.Authorization/roleAssignments/" + roleAssignmentName
+		setKeyVaultReadyStatus(testCtx, keyVaultName, resourceID, vaultURI)
+		setRoleAssignmentReadyStatus(testCtx, roleAssignmentName, roleAssignmentID)
+
+		Eventually(func(g Gomega) bool {
+			var current vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &current)).To(Succeed())
+
+			current.Spec.IdentityRef = nil
+			current.Spec.ServiceAccountRef = &vaultv1alpha1.ServiceAccountRef{Name: serviceAccountName}
+			if err := k8sClient.Update(testCtx, &current); err != nil {
+				if apierrors.IsConflict(err) {
+					return false
+				}
+				g.Expect(err).NotTo(HaveOccurred())
+			}
+			return true
+		}).WithTimeout(10 * time.Second).WithPolling(300 * time.Millisecond).Should(BeTrue())
+
+		Eventually(func(g Gomega) {
+			var roleAssignments authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(testCtx, &roleAssignments, client.InNamespace(ns))).To(Succeed())
+			g.Expect(roleAssignments.Items).To(HaveLen(1))
+			roleAssignment := roleAssignments.Items[0]
+
+			g.Expect(roleAssignment.UID).NotTo(Equal(roleAssignmentUID))
+			g.Expect(roleAssignment.Spec.PrincipalId).NotTo(BeNil())
+			g.Expect(*roleAssignment.Spec.PrincipalId).To(Equal(serviceAccountPrincipalID))
+			g.Expect(roleAssignment.Spec.AzureName).NotTo(Equal(initialRoleAssignmentAzureName))
+
+			var currentVault vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &currentVault)).To(Succeed())
+			g.Expect(currentVault.Status.OwnerPrincipalID).To(Equal(serviceAccountPrincipalID))
+
+			var keyVaults keyvaultv1.VaultList
+			g.Expect(k8sClient.List(testCtx, &keyVaults, client.InNamespace(ns))).To(Succeed())
+			g.Expect(keyVaults.Items).To(HaveLen(1))
+
+			expectedRoleAssignment, err := vaultpkg.BuildOwnerRoleAssignmentResource(
+				&currentVault,
+				&keyVaults.Items[0],
+				serviceAccountPrincipalID,
+			)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(roleAssignment.Spec.AzureName).To(Equal(expectedRoleAssignment.Spec.AzureName))
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
 	})
 
 	It("clears owner role assignment status when Vault identityRef changes to an unready identity", func() {
@@ -526,7 +751,7 @@ var _ = Describe("Vault controller", func() {
 			var current vaultv1alpha1.Vault
 			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &current)).To(Succeed())
 
-			current.Spec.IdentityRef.Name = identityPending
+			current.Spec.IdentityRef = &vaultv1alpha1.ApplicationIdentityRef{Name: identityPending}
 			if err := k8sClient.Update(testCtx, &current); err != nil {
 				if apierrors.IsConflict(err) {
 					return false
@@ -1166,6 +1391,64 @@ var _ = Describe("Vault controller", func() {
 		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
 	})
 
+	It("manages a SecretStore lifecycle for a ServiceAccount when external secrets integration is enabled", func() {
+		const (
+			serviceAccountName = "my-app-sa-secretstore"
+			vaultName          = "my-app-vault-sa-secretstore"
+		)
+
+		createServiceAccount(testCtx, serviceAccountName, map[string]string{
+			vaultpkg.ServiceAccountClientIDAnnotation:    "my-app-sa-secretstore-client",
+			vaultpkg.ServiceAccountPrincipalIDAnnotation: "my-app-sa-secretstore-principal",
+		})
+		vaultObj := newVaultWithServiceAccount(vaultName, serviceAccountName)
+		vaultObj.Spec.ExternalSecrets = true
+		Expect(k8sClient.Create(testCtx, vaultObj)).To(Succeed())
+
+		var keyVaultName string
+		var roleAssignmentName string
+		Eventually(func(g Gomega) {
+			var keyVaults keyvaultv1.VaultList
+			g.Expect(k8sClient.List(testCtx, &keyVaults, client.InNamespace(ns))).To(Succeed())
+			g.Expect(keyVaults.Items).To(HaveLen(1))
+			keyVaultName = keyVaults.Items[0].Name
+
+			var roleAssignments authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(testCtx, &roleAssignments, client.InNamespace(ns))).To(Succeed())
+			g.Expect(roleAssignments.Items).To(HaveLen(1))
+			roleAssignmentName = roleAssignments.Items[0].Name
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		Consistently(func(g Gomega) int {
+			var stores esov1.SecretStoreList
+			g.Expect(k8sClient.List(testCtx, &stores, client.InNamespace(ns))).To(Succeed())
+			return len(stores.Items)
+		}, 2*time.Second, 300*time.Millisecond).Should(Equal(0))
+
+		resourceID := "/subscriptions/sub-123/resourceGroups/rg-dis-dev/providers/Microsoft.KeyVault/vaults/" + vaultName
+		vaultURI := "https://" + vaultName + ".vault.azure.net"
+		roleAssignmentID := resourceID + "/providers/Microsoft.Authorization/roleAssignments/role-123"
+		setKeyVaultReadyStatus(testCtx, keyVaultName, resourceID, vaultURI)
+		setRoleAssignmentReadyStatus(testCtx, roleAssignmentName, roleAssignmentID)
+
+		expectedStoreName := vaultpkg.DeterministicSecretStoreName(vaultName)
+		Eventually(func(g Gomega) {
+			var store esov1.SecretStore
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: expectedStoreName, Namespace: ns}, &store)).To(Succeed())
+			g.Expect(store.Spec.Provider).NotTo(BeNil())
+			g.Expect(store.Spec.Provider.AzureKV).NotTo(BeNil())
+			g.Expect(store.Spec.Provider.AzureKV.ServiceAccountRef).NotTo(BeNil())
+			g.Expect(store.Spec.Provider.AzureKV.ServiceAccountRef.Name).To(Equal(serviceAccountName))
+			g.Expect(metav1.IsControlledBy(&store, vaultObj)).To(BeTrue())
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		Eventually(func(g Gomega) {
+			var current vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &current)).To(Succeed())
+			g.Expect(current.Status.ExternalSecretStoreName).To(Equal(expectedStoreName))
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+	})
+
 	It("surfaces SecretStore name conflicts without overwriting non-owned resources", func() {
 		const (
 			identityName = "my-app-identity-conflict"
@@ -1223,7 +1506,7 @@ func TestReconcileManagedSecretStoreReturnsCRDNotInstalledWhenSecretStoreCRDIsMi
 			Generation: 7,
 		},
 		Spec: vaultv1alpha1.VaultSpec{
-			IdentityRef:     vaultv1alpha1.ApplicationIdentityRef{Name: "app-identity-sample"},
+			IdentityRef:     &vaultv1alpha1.ApplicationIdentityRef{Name: "app-identity-sample"},
 			ExternalSecrets: true,
 		},
 	}
@@ -1259,7 +1542,7 @@ func TestReconcileManagedConfigMapDeletesStaleOwnedConfigMaps(t *testing.T) {
 			UID:        types.UID("vault-uid"),
 		},
 		Spec: vaultv1alpha1.VaultSpec{
-			IdentityRef: vaultv1alpha1.ApplicationIdentityRef{Name: "new-app"},
+			IdentityRef: &vaultv1alpha1.ApplicationIdentityRef{Name: "new-app"},
 		},
 	}
 
@@ -1315,13 +1598,13 @@ func TestReconcileManagedConfigMapReturnsNameConflictForNonOwnedConfigMap(t *tes
 			Generation: 11,
 		},
 		Spec: vaultv1alpha1.VaultSpec{
-			IdentityRef: vaultv1alpha1.ApplicationIdentityRef{Name: "app-sample"},
+			IdentityRef: &vaultv1alpha1.ApplicationIdentityRef{Name: "app-sample"},
 		},
 	}
 
 	conflict := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      vaultpkg.DeterministicConfigMapName(vaultObj.Spec.IdentityRef.Name),
+			Name:      vaultpkg.DeterministicConfigMapName("app-sample"),
 			Namespace: vaultObj.Namespace,
 		},
 		Data: map[string]string{
@@ -1379,7 +1662,7 @@ func TestBuildNetworkPolicyCondition(t *testing.T) {
 	vaultObj := &vaultv1alpha1.Vault{
 		ObjectMeta: metav1.ObjectMeta{Name: "vault-sample", Namespace: "default"},
 		Spec: vaultv1alpha1.VaultSpec{
-			IdentityRef: vaultv1alpha1.ApplicationIdentityRef{Name: "app-identity-sample"},
+			IdentityRef: &vaultv1alpha1.ApplicationIdentityRef{Name: "app-identity-sample"},
 		},
 	}
 

@@ -16,8 +16,8 @@ func (r *VaultReconciler) updateStatus(
 	vaultObj *vaultv1alpha1.Vault,
 	azureName string,
 	desiredKeyVault *keyvaultv1.Vault,
+	identity vaultpkg.ResolvedIdentity,
 	identityPending bool,
-	principalID string,
 	keyVault *keyvaultv1.Vault,
 	keyVaultReady vaultpkg.ASOReadyCondition,
 	roleAssignment *authorizationv1.RoleAssignment,
@@ -35,7 +35,7 @@ func (r *VaultReconciler) updateStatus(
 		return condition
 	}
 
-	identityCondition := applyCondition(buildIdentityCondition(vaultObj, identityPending))
+	identityCondition := applyCondition(buildIdentityCondition(vaultObj, identity))
 	vaultCondition := applyCondition(asoToStatusCondition(
 		vaultObj.Generation,
 		vaultv1alpha1.ConditionVaultReady,
@@ -43,7 +43,7 @@ func (r *VaultReconciler) updateStatus(
 		"VaultNotReady",
 		"waiting for ASO Key Vault readiness",
 	))
-	roleCondition := applyCondition(buildOwnerRoleAssignmentCondition(vaultObj, identityPending, roleAssignmentReady))
+	roleCondition := applyCondition(buildOwnerRoleAssignmentCondition(vaultObj, identity, roleAssignmentReady))
 	groupRoleAssignmentCondition = applyCondition(groupRoleAssignmentCondition)
 	networkCondition := applyCondition(buildNetworkPolicyCondition(vaultObj.Generation, desiredKeyVault, r.Config))
 	secretStoreCondition := applyCondition(secretStore.Condition)
@@ -60,6 +60,7 @@ func (r *VaultReconciler) updateStatus(
 	))
 
 	updated = setIfChanged(&vaultObj.Status.AzureName, azureName) || updated
+	principalID := identity.PrincipalID
 	if identityPending {
 		principalID = ""
 	}
@@ -79,14 +80,14 @@ func (r *VaultReconciler) updateStatus(
 	return r.Status().Update(ctx, vaultObj)
 }
 
-func buildIdentityCondition(vaultObj *vaultv1alpha1.Vault, identityPending bool) metav1.Condition {
-	if identityPending {
+func buildIdentityCondition(vaultObj *vaultv1alpha1.Vault, identity vaultpkg.ResolvedIdentity) metav1.Condition {
+	if identity.IsPending() {
 		return vaultpkg.NewCondition(
 			vaultv1alpha1.ConditionIdentityReady,
 			vaultObj.Generation,
 			metav1.ConditionFalse,
-			"IdentityNotReady",
-			fmt.Sprintf("ApplicationIdentity %q is not ready", vaultObj.Spec.IdentityRef.Name),
+			identity.PendingReason,
+			identity.PendingMessage,
 		)
 	}
 
@@ -95,22 +96,22 @@ func buildIdentityCondition(vaultObj *vaultv1alpha1.Vault, identityPending bool)
 		vaultObj.Generation,
 		metav1.ConditionTrue,
 		"IdentityReady",
-		fmt.Sprintf("ApplicationIdentity %q is ready", vaultObj.Spec.IdentityRef.Name),
+		fmt.Sprintf("%s is ready", identity.SourceDescription()),
 	)
 }
 
 func buildOwnerRoleAssignmentCondition(
 	vaultObj *vaultv1alpha1.Vault,
-	identityPending bool,
+	identity vaultpkg.ResolvedIdentity,
 	roleAssignmentReady vaultpkg.ASOReadyCondition,
 ) metav1.Condition {
-	if identityPending {
+	if identity.IsPending() {
 		return vaultpkg.NewCondition(
 			vaultv1alpha1.ConditionRoleAssignmentReady,
 			vaultObj.Generation,
 			metav1.ConditionFalse,
-			"IdentityNotReady",
-			fmt.Sprintf("waiting for ApplicationIdentity %q before reconciling owner role assignment", vaultObj.Spec.IdentityRef.Name),
+			identity.PendingReason,
+			fmt.Sprintf("waiting for owner identity before reconciling owner role assignment: %s", identity.PendingMessage),
 		)
 	}
 

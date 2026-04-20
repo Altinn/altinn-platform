@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
   - ../default
   - applicationidentities.yaml
+  - serviceaccounts.yaml
 
 patches:
   - path: manager_kind_patch.yaml
