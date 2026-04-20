@@ -64,7 +64,7 @@ func BuildManagedSecretStore(v *vaultv1alpha1.Vault, tenantID, vaultURI string) 
 			Name:      name,
 			Namespace: v.Namespace,
 			Labels: map[string]string{
-				"vault.dis.altinn.cloud/name": v.Name,
+				ManagedResourceOwnerLabel: v.Name,
 			},
 		},
 		Spec: externalsecretsv1.SecretStoreSpec{

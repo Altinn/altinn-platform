@@ -21,6 +21,12 @@ spec:
     - jsonPath: .status.conditions[?(@.type=='Ready')].reason
       name: Reason
       type: string
+    - jsonPath: .status.azureName
+      name: AzureName
+      type: string
+    - jsonPath: .status.vaultUri
+      name: VaultURI
+      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
