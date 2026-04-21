@@ -12,8 +12,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-const identityNotReadyReason = "IdentityNotReady"
-
 func TestResolveOwnerIdentityForReadyApplicationIdentity(t *testing.T) {
 	t.Parallel()
 

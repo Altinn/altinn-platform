@@ -18,6 +18,7 @@ import (
 const (
 	ServiceAccountClientIDAnnotation    = "azure.workload.identity/client-id"
 	ServiceAccountPrincipalIDAnnotation = "dis.altinn.cloud/principal-id"
+	identityNotReadyReason              = "IdentityNotReady"
 )
 
 type IdentitySourceKind string
@@ -113,7 +114,7 @@ func resolveApplicationIdentity(ctx context.Context, c client.Reader, namespace,
 		Name:      identityName,
 	}, &identity); err != nil {
 		if apierrors.IsNotFound(err) {
-			resolved.PendingReason = "IdentityNotReady"
+			resolved.PendingReason = identityNotReadyReason
 			resolved.PendingMessage = fmt.Sprintf("%s not found", resolved.SourceDescription())
 			return resolved, true, nil
 		}
@@ -122,18 +123,18 @@ func resolveApplicationIdentity(ctx context.Context, c client.Reader, namespace,
 
 	readyCond := meta.FindStatusCondition(identity.Status.Conditions, string(identityv1alpha1.ConditionReady))
 	if readyCond == nil || readyCond.Status != metav1.ConditionTrue {
-		resolved.PendingReason = "IdentityNotReady"
+		resolved.PendingReason = identityNotReadyReason
 		resolved.PendingMessage = fmt.Sprintf("%s is not ready", resolved.SourceDescription())
 		return resolved, true, nil
 	}
 
 	if identity.Status.ManagedIdentityName == nil || *identity.Status.ManagedIdentityName == "" {
-		resolved.PendingReason = "IdentityNotReady"
+		resolved.PendingReason = identityNotReadyReason
 		resolved.PendingMessage = fmt.Sprintf("%s is missing status.managedIdentityName", resolved.SourceDescription())
 		return resolved, true, nil
 	}
 	if identity.Status.PrincipalID == nil || *identity.Status.PrincipalID == "" {
-		resolved.PendingReason = "IdentityNotReady"
+		resolved.PendingReason = identityNotReadyReason
 		resolved.PendingMessage = fmt.Sprintf("%s is missing status.principalId", resolved.SourceDescription())
 		return resolved, true, nil
 	}
@@ -157,7 +158,7 @@ func resolveServiceAccount(ctx context.Context, c client.Reader, namespace, serv
 		Name:      serviceAccountName,
 	}, &serviceAccount); err != nil {
 		if apierrors.IsNotFound(err) {
-			resolved.PendingReason = "IdentityNotReady"
+			resolved.PendingReason = identityNotReadyReason
 			resolved.PendingMessage = fmt.Sprintf("%s not found", resolved.SourceDescription())
 			return resolved, true, nil
 		}
@@ -166,14 +167,14 @@ func resolveServiceAccount(ctx context.Context, c client.Reader, namespace, serv
 
 	clientID := strings.TrimSpace(serviceAccount.Annotations[ServiceAccountClientIDAnnotation])
 	if clientID == "" {
-		resolved.PendingReason = "IdentityNotReady"
+		resolved.PendingReason = identityNotReadyReason
 		resolved.PendingMessage = fmt.Sprintf("%s is missing annotation %q", resolved.SourceDescription(), ServiceAccountClientIDAnnotation)
 		return resolved, true, nil
 	}
 
 	principalID := strings.TrimSpace(serviceAccount.Annotations[ServiceAccountPrincipalIDAnnotation])
 	if principalID == "" {
-		resolved.PendingReason = "IdentityNotReady"
+		resolved.PendingReason = identityNotReadyReason
 		resolved.PendingMessage = fmt.Sprintf("%s is missing annotation %q", resolved.SourceDescription(), ServiceAccountPrincipalIDAnnotation)
 		return resolved, true, nil
 	}
