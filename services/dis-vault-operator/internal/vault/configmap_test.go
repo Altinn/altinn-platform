@@ -82,3 +82,24 @@ func TestBuildManagedConfigMapWithServiceAccountRef(t *testing.T) {
 		t.Fatalf("expected service-account based ConfigMap name, got %q", configMap.Name)
 	}
 }
+
+func TestBuildManagedConfigMapAllowsEmptyVaultURI(t *testing.T) {
+	t.Parallel()
+
+	vaultObj := &vaultv1alpha1.Vault{}
+	vaultObj.Name = testVaultName
+	vaultObj.Namespace = testNamespace
+	vaultObj.Spec.IdentityRef = &vaultv1alpha1.ApplicationIdentityRef{Name: "my-app"}
+
+	configMap, err := BuildManagedConfigMap(vaultObj, "my-akv-name", "")
+	if err != nil {
+		t.Fatalf("expected ConfigMap builder to allow an empty Vault URI, got error: %v", err)
+	}
+	got, ok := configMap.Data[ConfigMapKeyAKVURI]
+	if !ok {
+		t.Fatalf("expected AkvUri data key to be present")
+	}
+	if got != "" {
+		t.Fatalf("expected AkvUri data key to be empty until ASO reports the Vault URI, got %q", got)
+	}
+}

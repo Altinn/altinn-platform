@@ -222,8 +222,11 @@ var _ = Describe("Vault e2e", Ordered, func() {
 			return err
 		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).Should(Succeed())
 
-		By("verifying the ConfigMap is not created before the Vault URI is known")
-		ensureResourceNotCreatedYet("configmaps", expectedConfigMapName)
+		By("verifying the ConfigMap is created before the Vault URI is known")
+		waitForJSONPath("configmaps", expectedConfigMapName, "{.data.AkvName}", vaultpkg.DeterministicAzureVaultName(sampleNamespace, sampleVaultName, "dev"))
+		waitForJSONPath("configmaps", expectedConfigMapName, "{.data.AkvUri}", "")
+		waitForJSONPath("vaults.vault.dis.altinn.cloud", sampleVaultName, "{.status.conditions[?(@.type=='ConfigMapReady')].status}", "True")
+		waitForJSONPath("vaults.vault.dis.altinn.cloud", sampleVaultName, "{.status.conditions[?(@.type=='ConfigMapReady')].reason}", "PendingVaultURI")
 		waitForJSONPath("roleassignments.authorization.azure.com", expectedGroupRoleAssignName, "{.spec.principalId}", sampleGroupObjectID)
 		waitForJSONPath("roleassignments.authorization.azure.com", expectedGroupRoleAssignName, "{.spec.principalType}", "Group")
 		waitForJSONPath(
@@ -353,9 +356,12 @@ var _ = Describe("Vault e2e", Ordered, func() {
 			return err
 		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).Should(Succeed())
 
-		By("verifying the SecretStore is not created before the Vault URI is known")
+		By("verifying the SecretStore waits for the Vault URI while the ConfigMap is created immediately")
 		ensureResourceNotCreatedYet("secretstores.external-secrets.io", expectedSecretStoreName)
-		ensureResourceNotCreatedYet("configmaps", expectedConfigMapName)
+		waitForJSONPath("configmaps", expectedConfigMapName, "{.data.AkvName}", vaultpkg.DeterministicAzureVaultName(sampleNamespace, externalSecretsVaultName, "dev"))
+		waitForJSONPath("configmaps", expectedConfigMapName, "{.data.AkvUri}", "")
+		waitForJSONPath("vaults.vault.dis.altinn.cloud", externalSecretsVaultName, "{.status.conditions[?(@.type=='ConfigMapReady')].status}", "True")
+		waitForJSONPath("vaults.vault.dis.altinn.cloud", externalSecretsVaultName, "{.status.conditions[?(@.type=='ConfigMapReady')].reason}", "PendingVaultURI")
 
 		By("patching dependent ASO resources to Ready")
 		resourceID := "/subscriptions/fake-subscription/resourceGroups/fake-resource-group/providers/Microsoft.KeyVault/vaults/vault-es-sample"

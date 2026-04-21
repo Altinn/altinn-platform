@@ -107,28 +107,8 @@ func (r *VaultReconciler) reconcileManagedConfigMap(
 	}
 
 	vaultURI := vaultURIFromStatus(keyVault)
-	if vaultURI == "" {
-		if current != nil {
-			return configMapReconcileResult{
-				Condition: vaultpkg.NewCondition(
-					vaultv1alpha1.ConditionConfigMapReady,
-					vaultObj.Generation,
-					metav1.ConditionTrue,
-					"Ready",
-					"managed ConfigMap is present",
-				),
-			}, nil
-		}
-
-		return configMapReconcileResult{
-			Condition: vaultpkg.NewCondition(
-				vaultv1alpha1.ConditionConfigMapReady,
-				vaultObj.Generation,
-				metav1.ConditionUnknown,
-				"VaultNotReady",
-				"waiting for Vault URI before reconciling ConfigMap",
-			),
-		}, nil
+	if vaultURI == "" && current != nil {
+		vaultURI = current.Data[vaultpkg.ConfigMapKeyAKVURI]
 	}
 
 	desired, err := vaultpkg.BuildManagedConfigMap(vaultObj, azureName, vaultURI)
@@ -137,6 +117,18 @@ func (r *VaultReconciler) reconcileManagedConfigMap(
 	}
 	if err := r.upsertManagedConfigMap(ctx, vaultObj, desired); err != nil {
 		return configMapReconcileResult{}, err
+	}
+
+	if desired.Data[vaultpkg.ConfigMapKeyAKVURI] == "" {
+		return configMapReconcileResult{
+			Condition: vaultpkg.NewCondition(
+				vaultv1alpha1.ConditionConfigMapReady,
+				vaultObj.Generation,
+				metav1.ConditionTrue,
+				"PendingVaultURI",
+				"managed ConfigMap reconciled; AkvUri will be updated when Vault URI becomes available",
+			),
+		}, nil
 	}
 
 	return configMapReconcileResult{
