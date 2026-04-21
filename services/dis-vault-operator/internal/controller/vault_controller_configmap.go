@@ -74,7 +74,11 @@ func (r *VaultReconciler) reconcileManagedConfigMap(
 	azureName string,
 	keyVault *keyvaultv1.Vault,
 ) (configMapReconcileResult, error) {
-	name := vaultpkg.DeterministicConfigMapName(vaultObj.Spec.IdentityRef.Name)
+	authReferenceName, err := vaultpkg.ActiveAuthReferenceName(vaultObj)
+	if err != nil {
+		return configMapReconcileResult{}, err
+	}
+	name := vaultpkg.DeterministicConfigMapName(authReferenceName)
 	key := types.NamespacedName{Name: name, Namespace: vaultObj.Namespace}
 
 	if err := r.cleanupManagedConfigMaps(ctx, vaultObj, key); err != nil {

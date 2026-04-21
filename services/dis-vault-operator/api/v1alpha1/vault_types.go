@@ -47,10 +47,23 @@ type ApplicationIdentityRef struct {
 	Name string `json:"name"`
 }
 
+// ServiceAccountRef references a ServiceAccount in the same namespace.
+type ServiceAccountRef struct {
+	// Name is the ServiceAccount name in the same namespace.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+}
+
 // VaultSpec defines the desired state of Vault.
+// +kubebuilder:validation:XValidation:rule="has(self.identityRef) != has(self.serviceAccountRef)",message="exactly one of identityRef or serviceAccountRef must be set"
 type VaultSpec struct {
 	// IdentityRef points to the owning ApplicationIdentity in the same namespace.
-	IdentityRef ApplicationIdentityRef `json:"identityRef"`
+	// +optional
+	IdentityRef *ApplicationIdentityRef `json:"identityRef,omitempty"`
+
+	// ServiceAccountRef points to the owning ServiceAccount in the same namespace.
+	// +optional
+	ServiceAccountRef *ServiceAccountRef `json:"serviceAccountRef,omitempty"`
 
 	// GroupObjectID grants an optional Entra group access to the Key Vault.
 	// Lowercase is required to keep the identifier canonical in GitOps.

@@ -38,9 +38,9 @@ func TestBuildManagedConfigMap(t *testing.T) {
 	t.Parallel()
 
 	vaultObj := &vaultv1alpha1.Vault{}
-	vaultObj.Name = "my-app-vault"
-	vaultObj.Namespace = "default"
-	vaultObj.Spec.IdentityRef.Name = "my-app"
+	vaultObj.Name = testVaultName
+	vaultObj.Namespace = testNamespace
+	vaultObj.Spec.IdentityRef = &vaultv1alpha1.ApplicationIdentityRef{Name: "my-app"}
 
 	configMap, err := BuildManagedConfigMap(vaultObj, "my-akv-name", "https://my-akv.vault.azure.net")
 	if err != nil {
@@ -63,5 +63,22 @@ func TestBuildManagedConfigMap(t *testing.T) {
 	}
 	if got := configMap.Data[ConfigMapKeyAKVURI]; got != "https://my-akv.vault.azure.net" {
 		t.Fatalf("expected AkvUri data key to be set, got %q", got)
+	}
+}
+
+func TestBuildManagedConfigMapWithServiceAccountRef(t *testing.T) {
+	t.Parallel()
+
+	vaultObj := &vaultv1alpha1.Vault{}
+	vaultObj.Name = testVaultName
+	vaultObj.Namespace = testNamespace
+	vaultObj.Spec.ServiceAccountRef = &vaultv1alpha1.ServiceAccountRef{Name: "my-app-service-account"}
+
+	configMap, err := BuildManagedConfigMap(vaultObj, "my-akv-name", "https://my-akv.vault.azure.net")
+	if err != nil {
+		t.Fatalf("expected ConfigMap builder to succeed, got error: %v", err)
+	}
+	if configMap.Name != DeterministicConfigMapName("my-app-service-account") {
+		t.Fatalf("expected service-account based ConfigMap name, got %q", configMap.Name)
 	}
 }

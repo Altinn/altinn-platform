@@ -48,8 +48,9 @@ func BuildManagedSecretStore(v *vaultv1alpha1.Vault, tenantID, vaultURI string) 
 	if v == nil {
 		return nil, fmt.Errorf("vault must not be nil")
 	}
-	if strings.TrimSpace(v.Spec.IdentityRef.Name) == "" {
-		return nil, fmt.Errorf("identityRef.name must not be empty")
+	serviceAccountName, err := ActiveAuthReferenceName(v)
+	if err != nil {
+		return nil, err
 	}
 	vaultURI = strings.TrimSpace(vaultURI)
 	if vaultURI == "" {
@@ -73,7 +74,7 @@ func BuildManagedSecretStore(v *vaultv1alpha1.Vault, tenantID, vaultURI string) 
 					AuthType: &authType,
 					VaultURL: &vaultURL,
 					ServiceAccountRef: &esometav1.ServiceAccountSelector{
-						Name: v.Spec.IdentityRef.Name,
+						Name: serviceAccountName,
 					},
 				},
 			},

@@ -41,8 +41,9 @@ func BuildManagedConfigMap(v *vaultv1alpha1.Vault, azureName, vaultURI string) (
 	if v == nil {
 		return nil, fmt.Errorf("vault must not be nil")
 	}
-	if strings.TrimSpace(v.Spec.IdentityRef.Name) == "" {
-		return nil, fmt.Errorf("identityRef.name must not be empty")
+	authReferenceName, err := ActiveAuthReferenceName(v)
+	if err != nil {
+		return nil, err
 	}
 	if strings.TrimSpace(azureName) == "" {
 		return nil, fmt.Errorf("azureName must not be empty")
@@ -54,7 +55,7 @@ func BuildManagedConfigMap(v *vaultv1alpha1.Vault, azureName, vaultURI string) (
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      DeterministicConfigMapName(v.Spec.IdentityRef.Name),
+			Name:      DeterministicConfigMapName(authReferenceName),
 			Namespace: v.Namespace,
 			Labels: map[string]string{
 				ManagedResourceOwnerLabel:     v.Name,

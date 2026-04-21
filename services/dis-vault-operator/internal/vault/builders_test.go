@@ -33,7 +33,7 @@ func TestBuildASOKeyVaultResource(t *testing.T) {
 	v := &vaultv1alpha1.Vault{}
 	v.Name = testVaultName
 	v.Namespace = testNamespace
-	v.Spec.IdentityRef.Name = testIdentityName
+	v.Spec.IdentityRef = &vaultv1alpha1.ApplicationIdentityRef{Name: testIdentityName}
 
 	resource, err := BuildASOKeyVaultResource(v, cfg, "myappdevabc123")
 	if err != nil {
@@ -90,7 +90,7 @@ func TestBuildASOKeyVaultResourcePreservesExplicitPurgeProtectionFalse(t *testin
 	v := &vaultv1alpha1.Vault{}
 	v.Name = testVaultName
 	v.Namespace = testNamespace
-	v.Spec.IdentityRef.Name = testIdentityName
+	v.Spec.IdentityRef = &vaultv1alpha1.ApplicationIdentityRef{Name: testIdentityName}
 	v.Spec.PurgeProtectionEnabled = &disabled
 
 	resource, err := BuildASOKeyVaultResource(v, cfg, "myappdevabc123")
