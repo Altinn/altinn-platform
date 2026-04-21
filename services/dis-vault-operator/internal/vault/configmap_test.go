@@ -95,7 +95,11 @@ func TestBuildManagedConfigMapAllowsEmptyVaultURI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected ConfigMap builder to allow an empty Vault URI, got error: %v", err)
 	}
-	if got := configMap.Data[ConfigMapKeyAKVURI]; got != "" {
+	got, ok := configMap.Data[ConfigMapKeyAKVURI]
+	if !ok {
+		t.Fatalf("expected AkvUri data key to be present")
+	}
+	if got != "" {
 		t.Fatalf("expected AkvUri data key to be empty until ASO reports the Vault URI, got %q", got)
 	}
 }

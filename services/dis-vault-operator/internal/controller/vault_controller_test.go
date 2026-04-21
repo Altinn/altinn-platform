@@ -1609,7 +1609,11 @@ func TestReconcileManagedConfigMapDeletesStaleOwnedConfigMaps(t *testing.T) {
 	if current.Data[vaultpkg.ConfigMapKeyAKVName] != "new-akv" {
 		t.Fatalf("expected replacement ConfigMap to contain the Azure Key Vault name, got %#v", current.Data)
 	}
-	if current.Data[vaultpkg.ConfigMapKeyAKVURI] != "" {
+	gotURI, ok := current.Data[vaultpkg.ConfigMapKeyAKVURI]
+	if !ok {
+		t.Fatalf("expected replacement ConfigMap to contain the AkvUri key, got %#v", current.Data)
+	}
+	if gotURI != "" {
 		t.Fatalf("expected replacement ConfigMap to leave AkvUri empty until the Vault URI is known, got %#v", current.Data)
 	}
 }
