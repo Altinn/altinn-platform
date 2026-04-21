@@ -49,9 +49,6 @@ func BuildManagedConfigMap(v *vaultv1alpha1.Vault, azureName, vaultURI string) (
 		return nil, fmt.Errorf("azureName must not be empty")
 	}
 	vaultURI = strings.TrimSpace(vaultURI)
-	if vaultURI == "" {
-		return nil, fmt.Errorf("vaultURI must not be empty")
-	}
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{

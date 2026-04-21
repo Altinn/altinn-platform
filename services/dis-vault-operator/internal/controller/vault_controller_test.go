@@ -1223,7 +1223,7 @@ var _ = Describe("Vault controller", func() {
 		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
 	})
 
-	It("manages a ConfigMap lifecycle when the Vault URI becomes available", func() {
+	It("creates a ConfigMap before the Vault URI is available and updates it later", func() {
 		const (
 			identityName = "my-app-identity-configmap"
 			vaultName    = "my-app-vault-configmap"
@@ -1234,11 +1234,26 @@ var _ = Describe("Vault controller", func() {
 		Expect(k8sClient.Create(testCtx, vaultObj)).To(Succeed())
 
 		expectedConfigMapName := vaultpkg.DeterministicConfigMapName(identityName)
-		Consistently(func() bool {
+		expectedAKVName := vaultpkg.DeterministicAzureVaultName(ns, vaultName, "dev")
+		Eventually(func(g Gomega) {
 			var configMap corev1.ConfigMap
-			err := k8sClient.Get(testCtx, types.NamespacedName{Name: expectedConfigMapName, Namespace: ns}, &configMap)
-			return apierrors.IsNotFound(err)
-		}, 2*time.Second, 300*time.Millisecond).Should(BeTrue())
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: expectedConfigMapName, Namespace: ns}, &configMap)).To(Succeed())
+			g.Expect(configMap.Labels).To(HaveKeyWithValue(vaultpkg.ManagedResourceOwnerLabel, vaultName))
+			g.Expect(configMap.Labels).To(HaveKeyWithValue(vaultpkg.ManagedResourceComponentLabel, vaultpkg.ManagedConfigMapComponentValue))
+			g.Expect(configMap.Data).To(HaveKeyWithValue(vaultpkg.ConfigMapKeyAKVName, expectedAKVName))
+			g.Expect(configMap.Data).To(HaveKeyWithValue(vaultpkg.ConfigMapKeyAKVURI, ""))
+			g.Expect(metav1.IsControlledBy(&configMap, vaultObj)).To(BeTrue())
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+
+		Eventually(func(g Gomega) {
+			var current vaultv1alpha1.Vault
+			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: vaultName, Namespace: ns}, &current)).To(Succeed())
+
+			configMapCondition := meta.FindStatusCondition(current.Status.Conditions, string(vaultv1alpha1.ConditionConfigMapReady))
+			g.Expect(configMapCondition).NotTo(BeNil())
+			g.Expect(configMapCondition.Status).To(Equal(metav1.ConditionTrue))
+			g.Expect(configMapCondition.Reason).To(Equal("PendingVaultURI"))
+		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
 
 		var keyVaultName string
 		var roleAssignmentName string
@@ -1260,7 +1275,6 @@ var _ = Describe("Vault controller", func() {
 		setKeyVaultReadyStatus(testCtx, keyVaultName, resourceID, vaultURI)
 		setRoleAssignmentReadyStatus(testCtx, roleAssignmentName, roleAssignmentID)
 
-		expectedAKVName := vaultpkg.DeterministicAzureVaultName(ns, vaultName, "dev")
 		Eventually(func(g Gomega) {
 			var configMap corev1.ConfigMap
 			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: expectedConfigMapName, Namespace: ns}, &configMap)).To(Succeed())
@@ -1576,14 +1590,25 @@ func TestReconcileManagedConfigMapDeletesStaleOwnedConfigMaps(t *testing.T) {
 	if result.Condition.Type != string(vaultv1alpha1.ConditionConfigMapReady) {
 		t.Fatalf("expected ConfigMapReady condition, got %q", result.Condition.Type)
 	}
-	if result.Condition.Status != metav1.ConditionUnknown || result.Condition.Reason != "VaultNotReady" {
-		t.Fatalf("expected ConfigMapReady=Unknown/VaultNotReady, got %s/%s", result.Condition.Status, result.Condition.Reason)
+	if result.Condition.Status != metav1.ConditionTrue || result.Condition.Reason != "PendingVaultURI" {
+		t.Fatalf("expected ConfigMapReady=True/PendingVaultURI, got %s/%s", result.Condition.Status, result.Condition.Reason)
 	}
 
 	var current corev1.ConfigMap
 	err = reconciler.Get(context.Background(), types.NamespacedName{Name: stale.Name, Namespace: stale.Namespace}, &current)
 	if !apierrors.IsNotFound(err) {
 		t.Fatalf("expected stale managed ConfigMap to be deleted, got err=%v obj=%#v", err, current)
+	}
+
+	expectedName := vaultpkg.DeterministicConfigMapName("new-app")
+	if err := reconciler.Get(context.Background(), types.NamespacedName{Name: expectedName, Namespace: vaultObj.Namespace}, &current); err != nil {
+		t.Fatalf("expected reconciler to create the replacement ConfigMap, got error: %v", err)
+	}
+	if current.Data[vaultpkg.ConfigMapKeyAKVName] != "new-akv" {
+		t.Fatalf("expected replacement ConfigMap to contain the Azure Key Vault name, got %#v", current.Data)
+	}
+	if current.Data[vaultpkg.ConfigMapKeyAKVURI] != "" {
+		t.Fatalf("expected replacement ConfigMap to leave AkvUri empty until the Vault URI is known, got %#v", current.Data)
 	}
 }
 
@@ -1643,6 +1668,72 @@ func TestReconcileManagedConfigMapReturnsNameConflictForNonOwnedConfigMap(t *tes
 	}
 	if current.Data[vaultpkg.ConfigMapKeyAKVURI] != "https://existing.vault.azure.net" {
 		t.Fatalf("expected conflicting ConfigMap data to remain unchanged, got %#v", current.Data)
+	}
+}
+
+func TestReconcileManagedConfigMapPreservesExistingVaultURIWhenStatusIsUnavailable(t *testing.T) {
+	t.Parallel()
+
+	scheme := newControllerUnitTestScheme(t)
+	vaultObj := &vaultv1alpha1.Vault{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: vaultv1alpha1.GroupVersion.String(),
+			Kind:       "Vault",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "vault-sample",
+			Namespace:  "default",
+			Generation: 12,
+			UID:        types.UID("vault-uid"),
+		},
+		Spec: vaultv1alpha1.VaultSpec{
+			IdentityRef: &vaultv1alpha1.ApplicationIdentityRef{Name: "app-sample"},
+		},
+	}
+
+	current := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      vaultpkg.DeterministicConfigMapName("app-sample"),
+			Namespace: vaultObj.Namespace,
+			Labels: map[string]string{
+				vaultpkg.ManagedResourceOwnerLabel:     vaultObj.Name,
+				vaultpkg.ManagedResourceComponentLabel: vaultpkg.ManagedConfigMapComponentValue,
+			},
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(vaultObj, vaultv1alpha1.GroupVersion.WithKind("Vault")),
+			},
+		},
+		Data: map[string]string{
+			vaultpkg.ConfigMapKeyAKVName: "old-akv",
+			vaultpkg.ConfigMapKeyAKVURI:  "https://existing.vault.azure.net",
+		},
+	}
+
+	reconciler := &VaultReconciler{
+		Client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(current).Build(),
+		Scheme: scheme,
+	}
+
+	result, err := reconciler.reconcileManagedConfigMap(context.Background(), vaultObj, "new-akv", nil)
+	if err != nil {
+		t.Fatalf("expected reconcile to succeed when Vault status is temporarily unavailable, got error: %v", err)
+	}
+	if result.Condition.Type != string(vaultv1alpha1.ConditionConfigMapReady) {
+		t.Fatalf("expected ConfigMapReady condition, got %q", result.Condition.Type)
+	}
+	if result.Condition.Status != metav1.ConditionTrue || result.Condition.Reason != "Ready" {
+		t.Fatalf("expected ConfigMapReady=True/Ready, got %s/%s", result.Condition.Status, result.Condition.Reason)
+	}
+
+	var updated corev1.ConfigMap
+	if err := reconciler.Get(context.Background(), types.NamespacedName{Name: current.Name, Namespace: current.Namespace}, &updated); err != nil {
+		t.Fatalf("expected owned ConfigMap to remain managed, got error: %v", err)
+	}
+	if updated.Data[vaultpkg.ConfigMapKeyAKVName] != "new-akv" {
+		t.Fatalf("expected AkvName to be refreshed during reconcile, got %#v", updated.Data)
+	}
+	if updated.Data[vaultpkg.ConfigMapKeyAKVURI] != "https://existing.vault.azure.net" {
+		t.Fatalf("expected existing AkvUri to be preserved until a newer Vault URI is known, got %#v", updated.Data)
 	}
 }
 
