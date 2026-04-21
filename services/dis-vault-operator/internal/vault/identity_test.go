@@ -12,6 +12,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+const identityNotReadyReason = "IdentityNotReady"
+
 func TestResolveOwnerIdentityForReadyApplicationIdentity(t *testing.T) {
 	t.Parallel()
 
@@ -81,8 +83,8 @@ func TestResolveOwnerIdentityForUnreadyApplicationIdentity(t *testing.T) {
 	if !requeue {
 		t.Fatalf("expected requeue=true for unready identity")
 	}
-	if resolved.PendingReason != "IdentityNotReady" {
-		t.Fatalf("expected pending reason IdentityNotReady, got %q", resolved.PendingReason)
+	if resolved.PendingReason != identityNotReadyReason {
+		t.Fatalf("expected pending reason %s, got %q", identityNotReadyReason, resolved.PendingReason)
 	}
 }
 

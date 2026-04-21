@@ -38,8 +38,8 @@ func TestBuildManagedConfigMap(t *testing.T) {
 	t.Parallel()
 
 	vaultObj := &vaultv1alpha1.Vault{}
-	vaultObj.Name = "my-app-vault"
-	vaultObj.Namespace = "default"
+	vaultObj.Name = testVaultName
+	vaultObj.Namespace = testNamespace
 	vaultObj.Spec.IdentityRef = &vaultv1alpha1.ApplicationIdentityRef{Name: "my-app"}
 
 	configMap, err := BuildManagedConfigMap(vaultObj, "my-akv-name", "https://my-akv.vault.azure.net")
@@ -70,8 +70,8 @@ func TestBuildManagedConfigMapWithServiceAccountRef(t *testing.T) {
 	t.Parallel()
 
 	vaultObj := &vaultv1alpha1.Vault{}
-	vaultObj.Name = "my-app-vault"
-	vaultObj.Namespace = "default"
+	vaultObj.Name = testVaultName
+	vaultObj.Namespace = testNamespace
 	vaultObj.Spec.ServiceAccountRef = &vaultv1alpha1.ServiceAccountRef{Name: "my-app-service-account"}
 
 	configMap, err := BuildManagedConfigMap(vaultObj, "my-akv-name", "https://my-akv.vault.azure.net")
