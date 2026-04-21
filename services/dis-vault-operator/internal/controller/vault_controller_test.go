@@ -27,6 +27,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+const readyReason = "Ready"
+
 type noMatchSecretStoreClient struct {
 	client.Client
 }
@@ -165,7 +167,7 @@ var _ = Describe("Vault controller", func() {
 			meta.SetStatusCondition(&appIdentity.Status.Conditions, metav1.Condition{
 				Type:   string(identityv1alpha1.ConditionReady),
 				Status: metav1.ConditionTrue,
-				Reason: "Ready",
+				Reason: readyReason,
 			})
 			Expect(k8sClient.Status().Update(ctx, appIdentity)).To(Succeed())
 		}
@@ -197,7 +199,7 @@ var _ = Describe("Vault controller", func() {
 				Severity:           asoconditions.ConditionSeverityNone,
 				LastTransitionTime: metav1.Now(),
 				ObservedGeneration: keyVault.Generation,
-				Reason:             "Ready",
+				Reason:             readyReason,
 				Message:            "Provisioned",
 			}}
 
@@ -223,7 +225,7 @@ var _ = Describe("Vault controller", func() {
 				Severity:           asoconditions.ConditionSeverityNone,
 				LastTransitionTime: metav1.Now(),
 				ObservedGeneration: roleAssignment.Generation,
-				Reason:             "Ready",
+				Reason:             readyReason,
 				Message:            "Assigned",
 			}}
 
@@ -304,7 +306,7 @@ var _ = Describe("Vault controller", func() {
 			meta.SetStatusCondition(&identity.Status.Conditions, metav1.Condition{
 				Type:   string(identityv1alpha1.ConditionReady),
 				Status: metav1.ConditionTrue,
-				Reason: "Ready",
+				Reason: readyReason,
 			})
 			if err := k8sClient.Status().Update(testCtx, &identity); err != nil {
 				if apierrors.IsConflict(err) {
@@ -912,7 +914,7 @@ var _ = Describe("Vault controller", func() {
 			groupCondition := meta.FindStatusCondition(vaultObj.Status.Conditions, string(vaultv1alpha1.ConditionGroupRoleAssignment))
 			g.Expect(groupCondition).NotTo(BeNil())
 			g.Expect(groupCondition.Status).To(Equal(metav1.ConditionTrue))
-			g.Expect(groupCondition.Reason).To(Equal("Ready"))
+			g.Expect(groupCondition.Reason).To(Equal(readyReason))
 
 			ready := meta.FindStatusCondition(vaultObj.Status.Conditions, string(vaultv1alpha1.ConditionReady))
 			g.Expect(ready).NotTo(BeNil())
@@ -965,7 +967,7 @@ var _ = Describe("Vault controller", func() {
 			groupCondition := meta.FindStatusCondition(vaultObj.Status.Conditions, string(vaultv1alpha1.ConditionGroupRoleAssignment))
 			g.Expect(groupCondition).NotTo(BeNil())
 			g.Expect(groupCondition.Status).To(Equal(metav1.ConditionTrue))
-			g.Expect(groupCondition.Reason).To(Equal("Ready"))
+			g.Expect(groupCondition.Reason).To(Equal(readyReason))
 		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
 
 		findGroupAndOwnerAssignments := func(items []authorizationv1.RoleAssignment) (authorizationv1.RoleAssignment, authorizationv1.RoleAssignment) {
@@ -1292,7 +1294,7 @@ var _ = Describe("Vault controller", func() {
 			configMapCondition := meta.FindStatusCondition(current.Status.Conditions, string(vaultv1alpha1.ConditionConfigMapReady))
 			g.Expect(configMapCondition).NotTo(BeNil())
 			g.Expect(configMapCondition.Status).To(Equal(metav1.ConditionTrue))
-			g.Expect(configMapCondition.Reason).To(Equal("Ready"))
+			g.Expect(configMapCondition.Reason).To(Equal(readyReason))
 
 			ready := meta.FindStatusCondition(current.Status.Conditions, string(vaultv1alpha1.ConditionReady))
 			g.Expect(ready).NotTo(BeNil())
@@ -1362,7 +1364,7 @@ var _ = Describe("Vault controller", func() {
 			external := meta.FindStatusCondition(current.Status.Conditions, string(vaultv1alpha1.ConditionExternalSecretsReady))
 			g.Expect(external).NotTo(BeNil())
 			g.Expect(external.Status).To(Equal(metav1.ConditionTrue))
-			g.Expect(external.Reason).To(Equal("Ready"))
+			g.Expect(external.Reason).To(Equal(readyReason))
 			g.Expect(current.Status.ExternalSecretStoreName).To(Equal(expectedStoreName))
 
 			ready := meta.FindStatusCondition(current.Status.Conditions, string(vaultv1alpha1.ConditionReady))
@@ -1721,7 +1723,7 @@ func TestReconcileManagedConfigMapPreservesExistingVaultURIWhenStatusIsUnavailab
 	if result.Condition.Type != string(vaultv1alpha1.ConditionConfigMapReady) {
 		t.Fatalf("expected ConfigMapReady condition, got %q", result.Condition.Type)
 	}
-	if result.Condition.Status != metav1.ConditionTrue || result.Condition.Reason != "Ready" {
+	if result.Condition.Status != metav1.ConditionTrue || result.Condition.Reason != readyReason {
 		t.Fatalf("expected ConfigMapReady=True/Ready, got %s/%s", result.Condition.Status, result.Condition.Reason)
 	}
 
@@ -1763,7 +1765,7 @@ func TestBuildNetworkPolicyCondition(t *testing.T) {
 	}
 
 	ready := buildNetworkPolicyCondition(3, desired, cfg)
-	if ready.Status != metav1.ConditionTrue || ready.Reason != "Ready" {
+	if ready.Status != metav1.ConditionTrue || ready.Reason != readyReason {
 		t.Fatalf("expected network policy condition to be ready, got %s/%s", ready.Status, ready.Reason)
 	}
 
