@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.3.0...dis-vault-v1.4.0) (2026-04-21)
+
+
+### Features
+
+* **dis-vault:** support service account-backed vault identities ([#3347](https://github.com/Altinn/altinn-platform/issues/3347)) ([6b70042](https://github.com/Altinn/altinn-platform/commit/6b70042d8c7492cc449e222f7146bc97fbfe9c4b))
+
 ## [1.3.0](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.2.1...dis-vault-v1.3.0) (2026-04-20)
 
 
