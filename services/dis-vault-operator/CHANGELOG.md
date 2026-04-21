@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.4.0...dis-vault-v1.4.1) (2026-04-21)
+
+
+### Bug Fixes
+
+* **dis-vault:** create configmap before vault uri is ready ([#3350](https://github.com/Altinn/altinn-platform/issues/3350)) ([d751120](https://github.com/Altinn/altinn-platform/commit/d7511207ab024950119d80a54bf14ddb8140ac67))
+
 ## [1.4.0](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.3.0...dis-vault-v1.4.0) (2026-04-21)
 
 
