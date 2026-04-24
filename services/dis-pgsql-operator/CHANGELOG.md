@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.3](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.5.2...dis-pgsql-v0.5.3) (2026-04-24)
+
+
+### Bug Fixes
+
+* **dis-pgsql:** update pgx and fix vulns ([#3359](https://github.com/Altinn/altinn-platform/issues/3359)) ([56f5219](https://github.com/Altinn/altinn-platform/commit/56f5219bdcced1576dff0289739a7b5feb826aec))
+
 ## [0.5.2](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.5.1...dis-pgsql-v0.5.2) (2026-03-25)
 
 
