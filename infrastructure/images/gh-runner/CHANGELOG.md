@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.5.0...ghrunner-0.6.0) (2026-04-27)
+
+
+### Features
+
+* Improve .trivyignore formatting and descriptions ([#3384](https://github.com/Altinn/altinn-platform/issues/3384)) ([be29ae6](https://github.com/Altinn/altinn-platform/commit/be29ae6720422555a8fa54ce92f2a26abb9a1adb))
+
 ## [0.5.0](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.4.1...ghrunner-0.5.0) (2026-02-25)
 
 
