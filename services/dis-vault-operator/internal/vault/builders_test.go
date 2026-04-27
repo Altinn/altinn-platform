@@ -144,6 +144,46 @@ func TestBuildOwnerRoleAssignmentResource(t *testing.T) {
 	}
 }
 
+func TestBuildOwnerRoleAssignmentResourceUsesAzureKeyVaultNameForAzureNameSeed(t *testing.T) {
+	t.Parallel()
+
+	v := &vaultv1alpha1.Vault{}
+	v.Name = testVaultName
+	v.Namespace = testNamespace
+
+	firstKeyVault := testKeyVaultWithAzureName("product-infopor-f13d1aeb")
+	secondKeyVault := testKeyVaultWithAzureName("product-infopor-3b8f3a59")
+
+	first, err := BuildOwnerRoleAssignmentResource(v, firstKeyVault, "principal-123")
+	if err != nil {
+		t.Fatalf("expected first role assignment build to succeed, got error: %v", err)
+	}
+	second, err := BuildOwnerRoleAssignmentResource(v, secondKeyVault, "principal-123")
+	if err != nil {
+		t.Fatalf("expected second role assignment build to succeed, got error: %v", err)
+	}
+
+	if first.Spec.AzureName == second.Spec.AzureName {
+		t.Fatalf("expected different Azure Key Vault names to produce different role assignment Azure names")
+	}
+	if first.Spec.Owner == nil || first.Spec.Owner.Name != firstKeyVault.Name {
+		t.Fatalf("expected owner reference to use Kubernetes Key Vault name %q, got %#v", firstKeyVault.Name, first.Spec.Owner)
+	}
+}
+
+func TestBuildOwnerRoleAssignmentResourceRejectsKeyVaultWithoutAzureName(t *testing.T) {
+	t.Parallel()
+
+	v := &vaultv1alpha1.Vault{}
+	v.Name = testVaultName
+	v.Namespace = testNamespace
+
+	keyVault := testKeyVaultWithAzureName(" ")
+	if _, err := BuildOwnerRoleAssignmentResource(v, keyVault, "principal-123"); err == nil {
+		t.Fatalf("expected error when Key Vault AzureName is empty")
+	}
+}
+
 func TestBuildGroupRoleAssignmentResource(t *testing.T) {
 	t.Parallel()
 
@@ -189,6 +229,46 @@ func TestBuildGroupRoleAssignmentResource(t *testing.T) {
 	}
 }
 
+func TestBuildGroupRoleAssignmentResourceUsesAzureKeyVaultNameForAzureNameSeed(t *testing.T) {
+	t.Parallel()
+
+	v := &vaultv1alpha1.Vault{}
+	v.Name = testVaultName
+	v.Namespace = testNamespace
+
+	firstKeyVault := testKeyVaultWithAzureName("product-infopor-f13d1aeb")
+	secondKeyVault := testKeyVaultWithAzureName("product-infopor-3b8f3a59")
+
+	first, err := BuildGroupRoleAssignmentResource(v, firstKeyVault, testGroupObjectID)
+	if err != nil {
+		t.Fatalf("expected first group role assignment build to succeed, got error: %v", err)
+	}
+	second, err := BuildGroupRoleAssignmentResource(v, secondKeyVault, testGroupObjectID)
+	if err != nil {
+		t.Fatalf("expected second group role assignment build to succeed, got error: %v", err)
+	}
+
+	if first.Spec.AzureName == second.Spec.AzureName {
+		t.Fatalf("expected different Azure Key Vault names to produce different group role assignment Azure names")
+	}
+	if first.Spec.Owner == nil || first.Spec.Owner.Name != firstKeyVault.Name {
+		t.Fatalf("expected owner reference to use Kubernetes Key Vault name %q, got %#v", firstKeyVault.Name, first.Spec.Owner)
+	}
+}
+
+func TestBuildGroupRoleAssignmentResourceRejectsKeyVaultWithoutAzureName(t *testing.T) {
+	t.Parallel()
+
+	v := &vaultv1alpha1.Vault{}
+	v.Name = testVaultName
+	v.Namespace = testNamespace
+
+	keyVault := testKeyVaultWithAzureName(" ")
+	if _, err := BuildGroupRoleAssignmentResource(v, keyVault, testGroupObjectID); err == nil {
+		t.Fatalf("expected error when Key Vault AzureName is empty")
+	}
+}
+
 func TestBuildGroupRoleAssignmentResourceIsDeterministicForDifferentGroups(t *testing.T) {
 	t.Parallel()
 
@@ -223,4 +303,12 @@ func TestBuildGroupRoleAssignmentName(t *testing.T) {
 	if nameA == nameC {
 		t.Fatalf("expected different vault names to produce different names")
 	}
+}
+
+func testKeyVaultWithAzureName(azureName string) *keyvaultv1.Vault {
+	keyVault := &keyvaultv1.Vault{}
+	keyVault.Name = deterministicKubernetesName(testVaultName, "akv")
+	keyVault.Namespace = testNamespace
+	keyVault.Spec.AzureName = azureName
+	return keyVault
 }
