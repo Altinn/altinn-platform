@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.2](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.4.1...dis-vault-v1.4.2) (2026-04-27)
+
+
+### Bug Fixes
+
+* **dis-vault:** avoid role assignment guid collisions ([#3386](https://github.com/Altinn/altinn-platform/issues/3386)) ([f2fa9e4](https://github.com/Altinn/altinn-platform/commit/f2fa9e43dbda80e5b149913bdedf888aebddf740))
+
 ## [1.4.1](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.4.0...dis-vault-v1.4.1) (2026-04-21)
 
 
