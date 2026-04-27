@@ -28,12 +28,12 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Validate syncroot image
-        uses: Altinn/altinn-platform/actions/flux/verify-syncroot@0be6bf2f191006bb8011ebe55071c6796945cafa # main
+        uses: Altinn/altinn-platform/actions/flux/verify-syncroot@ae178837969e98ccb088d8c8b64466a0e07cd565 # main
         with:
           workdir: ./syncroot
 
       - name: Build and push at22 syncroot artifact
-        uses: Altinn/altinn-platform/actions/flux/build-push-image@0be6bf2f191006bb8011ebe55071c6796945cafa # main
+        uses: Altinn/altinn-platform/actions/flux/build-push-image@ae178837969e98ccb088d8c8b64466a0e07cd565 # main
         with:
           image_name: ${{ env.SYNCROOT_ARTIFACT_NAME }}
           tag: ${{ env.SYNCROOT_ENVIRONMENT }}
