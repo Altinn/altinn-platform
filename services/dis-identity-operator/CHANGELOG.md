@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.2](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.2.1...dis-identity-v0.2.2) (2026-04-27)
+
+
+### Dependency Updates
+
+* bump grpc-GO to 1.79.3 ([#3269](https://github.com/Altinn/altinn-platform/issues/3269)) ([9166356](https://github.com/Altinn/altinn-platform/commit/916635673abdde61b55ebb24addd51ff4b159f85))
+* update actions/setup-go digest to 4a36011 ([#3191](https://github.com/Altinn/altinn-platform/issues/3191)) ([3c78f2b](https://github.com/Altinn/altinn-platform/commit/3c78f2b53ad80d613b3c2f7ec686ddf9212829ef))
+* update dockerfile non-major dependencies ([#3382](https://github.com/Altinn/altinn-platform/issues/3382)) ([f0e15d1](https://github.com/Altinn/altinn-platform/commit/f0e15d1823a539184149f82e0ab15493a393f4a8))
+* update github-actions non-major dependencies ([#3018](https://github.com/Altinn/altinn-platform/issues/3018)) ([100ab8d](https://github.com/Altinn/altinn-platform/commit/100ab8d5d0b9f413983c4b6ca7b5baac6afe51ed))
+* update golangci/golangci-lint-action action to v9 ([#3378](https://github.com/Altinn/altinn-platform/issues/3378)) ([7184911](https://github.com/Altinn/altinn-platform/commit/7184911a4fb241f65d7917f3bd04383d6f9aa38f))
+
 ## [0.2.1](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.2.0...dis-identity-v0.2.1) (2026-03-20)
 
 
