@@ -114,8 +114,9 @@ func TestBuildOwnerRoleAssignmentResource(t *testing.T) {
 	v := &vaultv1alpha1.Vault{}
 	v.Name = testVaultName
 	v.Namespace = testNamespace
+	keyVault := testKeyVaultWithAzureName("sample-vault-a-11111111")
 
-	roleAssignment, err := BuildOwnerRoleAssignmentResource(v, nil, "principal-123")
+	roleAssignment, err := BuildOwnerRoleAssignmentResource(v, keyVault, "principal-123")
 	if err != nil {
 		t.Fatalf("expected role assignment builder to succeed, got error: %v", err)
 	}
@@ -135,12 +136,24 @@ func TestBuildOwnerRoleAssignmentResource(t *testing.T) {
 		t.Fatalf("expected AzureName to be a GUID, got %q: %v", roleAssignment.Spec.AzureName, err)
 	}
 
-	roleAssignment2, err := BuildOwnerRoleAssignmentResource(v, nil, "principal-123")
+	roleAssignment2, err := BuildOwnerRoleAssignmentResource(v, keyVault, "principal-123")
 	if err != nil {
 		t.Fatalf("expected second build to succeed, got error: %v", err)
 	}
 	if roleAssignment.Spec.AzureName != roleAssignment2.Spec.AzureName {
 		t.Fatalf("expected deterministic AzureName across builds")
+	}
+}
+
+func TestBuildOwnerRoleAssignmentResourceRejectsNilKeyVault(t *testing.T) {
+	t.Parallel()
+
+	v := &vaultv1alpha1.Vault{}
+	v.Name = testVaultName
+	v.Namespace = testNamespace
+
+	if _, err := BuildOwnerRoleAssignmentResource(v, nil, "principal-123"); err == nil {
+		t.Fatalf("expected error when Key Vault is nil")
 	}
 }
 
@@ -151,8 +164,8 @@ func TestBuildOwnerRoleAssignmentResourceUsesAzureKeyVaultNameForAzureNameSeed(t
 	v.Name = testVaultName
 	v.Namespace = testNamespace
 
-	firstKeyVault := testKeyVaultWithAzureName("product-infopor-f13d1aeb")
-	secondKeyVault := testKeyVaultWithAzureName("product-infopor-3b8f3a59")
+	firstKeyVault := testKeyVaultWithAzureName("sample-vault-a-11111111")
+	secondKeyVault := testKeyVaultWithAzureName("sample-vault-b-22222222")
 
 	first, err := BuildOwnerRoleAssignmentResource(v, firstKeyVault, "principal-123")
 	if err != nil {
@@ -190,8 +203,9 @@ func TestBuildGroupRoleAssignmentResource(t *testing.T) {
 	v := &vaultv1alpha1.Vault{}
 	v.Name = testVaultName
 	v.Namespace = testNamespace
+	keyVault := testKeyVaultWithAzureName("sample-vault-a-11111111")
 
-	roleAssignment, err := BuildGroupRoleAssignmentResource(v, nil, testGroupObjectID)
+	roleAssignment, err := BuildGroupRoleAssignmentResource(v, keyVault, testGroupObjectID)
 	if err != nil {
 		t.Fatalf("expected group role assignment builder to succeed, got error: %v", err)
 	}
@@ -220,12 +234,24 @@ func TestBuildGroupRoleAssignmentResource(t *testing.T) {
 		t.Fatalf("expected group assignment label to be set")
 	}
 
-	roleAssignment2, err := BuildGroupRoleAssignmentResource(v, nil, testGroupObjectID)
+	roleAssignment2, err := BuildGroupRoleAssignmentResource(v, keyVault, testGroupObjectID)
 	if err != nil {
 		t.Fatalf("expected second group build to succeed, got error: %v", err)
 	}
 	if roleAssignment.Spec.AzureName != roleAssignment2.Spec.AzureName {
 		t.Fatalf("expected deterministic AzureName across builds")
+	}
+}
+
+func TestBuildGroupRoleAssignmentResourceRejectsNilKeyVault(t *testing.T) {
+	t.Parallel()
+
+	v := &vaultv1alpha1.Vault{}
+	v.Name = testVaultName
+	v.Namespace = testNamespace
+
+	if _, err := BuildGroupRoleAssignmentResource(v, nil, testGroupObjectID); err == nil {
+		t.Fatalf("expected error when Key Vault is nil")
 	}
 }
 
@@ -236,8 +262,8 @@ func TestBuildGroupRoleAssignmentResourceUsesAzureKeyVaultNameForAzureNameSeed(t
 	v.Name = testVaultName
 	v.Namespace = testNamespace
 
-	firstKeyVault := testKeyVaultWithAzureName("product-infopor-f13d1aeb")
-	secondKeyVault := testKeyVaultWithAzureName("product-infopor-3b8f3a59")
+	firstKeyVault := testKeyVaultWithAzureName("sample-vault-a-11111111")
+	secondKeyVault := testKeyVaultWithAzureName("sample-vault-b-22222222")
 
 	first, err := BuildGroupRoleAssignmentResource(v, firstKeyVault, testGroupObjectID)
 	if err != nil {
@@ -275,12 +301,13 @@ func TestBuildGroupRoleAssignmentResourceIsDeterministicForDifferentGroups(t *te
 	v := &vaultv1alpha1.Vault{}
 	v.Name = testVaultName
 	v.Namespace = testNamespace
+	keyVault := testKeyVaultWithAzureName("sample-vault-a-11111111")
 
-	first, err := BuildGroupRoleAssignmentResource(v, nil, testGroupObjectID)
+	first, err := BuildGroupRoleAssignmentResource(v, keyVault, testGroupObjectID)
 	if err != nil {
 		t.Fatalf("expected first build to succeed, got error: %v", err)
 	}
-	second, err := BuildGroupRoleAssignmentResource(v, nil, "22222222-2222-2222-2222-222222222222")
+	second, err := BuildGroupRoleAssignmentResource(v, keyVault, "22222222-2222-2222-2222-222222222222")
 	if err != nil {
 		t.Fatalf("expected second build to succeed, got error: %v", err)
 	}

@@ -185,14 +185,13 @@ func buildRoleAssignmentResource(
 	principalType authorizationv1.RoleAssignmentProperties_PrincipalType,
 	labels map[string]string,
 ) (*authorizationv1.RoleAssignment, error) {
-	kubernetesOwnerName := deterministicKubernetesName(v.Name, "akv")
-	azureOwnerName := kubernetesOwnerName
-	if keyVault != nil {
-		kubernetesOwnerName = keyVault.Name
-		azureOwnerName = strings.TrimSpace(keyVault.Spec.AzureName)
-		if azureOwnerName == "" {
-			return nil, fmt.Errorf("keyVault.Spec.AzureName must not be empty")
-		}
+	if keyVault == nil {
+		return nil, fmt.Errorf("keyVault must not be nil")
+	}
+	kubernetesOwnerName := keyVault.Name
+	azureOwnerName := strings.TrimSpace(keyVault.Spec.AzureName)
+	if azureOwnerName == "" {
+		return nil, fmt.Errorf("keyVault.Spec.AzureName must not be empty")
 	}
 	azureName := deterministicRoleAssignmentAzureName(v.Namespace, azureOwnerName, principalID, keyVaultSecretsOfficerRole)
 
