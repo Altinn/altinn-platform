@@ -9,6 +9,14 @@ CVE-2026-26996
 CVE-2026-23950
 CVE-2026-24842
 CVE-2026-26960
+# minimatch: DoS via unbounded recursive backtracking and catastrophic backtracking in glob expressions
+CVE-2026-27903
+CVE-2026-27904
+# picomatch: ReDoS via crafted extglob patterns
+CVE-2026-33671
+# node-tar: hardlink path traversal and file overwrite via drive-relative linkpath/symlink
+CVE-2026-29786
+CVE-2026-31802
 
 # Go binaries (containerd, runc, docker, buildx) in base image. Should be handled upstream.
 # crypto/tls: Unexpected session resumption
@@ -40,3 +48,19 @@ CVE-2025-68973
 # Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')
 # https://avd.aquasec.com/nvd/cve-2026-23745
 CVE-2026-23745
+# go-jose/go-jose/v4: DoS via crafted JSON Web Encryption
+CVE-2026-34986
+# moby/spdystream: DoS via SPDY streaming
+CVE-2026-35469
+# opentelemetry-go SDK: Arbitrary code execution / PATH hijacking via BSD kenv
+CVE-2026-24051
+CVE-2026-39883
+# google.golang.org/grpc: Authorization bypass due to improper HTTP/2 path validation
+CVE-2026-33186
+# stdlib crypto/x509 and crypto/tls: DoS and certificate validation bypass
+CVE-2026-32280
+CVE-2026-32281
+CVE-2026-32283
+CVE-2026-33810
+# docker/docker (Moby): Authorization bypass vulnerability
+CVE-2026-34040
