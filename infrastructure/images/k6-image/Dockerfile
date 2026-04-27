@@ -9,5 +9,5 @@ RUN xk6 build \
     --with github.com/phymbert/xk6-sse \
     --output /k6
 
-FROM grafana/k6:1.7.0@sha256:ae824aa6906ce242156163462367cbcba7065efc2d365969ae41b282f1acc9f5
+FROM grafana/k6:1.7.1@sha256:4fd3a694926b064d3491d9b02b01cde886583c4931f1223816e3d9a7bdfa7e0f
 COPY --from=builder /k6 /usr/bin/k6
