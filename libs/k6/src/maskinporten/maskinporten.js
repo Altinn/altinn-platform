@@ -63,13 +63,17 @@ class MaskinportenAccessTokenGenerator {
       assertion: grant,
     };
 
-    const headers = {
+    const params = {
+      tags: {
+        tokenGenerator: 'Maskinporten Token Generator',
+        name: config.tokenUrl,
+      },
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
     };
 
-    const res = http.post(config.tokenUrl, body, headers);
+    const res = http.post(config.tokenUrl, body, params);
 
     if (res.status != 200) {
       throw new Error(`Failed to generate Maskinporten token: ${res.body}`);

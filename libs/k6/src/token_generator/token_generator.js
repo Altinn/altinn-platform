@@ -44,7 +44,10 @@ class PersonalTokenGenerator {
       headers: {
         Authorization: `Basic ${this.#encodedCredentials}`,
       },
-      tags: { name: 'Personal Token Generator' },
+      tags: {
+        tokenGenerator: 'Personal Token Generator',
+        name: config.getPersonalTokenUrl,
+      },
     };
 
     this.tokenGeneratorOptions = new PersonalTokenGeneratorOptions(
@@ -199,7 +202,10 @@ class EnterpriseTokenGenerator {
       headers: {
         Authorization: `Basic ${this.#encodedCredentials}`,
       },
-      tags: { name: 'Enterprise Token Generator' },
+      tags: {
+        tokenGenerator: 'Enterprise Token Generator',
+        name: config.getEnterpriseTokenUrl,
+      },
     };
 
     this.tokenGeneratorOptions = new EnterpriseTokenGeneratorOptions(
@@ -336,7 +342,10 @@ class PlatformTokenGenerator {
       headers: {
         Authorization: `Basic ${this.#encodedCredentials}`,
       },
-      tags: { name: 'Platform Token Generator' },
+      tags: {
+        tokenGenerator: 'Platform Token Generator',
+        name: config.getPlatformAccessTokenUrl,
+      },
     };
 
     this.tokenGeneratorOptions = new PlatformTokenGeneratorOptions(
