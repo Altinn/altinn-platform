@@ -10,6 +10,57 @@ resource "azurerm_role_assignment" "reader_user_role" {
   principal_id         = "b95b1fc9-7f21-49c3-8932-07161cd9ac5a"
 }
 
+resource "kubernetes_service_account_v1" "k6" {
+  for_each = var.k8s_rbac
+  metadata {
+    name      = "k6"
+    namespace = each.value.namespace
+  }
+}
+
+resource "kubernetes_role_v1" "k6_tests_manager" {
+  for_each = var.k8s_rbac
+  metadata {
+    name      = "k6"
+    namespace = each.value.namespace
+  }
+  rule {
+    api_groups = ["k6.io"]
+    resources  = ["testruns"]
+    verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
+  }
+  rule {
+    api_groups = [""]
+    resources  = ["configmaps"]
+    verbs      = ["get", "list", "watch", "delete", "patch"]
+  }
+  rule {
+    api_groups = [""]
+    resources  = ["pods"]
+    verbs      = ["get", "list", "watch"]
+  }
+
+}
+
+resource "kubernetes_role_binding_v1" "k6_tests_manager" {
+  for_each = var.k8s_rbac
+
+  metadata {
+    name      = "k6"
+    namespace = each.value.namespace
+  }
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "Role"
+    name      = "k6"
+  }
+  subject {
+    kind      = "ServiceAccount"
+    namespace = each.value.namespace
+    name      = "k6"
+  }
+}
+
 resource "kubernetes_cluster_role_v1" "dev_access" {
   metadata {
     name = "dev-access"
