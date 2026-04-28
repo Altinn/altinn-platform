@@ -1,8 +1,8 @@
 FROM golang:1.26-alpine@sha256:2389ebfa5b7f43eeafbd6be0c3700cc46690ef842ad962f6c5bd6be49ed82039  AS builder
 # renovate: datasource=github-tags depName=kubectl packageName=kubernetes/kubectl versioning=semver extractVersion=^kubernetes-(?<version>.*)$
-ARG KUBECTL_VERSION=1.35.3
+ARG KUBECTL_VERSION=1.36.0
 # renovate: datasource=github-releases depName=kubeseal packageName=bitnami-labs/sealed-secrets versioning=semver extractVersion=^sealed-secrets-(?<version>.*)$
-ARG KUBESEAL_VERSION=0.36.1
+ARG KUBESEAL_VERSION=0.36.6
 # renovate: datasource=github-releases depName=jsonnet packageName=google/jsonnet versioning=semver
 ARG JSONNET_VERSION=0.22.0
 # renovate: datasource=github-releases depName=jsonnet-bundler packageName=jsonnet-bundler/jsonnet-bundler versioning=semver extractVersion=^v(?<version>.*)$
@@ -62,13 +62,15 @@ FROM ghcr.io/altinn/altinn-platform/k6-image:v1.7.0@sha256:5e88f2669758eac8f5a58
 FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /jsonnet/vendor /jsonnet/vendor
+
 COPY --from=k6image /usr/bin/k6 /usr/bin/k6
+
 COPY infrastructure/images/k6-action/default_scenarios /actions/generate-k6-manifests/default_scenarios/
 COPY infrastructure/images/k6-action/infra /actions/generate-k6-manifests/infra/
 COPY infrastructure/images/k6-action/jsonnet /actions/generate-k6-manifests/jsonnet/
 
 # err:Error loading shared library libstdc++.so.6: No such file or directory (needed by /usr/local/bin/jsonnet)
-RUN apk add --no-cache libstdc++
+RUN apk add --no-cache libstdc++ git
 WORKDIR /workspace
 
 CMD ["generate-k6-manifests"]
