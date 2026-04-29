@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.9.0...tf-azdev-agent-0.9.1) (2026-04-29)
+
+
+### Bug Fixes
+
+* Update kubectl and helm versions, ignore golang CVEs ([#3403](https://github.com/Altinn/altinn-platform/issues/3403)) ([4737da7](https://github.com/Altinn/altinn-platform/commit/4737da73001c493b33d57211af1d27bbe10a6232))
+
 ## [0.9.0](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.8.3...tf-azdev-agent-0.9.0) (2026-04-29)
 
 
