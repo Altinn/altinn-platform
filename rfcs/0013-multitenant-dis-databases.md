@@ -11,18 +11,18 @@
 
 Add a `LogicalDatabase` resource to `dis-pgsql-operator`.
 
-`Database` keeps its current ownership model: one resource creates one dedicated Azure PostgreSQL Flexible Server.
+`Database` remains the server API: one resource creates one Azure PostgreSQL Flexible Server.
 
-The `Database` CRD will likely need a new Private Link network mode. That mode is for dedicated servers.
+The `Database` CRD needs to support shared servers and Private Link networking.
 
-`LogicalDatabase` means one database inside a shared PostgreSQL Flexible Server. It is reconciled by `dis-pgsql` in adminservices and can be used by any tenant or system that needs a database on a shared server.
+`LogicalDatabase` means one database inside a shared `Database` server. It is reconciled by `dis-pgsql` in adminservices and can be used by any tenant or system that needs a database on a shared server.
 
 # Motivation
 [motivation]: #motivation
 
 Some systems do not need one PostgreSQL server each. They need one shared server per environment and one logical database per tenant.
 
-The current `Database` API creates full servers using delegated subnets. That is still useful, but too heavy for shared multitenant cases.
+The current `Database` API creates full servers using delegated subnets. That is still useful, but it needs a shared server shape for multitenant cases.
 
 We need a second API that keeps shared server ownership central, while still making tenant databases declarative.
 
@@ -31,18 +31,18 @@ We need a second API that keeps shared server ownership central, while still mak
 
 The platform has two database APIs:
 
-- `Database`: creates a dedicated PostgreSQL Flexible Server.
-- `LogicalDatabase`: creates one database inside a shared PostgreSQL Flexible Server.
+- `Database`: creates a PostgreSQL Flexible Server.
+- `LogicalDatabase`: creates one database inside a shared `Database` server.
 
-`Database` should support both existing delegated-subnet networking and a new Private Link mode for dedicated servers.
+`Database` should support the current dedicated-server mode and a new shared-server mode. It should also support Private Link networking.
 
-`LogicalDatabase` is the multitenant API. It creates a database inside an admin-owned shared server.
+`LogicalDatabase` is the tenant database API. It creates a database inside a shared server created by `Database`.
 
-The shared server is fixed admin infrastructure. In v1 it is expected to be created by admin Terraform or equivalent admin automation. Server-level settings such as SKU, storage, backup, HA, PgBouncer, and tags belong to the shared server, not to each logical database.
+The shared server runs in admin infrastructure and is managed as a DIS `Database` resource from admin desired state, for example syncroot. The team or requester that needs the shared database service owns that desired state. Server-level settings such as SKU, storage, backup, HA, PgBouncer, and tags belong to the shared server, not to each logical database.
 
 ```mermaid
 sequenceDiagram
-    actor Tenant as Tenant pipeline
+    actor Requester as Requester pipeline
     participant DesiredState as Admin desired state
     participant Operator as adminservices dis-pgsql
     participant ASO as admin ASO
@@ -50,9 +50,15 @@ sequenceDiagram
     participant Postgres as Shared PostgreSQL server
     actor App as App in tenant cluster
 
-    Note over Tenant,Postgres: Provisioning
-    Tenant->>DesiredState: submits LogicalDatabase
-    DesiredState->>Operator: applies manifest
+    Note over Requester,Postgres: Shared server
+    Requester->>DesiredState: submits shared Database
+    DesiredState->>Operator: applies Database
+    Operator->>ASO: creates PostgreSQL server
+    ASO->>Postgres: provisions server
+
+    Note over Requester,Postgres: Tenant database
+    Requester->>DesiredState: submits LogicalDatabase
+    DesiredState->>Operator: applies LogicalDatabase
     Operator->>Operator: validates input and derives names
     Operator->>ASO: creates private endpoint and DNS resources
     ASO->>Network: provisions private endpoint
@@ -94,7 +100,7 @@ The `LogicalDatabase` manifest may be delivered to adminservices by GitOps, `aza
 
 When `dis-pgsql` reconciles it, it:
 
-1. derives the target shared server from admin config
+1. derives the target shared server from operator config
 2. validates tenant Azure values
 3. creates Private Link and DNS resources
 4. creates the PostgreSQL database
@@ -108,11 +114,12 @@ When `dis-pgsql` reconciles it, it:
 
 `LogicalDatabase` is a new namespaced resource in `storage.dis.altinn.cloud`.
 
-This RFC also expects a small `Database` CRD change:
+This RFC also expects `Database` CRD changes:
 
 - keep delegated-subnet networking as the default
-- add Private Link networking for dedicated servers
-- do not add shared-server fields to `Database`
+- add Private Link networking
+- add an explicit shared-server mode
+- do not add tenant database fields to `Database`
 
 Important spec fields:
 
@@ -155,7 +162,7 @@ The existing direct Postgres provisioning pattern should be reused and extended.
 
 Private Link gives the tenant VNet a private endpoint to the shared server. It only handles network reachability. Entra auth and PostgreSQL grants still decide who can log in and what they can access.
 
-The existing `Database` API should also get a Private Link network mode. In that case, it is still for dedicated servers only.
+The existing `Database` API should also get a Private Link network mode. Shared servers should use it. Dedicated servers may use it too.
 
 ## Deletion
 
@@ -165,12 +172,12 @@ Deleting the Kubernetes resource must not drop the database or delete private co
 
 ## Existing Database
 
-`Database` keeps the current dedicated-server behavior as the default. A new Private Link option can be added for dedicated servers that should use private endpoints instead of delegated subnets.
+`Database` keeps the current dedicated-server behavior as the default. A new shared-server mode can be added for servers that host `LogicalDatabase` resources.
 
 Both APIs can exist side by side:
 
-- `Database`: dedicated server
-- `LogicalDatabase`: database inside admin-owned shared server
+- `Database`: dedicated or shared server
+- `LogicalDatabase`: database inside a shared server
 
 # Drawbacks
 [drawbacks]: #drawbacks
@@ -183,12 +190,12 @@ Both APIs can exist side by side:
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
 
-This keeps the existing `Database` API simple and avoids adding a confusing multitenant mode to it.
+This keeps `Database` focused on PostgreSQL servers and puts tenant databases in their own resource.
 
 Alternatives:
 
-- Add a mode to `Database`: rejected because one kind would mean two very different things.
-- Use Terraform for every logical database: possible, but poor for Postgres grants and live status?
+- Put tenant database fields on `Database`: rejected because one kind would mean two very different things.
+- Manage logical databases outside DIS: rejected because this should be a DIS database API.
 - Let "tenant" clusters create shared databases directly: possible, but spreads shared-server authority too widely.
 - Keep one server per tenant: simplest isolation, but too costly and heavy for shared-server use cases.
 
