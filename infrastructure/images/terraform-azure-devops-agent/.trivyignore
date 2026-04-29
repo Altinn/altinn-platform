@@ -1,3 +1,23 @@
 # Should be fixed in upstream image, this image is used for build agents in private repos so we accept the risk until it is fixed
 # https://avd.aquasec.com/nvd/2025/cve-2025-68973/
 CVE-2025-68973
+
+# golang library vulnerabilities in kubectl/helm binaries - will be resolved when upstream tools rebuild with fixed dependencies
+# https://avd.aquasec.com/nvd/cve-2025-61726
+CVE-2025-61726
+# https://avd.aquasec.com/nvd/cve-2025-61728
+CVE-2025-61728
+# https://avd.aquasec.com/nvd/cve-2025-68121
+CVE-2025-68121
+# https://avd.aquasec.com/nvd/cve-2026-25679
+CVE-2026-25679
+# https://avd.aquasec.com/nvd/cve-2026-32280
+CVE-2026-32280
+# https://avd.aquasec.com/nvd/cve-2026-32281
+CVE-2026-32281
+# https://avd.aquasec.com/nvd/cve-2026-32283
+CVE-2026-32283
+# https://avd.aquasec.com/nvd/cve-2026-33186
+CVE-2026-33186
+# https://avd.aquasec.com/nvd/cve-2026-35469
+CVE-2026-35469
