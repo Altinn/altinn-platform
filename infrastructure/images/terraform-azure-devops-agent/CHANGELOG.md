@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.8.3...tf-azdev-agent-0.9.0) (2026-04-29)
+
+
+### Features
+
+* Update azure-devops-agent base image to v1.2.7 ([#3399](https://github.com/Altinn/altinn-platform/issues/3399)) ([673f84a](https://github.com/Altinn/altinn-platform/commit/673f84a0b12ac9910281216f9f6fab715eb99c1d))
+
 ## [0.8.3](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.8.2...tf-azdev-agent-0.8.3) (2026-01-22)
 
 
