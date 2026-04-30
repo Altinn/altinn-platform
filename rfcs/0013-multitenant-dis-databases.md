@@ -13,7 +13,7 @@ Add a `LogicalDatabase` resource to `dis-pgsql-operator`.
 
 `Database` remains the server API: one resource creates one Azure PostgreSQL Flexible Server.
 
-The `Database` CRD needs to support shared servers and Private Link networking.
+The `Database` CRD needs to support shared servers that use existing private access network prerequisites.
 
 `LogicalDatabase` means one database inside a shared `Database` server. It is reconciled by `dis-pgsql` in adminservices and can be used by any tenant or system that needs a database on a shared server.
 
@@ -34,15 +34,18 @@ The platform has two database APIs:
 - `Database`: creates a PostgreSQL Flexible Server.
 - `LogicalDatabase`: creates one database inside a shared `Database` server.
 
-`Database` should support the current dedicated-server mode and a new shared-server mode. It should also support Private Link networking.
+`Database` should support the current dedicated-server mode and a new shared-server mode. Shared-server networking does not belong to each `LogicalDatabase`.
 
 `LogicalDatabase` is the tenant database API. It creates a database inside a shared server created by `Database`.
 
 The shared server runs in admin infrastructure and is managed as a DIS `Database` resource from admin desired state, for example syncroot. The team or requester that needs the shared database service owns that desired state. Server-level settings such as SKU, storage, backup, HA, PgBouncer, and tags belong to the shared server, not to each logical database.
 
+The v1 multitenant path should stay close to the current private access model. It reuses existing network prerequisites created outside `dis-pgsql`, such as VNet peering, private DNS zones, and private DNS zone links between tenant AKS VNets and the admin multitenant DBs VNet.
+
 ```mermaid
 sequenceDiagram
     actor Requester as Requester pipeline
+    participant Infra as Tenant infra Terraform
     participant DesiredState as Admin desired state
     participant Operator as adminservices dis-pgsql
     participant ASO as admin ASO
@@ -50,24 +53,26 @@ sequenceDiagram
     participant Postgres as Shared PostgreSQL server
     actor App as App in tenant cluster
 
+    Note over Requester,Network: Network prerequisites
+    Requester->>Infra: applies tenant infra
+    Infra->>Network: creates VNet peering and private DNS links
+
     Note over Requester,Postgres: Shared server
     Requester->>DesiredState: submits shared Database
     DesiredState->>Operator: applies Database
-    Operator->>ASO: creates PostgreSQL server
-    ASO->>Postgres: provisions server
+    Operator->>ASO: creates PostgreSQL server using existing network refs
+    ASO->>Postgres: provisions private-access server
 
     Note over Requester,Postgres: Tenant database
     Requester->>DesiredState: submits LogicalDatabase
     DesiredState->>Operator: applies LogicalDatabase
-    Operator->>Operator: validates input and derives names
-    Operator->>ASO: creates private endpoint and DNS resources
-    ASO->>Network: provisions private endpoint
+    Operator->>Operator: derives names
     Operator->>Postgres: creates database, user, and grants
     Operator-->>DesiredState: updates status
 
     Note over App,Postgres: Runtime connection
-    App->>Network: connects to Postgres FQDN
-    Network->>Postgres: forwards private traffic
+    App->>Network: connects to Postgres FQDN over peering
+    Network->>Postgres: routes private access traffic
 ```
 
 Example:
@@ -86,11 +91,6 @@ spec:
     identity:
       name: my-app-tenant123-dev
       principalId: "<entra-object-id>"
-  privateLink:
-    subscriptionId: "<tenant-subscription-id>"
-    resourceGroupName: "<tenant-resource-group>"
-    vnetName: "<tenant-aks-vnet>"
-    subnetName: "<private-endpoint-subnet>"
   deletionPolicy: Retain
 ```
 
@@ -101,11 +101,10 @@ The `LogicalDatabase` manifest may be delivered to adminservices by GitOps, `aza
 When `dis-pgsql` reconciles it, it:
 
 1. derives the target shared server from operator config
-2. validates tenant Azure values
-3. creates Private Link and DNS resources
-4. creates the PostgreSQL database
-5. creates or maps the Entra principal and grants access
-6. writes status
+2. validates tenant and identity values
+3. creates the PostgreSQL database
+4. creates or maps the Entra principal and grants access
+5. writes status
 
 # Reference-level explanation
 [reference-level-explanation]: #reference-level-explanation
@@ -117,8 +116,8 @@ When `dis-pgsql` reconciles it, it:
 This RFC also expects `Database` CRD changes:
 
 - keep delegated-subnet networking as the default
-- add Private Link networking
 - add an explicit shared-server mode
+- make shared mode consume existing private access network references
 - do not add tenant database fields to `Database`
 
 Important spec fields:
@@ -127,7 +126,6 @@ Important spec fields:
 - `tenant.id`: stable tenant id.
 - `tenant.environment`: environment.
 - `access.identity`: Entra principal name and object id.
-- `privateLink`: tenant subscription, resource group, VNet, and subnet.
 - `deletionPolicy`: defaults to `Retain`.
 
 Status should include:
@@ -135,9 +133,7 @@ Status should include:
 - `databaseName`
 - `host`
 - `port`
-- `privateEndpointId`
-- `privateEndpointPrivateIp`
-- conditions: `Ready`, `PrivateLinkReady`, `DatabaseReady`, `AccessReady`
+- conditions: `Ready`, `DatabaseReady`, `AccessReady`
 - `observedGeneration`
 - validation errors
 
@@ -145,12 +141,14 @@ Status should include:
 
 `dis-pgsql` must not trust admin-side values from the request.
 
-The request may describe tenant-side network and identity data. The operator derives the shared server, database name, private endpoint name, DNS resources, and ASO resource names.
+For a shared `Database`, `dis-pgsql` creates and updates the PostgreSQL Flexible Server through ASO using existing private access network references. It manages server settings, tags, Entra admin, parameters, and status.
+
+It does not create tenant VNet peering or private DNS links in v1.
+
+For a `LogicalDatabase`, the request describes the logical database and identity access. The operator derives the shared server and database name.
 
 The operator creates or updates:
 
-- ASO private endpoint resources
-- ASO private DNS integration
 - ASO PostgreSQL database resource
 - a Postgres provisioning job for Entra user and grants
 
@@ -158,21 +156,37 @@ The existing direct Postgres provisioning pattern should be reused and extended.
 
 ## Networking
 
-`LogicalDatabase` uses Private Link. This is different from the current dedicated-server path, which uses delegated subnets and VNet integration.
+`LogicalDatabase` does not create network resources.
 
-Private Link gives the tenant VNet a private endpoint to the shared server. It only handles network reachability. Entra auth and PostgreSQL grants still decide who can log in and what they can access.
+Shared-server networking uses private access with VNet integration in v1.
 
-The existing `Database` API should also get a Private Link network mode. Shared servers should use it. Dedicated servers may use it too.
+The shared PostgreSQL server is created in a delegated subnet in an admin multitenant DBs VNet. Tenant AKS VNets reach it through VNet peering or the existing platform network. Private DNS zone links let workloads resolve the PostgreSQL FQDN to the server private address.
+
+`dis-pgsql` does not create the peering or private DNS links for this mode. Those are tenant infrastructure prerequisites and can stay in Terraform or equivalent automation.
+
+This is closest to the current `dis-pgsql` model. It also avoids one private endpoint per tenant or per logical database.
+
+The shared `Database` should reference or be configured with the existing delegated subnet and private DNS zone needed by Azure PostgreSQL Flexible Server private access.
+
+Operator-managed peering or DNS links can be considered later for tenants that do not use the current infrastructure pipelines.
+
+Server-level Private Endpoint remains an alternative.
+
+A shared private endpoint in the admin multitenant DBs VNet could be added later if the platform chooses that model. It still should not create one private endpoint per `LogicalDatabase`.
+
+In both models, network reachability only decides whether traffic can reach the server. Entra auth and PostgreSQL grants still decide who can log in and what they can access.
 
 ## Deletion
 
 `deletionPolicy` defaults to `Retain`.
 
-Deleting the Kubernetes resource must not drop the database or delete private connectivity by default. Destructive cleanup needs explicit opt-in.
+Deleting a `LogicalDatabase` resource must not drop the database by default. Shared connectivity is an infrastructure prerequisite and is not affected by logical database deletion. Destructive cleanup needs explicit opt-in.
 
 ## Existing Database
 
 `Database` keeps the current dedicated-server behavior as the default. A new shared-server mode can be added for servers that host `LogicalDatabase` resources.
+
+A shared `Database` uses existing private access network prerequisites. It does not create network resources per `LogicalDatabase`.
 
 Both APIs can exist side by side:
 
@@ -182,7 +196,7 @@ Both APIs can exist side by side:
 # Drawbacks
 [drawbacks]: #drawbacks
 
-- Admin `dis-pgsql` and ASO need broader Azure permissions.
+- Shared servers depend on Terraform or equivalent automation creating network prerequisites first.
 - Shared servers need capacity planning and tenant isolation discipline.
 - Backup, HA, PgBouncer, and failover are server-level decisions.
 - Per-tenant restore and cleanup are harder than deleting a dedicated server.
@@ -197,6 +211,9 @@ Alternatives:
 - Put tenant database fields on `Database`: rejected because one kind would mean two very different things.
 - Manage logical databases outside DIS: rejected because this should be a DIS database API.
 - Let "tenant" clusters create shared databases directly: possible, but spreads shared-server authority too widely.
+- Create private endpoints per logical database: rejected because connectivity is shared server infrastructure.
+- Let `dis-pgsql` own tenant VNet peering and private DNS links: possible later, but v1 keeps those prerequisites in Terraform or equivalent infrastructure automation.
+- Use one shared Private Endpoint per server: possible later if the platform chooses that connectivity model.
 - Keep one server per tenant: simplest isolation, but too costly and heavy for shared-server use cases.
 
 # Prior art
@@ -210,11 +227,11 @@ Alternatives:
 # Unresolved questions
 [unresolved-questions]: #unresolved-questions
 
-- Which ASO API versions should be used for Private Endpoint, DNS integration, and PostgreSQL databases?
+- Which ASO API versions should be used for shared PostgreSQL servers and PostgreSQL databases?
 - What is the minimum Azure RBAC needed for admin ASO?
 - Which tenant-side fields are required for safe validation?
 - Should status be copied back to workload clusters and how?
-- What is the long-term cleanup process for retained databases and private endpoints?
+- What is the long-term cleanup process for retained databases?
 - What are the shared server profiles for tenant count, PgBouncer, HA, backup, and storage?
 
 # Future possibilities
