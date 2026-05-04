@@ -1,8 +1,8 @@
 - Feature Name: multitenant_dis_databases
 - Title: Multitenant DIS databases
 - Start Date: 2026-04-29
-- RFC PR: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/pull/0000)
-- Github Issue: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/issues/0000)
+- RFC PR: [altinn/altinn-platform#3405](https://github.com/Altinn/altinn-platform/pull/3405)
+- Github Issue: [altinn/altinn-platform#3418](https://github.com/Altinn/altinn-platform/issues/3418)
 - Product/Category: Container Runtime
 - State: **REVIEW** (possible states are: **REVIEW**, **ACCEPTED** and **REJECTED**)
 
