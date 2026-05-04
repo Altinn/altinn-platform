@@ -14,6 +14,8 @@ resource "kubernetes_config_map_v1" "deploy_environment_at22" {
     ALTINN2_BASE_URL    = "https://at22.altinn.cloud"
     ALTINN_CDN_BASE_URL = "https://altinncdn.no"
     AM_UI_BASE_URL      = "https://am.ui.at22.altinn.cloud"
+    AF_UI_BASE_URL      = "https://af.at22.altinn.cloud"
+    INFO_CLOUD_URL      = "https://info.at22.altinn.cloud"
     DEPLOY_ENV          = "at22"
     ENV_TYPE            = "dev"
   }
@@ -31,6 +33,8 @@ resource "kubernetes_config_map_v1" "deploy_environment_at23" {
     ALTINN2_BASE_URL    = "https://at23.altinn.cloud"
     ALTINN_CDN_BASE_URL = "https://altinncdn.no"
     AM_UI_BASE_URL      = "https://am.ui.at23.altinn.cloud"
+    AF_UI_BASE_URL      = "https://af.at23.altinn.cloud"
+    INFO_CLOUD_URL      = "https://info.at23.altinn.cloud"
     DEPLOY_ENV          = "at23"
     ENV_TYPE            = "dev"
   }
@@ -48,6 +52,8 @@ resource "kubernetes_config_map_v1" "deploy_environment_at24" {
     ALTINN2_BASE_URL    = "https://at24.altinn.cloud"
     ALTINN_CDN_BASE_URL = "https://altinncdn.no"
     AM_UI_BASE_URL      = "https://am.ui.at24.altinn.cloud"
+    AF_UI_BASE_URL      = "https://af.at24.altinn.cloud"
+    INFO_CLOUD_URL      = "https://info.at24.altinn.cloud"
     DEPLOY_ENV          = "at24"
     ENV_TYPE            = "dev"
   }
@@ -65,6 +71,8 @@ resource "kubernetes_config_map_v1" "deploy_environment_yt01" {
     ALTINN2_BASE_URL    = "https://yt01.ai.basefarm.net"
     ALTINN_CDN_BASE_URL = "https://altinncdn.no"
     AM_UI_BASE_URL      = "https://am.ui.yt01.altinn.cloud"
+    AF_UI_BASE_URL      = "https://af.yt01.altinn.cloud"
+    INFO_CLOUD_URL      = "https://info.yt01.altinn.cloud"
     DEPLOY_ENV          = "yt01"
     ENV_TYPE            = "perf"
   }
@@ -82,6 +90,8 @@ resource "kubernetes_config_map_v1" "deploy_environment_tt02" {
     ALTINN2_BASE_URL    = "https://tt02.altinn.no"
     ALTINN_CDN_BASE_URL = "https://altinncdn.no"
     AM_UI_BASE_URL      = "https://am.ui.tt02.altinn.no"
+    AF_UI_BASE_URL      = "https://af.tt02.altinn.no"
+    INFO_CLOUD_URL      = "https://info.tt02.altinn.no"
     DEPLOY_ENV          = "tt02"
     ENV_TYPE            = "staging"
   }
@@ -99,6 +109,8 @@ resource "kubernetes_config_map_v1" "deploy_environment_prod" {
     ALTINN2_BASE_URL    = "https://altinn.no"
     ALTINN_CDN_BASE_URL = "https://altinncdn.no"
     AM_UI_BASE_URL      = "https://am.ui.altinn.no"
+    AF_UI_BASE_URL      = "https://af.altinn.no"
+    INFO_CLOUD_URL      = "https://info.altinn.no"
     DEPLOY_ENV          = "prod"
     ENV_TYPE            = "prod"
   }
