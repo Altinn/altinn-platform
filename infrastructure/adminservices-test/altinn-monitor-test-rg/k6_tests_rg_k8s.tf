@@ -179,7 +179,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot2c7g" {
 resource "azurerm_kubernetes_cluster_node_pool" "prometheus" {
   name                  = "prometheus"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.k6tests.id
-  vm_size               = "Standard_D4s_v6"
+  vm_size               = "Standard_D8s_v6"
   auto_scaling_enabled  = false
   node_count            = 1
   node_labels = {
