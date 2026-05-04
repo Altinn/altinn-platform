@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.4](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.5.3...dis-pgsql-v0.5.4) (2026-05-04)
+
+
+### Dependency Updates
+
+* update github-actions non-major dependencies ([#3018](https://github.com/Altinn/altinn-platform/issues/3018)) ([100ab8d](https://github.com/Altinn/altinn-platform/commit/100ab8d5d0b9f413983c4b6ca7b5baac6afe51ed))
+* update golangci/golangci-lint-action action to v9 ([#3378](https://github.com/Altinn/altinn-platform/issues/3378)) ([7184911](https://github.com/Altinn/altinn-platform/commit/7184911a4fb241f65d7917f3bd04383d6f9aa38f))
+
 ## [0.5.3](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.5.2...dis-pgsql-v0.5.3) (2026-04-24)
 
 
