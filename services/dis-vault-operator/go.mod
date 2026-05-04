@@ -4,15 +4,15 @@ go 1.26.1
 
 require (
 	github.com/Altinn/altinn-platform/services/dis-identity-operator v0.0.0-20260319083500-bd4f5f84c472
-	github.com/Azure/azure-service-operator/v2 v2.17.0
+	github.com/Azure/azure-service-operator/v2 v2.19.0
 	github.com/external-secrets/external-secrets/apis v0.0.0-20260320084310-395e4e3a10c3
 	github.com/google/uuid v1.6.0
-	github.com/onsi/ginkgo/v2 v2.27.2
-	github.com/onsi/gomega v1.38.2
-	k8s.io/apiextensions-apiserver v0.35.0
-	k8s.io/apimachinery v0.35.1
-	k8s.io/client-go v0.35.1
-	sigs.k8s.io/controller-runtime v0.23.1
+	github.com/onsi/ginkgo/v2 v2.28.3
+	github.com/onsi/gomega v1.40.0
+	k8s.io/apiextensions-apiserver v0.36.0
+	k8s.io/apimachinery v0.36.0
+	k8s.io/client-go v0.36.0
+	sigs.k8s.io/controller-runtime v0.24.0
 )
 
 require (
