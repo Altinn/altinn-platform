@@ -11,16 +11,16 @@
 
 Add a `LogicalDatabase` resource to `dis-pgsql-operator`.
 
-`Database` remains the server API: one resource creates one Azure PostgreSQL Flexible Server.
+`Database` remains the server API: one resource creates one database server.
 
 The `Database` CRD needs to support a shared mode that uses existing private access network prerequisites.
 
-`LogicalDatabase` means one database inside a shared `Database`. It is reconciled by `dis-pgsql` in adminservices and can be used by any tenant or system that needs a database on a shared PostgreSQL Flexible Server.
+`LogicalDatabase` means one database inside a shared `Database`. It is reconciled by `dis-pgsql` in adminservices and can be used by any tenant or system that needs a database on a shared `Database`.
 
 # Motivation
 [motivation]: #motivation
 
-Some systems do not need one PostgreSQL server each. They need shared PostgreSQL servers that can host one logical database per tenant.
+Some systems do not need one dedicated `Database` each. They need shared `Database` resources that can host one `LogicalDatabase` per tenant.
 
 The current `Database` API creates full servers using delegated subnets. That is still useful, but it needs a shared mode for multitenant cases.
 
@@ -31,7 +31,7 @@ We need a second API that keeps server ownership central, while still making ten
 
 The platform has two database APIs:
 
-- `Database`: creates a PostgreSQL Flexible Server.
+- `Database`: creates a database server.
 - `LogicalDatabase`: creates one database inside a shared `Database`.
 
 `Database` should support the current dedicated mode and a new shared mode. Shared `Database` networking does not belong to each `LogicalDatabase`.
@@ -52,7 +52,7 @@ sequenceDiagram
     participant Operator as adminservices dis-pgsql
     participant ASO as admin ASO
     participant Network as Azure
-    participant Postgres as PostgreSQL Flexible Server
+    participant Postgres as Database server
     actor App as App in tenant cluster
 
     Note over Requester,Network: Network prerequisites
@@ -148,7 +148,7 @@ Status should include:
 
 `dis-pgsql` must not trust admin-side values from the request.
 
-For a shared `Database`, `dis-pgsql` creates and updates the PostgreSQL Flexible Server through ASO using existing private access network references. It manages server settings, tags, Entra admin, parameters, and status.
+For a shared `Database`, `dis-pgsql` creates and updates the database server through ASO using existing private access network references. It manages server settings, tags, Entra admin, parameters, and status.
 
 It does not create tenant VNet peering or private DNS links in v1.
 
@@ -156,10 +156,10 @@ For a `LogicalDatabase`, the request describes the logical database and identity
 
 The operator creates or updates:
 
-- ASO PostgreSQL database resource
-- a Postgres provisioning job for Entra user and grants
+- ASO resource for the `LogicalDatabase`
+- a user provisioning job for Entra user and grants
 
-The existing direct Postgres provisioning pattern should be reused and extended.
+The existing direct database provisioning pattern should be reused and extended.
 
 ## Networking
 
@@ -167,13 +167,13 @@ The existing direct Postgres provisioning pattern should be reused and extended.
 
 Shared `Database` networking uses private access with VNet integration in v1.
 
-The PostgreSQL Flexible Server is created in a delegated subnet in an admin multitenant DBs VNet. Tenant AKS VNets reach it through VNet peering or the existing platform network. Private DNS zone links let workloads resolve the PostgreSQL FQDN to the server private address.
+The database server is created in a delegated subnet in an admin multitenant DBs VNet. Tenant AKS VNets reach it through VNet peering or the existing platform network. Private DNS zone links let workloads resolve the Database endpoint to the server private address.
 
 `dis-pgsql` does not create the peering or private DNS links for this mode. Those are tenant infrastructure prerequisites and can stay in Terraform or equivalent automation.
 
 This is closest to the current `dis-pgsql` model. It also avoids one private endpoint per tenant or per logical database.
 
-The shared `Database` should reference or be configured with the existing delegated subnet and private DNS zone needed by Azure PostgreSQL Flexible Server private access.
+The shared `Database` should reference or be configured with the existing delegated subnet and private DNS zone needed for private access.
 
 Operator-managed peering or DNS links can be considered later for tenants that do not use the current infrastructure pipelines.
 
@@ -199,7 +199,7 @@ Multiple shared `Database` resources may exist in the same namespace. `LogicalDa
 
 Both APIs can exist side by side:
 
-- `Database`: dedicated or shared PostgreSQL Flexible Server
+- `Database`: dedicated or shared database server
 - `LogicalDatabase`: database inside a shared `Database`
 
 # Drawbacks
@@ -230,15 +230,14 @@ Alternatives:
 [prior-art]: #prior-art
 
 - RFC 0006 introduced the dedicated PostgreSQL self-service model.
-- The current operator already manages ASO PostgreSQL resources, DNS, server parameters, Entra admin, and Postgres grants.
+- The current operator already manages ASO resources, DNS, server parameters, Entra admin, and grants.
 - RFC 0012 describes the admin GitOps direction for platform components.
-- CloudNativePG uses `Cluster` for the PostgreSQL cluster and `Database` for databases inside it. DIS already uses `Database` for the server API, so this RFC uses `LogicalDatabase` for databases inside a shared DIS `Database`.
 - ASO already supports Azure PostgreSQL and network resources.
 
 # Unresolved questions
 [unresolved-questions]: #unresolved-questions
 
-- Which ASO API versions should be used for shared PostgreSQL Flexible Servers and PostgreSQL databases?
+- Which ASO API versions should back `Database` and `LogicalDatabase` reconciliation?
 - What is the minimum Azure RBAC needed for admin ASO?
 - Which tenant-side fields are required for safe validation?
 - Should status be copied back to workload clusters and how?
