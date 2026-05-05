@@ -113,6 +113,7 @@ type DatabaseSpec struct {
 	// Defaults to Dedicated.
 	// +optional
 	// +kubebuilder:default=Dedicated
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="mode is immutable"
 	Mode DatabaseMode `json:"mode,omitempty"`
 
 	// version is the major version of PostgreSQL to run (e.g. 17).
