@@ -58,6 +58,9 @@ func (r *DatabaseReconciler) resolveUserIdentity(
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
 ) (resolvedIdentity, bool, error) {
+	if db.Spec.Auth.User == nil {
+		return resolvedIdentity{}, false, fmt.Errorf("spec.auth.user must be set")
+	}
 	return r.resolveIdentitySource(ctx, logger, db, "user", db.Spec.Auth.User.Identity)
 }
 

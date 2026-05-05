@@ -1,6 +1,24 @@
 apiVersion: storage.dis.altinn.cloud/v1alpha1
 kind: Database
 metadata:
+  name: shared-db
+  namespace: default
+spec:
+  mode: Shared
+  version: 17
+  serverType: prod
+  network:
+    delegatedSubnetResourceId: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-dis-admin-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-admin-dbs/subnets/snet-postgres-shared
+    privateDnsZoneResourceId: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-dis-admin-network/providers/Microsoft.Network/privateDnsZones/shared.private.postgres.database.azure.com
+  auth:
+    admin:
+      identity:
+        identityRef:
+          name: adminidentity
+---
+apiVersion: storage.dis.altinn.cloud/v1alpha1
+kind: Database
+metadata:
   name: db1
   namespace: default
 spec:

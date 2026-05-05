@@ -419,7 +419,7 @@ func writeTestManifestWithBackupRetention(
 						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: adminIdentityRef},
 					},
 				},
-				User: storagev1alpha1.UserIdentitySpec{
+				User: &storagev1alpha1.UserIdentitySpec{
 					Identity: storagev1alpha1.IdentitySource{
 						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: userIdentityRef},
 					},
@@ -464,7 +464,7 @@ func writeTestManifestWithHighAvailability(
 						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: adminIdentityRef},
 					},
 				},
-				User: storagev1alpha1.UserIdentitySpec{
+				User: &storagev1alpha1.UserIdentitySpec{
 					Identity: storagev1alpha1.IdentitySource{
 						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: userIdentityRef},
 					},
@@ -510,7 +510,7 @@ func writeTestManifestWithServerParameters(
 						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: adminIdentityRef},
 					},
 				},
-				User: storagev1alpha1.UserIdentitySpec{
+				User: &storagev1alpha1.UserIdentitySpec{
 					Identity: storagev1alpha1.IdentitySource{
 						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: userIdentityRef},
 					},
