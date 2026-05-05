@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -33,6 +34,10 @@ const (
 	defaultMaintenanceStartMinute        = 0
 	maintenanceCustomWindowEnabled       = "Enabled"
 )
+
+type postgresNetworkConfig struct {
+	Network *dbforpostgresqlv1.Network
+}
 
 // Reuse the defaults for now
 func desiredStorage(db *storagev1alpha1.Database) *dbforpostgresqlv1.Storage {
@@ -105,13 +110,83 @@ func (r *DatabaseReconciler) subnetARMIDResourceReference(subnetName string) *ge
 	}
 }
 
+func (r *DatabaseReconciler) dedicatedPostgresNetworkConfig(
+	db *storagev1alpha1.Database,
+	zoneName string,
+) (postgresNetworkConfig, error) {
+	// Use the subnet allocated to this database from the status.
+	if db.Status.SubnetCIDR == "" {
+		return postgresNetworkConfig{}, fmt.Errorf("database status has no SubnetCIDR; cannot build network for server")
+	}
+
+	// Make sure the subnet exists in our catalog, and therefore in the vnet.
+	subnetInfo, ok := r.SubnetCatalog.FindByCIDR(db.Status.SubnetCIDR)
+	if !ok {
+		return postgresNetworkConfig{}, fmt.Errorf("no subnet in catalog matching CIDR %q", db.Status.SubnetCIDR)
+	}
+
+	subnetID := r.subnetARMIDResourceReference(subnetInfo.Name)
+	zoneID := r.privateZoneARMIDResourceReference(zoneName)
+
+	publicNetworkAccess := dbforpostgresqlv1.Network_PublicNetworkAccess_Disabled
+	return postgresNetworkConfig{
+		Network: &dbforpostgresqlv1.Network{
+			DelegatedSubnetResourceReference:   subnetID,
+			PrivateDnsZoneArmResourceReference: zoneID,
+			PublicNetworkAccess:                to.Ptr(publicNetworkAccess),
+		},
+	}, nil
+}
+
+func sharedPostgresNetworkConfig(db *storagev1alpha1.Database) (postgresNetworkConfig, error) {
+	if db.Spec.Network == nil {
+		return postgresNetworkConfig{}, fmt.Errorf("spec.network must be set when mode is Shared")
+	}
+
+	subnetResourceID := strings.TrimSpace(db.Spec.Network.DelegatedSubnetResourceID)
+	if subnetResourceID == "" {
+		return postgresNetworkConfig{}, fmt.Errorf("spec.network.delegatedSubnetResourceId must be set when mode is Shared")
+	}
+
+	zoneResourceID := strings.TrimSpace(db.Spec.Network.PrivateDNSZoneResourceID)
+	if zoneResourceID == "" {
+		return postgresNetworkConfig{}, fmt.Errorf("spec.network.privateDnsZoneResourceId must be set when mode is Shared")
+	}
+
+	publicNetworkAccess := dbforpostgresqlv1.Network_PublicNetworkAccess_Disabled
+	return postgresNetworkConfig{
+		Network: &dbforpostgresqlv1.Network{
+			DelegatedSubnetResourceReference: &genruntime.ResourceReference{
+				ARMID: subnetResourceID,
+			},
+			PrivateDnsZoneArmResourceReference: &genruntime.ResourceReference{
+				ARMID: zoneResourceID,
+			},
+			PublicNetworkAccess: to.Ptr(publicNetworkAccess),
+		},
+	}, nil
+}
+
+func resourceReferenceLogValue(ref *genruntime.ResourceReference) string {
+	if ref == nil {
+		return ""
+	}
+	if ref.ARMID != "" {
+		return ref.ARMID
+	}
+	if ref.Group != "" || ref.Kind != "" {
+		return fmt.Sprintf("%s/%s/%s", ref.Group, ref.Kind, ref.Name)
+	}
+	return ref.Name
+}
+
 // ensurePostgresServer ensures a PostgreSQL Flexible Server ASO resource exists
 // for the given Database.
 func (r *DatabaseReconciler) ensurePostgresServer(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
-	zoneName string,
+	networkConfig postgresNetworkConfig,
 ) error {
 	ns := db.Namespace
 
@@ -145,26 +220,8 @@ func (r *DatabaseReconciler) ensurePostgresServer(
 	versionStr := fmt.Sprintf("%d", db.Spec.Version)
 	version := dbforpostgresqlv1.ServerVersion(versionStr)
 
-	// Use the subnet allocated to this database from the status
-	if db.Status.SubnetCIDR == "" {
-		return fmt.Errorf("database status has no SubnetCIDR; cannot build network for server")
-	}
-
-	// Make. sure the subnet exists in our catalog,
-	// and therefore in the vnet.
-	subnetInfo, ok := r.SubnetCatalog.FindByCIDR(db.Status.SubnetCIDR)
-	if !ok {
-		return fmt.Errorf("no subnet in catalog matching CIDR %q", db.Status.SubnetCIDR)
-	}
-
-	subnetID := r.subnetARMIDResourceReference(subnetInfo.Name)
-
-	zoneID := r.privateZoneARMIDResourceReference(zoneName)
-
-	network := &dbforpostgresqlv1.Network{
-		DelegatedSubnetResourceReference:   subnetID,
-		PrivateDnsZoneArmResourceReference: zoneID,
-		PublicNetworkAccess:                to.Ptr(dbforpostgresqlv1.Network_PublicNetworkAccess_Disabled),
+	if networkConfig.Network == nil {
+		return fmt.Errorf("postgres network config must be set")
 	}
 
 	// AD auth settings
@@ -187,7 +244,7 @@ func (r *DatabaseReconciler) ensurePostgresServer(
 		},
 
 		Version:           &version,
-		Network:           network,
+		Network:           networkConfig.Network,
 		Storage:           storage,
 		Backup:            backup,
 		HighAvailability:  highAvailability,
@@ -229,8 +286,8 @@ func (r *DatabaseReconciler) ensurePostgresServer(
 			"namespace", ns,
 			"location", loc,
 			"version", versionStr,
-			"subnetID", subnetID,
-			"zoneID", zoneID,
+			"subnetID", resourceReferenceLogValue(networkConfig.Network.DelegatedSubnetResourceReference),
+			"zoneID", resourceReferenceLogValue(networkConfig.Network.PrivateDnsZoneArmResourceReference),
 			"skuName", profile.SkuName,
 			"storageGB", storage.StorageSizeGB,
 		)

@@ -92,7 +92,10 @@ spec:
                         is not set.
                       rule: has(self.identity.identityRef) || has(self.serviceAccountName)
                   user:
-                    description: user defines the identity used for normal user access.
+                    description: |-
+                      user defines the identity used for normal user access.
+                      Required for dedicated databases. Optional for shared databases because
+                      normal user provisioning is handled by LogicalDatabase resources.
                     properties:
                       identity:
                         description: identity defines the Entra identity source (direct
@@ -130,7 +133,6 @@ spec:
                     type: object
                 required:
                 - admin
-                - user
                 type: object
               backupRetentionDays:
                 description: |-
@@ -160,6 +162,34 @@ spec:
                   highAvailabilityEnabled controls whether PostgreSQL high availability is enabled.
                   If omitted, it defaults to true for prod/production server types and false otherwise.
                 type: boolean
+              mode:
+                default: Dedicated
+                description: |-
+                  mode controls whether this Database provisions a dedicated server or a shared server.
+                  Defaults to Dedicated.
+                enum:
+                - Dedicated
+                - Shared
+                type: string
+              network:
+                description: |-
+                  network references existing private access resources for shared databases.
+                  It must be omitted for dedicated databases.
+                properties:
+                  delegatedSubnetResourceId:
+                    description: delegatedSubnetResourceId is the Azure ARM ID of
+                      an existing delegated subnet.
+                    minLength: 1
+                    type: string
+                  privateDnsZoneResourceId:
+                    description: privateDnsZoneResourceId is the Azure ARM ID of an
+                      existing private DNS zone.
+                    minLength: 1
+                    type: string
+                required:
+                - delegatedSubnetResourceId
+                - privateDnsZoneResourceId
+                type: object
               serverParams:
                 description: |-
                   serverParams configures allowed PostgreSQL server parameters.
@@ -223,6 +253,13 @@ spec:
             - serverType
             - version
             type: object
+            x-kubernetes-validations:
+            - message: spec.network is required when mode is Shared and must be omitted
+                when mode is Dedicated.
+              rule: '(has(self.mode) && self.mode == ''Shared'') ? has(self.network)
+                : !has(self.network)'
+            - message: spec.auth.user is required when mode is Dedicated.
+              rule: (has(self.mode) && self.mode == 'Shared') || has(self.auth.user)
           status:
             description: status defines the observed state of Database.
             properties:

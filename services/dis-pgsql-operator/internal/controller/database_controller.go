@@ -79,10 +79,6 @@ type DatabaseReconciler struct {
 func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("database", req.NamespacedName)
 
-	if r.SubnetCatalog == nil {
-		return ctrl.Result{}, fmt.Errorf("SubnetCatalog is not configured on DatabaseReconciler")
-	}
-
 	var db storagev1alpha1.Database
 	if err := r.Get(ctx, req.NamespacedName, &db); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -96,10 +92,32 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil
 	}
 
+	if databaseMode(&db) == storagev1alpha1.DatabaseModeShared {
+		return r.reconcileSharedDatabase(ctx, logger, &db)
+	}
+	return r.reconcileDedicatedDatabase(ctx, logger, &db)
+}
+
+func databaseMode(db *storagev1alpha1.Database) storagev1alpha1.DatabaseMode {
+	if db.Spec.Mode == storagev1alpha1.DatabaseModeShared {
+		return storagev1alpha1.DatabaseModeShared
+	}
+	return storagev1alpha1.DatabaseModeDedicated
+}
+
+func (r *DatabaseReconciler) reconcileDedicatedDatabase(
+	ctx context.Context,
+	logger logr.Logger,
+	db *storagev1alpha1.Database,
+) (ctrl.Result, error) {
+	if r.SubnetCatalog == nil {
+		return ctrl.Result{}, fmt.Errorf("SubnetCatalog is not configured on DatabaseReconciler")
+	}
+
 	// Only allocate if we don't already have one
 	if db.Status.SubnetCIDR == "" {
 		logger.Info("allocating subnet for database")
-		if err := r.allocateSubnetForDatabase(ctx, logger, &db); err != nil {
+		if err := r.allocateSubnetForDatabase(ctx, logger, db); err != nil {
 			if errors.Is(err, network.ErrNoFreeSubnets) {
 				logger.Info("no free subnets available, will retry later", "error", err.Error())
 
@@ -110,7 +128,7 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 					Message: "No free subnet CIDRs available in the configured catalog",
 				})
 
-				if err := r.Status().Update(ctx, &db); err != nil {
+				if err := r.Status().Update(ctx, db); err != nil {
 					logger.Error(err, "failed to update Database status after no free subnets")
 					return ctrl.Result{}, err
 				}
@@ -133,7 +151,7 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// Private Dns zone
-	if err := r.ensurePrivateDNSZone(ctx, logger, &db); err != nil {
+	if err := r.ensurePrivateDNSZone(ctx, logger, db); err != nil {
 		logger.Error(err, "failed to ensure private DNS zone")
 		return ctrl.Result{}, err
 	}
@@ -155,9 +173,9 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// DB VNet link
 	if err := r.ensurePrivateDNSVNetLink(
-		ctx, logger, &db,
-		zoneNameForDatabase(&db),
-		vnetLinkNameForDB(&db),
+		ctx, logger, db,
+		zoneNameForDatabase(db),
+		vnetLinkNameForDB(db),
 		r.Config.DBVNetName,
 		dbVnetID,
 	); err != nil {
@@ -167,9 +185,9 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// AKS VNet link
 	if err := r.ensurePrivateDNSVNetLink(
-		ctx, logger, &db,
-		zoneNameForDatabase(&db),
-		vnetLinkNameForAKS(&db),
+		ctx, logger, db,
+		zoneNameForDatabase(db),
+		vnetLinkNameForAKS(db),
 		r.Config.AKSVNetName,
 		aksVnetID,
 	); err != nil {
@@ -177,23 +195,56 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	// PostgreSQL Flexible Server
-	if err := r.ensurePostgresServer(ctx, logger, &db, zoneNameForDatabase(&db)); err != nil {
+	networkConfig, err := r.dedicatedPostgresNetworkConfig(db, zoneNameForDatabase(db))
+	if err != nil {
+		logger.Error(err, "failed to build dedicated PostgreSQL network config")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.ensurePostgresServer(ctx, logger, db, networkConfig); err != nil {
 		logger.Error(err, "failed to ensure PostgreSQLFlexibleServer for database")
 		return ctrl.Result{}, err
 	}
 
-	if err := r.ensurePostgresExtensionSettings(ctx, logger, &db); err != nil {
+	return r.reconcileCommonDatabaseResources(ctx, logger, db, true)
+}
+
+func (r *DatabaseReconciler) reconcileSharedDatabase(
+	ctx context.Context,
+	logger logr.Logger,
+	db *storagev1alpha1.Database,
+) (ctrl.Result, error) {
+	networkConfig, err := sharedPostgresNetworkConfig(db)
+	if err != nil {
+		logger.Error(err, "failed to build shared PostgreSQL network config")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.ensurePostgresServer(ctx, logger, db, networkConfig); err != nil {
+		logger.Error(err, "failed to ensure PostgreSQLFlexibleServer for shared database")
+		return ctrl.Result{}, err
+	}
+
+	return r.reconcileCommonDatabaseResources(ctx, logger, db, false)
+}
+
+func (r *DatabaseReconciler) reconcileCommonDatabaseResources(
+	ctx context.Context,
+	logger logr.Logger,
+	db *storagev1alpha1.Database,
+	provisionUser bool,
+) (ctrl.Result, error) {
+	if err := r.ensurePostgresExtensionSettings(ctx, logger, db); err != nil {
 		logger.Error(err, "failed to ensure PostgreSQL extension settings for database")
 		return ctrl.Result{}, err
 	}
 
-	if err := r.ensurePostgresServerParameters(ctx, logger, &db); err != nil {
+	if err := r.ensurePostgresServerParameters(ctx, logger, db); err != nil {
 		logger.Error(err, "failed to ensure PostgreSQL server parameters for database")
 		return ctrl.Result{}, err
 	}
 
-	adminIdentity, requeue, err := r.resolveAdminIdentity(ctx, logger, &db)
+	adminIdentity, requeue, err := r.resolveAdminIdentity(ctx, logger, db)
 	if err != nil {
 		logger.Error(err, "failed to resolve admin identity")
 		return ctrl.Result{}, err
@@ -204,24 +255,28 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// Flexible Server admin
-	if err := r.ensureFlexibleServerAdministrator(ctx, logger, &db, adminIdentity); err != nil {
+	if err := r.ensureFlexibleServerAdministrator(ctx, logger, db, adminIdentity); err != nil {
 		logger.Error(err, "failed to ensure FlexibleServerAdministrator for database")
 		return ctrl.Result{}, err
 	}
 
 	if !r.Config.UseAzFakes {
-		ready, err := r.asoResourcesReady(ctx, logger, &db)
+		ready, err := r.asoResourcesReady(ctx, logger, db)
 		if err != nil {
 			logger.Error(err, "failed to check ASO readiness for database")
 			return ctrl.Result{}, err
 		}
 		if !ready {
-			logger.Info("waiting for ASO resources to be ready before provisioning user")
+			logger.Info("waiting for ASO resources to be ready")
 			return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 		}
 	}
 
-	userIdentity, requeue, err := r.resolveUserIdentity(ctx, logger, &db)
+	if !provisionUser {
+		return ctrl.Result{}, nil
+	}
+
+	userIdentity, requeue, err := r.resolveUserIdentity(ctx, logger, db)
 	if err != nil {
 		logger.Error(err, "failed to resolve user identity")
 		return ctrl.Result{}, err
@@ -232,7 +287,7 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// Normal DB user provisioning job
-	if err := r.ensureUserProvisionJob(ctx, logger, &db, resolvedDatabaseAuth{
+	if err := r.ensureUserProvisionJob(ctx, logger, db, resolvedDatabaseAuth{
 		Admin: adminIdentity,
 		User:  userIdentity,
 	}); err != nil {

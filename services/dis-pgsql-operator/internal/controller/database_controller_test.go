@@ -32,6 +32,8 @@ var _ = Describe("Database controller", func() {
 	)
 
 	const ns = "default"
+	const sharedDelegatedSubnetResourceID = "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-dev-001/subnets/shared-postgres"
+	const sharedPrivateDNSZoneResourceID = "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/privateDnsZones/shared.private.postgres.database.azure.com"
 
 	directAuth := func(adminName, adminPrincipalID, adminServiceAccount, userName, userPrincipalID string) storagev1alpha1.DatabaseAuth {
 		return storagev1alpha1.DatabaseAuth{
@@ -42,7 +44,7 @@ var _ = Describe("Database controller", func() {
 				},
 				ServiceAccountName: adminServiceAccount,
 			},
-			User: storagev1alpha1.UserIdentitySpec{
+			User: &storagev1alpha1.UserIdentitySpec{
 				Identity: storagev1alpha1.IdentitySource{
 					Name:        userName,
 					PrincipalId: userPrincipalID,
@@ -58,7 +60,7 @@ var _ = Describe("Database controller", func() {
 					IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: adminRefName},
 				},
 			},
-			User: storagev1alpha1.UserIdentitySpec{
+			User: &storagev1alpha1.UserIdentitySpec{
 				Identity: storagev1alpha1.IdentitySource{
 					IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: userRefName},
 				},
@@ -76,6 +78,37 @@ var _ = Describe("Database controller", func() {
 				Version:    17,
 				ServerType: "dev",
 				Auth:       auth,
+			},
+		}
+	}
+
+	sharedNetwork := func() *storagev1alpha1.DatabaseNetworkSpec {
+		return &storagev1alpha1.DatabaseNetworkSpec{
+			DelegatedSubnetResourceID: sharedDelegatedSubnetResourceID,
+			PrivateDNSZoneResourceID:  sharedPrivateDNSZoneResourceID,
+		}
+	}
+
+	newSharedDatabase := func(name string) *storagev1alpha1.Database {
+		return &storagev1alpha1.Database{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: ns,
+			},
+			Spec: storagev1alpha1.DatabaseSpec{
+				Mode:       storagev1alpha1.DatabaseModeShared,
+				Version:    17,
+				ServerType: "dev",
+				Network:    sharedNetwork(),
+				Auth: storagev1alpha1.DatabaseAuth{
+					Admin: storagev1alpha1.AdminIdentitySpec{
+						Identity: storagev1alpha1.IdentitySource{
+							Name:        "admin-mi",
+							PrincipalId: "admin-mi-id",
+						},
+						ServiceAccountName: "admin-mi",
+					},
+				},
 			},
 		}
 	}
@@ -488,6 +521,254 @@ var _ = Describe("Database controller", func() {
 			return current.Spec.VirtualNetwork.Reference.ARMID
 		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).
 			Should(Equal(expectedAKSVNetARMID))
+	})
+
+	It("rejects dedicated Databases without user auth", func() {
+		db := &storagev1alpha1.Database{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-app-db-dedicated-no-user",
+				Namespace: ns,
+			},
+			Spec: storagev1alpha1.DatabaseSpec{
+				Version:    17,
+				ServerType: "dev",
+				Auth: storagev1alpha1.DatabaseAuth{
+					Admin: storagev1alpha1.AdminIdentitySpec{
+						Identity: storagev1alpha1.IdentitySource{
+							Name:        "admin-mi",
+							PrincipalId: "admin-mi-id",
+						},
+						ServiceAccountName: "admin-mi",
+					},
+				},
+			},
+		}
+
+		err := k8sClient.Create(ctx, db)
+		Expect(apierrors.IsInvalid(err)).To(BeTrue(), "expected dedicated Database without auth.user to be rejected")
+	})
+
+	It("rejects dedicated Databases with shared network config", func() {
+		db := newDatabaseForJob("my-app-db-dedicated-network", directAuth(
+			"admin-mi",
+			"admin-mi-id",
+			"admin-mi",
+			"user-mi",
+			"user-mi-id",
+		))
+		db.Spec.Network = sharedNetwork()
+
+		err := k8sClient.Create(ctx, db)
+		Expect(apierrors.IsInvalid(err)).To(BeTrue(), "expected dedicated Database with spec.network to be rejected")
+	})
+
+	It("rejects shared Databases without network config", func() {
+		db := newSharedDatabase("my-app-db-shared-no-network")
+		db.Spec.Network = nil
+
+		err := k8sClient.Create(ctx, db)
+		Expect(apierrors.IsInvalid(err)).To(BeTrue(), "expected shared Database without spec.network to be rejected")
+	})
+
+	It("creates a shared FlexibleServer with existing network references and skips dedicated side effects", func() {
+		db := newSharedDatabase("my-app-db-shared")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		Eventually(func(g Gomega) struct {
+			subnetID string
+			zoneID   string
+		} {
+			var server dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &server)).To(Succeed())
+			g.Expect(server.Spec.Network).NotTo(BeNil())
+			g.Expect(server.Spec.Network.DelegatedSubnetResourceReference).NotTo(BeNil())
+			g.Expect(server.Spec.Network.PrivateDnsZoneArmResourceReference).NotTo(BeNil())
+			return struct {
+				subnetID string
+				zoneID   string
+			}{
+				subnetID: server.Spec.Network.DelegatedSubnetResourceReference.ARMID,
+				zoneID:   server.Spec.Network.PrivateDnsZoneArmResourceReference.ARMID,
+			}
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(struct {
+				subnetID string
+				zoneID   string
+			}{
+				subnetID: sharedDelegatedSubnetResourceID,
+				zoneID:   sharedPrivateDNSZoneResourceID,
+			}))
+
+		Consistently(func(g Gomega) string {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &updated)).To(Succeed())
+			return updated.Status.SubnetCIDR
+		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+
+		Consistently(func() bool {
+			var zone networkv1.PrivateDnsZone
+			err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      zoneNameForDatabase(db),
+				Namespace: db.Namespace,
+			}, &zone)
+			return apierrors.IsNotFound(err)
+		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeTrue())
+
+		Consistently(func(g Gomega) []string {
+			var links networkv1.PrivateDnsZonesVirtualNetworkLinkList
+			g.Expect(k8sClient.List(ctx, &links, client.InNamespace(db.Namespace))).To(Succeed())
+			found := make([]string, 0)
+			for _, link := range links.Items {
+				if link.Name == vnetLinkNameForDB(db) || link.Name == vnetLinkNameForAKS(db) {
+					found = append(found, link.Name)
+				}
+			}
+			return found
+		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+
+		Consistently(func(g Gomega) int {
+			var jobs batchv1.JobList
+			g.Expect(k8sClient.List(ctx, &jobs,
+				client.InNamespace(db.Namespace),
+				client.MatchingLabels(map[string]string{
+					"dis.altinn.cloud/database-name":  db.Name,
+					"dis.altinn.cloud/user-provision": "true",
+				}),
+			)).To(Succeed())
+			return len(jobs.Items)
+		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(0))
+	})
+
+	It("reconciles shared server settings and parameters", func() {
+		sizeGB := int32(64)
+		tier := "P15"
+		retentionDays := 21
+		highAvailabilityEnabled := true
+		db := newSharedDatabase("my-app-db-shared-settings")
+		db.Spec.Storage = &storagev1alpha1.DatabaseStorageSpec{
+			SizeGB: &sizeGB,
+			Tier:   &tier,
+		}
+		db.Spec.BackupRetentionDays = &retentionDays
+		db.Spec.HighAvailabilityEnabled = &highAvailabilityEnabled
+		db.Spec.EnableExtensions = []storagev1alpha1.DatabaseExtension{
+			storagev1alpha1.DatabaseExtensionHstore,
+			storagev1alpha1.DatabaseExtensionPgCron,
+		}
+		db.Spec.ServerParams = []storagev1alpha1.DatabaseServerParameter{
+			{
+				Name:  "autovacuum_naptime",
+				Value: intstr.FromInt(15),
+			},
+		}
+
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		Eventually(func(g Gomega) struct {
+			sizeGB        int
+			tier          string
+			retentionDays int
+			haMode        dbforpostgresqlv1.HighAvailability_Mode
+		} {
+			var server dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &server)).To(Succeed())
+			g.Expect(server.Spec.Storage).NotTo(BeNil())
+			g.Expect(server.Spec.Storage.StorageSizeGB).NotTo(BeNil())
+			g.Expect(server.Spec.Storage.Tier).NotTo(BeNil())
+			g.Expect(server.Spec.Backup).NotTo(BeNil())
+			g.Expect(server.Spec.Backup.BackupRetentionDays).NotTo(BeNil())
+			g.Expect(server.Spec.HighAvailability).NotTo(BeNil())
+			g.Expect(server.Spec.HighAvailability.Mode).NotTo(BeNil())
+			return struct {
+				sizeGB        int
+				tier          string
+				retentionDays int
+				haMode        dbforpostgresqlv1.HighAvailability_Mode
+			}{
+				sizeGB:        *server.Spec.Storage.StorageSizeGB,
+				tier:          string(*server.Spec.Storage.Tier),
+				retentionDays: *server.Spec.Backup.BackupRetentionDays,
+				haMode:        *server.Spec.HighAvailability.Mode,
+			}
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(struct {
+				sizeGB        int
+				tier          string
+				retentionDays int
+				haMode        dbforpostgresqlv1.HighAvailability_Mode
+			}{
+				sizeGB:        64,
+				tier:          "P15",
+				retentionDays: 21,
+				haMode:        dbforpostgresqlv1.HighAvailability_Mode_ZoneRedundant,
+			}))
+
+		expectedConfigurations := map[string]string{
+			extensionsConfigResourceName(db.Name):                             "hstore,pg_cron",
+			serverParameterConfigResourceName(db.Name, "autovacuum_naptime"):  "15",
+			serverParameterConfigResourceName(db.Name, "pgbouncer.enabled"):   "true",
+			serverParameterConfigResourceName(db.Name, "pgbouncer.pool_mode"): "transaction",
+		}
+
+		for resourceName, expectedValue := range expectedConfigurations {
+			Eventually(func(g Gomega) string {
+				var configuration dbforpostgresqlv1.FlexibleServersConfiguration
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+					Name:      resourceName,
+					Namespace: db.Namespace,
+				}, &configuration)).To(Succeed())
+				g.Expect(configuration.Spec.Value).NotTo(BeNil())
+				return *configuration.Spec.Value
+			}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+				Should(Equal(expectedValue))
+		}
+	})
+
+	It("allows multiple shared Databases in one namespace without subnet allocation", func() {
+		db1 := newSharedDatabase("my-app-db-shared-one")
+		db2 := newSharedDatabase("my-app-db-shared-two")
+
+		Expect(k8sClient.Create(ctx, db1)).To(Succeed())
+		Expect(k8sClient.Create(ctx, db2)).To(Succeed())
+
+		Eventually(func(g Gomega) []string {
+			var servers dbforpostgresqlv1.FlexibleServerList
+			g.Expect(k8sClient.List(ctx, &servers, client.InNamespace(ns))).To(Succeed())
+			found := make([]string, 0, len(servers.Items))
+			for _, server := range servers.Items {
+				if server.Name == db1.Name || server.Name == db2.Name {
+					found = append(found, server.Name)
+				}
+			}
+			return found
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(ConsistOf(db1.Name, db2.Name))
+
+		Consistently(func(g Gomega) []string {
+			var dbList storagev1alpha1.DatabaseList
+			g.Expect(k8sClient.List(ctx, &dbList, client.InNamespace(ns))).To(Succeed())
+			subnets := make([]string, 0)
+			for _, item := range dbList.Items {
+				if item.Name == db1.Name || item.Name == db2.Name {
+					subnets = append(subnets, item.Status.SubnetCIDR)
+				}
+			}
+			return subnets
+		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(ConsistOf("", ""))
 	})
 
 	// Database testing

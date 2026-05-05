@@ -11,7 +11,10 @@ type DatabaseAuth struct {
 	Admin AdminIdentitySpec `json:"admin"`
 
 	// user defines the identity used for normal user access.
-	User UserIdentitySpec `json:"user"`
+	// Required for dedicated databases. Optional for shared databases because
+	// normal user provisioning is handled by LogicalDatabase resources.
+	// +optional
+	User *UserIdentitySpec `json:"user,omitempty"`
 }
 
 // +kubebuilder:validation:XValidation:rule="has(self.identity.identityRef) || has(self.serviceAccountName)",message="serviceAccountName is required when identity.identityRef is not set."
@@ -71,6 +74,15 @@ const (
 	DatabaseExtensionUUIDOSSP         DatabaseExtension = "uuid-ossp"
 )
 
+// +kubebuilder:validation:Enum=Dedicated;Shared
+// DatabaseMode defines whether a Database owns dedicated infrastructure or hosts logical databases.
+type DatabaseMode string
+
+const (
+	DatabaseModeDedicated DatabaseMode = "Dedicated"
+	DatabaseModeShared    DatabaseMode = "Shared"
+)
+
 // +kubebuilder:validation:XValidation:rule="self.name != 'azure.extensions' && self.name != 'shared_preload_libraries' && self.name != 'pgbouncer.enabled' && self.name != 'pgbouncer.max_prepared_statements' && self.name != 'pgbouncer.pool_mode' && self.name != 'max_connections'",message="azure.extensions/shared_preload_libraries are managed via enableExtensions, and pgbouncer/max_connections are managed by the operator."
 // DatabaseServerParameter is a PostgreSQL server parameter with a scalar value.
 type DatabaseServerParameter struct {
@@ -82,8 +94,27 @@ type DatabaseServerParameter struct {
 	Value intstr.IntOrString `json:"value"`
 }
 
+// DatabaseNetworkSpec references pre-existing network resources for shared databases.
+type DatabaseNetworkSpec struct {
+	// delegatedSubnetResourceId is the Azure ARM ID of an existing delegated subnet.
+	// +kubebuilder:validation:MinLength=1
+	DelegatedSubnetResourceID string `json:"delegatedSubnetResourceId"`
+
+	// privateDnsZoneResourceId is the Azure ARM ID of an existing private DNS zone.
+	// +kubebuilder:validation:MinLength=1
+	PrivateDNSZoneResourceID string `json:"privateDnsZoneResourceId"`
+}
+
 // DatabaseSpec defines the desired state of Database.
+// +kubebuilder:validation:XValidation:rule="(has(self.mode) && self.mode == 'Shared') ? has(self.network) : !has(self.network)",message="spec.network is required when mode is Shared and must be omitted when mode is Dedicated."
+// +kubebuilder:validation:XValidation:rule="(has(self.mode) && self.mode == 'Shared') || has(self.auth.user)",message="spec.auth.user is required when mode is Dedicated."
 type DatabaseSpec struct {
+	// mode controls whether this Database provisions a dedicated server or a shared server.
+	// Defaults to Dedicated.
+	// +optional
+	// +kubebuilder:default=Dedicated
+	Mode DatabaseMode `json:"mode,omitempty"`
+
 	// version is the major version of PostgreSQL to run (e.g. 17).
 	// +kubebuilder:validation:Minimum=9
 	Version int `json:"version"`
@@ -94,6 +125,11 @@ type DatabaseSpec struct {
 
 	// auth defines which AppIdentities should have access to this database.
 	Auth DatabaseAuth `json:"auth"`
+
+	// network references existing private access resources for shared databases.
+	// It must be omitted for dedicated databases.
+	// +optional
+	Network *DatabaseNetworkSpec `json:"network,omitempty"`
 
 	// enableExtensions is the curated list of PostgreSQL extensions that should be enabled.
 	// Some extensions require shared_preload_libraries and are configured automatically.

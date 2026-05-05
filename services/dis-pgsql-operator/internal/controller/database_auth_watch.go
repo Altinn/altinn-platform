@@ -42,7 +42,10 @@ func databaseReferencesIdentity(db *storagev1alpha1.Database, identityName strin
 	if db.Spec.Auth.Admin.Identity.IdentityRef != nil && db.Spec.Auth.Admin.Identity.IdentityRef.Name == identityName {
 		return true
 	}
-	if db.Spec.Auth.User.Identity.IdentityRef != nil && db.Spec.Auth.User.Identity.IdentityRef.Name == identityName {
+	user := db.Spec.Auth.User
+	if user != nil &&
+		user.Identity.IdentityRef != nil &&
+		user.Identity.IdentityRef.Name == identityName {
 		return true
 	}
 	return false

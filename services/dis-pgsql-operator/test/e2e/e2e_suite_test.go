@@ -36,7 +36,7 @@ var (
 	managerImage = "example.com/dis-pgsql-operator:v0.0.1"
 	// shouldCleanupCertManager tracks whether CertManager was installed by this suite.
 	shouldCleanupCertManager = false
-	
+
 	// projectImage is the name of the image which will be build and loaded
 	// with the code source changes to be tested.
 	projectImage = "localhost/dis-pgsql-operator:v0.0.1"
@@ -67,6 +67,11 @@ var _ = BeforeSuite(func() {
 	_, err = utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to install ASO CRDs on Kind")
 
+	By("installing ApplicationIdentity CRD")
+	cmd = exec.Command("make", "install-dis-identity-crd-kind")
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to install ApplicationIdentity CRD on Kind")
+
 	By("creating manager namespace")
 	cmd = exec.Command("kubectl", "create", "ns", namespace)
 	_, err = utils.Run(cmd)
@@ -91,17 +96,7 @@ var _ = BeforeSuite(func() {
 	// The tests-e2e are intended to run on a temporary cluster that is created and destroyed for testing.
 	// To prevent errors when tests run in environments with CertManager already installed,
 	// we check for its presence before execution.
-	// Setup CertManager before the suite if not skipped and if not already installed
-	if !skipCertManagerInstall {
-		By("checking if cert manager is installed already")
-		isCertManagerAlreadyInstalled = utils.IsCertManagerCRDsInstalled()
-		if !isCertManagerAlreadyInstalled {
-			_, _ = fmt.Fprintf(GinkgoWriter, "Installing CertManager...\n")
-			Expect(utils.InstallCertManager()).To(Succeed(), "Failed to install CertManager")
-		} else {
-			_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: CertManager is already installed. Skipping installation...\n")
-		}
-	}
+	setupCertManager()
 })
 
 var _ = AfterSuite(func() {
@@ -121,11 +116,7 @@ var _ = AfterSuite(func() {
 	cmd = exec.Command("kubectl", "delete", "ns", namespace, "--ignore-not-found")
 	_, _ = utils.Run(cmd)
 
-	// Teardown CertManager after the suite if not skipped and if it was not already installed
-	if !skipCertManagerInstall && !isCertManagerAlreadyInstalled {
-		_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling CertManager...\n")
-		utils.UninstallCertManager()
-	}
+	teardownCertManager()
 })
 
 // setupCertManager installs CertManager if needed for webhook tests.
