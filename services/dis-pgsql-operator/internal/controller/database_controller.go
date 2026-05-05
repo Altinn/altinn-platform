@@ -214,7 +214,7 @@ func (r *DatabaseReconciler) reconcileSharedDatabase(
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
 ) (ctrl.Result, error) {
-	networkConfig, err := sharedPostgresNetworkConfig(db)
+	networkConfig, err := r.sharedPostgresNetworkConfig(db)
 	if err != nil {
 		logger.Error(err, "failed to build shared PostgreSQL network config")
 		return ctrl.Result{}, err

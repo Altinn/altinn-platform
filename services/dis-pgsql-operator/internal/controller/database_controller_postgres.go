@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,6 +39,11 @@ const (
 type postgresNetworkConfig struct {
 	Network *dbforpostgresqlv1.Network
 }
+
+const (
+	azureSubnetResourceType         = "Microsoft.Network/virtualNetworks/subnets"
+	azurePrivateDNSZoneResourceType = "Microsoft.Network/privateDnsZones"
+)
 
 // Reuse the defaults for now
 func desiredStorage(db *storagev1alpha1.Database) *dbforpostgresqlv1.Storage {
@@ -138,19 +144,27 @@ func (r *DatabaseReconciler) dedicatedPostgresNetworkConfig(
 	}, nil
 }
 
-func sharedPostgresNetworkConfig(db *storagev1alpha1.Database) (postgresNetworkConfig, error) {
+func (r *DatabaseReconciler) sharedPostgresNetworkConfig(db *storagev1alpha1.Database) (postgresNetworkConfig, error) {
 	if db.Spec.Network == nil {
 		return postgresNetworkConfig{}, fmt.Errorf("spec.network must be set when mode is Shared")
 	}
 
-	subnetResourceID := strings.TrimSpace(db.Spec.Network.DelegatedSubnetResourceID)
-	if subnetResourceID == "" {
-		return postgresNetworkConfig{}, fmt.Errorf("spec.network.delegatedSubnetResourceId must be set when mode is Shared")
+	subnetResourceID, err := r.validateSharedNetworkResourceID(
+		"spec.network.delegatedSubnetResourceId",
+		db.Spec.Network.DelegatedSubnetResourceID,
+		azureSubnetResourceType,
+	)
+	if err != nil {
+		return postgresNetworkConfig{}, err
 	}
 
-	zoneResourceID := strings.TrimSpace(db.Spec.Network.PrivateDNSZoneResourceID)
-	if zoneResourceID == "" {
-		return postgresNetworkConfig{}, fmt.Errorf("spec.network.privateDnsZoneResourceId must be set when mode is Shared")
+	zoneResourceID, err := r.validateSharedNetworkResourceID(
+		"spec.network.privateDnsZoneResourceId",
+		db.Spec.Network.PrivateDNSZoneResourceID,
+		azurePrivateDNSZoneResourceType,
+	)
+	if err != nil {
+		return postgresNetworkConfig{}, err
 	}
 
 	publicNetworkAccess := dbforpostgresqlv1.Network_PublicNetworkAccess_Disabled
@@ -165,6 +179,33 @@ func sharedPostgresNetworkConfig(db *storagev1alpha1.Database) (postgresNetworkC
 			PublicNetworkAccess: to.Ptr(publicNetworkAccess),
 		},
 	}, nil
+}
+
+func (r *DatabaseReconciler) validateSharedNetworkResourceID(fieldPath, resourceID, expectedResourceType string) (string, error) {
+	resourceID = strings.TrimSpace(resourceID)
+	if resourceID == "" {
+		return "", fmt.Errorf("%s must be set when mode is Shared", fieldPath)
+	}
+
+	parsed, err := arm.ParseResourceID(resourceID)
+	if err != nil {
+		return "", fmt.Errorf("%s must be a valid ARM resource ID: %w", fieldPath, err)
+	}
+
+	subscriptionID := strings.TrimSpace(r.Config.SubscriptionId)
+	if subscriptionID == "" {
+		return "", fmt.Errorf("operator subscription id is not configured; cannot validate %s", fieldPath)
+	}
+	if !strings.EqualFold(parsed.SubscriptionID, subscriptionID) {
+		return "", fmt.Errorf("%s must be in subscription %q", fieldPath, subscriptionID)
+	}
+
+	actualResourceType := parsed.ResourceType.String()
+	if !strings.EqualFold(actualResourceType, expectedResourceType) {
+		return "", fmt.Errorf("%s must reference %s, got %s", fieldPath, expectedResourceType, actualResourceType)
+	}
+
+	return resourceID, nil
 }
 
 func resourceReferenceLogValue(ref *genruntime.ResourceReference) string {

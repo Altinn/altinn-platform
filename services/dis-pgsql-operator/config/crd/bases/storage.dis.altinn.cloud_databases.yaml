@@ -171,6 +171,9 @@ spec:
                 - Dedicated
                 - Shared
                 type: string
+                x-kubernetes-validations:
+                - message: mode is immutable
+                  rule: self == oldSelf
               network:
                 description: |-
                   network references existing private access resources for shared databases.

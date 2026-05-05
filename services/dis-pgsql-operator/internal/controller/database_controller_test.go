@@ -11,6 +11,7 @@ import (
 
 	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
 	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
@@ -569,6 +570,44 @@ var _ = Describe("Database controller", func() {
 		err := k8sClient.Create(ctx, db)
 		Expect(apierrors.IsInvalid(err)).To(BeTrue(), "expected shared Database without spec.network to be rejected")
 	})
+
+	DescribeTable("rejects shared network ARM IDs outside the allowed scope or expected type",
+		func(mutate func(*storagev1alpha1.DatabaseNetworkSpec), expectedError string) {
+			db := newSharedDatabase("my-app-db-shared-invalid-network")
+			mutate(db.Spec.Network)
+
+			reconciler := DatabaseReconciler{
+				Config: config.OperatorConfig{SubscriptionId: "my-subscription-id"},
+			}
+			_, err := reconciler.sharedPostgresNetworkConfig(db)
+
+			Expect(err).To(MatchError(ContainSubstring(expectedError)))
+		},
+		Entry("subnet in a different subscription",
+			func(network *storagev1alpha1.DatabaseNetworkSpec) {
+				network.DelegatedSubnetResourceID = "/subscriptions/other-subscription/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-dev-001/subnets/shared-postgres"
+			},
+			"spec.network.delegatedSubnetResourceId must be in subscription",
+		),
+		Entry("private DNS zone in a different subscription",
+			func(network *storagev1alpha1.DatabaseNetworkSpec) {
+				network.PrivateDNSZoneResourceID = "/subscriptions/other-subscription/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/privateDnsZones/shared.private.postgres.database.azure.com"
+			},
+			"spec.network.privateDnsZoneResourceId must be in subscription",
+		),
+		Entry("subnet reference with the wrong resource type",
+			func(network *storagev1alpha1.DatabaseNetworkSpec) {
+				network.DelegatedSubnetResourceID = "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-dev-001"
+			},
+			"spec.network.delegatedSubnetResourceId must reference Microsoft.Network/virtualNetworks/subnets",
+		),
+		Entry("private DNS zone reference with the wrong resource type",
+			func(network *storagev1alpha1.DatabaseNetworkSpec) {
+				network.PrivateDNSZoneResourceID = "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-dev-001/subnets/shared-postgres"
+			},
+			"spec.network.privateDnsZoneResourceId must reference Microsoft.Network/privateDnsZones",
+		),
+	)
 
 	It("creates a shared FlexibleServer with existing network references and skips dedicated side effects", func() {
 		db := newSharedDatabase("my-app-db-shared")
