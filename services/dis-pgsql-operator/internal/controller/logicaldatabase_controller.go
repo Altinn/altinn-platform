@@ -43,6 +43,7 @@ type LogicalDatabaseReconciler struct {
 
 // +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=logicaldatabases,verbs=get;list;watch
 // +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=logicaldatabases/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=databases,verbs=get;list;watch
 
 func (r *LogicalDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("logicaldatabase", req.NamespacedName)
