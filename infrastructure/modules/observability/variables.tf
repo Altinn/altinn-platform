@@ -72,6 +72,12 @@ variable "location" {
   description = "Default region for resources"
 }
 
+variable "log_analytics_local_authentication_enabled" {
+  type        = bool
+  default     = false
+  description = "Enable local (key-based) authentication for Log Analytics Workspace. Disable to enforce Entra ID-only access."
+}
+
 variable "log_analytics_retention_days" {
   type        = number
   default     = 30
