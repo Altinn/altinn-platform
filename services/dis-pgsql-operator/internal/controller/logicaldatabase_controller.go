@@ -7,7 +7,6 @@ import (
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -18,21 +17,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
+	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
+	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 )
 
 const (
-	logicalDatabaseConditionReady         = "Ready"
-	logicalDatabaseConditionDatabaseReady = "DatabaseReady"
-	logicalDatabaseConditionAccessReady   = "AccessReady"
-
-	logicalDatabaseReasonValidationFailed        = "ValidationFailed"
-	logicalDatabaseReasonProvisioningDeferred    = "ProvisioningNotImplemented"
 	logicalDatabaseValidationReasonRequired      = "Required"
 	logicalDatabaseValidationReasonNotFound      = "NotFound"
 	logicalDatabaseValidationReasonNotShared     = "NotShared"
 	logicalDatabaseValidationReasonUnsupported   = "Unsupported"
+	logicalDatabaseValidationReasonImmutable     = "Immutable"
 	logicalDatabaseValidationFieldServerRefName  = "spec.serverRef.name"
 	logicalDatabaseValidationFieldDeletionPolicy = "spec.deletionPolicy"
+	logicalDatabaseValidationFieldDatabaseName   = "status.databaseName"
 )
 
 // LogicalDatabaseReconciler reconciles a LogicalDatabase object.
@@ -44,6 +41,9 @@ type LogicalDatabaseReconciler struct {
 // +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=logicaldatabases,verbs=get;list;watch
 // +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=logicaldatabases/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=databases,verbs=get;list;watch
+// +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleservers,verbs=get;list;watch
+// +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversdatabases,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversdatabases/status,verbs=get
 
 func (r *LogicalDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("logicaldatabase", req.NamespacedName)
@@ -69,6 +69,7 @@ func (r *LogicalDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	logicalDatabase.Status.ObservedGeneration = logicalDatabase.Generation
 	logicalDatabase.Status.ValidationErrors = validationErrors
 
+	result := ctrl.Result{}
 	if len(validationErrors) > 0 {
 		setLogicalDatabaseConditions(
 			&logicalDatabase,
@@ -77,16 +78,75 @@ func (r *LogicalDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			"LogicalDatabase validation failed",
 		)
 	} else {
-		setLogicalDatabaseConditions(
-			&logicalDatabase,
-			metav1.ConditionFalse,
-			logicalDatabaseReasonProvisioningDeferred,
-			"LogicalDatabase provisioning is not implemented in this release",
+		databaseName := dbUtil.DeriveLogicalDatabaseName(
+			logicalDatabase.Spec.Tenant.ID,
+			logicalDatabase.Spec.Tenant.Environment,
+			logicalDatabase.Spec.DatabaseKey,
 		)
+		logicalDatabase.Status.DatabaseName = databaseName
+
+		if err := r.ensureFlexibleServersDatabase(ctx, &logicalDatabase); err != nil {
+			logger.Error(err, "failed to ensure FlexibleServersDatabase for LogicalDatabase")
+			return ctrl.Result{}, err
+		}
+
+		ready, host, err := r.logicalDatabaseReady(ctx, logger, &logicalDatabase)
+		if err != nil {
+			logger.Error(err, "failed to check LogicalDatabase readiness")
+			return ctrl.Result{}, err
+		}
+		if ready {
+			logicalDatabase.Status.Host = host
+			logicalDatabase.Status.Port = logicalDatabasePort
+			setLogicalDatabaseCondition(
+				&logicalDatabase,
+				logicalDatabaseConditionDatabaseReady,
+				metav1.ConditionTrue,
+				logicalDatabaseReasonDatabaseReady,
+				"Logical database is ready",
+			)
+			setLogicalDatabaseCondition(
+				&logicalDatabase,
+				logicalDatabaseConditionAccessReady,
+				metav1.ConditionFalse,
+				logicalDatabaseReasonProvisioningDeferred,
+				"LogicalDatabase access provisioning is not implemented in this release",
+			)
+			setLogicalDatabaseCondition(
+				&logicalDatabase,
+				logicalDatabaseConditionReady,
+				metav1.ConditionFalse,
+				logicalDatabaseReasonProvisioningDeferred,
+				"LogicalDatabase access provisioning is not implemented in this release",
+			)
+		} else {
+			setLogicalDatabaseCondition(
+				&logicalDatabase,
+				logicalDatabaseConditionDatabaseReady,
+				metav1.ConditionFalse,
+				logicalDatabaseReasonProvisioning,
+				"Logical database is provisioning",
+			)
+			setLogicalDatabaseCondition(
+				&logicalDatabase,
+				logicalDatabaseConditionAccessReady,
+				metav1.ConditionFalse,
+				logicalDatabaseReasonProvisioningDeferred,
+				"LogicalDatabase access provisioning is not implemented in this release",
+			)
+			setLogicalDatabaseCondition(
+				&logicalDatabase,
+				logicalDatabaseConditionReady,
+				metav1.ConditionFalse,
+				logicalDatabaseReasonProvisioning,
+				"Logical database is provisioning",
+			)
+			result = ctrl.Result{RequeueAfter: logicalDatabaseRequeueDelay}
+		}
 	}
 
 	if apiequality.Semantic.DeepEqual(original.Status, logicalDatabase.Status) {
-		return ctrl.Result{}, nil
+		return result, nil
 	}
 
 	if err := r.Status().Update(ctx, &logicalDatabase); err != nil {
@@ -94,7 +154,7 @@ func (r *LogicalDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{}, nil
+	return result, nil
 }
 
 func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
@@ -120,6 +180,19 @@ func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 	addRequiredStringError("spec.tenant.environment", logicalDatabase.Spec.Tenant.Environment)
 	addRequiredStringError("spec.access.identity.name", logicalDatabase.Spec.Access.Identity.Name)
 	addRequiredStringError("spec.access.identity.principalId", logicalDatabase.Spec.Access.Identity.PrincipalId)
+
+	derivedDatabaseName := dbUtil.DeriveLogicalDatabaseName(
+		logicalDatabase.Spec.Tenant.ID,
+		logicalDatabase.Spec.Tenant.Environment,
+		logicalDatabase.Spec.DatabaseKey,
+	)
+	if logicalDatabase.Status.DatabaseName != "" && logicalDatabase.Status.DatabaseName != derivedDatabaseName {
+		validationErrors = append(validationErrors, storagev1alpha1.LogicalDatabaseValidationError{
+			Field:   logicalDatabaseValidationFieldDatabaseName,
+			Reason:  logicalDatabaseValidationReasonImmutable,
+			Message: fmt.Sprintf("derived database name changed from %q to %q; recreate LogicalDatabase to use a new name", logicalDatabase.Status.DatabaseName, derivedDatabaseName),
+		})
+	}
 
 	if logicalDatabase.Spec.DeletionPolicy != "" &&
 		logicalDatabase.Spec.DeletionPolicy != storagev1alpha1.LogicalDatabaseDeletionPolicyRetain {
@@ -162,27 +235,6 @@ func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 	return validationErrors, nil
 }
 
-func setLogicalDatabaseConditions(
-	logicalDatabase *storagev1alpha1.LogicalDatabase,
-	status metav1.ConditionStatus,
-	reason,
-	message string,
-) {
-	for _, conditionType := range []string{
-		logicalDatabaseConditionReady,
-		logicalDatabaseConditionDatabaseReady,
-		logicalDatabaseConditionAccessReady,
-	} {
-		meta.SetStatusCondition(&logicalDatabase.Status.Conditions, metav1.Condition{
-			Type:               conditionType,
-			Status:             status,
-			Reason:             reason,
-			Message:            message,
-			ObservedGeneration: logicalDatabase.Generation,
-		})
-	}
-}
-
 func (r *LogicalDatabaseReconciler) mapDatabaseToLogicalDatabases(
 	ctx context.Context,
 	obj client.Object,
@@ -211,6 +263,7 @@ func (r *LogicalDatabaseReconciler) mapDatabaseToLogicalDatabases(
 func (r *LogicalDatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&storagev1alpha1.LogicalDatabase{}).
+		Owns(&dbforpostgresqlv1.FlexibleServersDatabase{}).
 		Watches(&storagev1alpha1.Database{}, handler.EnqueueRequestsFromMapFunc(r.mapDatabaseToLogicalDatabases)).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,

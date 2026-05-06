@@ -196,6 +196,10 @@ install-aso-crds-kind: aso-crds
 	--type='json' \
 	-p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'
 
+	kubectl patch crd flexibleserversdatabases.dbforpostgresql.azure.com \
+	--type='json' \
+	-p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'
+
 .PHONY: install-dis-identity-crd-kind
 install-dis-identity-crd-kind: dis-identity-crd
 	kubectl apply --server-side --force-conflicts -f $(DIS_IDENTITY_CRD_FILE)

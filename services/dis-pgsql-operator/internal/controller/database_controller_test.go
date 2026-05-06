@@ -7,6 +7,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
@@ -15,6 +16,7 @@ import (
 	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
+	"github.com/Azure/azure-service-operator/v2/pkg/common/annotations"
 	"github.com/Azure/azure-service-operator/v2/pkg/genruntime"
 	asoconditions "github.com/Azure/azure-service-operator/v2/pkg/genruntime/conditions"
 	batchv1 "k8s.io/api/batch/v1"
@@ -197,6 +199,8 @@ var _ = Describe("Database controller", func() {
 					ObservedGeneration: server.Generation,
 				},
 			}
+			host := fmt.Sprintf("%s.postgres.database.azure.com", serverName)
+			server.Status.FullyQualifiedDomainName = &host
 			return k8sClient.Status().Update(ctx, &server)
 		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
 			Should(Succeed())
@@ -223,21 +227,80 @@ var _ = Describe("Database controller", func() {
 			Should(Succeed())
 	}
 
+	markLogicalDatabaseASOReady := func(ctx context.Context, logicalDatabase *storagev1alpha1.LogicalDatabase) {
+		databaseName := dbUtil.DeriveLogicalDatabaseName(
+			logicalDatabase.Spec.Tenant.ID,
+			logicalDatabase.Spec.Tenant.Environment,
+			logicalDatabase.Spec.DatabaseKey,
+		)
+		resourceName := logicalDatabaseASOResourceName(logicalDatabase.Spec.ServerRef.Name, databaseName)
+		Eventually(func() error {
+			var server dbforpostgresqlv1.FlexibleServer
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      logicalDatabase.Spec.ServerRef.Name,
+				Namespace: logicalDatabase.Namespace,
+			}, &server); err != nil {
+				return err
+			}
+			server.Status.Conditions = []asoconditions.Condition{
+				{
+					Type:               asoconditions.ConditionTypeReady,
+					Status:             metav1.ConditionTrue,
+					Reason:             "Ready",
+					LastTransitionTime: metav1.Now(),
+					ObservedGeneration: server.Generation,
+				},
+			}
+			host := fmt.Sprintf("%s.postgres.database.azure.com", logicalDatabase.Spec.ServerRef.Name)
+			server.Status.FullyQualifiedDomainName = &host
+			return k8sClient.Status().Update(ctx, &server)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func() error {
+			var asoDatabase dbforpostgresqlv1.FlexibleServersDatabase
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      resourceName,
+				Namespace: logicalDatabase.Namespace,
+			}, &asoDatabase); err != nil {
+				return err
+			}
+			asoDatabase.Status.Conditions = []asoconditions.Condition{
+				{
+					Type:               asoconditions.ConditionTypeReady,
+					Status:             metav1.ConditionTrue,
+					Reason:             "Ready",
+					LastTransitionTime: metav1.Now(),
+					ObservedGeneration: asoDatabase.Generation,
+				},
+			}
+			return k8sClient.Status().Update(ctx, &asoDatabase)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+	}
+
 	cleanupNamespacedTestResources := func(ctx context.Context, namespace string) {
+		propagationPolicy := metav1.DeletePropagationBackground
 		deleteAll := func(obj client.Object) {
-			Expect(k8sClient.DeleteAllOf(ctx, obj, client.InNamespace(namespace))).To(Succeed())
+			Expect(k8sClient.DeleteAllOf(ctx, obj,
+				client.InNamespace(namespace),
+				client.PropagationPolicy(propagationPolicy),
+			)).To(Succeed())
 		}
 
-		// Delete dependents first so each spec starts from a clean namespace.
+		// Delete reconciling parents first so they cannot recreate children while
+		// this cleanup is draining the namespace.
+		deleteAll(&storagev1alpha1.LogicalDatabase{})
+		deleteAll(&storagev1alpha1.Database{})
+
 		deleteAll(&batchv1.Job{})
+		deleteAll(&dbforpostgresqlv1.FlexibleServersDatabase{})
 		deleteAll(&dbforpostgresqlv1.FlexibleServersAdministrator{})
 		deleteAll(&dbforpostgresqlv1.FlexibleServersConfiguration{})
 		deleteAll(&dbforpostgresqlv1.FlexibleServer{})
 		deleteAll(&networkv1.PrivateDnsZonesVirtualNetworkLink{})
 		deleteAll(&networkv1.PrivateDnsZone{})
 		deleteAll(&identityv1alpha1.ApplicationIdentity{})
-		deleteAll(&storagev1alpha1.LogicalDatabase{})
-		deleteAll(&storagev1alpha1.Database{})
 
 		Eventually(func(g Gomega) int {
 			var list storagev1alpha1.DatabaseList
@@ -252,6 +315,17 @@ var _ = Describe("Database controller", func() {
 			return len(list.Items)
 		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
 			Should(Equal(0))
+	}
+
+	listLogicalDatabaseASOChildren := func(g Gomega, logicalDatabaseName string) []dbforpostgresqlv1.FlexibleServersDatabase {
+		var logicalDatabases dbforpostgresqlv1.FlexibleServersDatabaseList
+		g.Expect(k8sClient.List(ctx, &logicalDatabases,
+			client.InNamespace(ns),
+			client.MatchingLabels(map[string]string{
+				logicalDatabaseLabelKey: logicalDatabaseName,
+			}),
+		)).To(Succeed())
+		return logicalDatabases.Items
 	}
 
 	BeforeEach(func() {
@@ -2213,12 +2287,42 @@ var _ = Describe("Database controller", func() {
 		))
 	})
 
-	It("validates a LogicalDatabase that references a shared Database", func() {
+	It("creates a FlexibleServersDatabase and publishes LogicalDatabase status", func() {
 		db := newSharedDatabase("shared-db-logical-valid")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		logicalDatabase := newLogicalDatabase("tenant123-dev-app-db-valid", db.Name)
 		Expect(k8sClient.Create(ctx, logicalDatabase)).To(Succeed())
+
+		expectedDatabaseName := dbUtil.DeriveLogicalDatabaseName(
+			logicalDatabase.Spec.Tenant.ID,
+			logicalDatabase.Spec.Tenant.Environment,
+			logicalDatabase.Spec.DatabaseKey,
+		)
+		expectedResourceName := logicalDatabaseASOResourceName(db.Name, expectedDatabaseName)
+
+		Eventually(func(g Gomega) dbforpostgresqlv1.FlexibleServersDatabase_Spec {
+			var asoDatabase dbforpostgresqlv1.FlexibleServersDatabase
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      expectedResourceName,
+				Namespace: logicalDatabase.Namespace,
+			}, &asoDatabase)).To(Succeed())
+			g.Expect(asoDatabase.Spec.AzureName).To(Equal(expectedDatabaseName))
+			g.Expect(asoDatabase.Spec.Owner).NotTo(BeNil())
+			g.Expect(asoDatabase.Spec.Owner.Name).To(Equal(db.Name))
+			g.Expect(asoDatabase.Spec.Charset).To(BeNil())
+			g.Expect(asoDatabase.Spec.Collation).To(BeNil())
+			g.Expect(asoDatabase.Labels).To(HaveKeyWithValue(databaseNameLabelKey, db.Name))
+			g.Expect(asoDatabase.Labels).To(HaveKeyWithValue(logicalDatabaseLabelKey, logicalDatabase.Name))
+			g.Expect(asoDatabase.Annotations).To(HaveKeyWithValue(
+				annotations.ReconcilePolicy,
+				string(annotations.ReconcilePolicyDetachOnDelete),
+			))
+			return asoDatabase.Spec
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			ShouldNot(BeZero())
+
+		markLogicalDatabaseASOReady(ctx, logicalDatabase)
 
 		Eventually(func(g Gomega) []storagev1alpha1.LogicalDatabaseValidationError {
 			var updated storagev1alpha1.LogicalDatabase
@@ -2227,6 +2331,9 @@ var _ = Describe("Database controller", func() {
 				Namespace: logicalDatabase.Namespace,
 			}, &updated)).To(Succeed())
 			g.Expect(updated.Status.ObservedGeneration).To(Equal(updated.Generation))
+			g.Expect(updated.Status.DatabaseName).To(Equal(expectedDatabaseName))
+			g.Expect(updated.Status.Host).To(Equal(fmt.Sprintf("%s.postgres.database.azure.com", db.Name)))
+			g.Expect(updated.Status.Port).To(Equal(logicalDatabasePort))
 
 			ready := meta.FindStatusCondition(updated.Status.Conditions, logicalDatabaseConditionReady)
 			g.Expect(ready).NotTo(BeNil())
@@ -2235,8 +2342,8 @@ var _ = Describe("Database controller", func() {
 
 			databaseReady := meta.FindStatusCondition(updated.Status.Conditions, logicalDatabaseConditionDatabaseReady)
 			g.Expect(databaseReady).NotTo(BeNil())
-			g.Expect(databaseReady.Status).To(Equal(metav1.ConditionFalse))
-			g.Expect(databaseReady.Reason).To(Equal(logicalDatabaseReasonProvisioningDeferred))
+			g.Expect(databaseReady.Status).To(Equal(metav1.ConditionTrue))
+			g.Expect(databaseReady.Reason).To(Equal(logicalDatabaseReasonDatabaseReady))
 
 			accessReady := meta.FindStatusCondition(updated.Status.Conditions, logicalDatabaseConditionAccessReady)
 			g.Expect(accessReady).NotTo(BeNil())
@@ -2273,6 +2380,11 @@ var _ = Describe("Database controller", func() {
 			return ""
 		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
 			Should(Equal(logicalDatabaseValidationReasonNotFound))
+
+		Consistently(func(g Gomega) []dbforpostgresqlv1.FlexibleServersDatabase {
+			return listLogicalDatabaseASOChildren(g, logicalDatabase.Name)
+		}).WithTimeout(2 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
 	})
 
 	It("reports NotShared when LogicalDatabase serverRef points to a dedicated Database", func() {
@@ -2303,6 +2415,11 @@ var _ = Describe("Database controller", func() {
 			return ""
 		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
 			Should(Equal(logicalDatabaseValidationReasonNotShared))
+
+		Consistently(func(g Gomega) []dbforpostgresqlv1.FlexibleServersDatabase {
+			return listLogicalDatabaseASOChildren(g, logicalDatabase.Name)
+		}).WithTimeout(2 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
 	})
 
 	It("revalidates LogicalDatabase when the referenced shared Database is created later", func() {
@@ -2336,37 +2453,178 @@ var _ = Describe("Database controller", func() {
 			return updated.Status.ValidationErrors
 		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
 			Should(BeEmpty())
+
+		Eventually(func(g Gomega) int {
+			return len(listLogicalDatabaseASOChildren(g, logicalDatabase.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
 	})
 
-	It("does not create database state for valid LogicalDatabase resources in this API slice", func() {
-		db := newSharedDatabase("shared-db-logical-no-state")
+	It("allows the same derived logical database name on different shared Databases", func() {
+		db1 := newSharedDatabase("shared-db-logical-one")
+		db2 := newSharedDatabase("shared-db-logical-two")
+		Expect(k8sClient.Create(ctx, db1)).To(Succeed())
+		Expect(k8sClient.Create(ctx, db2)).To(Succeed())
+
+		logicalDatabase1 := newLogicalDatabase("tenant123-dev-app-db-one", db1.Name)
+		logicalDatabase2 := newLogicalDatabase("tenant123-dev-app-db-two", db2.Name)
+		Expect(k8sClient.Create(ctx, logicalDatabase1)).To(Succeed())
+		Expect(k8sClient.Create(ctx, logicalDatabase2)).To(Succeed())
+
+		expectedDatabaseName := dbUtil.DeriveLogicalDatabaseName(
+			logicalDatabase1.Spec.Tenant.ID,
+			logicalDatabase1.Spec.Tenant.Environment,
+			logicalDatabase1.Spec.DatabaseKey,
+		)
+		Eventually(func(g Gomega) []string {
+			logicalDatabases := append(
+				listLogicalDatabaseASOChildren(g, logicalDatabase1.Name),
+				listLogicalDatabaseASOChildren(g, logicalDatabase2.Name)...,
+			)
+			names := make([]string, 0, len(logicalDatabases))
+			for _, asoDatabase := range logicalDatabases {
+				g.Expect(asoDatabase.Spec.AzureName).To(Equal(expectedDatabaseName))
+				names = append(names, asoDatabase.Name)
+			}
+			return names
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(ConsistOf(
+				logicalDatabaseASOResourceName(db1.Name, expectedDatabaseName),
+				logicalDatabaseASOResourceName(db2.Name, expectedDatabaseName),
+			))
+	})
+
+	It("does not adopt a FlexibleServersDatabase owned by another LogicalDatabase", func() {
+		db := newSharedDatabase("shared-db-logical-owner-guard")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
-		logicalDatabase := newLogicalDatabase("tenant123-dev-app-db-no-state", db.Name)
+		firstLogicalDatabase := newLogicalDatabase("tenant123-dev-app-db-owner-one", db.Name)
+		Expect(k8sClient.Create(ctx, firstLogicalDatabase)).To(Succeed())
+
+		expectedDatabaseName := dbUtil.DeriveLogicalDatabaseName(
+			firstLogicalDatabase.Spec.Tenant.ID,
+			firstLogicalDatabase.Spec.Tenant.Environment,
+			firstLogicalDatabase.Spec.DatabaseKey,
+		)
+		expectedResourceName := logicalDatabaseASOResourceName(db.Name, expectedDatabaseName)
+
+		var firstUpdated storagev1alpha1.LogicalDatabase
+		Eventually(func(g Gomega) string {
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      firstLogicalDatabase.Name,
+				Namespace: firstLogicalDatabase.Namespace,
+			}, &firstUpdated)).To(Succeed())
+
+			var asoDatabase dbforpostgresqlv1.FlexibleServersDatabase
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      expectedResourceName,
+				Namespace: firstLogicalDatabase.Namespace,
+			}, &asoDatabase)).To(Succeed())
+			g.Expect(metav1.IsControlledBy(&asoDatabase, &firstUpdated)).To(BeTrue())
+			return asoDatabase.Labels[logicalDatabaseLabelKey]
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(firstLogicalDatabase.Name))
+
+		secondLogicalDatabase := newLogicalDatabase("tenant123-dev-app-db-owner-two", db.Name)
+		Expect(k8sClient.Create(ctx, secondLogicalDatabase)).To(Succeed())
+
+		reconciler := &LogicalDatabaseReconciler{
+			Client: k8sClient,
+			Scheme: k8sManager.GetScheme(),
+		}
+		_, err := reconciler.Reconcile(ctx, ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      secondLogicalDatabase.Name,
+				Namespace: secondLogicalDatabase.Namespace,
+			},
+		})
+		Expect(err).To(MatchError(ContainSubstring(
+			fmt.Sprintf("not LogicalDatabase %s/%s", secondLogicalDatabase.Namespace, secondLogicalDatabase.Name),
+		)))
+
+		var asoDatabase dbforpostgresqlv1.FlexibleServersDatabase
+		Expect(k8sClient.Get(ctx, types.NamespacedName{
+			Name:      expectedResourceName,
+			Namespace: firstLogicalDatabase.Namespace,
+		}, &asoDatabase)).To(Succeed())
+		Expect(asoDatabase.Labels).To(HaveKeyWithValue(logicalDatabaseLabelKey, firstLogicalDatabase.Name))
+		Expect(metav1.IsControlledBy(&asoDatabase, &firstUpdated)).To(BeTrue())
+	})
+
+	It("does not create access provisioning jobs for LogicalDatabase resources", func() {
+		db := newSharedDatabase("shared-db-logical-no-access-job")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		logicalDatabase := newLogicalDatabase("tenant123-dev-app-db-no-access-job", db.Name)
 		Expect(k8sClient.Create(ctx, logicalDatabase)).To(Succeed())
 
-		Eventually(func(g Gomega) []storagev1alpha1.LogicalDatabaseValidationError {
+		Eventually(func(g Gomega) int {
+			return len(listLogicalDatabaseASOChildren(g, logicalDatabase.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+
+		Consistently(func(g Gomega) []batchv1.Job {
+			var jobs batchv1.JobList
+			g.Expect(k8sClient.List(ctx, &jobs,
+				client.InNamespace(ns),
+				client.MatchingLabels(map[string]string{
+					logicalDatabaseLabelKey: logicalDatabase.Name,
+				}),
+			)).To(Succeed())
+			return jobs.Items
+		}).WithTimeout(2 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+	})
+
+	It("fails validation instead of creating a second database when the derived name changes", func() {
+		db := newSharedDatabase("shared-db-logical-name-change")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		logicalDatabase := newLogicalDatabase("tenant123-dev-app-db-name-change", db.Name)
+		Expect(k8sClient.Create(ctx, logicalDatabase)).To(Succeed())
+
+		Eventually(func(g Gomega) string {
 			var updated storagev1alpha1.LogicalDatabase
 			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      logicalDatabase.Name,
 				Namespace: logicalDatabase.Namespace,
 			}, &updated)).To(Succeed())
-			return updated.Status.ValidationErrors
+			return updated.Status.DatabaseName
 		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
-			Should(BeEmpty())
+			Should(Equal("tenant123-dev-app-db"))
 
-		var jobs batchv1.JobList
-		Expect(k8sClient.List(ctx, &jobs,
-			client.InNamespace(ns),
-			client.MatchingLabels(map[string]string{
-				"dis.altinn.cloud/database-name": logicalDatabase.Name,
-			}),
-		)).To(Succeed())
-		Expect(jobs.Items).To(BeEmpty())
+		Eventually(func() error {
+			var updated storagev1alpha1.LogicalDatabase
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      logicalDatabase.Name,
+				Namespace: logicalDatabase.Namespace,
+			}, &updated); err != nil {
+				return err
+			}
+			updated.Spec.DatabaseKey = "renamed-db"
+			return k8sClient.Update(ctx, &updated)
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
 
-		var logicalDatabases dbforpostgresqlv1.FlexibleServersDatabaseList
-		Expect(k8sClient.List(ctx, &logicalDatabases, client.InNamespace(ns))).To(Succeed())
-		Expect(logicalDatabases.Items).To(BeEmpty())
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.LogicalDatabase
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      logicalDatabase.Name,
+				Namespace: logicalDatabase.Namespace,
+			}, &updated)).To(Succeed())
+			for _, validationError := range updated.Status.ValidationErrors {
+				if validationError.Field == logicalDatabaseValidationFieldDatabaseName {
+					return validationError.Reason
+				}
+			}
+			return ""
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(logicalDatabaseValidationReasonImmutable))
+
+		Eventually(func(g Gomega) []dbforpostgresqlv1.FlexibleServersDatabase {
+			return listLogicalDatabaseASOChildren(g, logicalDatabase.Name)
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(HaveLen(1))
 	})
 
 	It("defaults LogicalDatabase deletionPolicy to Retain", func() {
