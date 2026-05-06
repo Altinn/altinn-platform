@@ -47,3 +47,17 @@ func TestWithRequiredSuffix(t *testing.T) {
 		t.Fatalf("WithRequiredSuffix() = %q", got)
 	}
 }
+
+func TestWithRequiredSuffixClampsOversizedSuffix(t *testing.T) {
+	got := WithRequiredSuffix("base", "-suffix", 4, "x")
+	if got != "-suf" {
+		t.Fatalf("WithRequiredSuffix() = %q", got)
+	}
+}
+
+func TestWithRequiredSuffixClampsFallback(t *testing.T) {
+	got := WithRequiredSuffix("-----", "-suffix", 10, "fallback")
+	if got != "fal-suffix" {
+		t.Fatalf("WithRequiredSuffix() = %q", got)
+	}
+}

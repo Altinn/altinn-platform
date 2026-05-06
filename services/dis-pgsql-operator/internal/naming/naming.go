@@ -64,12 +64,22 @@ func WithHashSuffixOnOverflow(name string, maxLen int, hash, fallback string) st
 
 // WithRequiredSuffix appends suffix, truncating base when needed to fit maxLen.
 func WithRequiredSuffix(base, suffix string, maxLen int, fallback string) string {
-	maxBaseLen := max(maxLen-len(suffix), 1)
+	if maxLen <= 0 {
+		return ""
+	}
+	if len(suffix) >= maxLen {
+		return suffix[:maxLen]
+	}
+
+	maxBaseLen := maxLen - len(suffix)
 	if len(base) > maxBaseLen {
 		base = strings.TrimRight(base[:maxBaseLen], "-")
 		if base == "" {
 			base = fallback
 		}
+	}
+	if len(base) > maxBaseLen {
+		base = strings.TrimRight(base[:maxBaseLen], "-")
 	}
 	return base + suffix
 }
