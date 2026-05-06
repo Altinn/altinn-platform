@@ -38,6 +38,7 @@ rules:
   - flexibleservers
   - flexibleserversadministrators
   - flexibleserversconfigurations
+  - flexibleserversdatabases
   verbs:
   - create
   - delete
@@ -56,6 +57,12 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - dbforpostgresql.azure.com
+  resources:
+  - flexibleserversdatabases/status
+  verbs:
+  - get
 - apiGroups:
   - network.azure.com
   resources:

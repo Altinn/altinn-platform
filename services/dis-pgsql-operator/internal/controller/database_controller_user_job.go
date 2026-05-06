@@ -2,8 +2,6 @@ package controller
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"maps"
 	"strings"
@@ -18,19 +16,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/naming"
 )
 
 func userProvisionJobName(dbName string, auth resolvedDatabaseAuth) string {
 	hash := userProvisionSpecHash(dbName, auth)
 	base := fmt.Sprintf("%s-user-provision", dbName)
-	maxBaseLen := max(63-1-len(hash), 1)
-	if len(base) > maxBaseLen {
-		base = strings.TrimRight(base[:maxBaseLen], "-")
-		if base == "" {
-			base = "db"
-		}
-	}
-	return fmt.Sprintf("%s-%s", base, hash)
+	return naming.WithRequiredSuffix(base, "-"+hash, 63, "db")
 }
 
 func userProvisionSpecHash(dbName string, auth resolvedDatabaseAuth) string {
@@ -41,8 +33,7 @@ func userProvisionSpecHash(dbName string, auth resolvedDatabaseAuth) string {
 		auth.User.PrincipalID,
 		dbName,
 	)
-	sum := sha256.Sum256([]byte(payload))
-	return hex.EncodeToString(sum[:])[:8]
+	return naming.StableSHA256Hex(payload)[:8]
 }
 
 func (r *DatabaseReconciler) ensureUserProvisionJob(

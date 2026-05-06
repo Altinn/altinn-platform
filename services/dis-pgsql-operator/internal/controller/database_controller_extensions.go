@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"crypto/sha1"
 	"fmt"
 	"maps"
 	"sort"
@@ -20,6 +19,7 @@ import (
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
 	k8sutil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/k8s"
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/naming"
 	to "github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	genruntime "github.com/Azure/azure-service-operator/v2/pkg/genruntime"
@@ -48,16 +48,8 @@ func sharedPreloadLibrariesConfigResourceName(dbName string) string {
 func serverParameterConfigResourceName(dbName, parameterName string) string {
 	const maxResourceNameLen = 253
 
-	hash := sha1.Sum([]byte(parameterName))
-	suffix := fmt.Sprintf("-server-param-%x", hash[:5])
-	maxBaseNameLen := maxResourceNameLen - len(suffix)
-
-	baseName := dbName
-	if len(baseName) > maxBaseNameLen {
-		baseName = baseName[:maxBaseNameLen]
-	}
-
-	return baseName + suffix
+	suffix := fmt.Sprintf("-server-param-%s", naming.StableSHA1Hex(parameterName)[:10])
+	return naming.WithRequiredSuffix(dbName, suffix, maxResourceNameLen, "db")
 }
 
 func (r *DatabaseReconciler) ensurePostgresExtensionSettings(
