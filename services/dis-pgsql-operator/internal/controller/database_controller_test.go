@@ -2266,7 +2266,7 @@ var _ = Describe("Database controller", func() {
 			g.Expect(ready.Reason).To(Equal(logicalDatabaseReasonValidationFailed))
 
 			for _, validationError := range updated.Status.ValidationErrors {
-				if validationError.Field == "spec.serverRef.name" {
+				if validationError.Field == logicalDatabaseValidationFieldServerRefName {
 					return validationError.Reason
 				}
 			}
@@ -2296,7 +2296,7 @@ var _ = Describe("Database controller", func() {
 			}, &updated)).To(Succeed())
 			g.Expect(updated.Status.ObservedGeneration).To(Equal(updated.Generation))
 			for _, validationError := range updated.Status.ValidationErrors {
-				if validationError.Field == "spec.serverRef.name" {
+				if validationError.Field == logicalDatabaseValidationFieldServerRefName {
 					return validationError.Reason
 				}
 			}
@@ -2317,7 +2317,7 @@ var _ = Describe("Database controller", func() {
 				Namespace: logicalDatabase.Namespace,
 			}, &updated)).To(Succeed())
 			for _, validationError := range updated.Status.ValidationErrors {
-				if validationError.Field == "spec.serverRef.name" {
+				if validationError.Field == logicalDatabaseValidationFieldServerRefName {
 					return validationError.Reason
 				}
 			}

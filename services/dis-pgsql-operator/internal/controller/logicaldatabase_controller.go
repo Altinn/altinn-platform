@@ -31,6 +31,7 @@ const (
 	logicalDatabaseValidationReasonNotFound      = "NotFound"
 	logicalDatabaseValidationReasonNotShared     = "NotShared"
 	logicalDatabaseValidationReasonUnsupported   = "Unsupported"
+	logicalDatabaseValidationFieldServerRefName  = "spec.serverRef.name"
 	logicalDatabaseValidationFieldDeletionPolicy = "spec.deletionPolicy"
 )
 
@@ -108,7 +109,7 @@ func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 		})
 	}
 
-	addRequiredStringError("spec.serverRef.name", logicalDatabase.Spec.ServerRef.Name)
+	addRequiredStringError(logicalDatabaseValidationFieldServerRefName, logicalDatabase.Spec.ServerRef.Name)
 	addRequiredStringError("spec.databaseKey", logicalDatabase.Spec.DatabaseKey)
 	addRequiredStringError("spec.tenant.id", logicalDatabase.Spec.Tenant.ID)
 	addRequiredStringError("spec.tenant.environment", logicalDatabase.Spec.Tenant.Environment)
@@ -136,14 +137,14 @@ func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 	}, &db); err != nil {
 		if apierrors.IsNotFound(err) {
 			validationErrors = append(validationErrors, storagev1alpha1.LogicalDatabaseValidationError{
-				Field:   "spec.serverRef.name",
+				Field:   logicalDatabaseValidationFieldServerRefName,
 				Reason:  logicalDatabaseValidationReasonNotFound,
 				Message: fmt.Sprintf("Database %q was not found in namespace %q", serverName, logicalDatabase.Namespace),
 			})
 			return validationErrors
 		}
 		validationErrors = append(validationErrors, storagev1alpha1.LogicalDatabaseValidationError{
-			Field:   "spec.serverRef.name",
+			Field:   logicalDatabaseValidationFieldServerRefName,
 			Reason:  "GetFailed",
 			Message: fmt.Sprintf("failed to get Database %q in namespace %q: %v", serverName, logicalDatabase.Namespace, err),
 		})
@@ -152,7 +153,7 @@ func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 
 	if databaseMode(&db) != storagev1alpha1.DatabaseModeShared {
 		validationErrors = append(validationErrors, storagev1alpha1.LogicalDatabaseValidationError{
-			Field:   "spec.serverRef.name",
+			Field:   logicalDatabaseValidationFieldServerRefName,
 			Reason:  logicalDatabaseValidationReasonNotShared,
 			Message: fmt.Sprintf("Database %q must have spec.mode Shared", serverName),
 		})
