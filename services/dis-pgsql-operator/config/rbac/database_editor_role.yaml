@@ -17,6 +17,7 @@ rules:
   - storage.dis.altinn.cloud
   resources:
   - databases
+  - logicaldatabases
   verbs:
   - create
   - delete
@@ -29,5 +30,6 @@ rules:
   - storage.dis.altinn.cloud
   resources:
   - databases/status
+  - logicaldatabases/status
   verbs:
   - get

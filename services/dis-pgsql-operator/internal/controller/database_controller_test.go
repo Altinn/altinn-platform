@@ -114,6 +114,31 @@ var _ = Describe("Database controller", func() {
 		}
 	}
 
+	newLogicalDatabase := func(name, serverName string) *storagev1alpha1.LogicalDatabase {
+		return &storagev1alpha1.LogicalDatabase{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: ns,
+			},
+			Spec: storagev1alpha1.LogicalDatabaseSpec{
+				ServerRef: storagev1alpha1.LogicalDatabaseServerRef{
+					Name: serverName,
+				},
+				DatabaseKey: "app-db",
+				Tenant: storagev1alpha1.LogicalDatabaseTenantSpec{
+					ID:          "tenant123",
+					Environment: "dev",
+				},
+				Access: storagev1alpha1.LogicalDatabaseAccessSpec{
+					Identity: storagev1alpha1.LogicalDatabaseIdentitySpec{
+						Name:        "my-app-tenant123-dev",
+						PrincipalId: "my-app-tenant123-dev-principal-id",
+					},
+				},
+			},
+		}
+	}
+
 	waitForProvisionJob := func(ctx context.Context, dbName, namespace string) batchv1.Job {
 		var job batchv1.Job
 		Eventually(func(g Gomega) string {
@@ -211,10 +236,18 @@ var _ = Describe("Database controller", func() {
 		deleteAll(&networkv1.PrivateDnsZonesVirtualNetworkLink{})
 		deleteAll(&networkv1.PrivateDnsZone{})
 		deleteAll(&identityv1alpha1.ApplicationIdentity{})
+		deleteAll(&storagev1alpha1.LogicalDatabase{})
 		deleteAll(&storagev1alpha1.Database{})
 
 		Eventually(func(g Gomega) int {
 			var list storagev1alpha1.DatabaseList
+			g.Expect(k8sClient.List(ctx, &list, client.InNamespace(namespace))).To(Succeed())
+			return len(list.Items)
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(0))
+
+		Eventually(func(g Gomega) int {
+			var list storagev1alpha1.LogicalDatabaseList
 			g.Expect(k8sClient.List(ctx, &list, client.InNamespace(namespace))).To(Succeed())
 			return len(list.Items)
 		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
@@ -2178,6 +2211,181 @@ var _ = Describe("Database controller", func() {
 		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
 			corev1.EnvVar{Name: "DISPG_ADMIN_APP_IDENTITY", Value: "admin-mi"},
 		))
+	})
+
+	It("validates a LogicalDatabase that references a shared Database", func() {
+		db := newSharedDatabase("shared-db-logical-valid")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		logicalDatabase := newLogicalDatabase("tenant123-dev-app-db-valid", db.Name)
+		Expect(k8sClient.Create(ctx, logicalDatabase)).To(Succeed())
+
+		Eventually(func(g Gomega) []storagev1alpha1.LogicalDatabaseValidationError {
+			var updated storagev1alpha1.LogicalDatabase
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      logicalDatabase.Name,
+				Namespace: logicalDatabase.Namespace,
+			}, &updated)).To(Succeed())
+			g.Expect(updated.Status.ObservedGeneration).To(Equal(updated.Generation))
+
+			ready := meta.FindStatusCondition(updated.Status.Conditions, logicalDatabaseConditionReady)
+			g.Expect(ready).NotTo(BeNil())
+			g.Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(ready.Reason).To(Equal(logicalDatabaseReasonProvisioningDeferred))
+
+			databaseReady := meta.FindStatusCondition(updated.Status.Conditions, logicalDatabaseConditionDatabaseReady)
+			g.Expect(databaseReady).NotTo(BeNil())
+			g.Expect(databaseReady.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(databaseReady.Reason).To(Equal(logicalDatabaseReasonProvisioningDeferred))
+
+			accessReady := meta.FindStatusCondition(updated.Status.Conditions, logicalDatabaseConditionAccessReady)
+			g.Expect(accessReady).NotTo(BeNil())
+			g.Expect(accessReady.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(accessReady.Reason).To(Equal(logicalDatabaseReasonProvisioningDeferred))
+
+			return updated.Status.ValidationErrors
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+	})
+
+	It("reports NotFound when LogicalDatabase serverRef does not exist", func() {
+		logicalDatabase := newLogicalDatabase("tenant123-dev-app-db-missing-server", "missing-shared-db")
+		Expect(k8sClient.Create(ctx, logicalDatabase)).To(Succeed())
+
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.LogicalDatabase
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      logicalDatabase.Name,
+				Namespace: logicalDatabase.Namespace,
+			}, &updated)).To(Succeed())
+			g.Expect(updated.Status.ObservedGeneration).To(Equal(updated.Generation))
+
+			ready := meta.FindStatusCondition(updated.Status.Conditions, logicalDatabaseConditionReady)
+			g.Expect(ready).NotTo(BeNil())
+			g.Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(ready.Reason).To(Equal(logicalDatabaseReasonValidationFailed))
+
+			for _, validationError := range updated.Status.ValidationErrors {
+				if validationError.Field == "spec.serverRef.name" {
+					return validationError.Reason
+				}
+			}
+			return ""
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(logicalDatabaseValidationReasonNotFound))
+	})
+
+	It("reports NotShared when LogicalDatabase serverRef points to a dedicated Database", func() {
+		db := newDatabaseForJob("dedicated-db-logical-invalid", directAuth(
+			"admin-mi",
+			"admin-mi-id",
+			"admin-mi",
+			"user-mi",
+			"user-mi-id",
+		))
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		logicalDatabase := newLogicalDatabase("tenant123-dev-app-db-dedicated-server", db.Name)
+		Expect(k8sClient.Create(ctx, logicalDatabase)).To(Succeed())
+
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.LogicalDatabase
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      logicalDatabase.Name,
+				Namespace: logicalDatabase.Namespace,
+			}, &updated)).To(Succeed())
+			g.Expect(updated.Status.ObservedGeneration).To(Equal(updated.Generation))
+			for _, validationError := range updated.Status.ValidationErrors {
+				if validationError.Field == "spec.serverRef.name" {
+					return validationError.Reason
+				}
+			}
+			return ""
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(logicalDatabaseValidationReasonNotShared))
+	})
+
+	It("revalidates LogicalDatabase when the referenced shared Database is created later", func() {
+		const serverName = "shared-db-created-later"
+		logicalDatabase := newLogicalDatabase("tenant123-dev-app-db-late-server", serverName)
+		Expect(k8sClient.Create(ctx, logicalDatabase)).To(Succeed())
+
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.LogicalDatabase
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      logicalDatabase.Name,
+				Namespace: logicalDatabase.Namespace,
+			}, &updated)).To(Succeed())
+			for _, validationError := range updated.Status.ValidationErrors {
+				if validationError.Field == "spec.serverRef.name" {
+					return validationError.Reason
+				}
+			}
+			return ""
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(logicalDatabaseValidationReasonNotFound))
+
+		Expect(k8sClient.Create(ctx, newSharedDatabase(serverName))).To(Succeed())
+
+		Eventually(func(g Gomega) []storagev1alpha1.LogicalDatabaseValidationError {
+			var updated storagev1alpha1.LogicalDatabase
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      logicalDatabase.Name,
+				Namespace: logicalDatabase.Namespace,
+			}, &updated)).To(Succeed())
+			return updated.Status.ValidationErrors
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+	})
+
+	It("does not create database state for valid LogicalDatabase resources in this API slice", func() {
+		db := newSharedDatabase("shared-db-logical-no-state")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		logicalDatabase := newLogicalDatabase("tenant123-dev-app-db-no-state", db.Name)
+		Expect(k8sClient.Create(ctx, logicalDatabase)).To(Succeed())
+
+		Eventually(func(g Gomega) []storagev1alpha1.LogicalDatabaseValidationError {
+			var updated storagev1alpha1.LogicalDatabase
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      logicalDatabase.Name,
+				Namespace: logicalDatabase.Namespace,
+			}, &updated)).To(Succeed())
+			return updated.Status.ValidationErrors
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+
+		var jobs batchv1.JobList
+		Expect(k8sClient.List(ctx, &jobs,
+			client.InNamespace(ns),
+			client.MatchingLabels(map[string]string{
+				"dis.altinn.cloud/database-name": logicalDatabase.Name,
+			}),
+		)).To(Succeed())
+		Expect(jobs.Items).To(BeEmpty())
+
+		var logicalDatabases dbforpostgresqlv1.FlexibleServersDatabaseList
+		Expect(k8sClient.List(ctx, &logicalDatabases, client.InNamespace(ns))).To(Succeed())
+		Expect(logicalDatabases.Items).To(BeEmpty())
+	})
+
+	It("defaults LogicalDatabase deletionPolicy to Retain", func() {
+		db := newSharedDatabase("shared-db-logical-default-policy")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		logicalDatabase := newLogicalDatabase("tenant123-dev-app-db-default-policy", db.Name)
+		Expect(logicalDatabase.Spec.DeletionPolicy).To(BeEmpty())
+		Expect(k8sClient.Create(ctx, logicalDatabase)).To(Succeed())
+
+		var updated storagev1alpha1.LogicalDatabase
+		Eventually(func(g Gomega) storagev1alpha1.LogicalDatabaseDeletionPolicy {
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      logicalDatabase.Name,
+				Namespace: logicalDatabase.Namespace,
+			}, &updated)).To(Succeed())
+			return updated.Spec.DeletionPolicy
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(storagev1alpha1.LogicalDatabaseDeletionPolicyRetain))
 	})
 
 })

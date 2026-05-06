@@ -124,6 +124,11 @@ var _ = BeforeSuite(func() {
 		Config:        config,
 	}).SetupWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())
+	err = (&LogicalDatabaseReconciler{
+		Client: k8sManager.GetClient(),
+		Scheme: k8sManager.GetScheme(),
+	}).SetupWithManager(k8sManager)
+	Expect(err).NotTo(HaveOccurred())
 
 	k8sClient = k8sManager.GetClient()
 	Expect(k8sClient).NotTo(BeNil())

@@ -17,11 +17,13 @@ rules:
   - storage.dis.altinn.cloud
   resources:
   - databases
+  - logicaldatabases
   verbs:
   - '*'
 - apiGroups:
   - storage.dis.altinn.cloud
   resources:
   - databases/status
+  - logicaldatabases/status
   verbs:
   - get
