@@ -77,11 +77,18 @@ func (r *LogicalDatabaseReconciler) ensureFlexibleServersDatabase(
 		}
 		if err := r.Create(ctx, flexibleServersDatabase); err != nil {
 			if apierrors.IsAlreadyExists(err) {
-				return nil
+				if err := r.Get(ctx, types.NamespacedName{Name: resourceName, Namespace: ns}, &existing); err != nil {
+					return fmt.Errorf("get FlexibleServersDatabase %s/%s after create conflict: %w", ns, resourceName, err)
+				}
+				return ensureLogicalDatabaseASOResourceOwnedBy(logicalDatabase, &existing)
 			}
 			return fmt.Errorf("create FlexibleServersDatabase %s/%s: %w", ns, resourceName, err)
 		}
 		return nil
+	}
+
+	if err := ensureLogicalDatabaseASOResourceOwnedBy(logicalDatabase, &existing); err != nil {
+		return err
 	}
 
 	updated := false
@@ -126,6 +133,10 @@ func (r *LogicalDatabaseReconciler) logicalDatabaseReady(
 		return false, "", fmt.Errorf("get FlexibleServersDatabase %s/%s: %w", ns, resourceName, err)
 	}
 
+	if err := ensureLogicalDatabaseASOResourceOwnedBy(logicalDatabase, &flexibleServersDatabase); err != nil {
+		return false, "", err
+	}
+
 	databaseStatus, databaseReason, databaseMessage, databaseReady := readyConditionInfo(flexibleServersDatabase.Status.Conditions)
 	if !databaseReady || databaseStatus != metav1.ConditionTrue {
 		logger.Info("FlexibleServersDatabase not ready yet",
@@ -152,6 +163,30 @@ func (r *LogicalDatabaseReconciler) logicalDatabaseReady(
 	}
 
 	return true, strings.TrimSpace(*server.Status.FullyQualifiedDomainName), nil
+}
+
+func ensureLogicalDatabaseASOResourceOwnedBy(
+	logicalDatabase *storagev1alpha1.LogicalDatabase,
+	asoDatabase *dbforpostgresqlv1.FlexibleServersDatabase,
+) error {
+	if metav1.IsControlledBy(asoDatabase, logicalDatabase) {
+		return nil
+	}
+
+	resource := fmt.Sprintf("%s/%s", asoDatabase.Namespace, asoDatabase.Name)
+	controllerRef := metav1.GetControllerOf(asoDatabase)
+	if controllerRef == nil {
+		return fmt.Errorf("FlexibleServersDatabase %s exists but is not controlled by LogicalDatabase %s/%s", resource, logicalDatabase.Namespace, logicalDatabase.Name)
+	}
+
+	return fmt.Errorf(
+		"FlexibleServersDatabase %s is controlled by %s %s, not LogicalDatabase %s/%s",
+		resource,
+		controllerRef.Kind,
+		controllerRef.Name,
+		logicalDatabase.Namespace,
+		logicalDatabase.Name,
+	)
 }
 
 func logicalDatabaseASOResourceName(serverName, databaseName string) string {

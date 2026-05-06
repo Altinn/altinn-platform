@@ -7,6 +7,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
@@ -2491,6 +2492,63 @@ var _ = Describe("Database controller", func() {
 				logicalDatabaseASOResourceName(db1.Name, expectedDatabaseName),
 				logicalDatabaseASOResourceName(db2.Name, expectedDatabaseName),
 			))
+	})
+
+	It("does not adopt a FlexibleServersDatabase owned by another LogicalDatabase", func() {
+		db := newSharedDatabase("shared-db-logical-owner-guard")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		firstLogicalDatabase := newLogicalDatabase("tenant123-dev-app-db-owner-one", db.Name)
+		Expect(k8sClient.Create(ctx, firstLogicalDatabase)).To(Succeed())
+
+		expectedDatabaseName := dbUtil.DeriveLogicalDatabaseName(
+			firstLogicalDatabase.Spec.Tenant.ID,
+			firstLogicalDatabase.Spec.Tenant.Environment,
+			firstLogicalDatabase.Spec.DatabaseKey,
+		)
+		expectedResourceName := logicalDatabaseASOResourceName(db.Name, expectedDatabaseName)
+
+		var firstUpdated storagev1alpha1.LogicalDatabase
+		Eventually(func(g Gomega) string {
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      firstLogicalDatabase.Name,
+				Namespace: firstLogicalDatabase.Namespace,
+			}, &firstUpdated)).To(Succeed())
+
+			var asoDatabase dbforpostgresqlv1.FlexibleServersDatabase
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      expectedResourceName,
+				Namespace: firstLogicalDatabase.Namespace,
+			}, &asoDatabase)).To(Succeed())
+			g.Expect(metav1.IsControlledBy(&asoDatabase, &firstUpdated)).To(BeTrue())
+			return asoDatabase.Labels[logicalDatabaseLabelKey]
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(firstLogicalDatabase.Name))
+
+		secondLogicalDatabase := newLogicalDatabase("tenant123-dev-app-db-owner-two", db.Name)
+		Expect(k8sClient.Create(ctx, secondLogicalDatabase)).To(Succeed())
+
+		reconciler := &LogicalDatabaseReconciler{
+			Client: k8sClient,
+			Scheme: k8sManager.GetScheme(),
+		}
+		_, err := reconciler.Reconcile(ctx, ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      secondLogicalDatabase.Name,
+				Namespace: secondLogicalDatabase.Namespace,
+			},
+		})
+		Expect(err).To(MatchError(ContainSubstring(
+			fmt.Sprintf("not LogicalDatabase %s/%s", secondLogicalDatabase.Namespace, secondLogicalDatabase.Name),
+		)))
+
+		var asoDatabase dbforpostgresqlv1.FlexibleServersDatabase
+		Expect(k8sClient.Get(ctx, types.NamespacedName{
+			Name:      expectedResourceName,
+			Namespace: firstLogicalDatabase.Namespace,
+		}, &asoDatabase)).To(Succeed())
+		Expect(asoDatabase.Labels).To(HaveKeyWithValue(logicalDatabaseLabelKey, firstLogicalDatabase.Name))
+		Expect(metav1.IsControlledBy(&asoDatabase, &firstUpdated)).To(BeTrue())
 	})
 
 	It("does not create access provisioning jobs for LogicalDatabase resources", func() {
