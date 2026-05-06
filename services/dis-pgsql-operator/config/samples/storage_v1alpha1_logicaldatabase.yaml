@@ -1,0 +1,17 @@
+apiVersion: storage.dis.altinn.cloud/v1alpha1
+kind: LogicalDatabase
+metadata:
+  name: tenant123-dev-app-db
+  namespace: default
+spec:
+  serverRef:
+    name: shared-db
+  databaseKey: app-db
+  tenant:
+    id: tenant123
+    environment: dev
+  access:
+    identity:
+      name: my-app-tenant123-dev
+      principalId: "00000000-0000-0000-0000-000000000000"
+  deletionPolicy: Retain

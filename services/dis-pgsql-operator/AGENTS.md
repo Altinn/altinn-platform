@@ -26,15 +26,16 @@
 
 ## Required verification for code changes
 If you modify any files under:
-- `api/**`, `cmd/**`, `internal/**`, `test/**`
+- `api/**`, `cmd/**`, `internal/**`, `test/**`, `config/**`
 
 You MUST run these commands before producing a final answer/patch:
 1. `make fmt-cache`
 2. `make generate-cache`
 3. `make manifests-cache` (required if `api/**` or `config/**` changed)
 4. `make test-ci-cache`
+5. `make lint-cache`
 
-You can run all these by running `make run-checks-ci`
+You can run all these by running `make run-checks-ci-cache`
 
 In the final response, include the command(s) you ran and whether they passed.
 If you cannot run them, you MUST say so explicitly and explain why.
