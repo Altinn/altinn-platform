@@ -2380,7 +2380,7 @@ var _ = Describe("Database controller", func() {
 		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
 			Should(Equal(logicalDatabaseValidationReasonNotFound))
 
-		Eventually(func(g Gomega) []dbforpostgresqlv1.FlexibleServersDatabase {
+		Consistently(func(g Gomega) []dbforpostgresqlv1.FlexibleServersDatabase {
 			return listLogicalDatabaseASOChildren(g, logicalDatabase.Name)
 		}).WithTimeout(2 * time.Second).WithPolling(250 * time.Millisecond).
 			Should(BeEmpty())
@@ -2415,7 +2415,7 @@ var _ = Describe("Database controller", func() {
 		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
 			Should(Equal(logicalDatabaseValidationReasonNotShared))
 
-		Eventually(func(g Gomega) []dbforpostgresqlv1.FlexibleServersDatabase {
+		Consistently(func(g Gomega) []dbforpostgresqlv1.FlexibleServersDatabase {
 			return listLogicalDatabaseASOChildren(g, logicalDatabase.Name)
 		}).WithTimeout(2 * time.Second).WithPolling(250 * time.Millisecond).
 			Should(BeEmpty())
@@ -2505,14 +2505,17 @@ var _ = Describe("Database controller", func() {
 		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
 			Should(Equal(1))
 
-		var jobs batchv1.JobList
-		Expect(k8sClient.List(ctx, &jobs,
-			client.InNamespace(ns),
-			client.MatchingLabels(map[string]string{
-				logicalDatabaseLabelKey: logicalDatabase.Name,
-			}),
-		)).To(Succeed())
-		Expect(jobs.Items).To(BeEmpty())
+		Consistently(func(g Gomega) []batchv1.Job {
+			var jobs batchv1.JobList
+			g.Expect(k8sClient.List(ctx, &jobs,
+				client.InNamespace(ns),
+				client.MatchingLabels(map[string]string{
+					logicalDatabaseLabelKey: logicalDatabase.Name,
+				}),
+			)).To(Succeed())
+			return jobs.Items
+		}).WithTimeout(2 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
 	})
 
 	It("fails validation instead of creating a second database when the derived name changes", func() {
