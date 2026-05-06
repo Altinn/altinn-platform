@@ -61,7 +61,11 @@ func (r *LogicalDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	original := logicalDatabase.DeepCopy()
-	validationErrors := r.validateLogicalDatabase(ctx, &logicalDatabase)
+	validationErrors, err := r.validateLogicalDatabase(ctx, &logicalDatabase)
+	if err != nil {
+		logger.Error(err, "failed to validate LogicalDatabase")
+		return ctrl.Result{}, err
+	}
 	logicalDatabase.Status.ObservedGeneration = logicalDatabase.Generation
 	logicalDatabase.Status.ValidationErrors = validationErrors
 
@@ -96,7 +100,7 @@ func (r *LogicalDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 	ctx context.Context,
 	logicalDatabase *storagev1alpha1.LogicalDatabase,
-) []storagev1alpha1.LogicalDatabaseValidationError {
+) ([]storagev1alpha1.LogicalDatabaseValidationError, error) {
 	var validationErrors []storagev1alpha1.LogicalDatabaseValidationError
 
 	addRequiredStringError := func(field, value string) {
@@ -128,7 +132,7 @@ func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 
 	serverName := strings.TrimSpace(logicalDatabase.Spec.ServerRef.Name)
 	if serverName == "" {
-		return validationErrors
+		return validationErrors, nil
 	}
 
 	var db storagev1alpha1.Database
@@ -142,14 +146,9 @@ func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 				Reason:  logicalDatabaseValidationReasonNotFound,
 				Message: fmt.Sprintf("Database %q was not found in namespace %q", serverName, logicalDatabase.Namespace),
 			})
-			return validationErrors
+			return validationErrors, nil
 		}
-		validationErrors = append(validationErrors, storagev1alpha1.LogicalDatabaseValidationError{
-			Field:   logicalDatabaseValidationFieldServerRefName,
-			Reason:  "GetFailed",
-			Message: fmt.Sprintf("failed to get Database %q in namespace %q: %v", serverName, logicalDatabase.Namespace, err),
-		})
-		return validationErrors
+		return nil, fmt.Errorf("get Database %s/%s: %w", logicalDatabase.Namespace, serverName, err)
 	}
 
 	if databaseMode(&db) != storagev1alpha1.DatabaseModeShared {
@@ -160,7 +159,7 @@ func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 		})
 	}
 
-	return validationErrors
+	return validationErrors, nil
 }
 
 func setLogicalDatabaseConditions(
