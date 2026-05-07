@@ -93,9 +93,12 @@ spec:
     id: tenant123
     environment: dev
   access:
-    identity:
+    app:
       name: my-app-tenant123-dev
-      principalId: "<entra-object-id>"
+      principalId: "<app-entra-object-id>"
+    owner:
+      name: my-team-db-owners
+      principalId: "<owner-group-object-id>"
   deletionPolicy: Retain
 ```
 
@@ -109,7 +112,7 @@ When `dis-pgsql` reconciles it, it:
 2. validates that it points to a shared `Database` in the same namespace
 3. validates tenant and identity values
 4. creates the PostgreSQL database
-5. creates or maps the Entra principal and grants access
+5. creates or maps the app Entra principal and owner Entra group, and grants access
 6. writes status
 
 # Reference-level explanation
@@ -132,7 +135,8 @@ Important spec fields:
 - `databaseKey`: short database purpose.
 - `tenant.id`: stable tenant id.
 - `tenant.environment`: environment.
-- `access.identity`: Entra principal name and object id.
+- `access.app`: runtime app Entra principal name and object id (`principalId`).
+- `access.owner`: owner/team Entra group name and object id (`principalId`).
 - `deletionPolicy`: defaults to `Retain`.
 
 Status should include:
@@ -157,9 +161,17 @@ For a `LogicalDatabase`, the request describes the logical database and identity
 The operator creates or updates:
 
 - ASO resource for the `LogicalDatabase`
-- a user provisioning job for Entra user and grants
+- a user provisioning job for Entra app and owner-group grants
 
 The existing direct database provisioning pattern should be reused and extended.
+
+The app principal is the runtime identity. It gets `CONNECT` on the logical
+database, owns the logical database schema, and receives database-scoped
+`search_path` settings. The owner principal is an Entra group for the team that
+owns the logical database. It gets `CONNECT`, schema usage/create privileges,
+and read/write privileges on app-schema objects. The owner group is not made
+database owner in v1; the operator/admin identity keeps database ownership so
+privileges can be tightened or expanded declaratively later.
 
 ## Networking
 
