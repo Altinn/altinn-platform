@@ -162,11 +162,9 @@ var _ = Describe("User provisioning", Ordered, func() {
 		)
 
 		defer func() {
-			cmd := exec.Command("kubectl", "delete", "-f", manifestPath, "--ignore-not-found=true")
-			_, _ = utils.Run(cmd)
-			_ = os.Remove(manifestPath)
 			deleteLogicalDatabaseAndProvisionJobs(logicalResourceName, namespace)
 			deleteDatabaseAndProvisionJobs(logicalSharedDBName, namespace)
+			_ = os.Remove(manifestPath)
 			cleanupLogicalPostgresResources(expectedDatabaseName, logicalAppIdentity, logicalOwnerIdentity)
 		}()
 
@@ -314,10 +312,8 @@ var _ = Describe("User provisioning", Ordered, func() {
 		)
 
 		defer func() {
-			cmd := exec.Command("kubectl", "delete", "-f", manifestPath, "--ignore-not-found=true")
-			_, _ = utils.Run(cmd)
-			_ = os.Remove(manifestPath)
 			deleteDatabaseAndProvisionJobs(explicitRetentionDBName, namespace)
+			_ = os.Remove(manifestPath)
 		}()
 
 		By("creating a Database custom resource with explicit backup retention")
@@ -374,10 +370,8 @@ var _ = Describe("User provisioning", Ordered, func() {
 		)
 
 		defer func() {
-			cmd := exec.Command("kubectl", "delete", "-f", manifestPath, "--ignore-not-found=true")
-			_, _ = utils.Run(cmd)
-			_ = os.Remove(manifestPath)
 			deleteDatabaseAndProvisionJobs(explicitHADBName, namespace)
+			_ = os.Remove(manifestPath)
 		}()
 
 		By("creating a Database custom resource with explicit HA enabled")
@@ -452,10 +446,8 @@ var _ = Describe("User provisioning", Ordered, func() {
 		)
 
 		defer func() {
-			cmd := exec.Command("kubectl", "delete", "-f", manifestPath, "--ignore-not-found=true")
-			_, _ = utils.Run(cmd)
-			_ = os.Remove(manifestPath)
 			deleteDatabaseAndProvisionJobs(explicitServerParamsDBName, namespace)
+			_ = os.Remove(manifestPath)
 		}()
 
 		By("creating a Database custom resource with explicit server parameters")
@@ -978,6 +970,8 @@ func deleteDatabaseAndProvisionJobs(dbName, namespace string) {
 }
 
 func deleteLogicalDatabaseAndProvisionJobs(logicalDatabaseName, namespace string) {
+	logicalDatabaseLabelSelector := fmt.Sprintf("dis.altinn.cloud/logical-database-name=%s", logicalDatabaseName)
+
 	cmd := exec.Command(
 		"kubectl", "delete",
 		"logicaldatabases.storage.dis.altinn.cloud",
@@ -987,11 +981,11 @@ func deleteLogicalDatabaseAndProvisionJobs(logicalDatabaseName, namespace string
 	)
 	_, _ = utils.Run(cmd)
 
-	labelSelector := fmt.Sprintf("dis.altinn.cloud/logical-database-name=%s,dis.altinn.cloud/user-provision=true", logicalDatabaseName)
+	jobLabelSelector := fmt.Sprintf("%s,dis.altinn.cloud/user-provision=true", logicalDatabaseLabelSelector)
 	cmd = exec.Command(
 		"kubectl", "delete",
 		"job",
-		"-l", labelSelector,
+		"-l", jobLabelSelector,
 		"-n", namespace,
 		"--ignore-not-found=true",
 	)
@@ -1000,8 +994,41 @@ func deleteLogicalDatabaseAndProvisionJobs(logicalDatabaseName, namespace string
 	Eventually(func() string {
 		cmd = exec.Command(
 			"kubectl", "get",
+			"logicaldatabases.storage.dis.altinn.cloud",
+			logicalDatabaseName,
+			"-n", namespace,
+			"--ignore-not-found=true",
+			"-o", "name",
+		)
+		output, err := utils.Run(cmd)
+		if err != nil {
+			return "error"
+		}
+		return strings.TrimSpace(output)
+	}).WithTimeout(30 * time.Second).WithPolling(2 * time.Second).
+		Should(BeEmpty())
+
+	Eventually(func() string {
+		cmd = exec.Command(
+			"kubectl", "get",
+			"flexibleserversdatabases.dbforpostgresql.azure.com",
+			"-l", logicalDatabaseLabelSelector,
+			"-n", namespace,
+			"-o", "name",
+		)
+		output, err := utils.Run(cmd)
+		if err != nil {
+			return "error"
+		}
+		return strings.TrimSpace(output)
+	}).WithTimeout(30 * time.Second).WithPolling(2 * time.Second).
+		Should(BeEmpty())
+
+	Eventually(func() string {
+		cmd = exec.Command(
+			"kubectl", "get",
 			"job",
-			"-l", labelSelector,
+			"-l", jobLabelSelector,
 			"-n", namespace,
 			"-o", "name",
 		)
