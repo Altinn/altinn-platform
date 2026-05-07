@@ -132,9 +132,13 @@ var _ = Describe("Database controller", func() {
 					Environment: "dev",
 				},
 				Access: storagev1alpha1.LogicalDatabaseAccessSpec{
-					Identity: storagev1alpha1.LogicalDatabaseIdentitySpec{
+					App: storagev1alpha1.LogicalDatabasePrincipalSpec{
 						Name:        "my-app-tenant123-dev",
 						PrincipalId: "my-app-tenant123-dev-principal-id",
+					},
+					Owner: storagev1alpha1.LogicalDatabasePrincipalSpec{
+						Name:        "my-team-db-owners",
+						PrincipalId: "my-team-db-owners-principal-id",
 					},
 				},
 			},
@@ -149,6 +153,27 @@ var _ = Describe("Database controller", func() {
 				client.InNamespace(namespace),
 				client.MatchingLabels(map[string]string{
 					"dis.altinn.cloud/database-name":  dbName,
+					"dis.altinn.cloud/user-provision": "true",
+				}),
+			)).To(Succeed())
+			if len(jobs.Items) != 1 {
+				return ""
+			}
+			job = jobs.Items[0]
+			return job.Name
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			ShouldNot(BeEmpty())
+		return job
+	}
+
+	waitForLogicalAccessJob := func(ctx context.Context, logicalDatabaseName, namespace string) batchv1.Job {
+		var job batchv1.Job
+		Eventually(func(g Gomega) string {
+			var jobs batchv1.JobList
+			g.Expect(k8sClient.List(ctx, &jobs,
+				client.InNamespace(namespace),
+				client.MatchingLabels(map[string]string{
+					logicalDatabaseLabelKey:           logicalDatabaseName,
 					"dis.altinn.cloud/user-provision": "true",
 				}),
 			)).To(Succeed())
@@ -2338,7 +2363,7 @@ var _ = Describe("Database controller", func() {
 			ready := meta.FindStatusCondition(updated.Status.Conditions, logicalDatabaseConditionReady)
 			g.Expect(ready).NotTo(BeNil())
 			g.Expect(ready.Status).To(Equal(metav1.ConditionFalse))
-			g.Expect(ready.Reason).To(Equal(logicalDatabaseReasonProvisioningDeferred))
+			g.Expect(ready.Reason).To(Equal(logicalDatabaseReasonProvisioning))
 
 			databaseReady := meta.FindStatusCondition(updated.Status.Conditions, logicalDatabaseConditionDatabaseReady)
 			g.Expect(databaseReady).NotTo(BeNil())
@@ -2348,11 +2373,48 @@ var _ = Describe("Database controller", func() {
 			accessReady := meta.FindStatusCondition(updated.Status.Conditions, logicalDatabaseConditionAccessReady)
 			g.Expect(accessReady).NotTo(BeNil())
 			g.Expect(accessReady.Status).To(Equal(metav1.ConditionFalse))
-			g.Expect(accessReady.Reason).To(Equal(logicalDatabaseReasonProvisioningDeferred))
+			g.Expect(accessReady.Reason).To(Equal(logicalDatabaseReasonProvisioning))
 
 			return updated.Status.ValidationErrors
 		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
 			Should(BeEmpty())
+
+		job := waitForLogicalAccessJob(ctx, logicalDatabase.Name, logicalDatabase.Namespace)
+		Expect(job.Labels).To(HaveKeyWithValue(databaseNameLabelKey, db.Name))
+		Expect(job.Labels).To(HaveKeyWithValue(logicalDatabaseLabelKey, logicalDatabase.Name))
+		Expect(job.Spec.Template.Labels["azure.workload.identity/use"]).To(Equal("true"))
+		Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(db.Spec.Auth.Admin.ServiceAccountName))
+		Expect(job.Spec.Template.Spec.Containers).To(HaveLen(1))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: "DISPG_DATABASE_NAME", Value: db.Name},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: "DISPG_DB_HOST", Value: fmt.Sprintf("%s.postgres.database.azure.com", db.Name)},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: "DISPG_DB_NAME", Value: expectedDatabaseName},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: "DISPG_DB_SCHEMA", Value: expectedDatabaseName},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: "DISPG_APP_IDENTITY_NAME", Value: logicalDatabase.Spec.Access.App.Name},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: "DISPG_APP_IDENTITY_ID", Value: logicalDatabase.Spec.Access.App.PrincipalId},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: "DISPG_OWNER_IDENTITY_NAME", Value: logicalDatabase.Spec.Access.Owner.Name},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: "DISPG_OWNER_IDENTITY_ID", Value: logicalDatabase.Spec.Access.Owner.PrincipalId},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: "DISPG_REVOKE_PUBLIC_CONNECT", Value: "1"},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: "DISPG_DB_SEARCH_PATH_SCOPE", Value: "database"},
+		))
 	})
 
 	It("reports NotFound when LogicalDatabase serverRef does not exist", func() {
@@ -2551,11 +2613,11 @@ var _ = Describe("Database controller", func() {
 		Expect(metav1.IsControlledBy(&asoDatabase, &firstUpdated)).To(BeTrue())
 	})
 
-	It("does not create access provisioning jobs for LogicalDatabase resources", func() {
-		db := newSharedDatabase("shared-db-logical-no-access-job")
+	It("sets LogicalDatabase Ready after the access provisioning Job completes", func() {
+		db := newSharedDatabase("shared-db-logical-access-ready")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
-		logicalDatabase := newLogicalDatabase("tenant123-dev-app-db-no-access-job", db.Name)
+		logicalDatabase := newLogicalDatabase("tenant123-dev-app-db-access-ready", db.Name)
 		Expect(k8sClient.Create(ctx, logicalDatabase)).To(Succeed())
 
 		Eventually(func(g Gomega) int {
@@ -2563,17 +2625,115 @@ var _ = Describe("Database controller", func() {
 		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
 			Should(Equal(1))
 
-		Consistently(func(g Gomega) []batchv1.Job {
-			var jobs batchv1.JobList
-			g.Expect(k8sClient.List(ctx, &jobs,
-				client.InNamespace(ns),
-				client.MatchingLabels(map[string]string{
-					logicalDatabaseLabelKey: logicalDatabase.Name,
-				}),
-			)).To(Succeed())
-			return jobs.Items
-		}).WithTimeout(2 * time.Second).WithPolling(250 * time.Millisecond).
-			Should(BeEmpty())
+		markLogicalDatabaseASOReady(ctx, logicalDatabase)
+
+		job := waitForLogicalAccessJob(ctx, logicalDatabase.Name, logicalDatabase.Namespace)
+
+		Eventually(func() error {
+			var accessJob batchv1.Job
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      job.Name,
+				Namespace: job.Namespace,
+			}, &accessJob); err != nil {
+				return err
+			}
+			now := metav1.Now()
+			accessJob.Status.StartTime = &now
+			accessJob.Status.CompletionTime = &now
+			accessJob.Status.Succeeded = 1
+			accessJob.Status.Conditions = []batchv1.JobCondition{
+				{
+					Type:               batchv1.JobSuccessCriteriaMet,
+					Status:             corev1.ConditionTrue,
+					Reason:             "Completed",
+					LastTransitionTime: now,
+				},
+				{
+					Type:               batchv1.JobComplete,
+					Status:             corev1.ConditionTrue,
+					Reason:             "Completed",
+					LastTransitionTime: now,
+				},
+			}
+			return k8sClient.Status().Update(ctx, &accessJob)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func(g Gomega) metav1.ConditionStatus {
+			var updated storagev1alpha1.LogicalDatabase
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      logicalDatabase.Name,
+				Namespace: logicalDatabase.Namespace,
+			}, &updated)).To(Succeed())
+
+			accessReady := meta.FindStatusCondition(updated.Status.Conditions, logicalDatabaseConditionAccessReady)
+			g.Expect(accessReady).NotTo(BeNil())
+			g.Expect(accessReady.Status).To(Equal(metav1.ConditionTrue))
+			g.Expect(accessReady.Reason).To(Equal(logicalDatabaseReasonReady))
+
+			ready := meta.FindStatusCondition(updated.Status.Conditions, logicalDatabaseConditionReady)
+			g.Expect(ready).NotTo(BeNil())
+			return ready.Status
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(metav1.ConditionTrue))
+	})
+
+	It("recreates the LogicalDatabase access provisioning Job when the current Job is failed", func() {
+		db := newSharedDatabase("shared-db-logical-access-job-failed")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		logicalDatabase := newLogicalDatabase("tenant123-dev-app-db-access-job-failed", db.Name)
+		Expect(k8sClient.Create(ctx, logicalDatabase)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			return len(listLogicalDatabaseASOChildren(g, logicalDatabase.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+
+		markLogicalDatabaseASOReady(ctx, logicalDatabase)
+
+		oldJob := waitForLogicalAccessJob(ctx, logicalDatabase.Name, logicalDatabase.Namespace)
+		oldUID := oldJob.UID
+
+		Eventually(func() error {
+			var failedJob batchv1.Job
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      oldJob.Name,
+				Namespace: oldJob.Namespace,
+			}, &failedJob); err != nil {
+				return err
+			}
+			now := metav1.Now()
+			failedJob.Status.StartTime = &now
+			failedJob.Status.CompletionTime = nil
+			failedJob.Status.Failed = 1
+			failedJob.Status.Conditions = []batchv1.JobCondition{
+				{
+					Type:               batchv1.JobFailureTarget,
+					Status:             corev1.ConditionTrue,
+					Reason:             "BackoffLimitExceeded",
+					LastTransitionTime: now,
+				},
+				{
+					Type:               batchv1.JobFailed,
+					Status:             corev1.ConditionTrue,
+					Reason:             "BackoffLimitExceeded",
+					LastTransitionTime: now,
+				},
+			}
+			return k8sClient.Status().Update(ctx, &failedJob)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func(g Gomega) types.UID {
+			var recreatedJob batchv1.Job
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      oldJob.Name,
+				Namespace: oldJob.Namespace,
+			}, &recreatedJob)).To(Succeed())
+			return recreatedJob.UID
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			ShouldNot(Equal(oldUID))
 	})
 
 	It("fails validation instead of creating a second database when the derived name changes", func() {

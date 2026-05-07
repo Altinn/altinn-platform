@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	batchv1 "k8s.io/api/batch/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
 	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 )
@@ -36,6 +38,8 @@ const (
 type LogicalDatabaseReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+
+	Config config.OperatorConfig
 }
 
 // +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=logicaldatabases,verbs=get;list;watch
@@ -44,6 +48,8 @@ type LogicalDatabaseReconciler struct {
 // +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleservers,verbs=get;list;watch
 // +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversdatabases,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversdatabases/status,verbs=get
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=batch,resources=jobs/status,verbs=get
 
 func (r *LogicalDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("logicaldatabase", req.NamespacedName)
@@ -105,20 +111,44 @@ func (r *LogicalDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				logicalDatabaseReasonDatabaseReady,
 				"Logical database is ready",
 			)
-			setLogicalDatabaseCondition(
-				&logicalDatabase,
-				logicalDatabaseConditionAccessReady,
-				metav1.ConditionFalse,
-				logicalDatabaseReasonProvisioningDeferred,
-				"LogicalDatabase access provisioning is not implemented in this release",
-			)
-			setLogicalDatabaseCondition(
-				&logicalDatabase,
-				logicalDatabaseConditionReady,
-				metav1.ConditionFalse,
-				logicalDatabaseReasonProvisioningDeferred,
-				"LogicalDatabase access provisioning is not implemented in this release",
-			)
+
+			accessReady, accessReason, accessMessage, err := r.ensureLogicalDatabaseAccess(ctx, logger, &logicalDatabase)
+			if err != nil {
+				logger.Error(err, "failed to ensure LogicalDatabase access")
+				return ctrl.Result{}, err
+			}
+			if accessReady {
+				setLogicalDatabaseCondition(
+					&logicalDatabase,
+					logicalDatabaseConditionAccessReady,
+					metav1.ConditionTrue,
+					accessReason,
+					accessMessage,
+				)
+				setLogicalDatabaseCondition(
+					&logicalDatabase,
+					logicalDatabaseConditionReady,
+					metav1.ConditionTrue,
+					logicalDatabaseReasonReady,
+					"Logical database and access are ready",
+				)
+			} else {
+				setLogicalDatabaseCondition(
+					&logicalDatabase,
+					logicalDatabaseConditionAccessReady,
+					metav1.ConditionFalse,
+					accessReason,
+					accessMessage,
+				)
+				setLogicalDatabaseCondition(
+					&logicalDatabase,
+					logicalDatabaseConditionReady,
+					metav1.ConditionFalse,
+					logicalDatabaseReasonProvisioning,
+					"Logical database access is provisioning",
+				)
+				result = ctrl.Result{RequeueAfter: logicalDatabaseRequeueDelay}
+			}
 		} else {
 			setLogicalDatabaseCondition(
 				&logicalDatabase,
@@ -131,8 +161,8 @@ func (r *LogicalDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				&logicalDatabase,
 				logicalDatabaseConditionAccessReady,
 				metav1.ConditionFalse,
-				logicalDatabaseReasonProvisioningDeferred,
-				"LogicalDatabase access provisioning is not implemented in this release",
+				logicalDatabaseReasonProvisioning,
+				"Logical database access is waiting for the database",
 			)
 			setLogicalDatabaseCondition(
 				&logicalDatabase,
@@ -150,6 +180,10 @@ func (r *LogicalDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	if err := r.Status().Update(ctx, &logicalDatabase); err != nil {
+		if apierrors.IsConflict(err) {
+			logger.Info("LogicalDatabase status update conflict; requeueing")
+			return ctrl.Result{Requeue: true}, nil
+		}
 		logger.Error(err, "failed to update LogicalDatabase status")
 		return ctrl.Result{}, err
 	}
@@ -178,8 +212,10 @@ func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 	addRequiredStringError("spec.databaseKey", logicalDatabase.Spec.DatabaseKey)
 	addRequiredStringError("spec.tenant.id", logicalDatabase.Spec.Tenant.ID)
 	addRequiredStringError("spec.tenant.environment", logicalDatabase.Spec.Tenant.Environment)
-	addRequiredStringError("spec.access.identity.name", logicalDatabase.Spec.Access.Identity.Name)
-	addRequiredStringError("spec.access.identity.principalId", logicalDatabase.Spec.Access.Identity.PrincipalId)
+	addRequiredStringError("spec.access.app.name", logicalDatabase.Spec.Access.App.Name)
+	addRequiredStringError("spec.access.app.principalId", logicalDatabase.Spec.Access.App.PrincipalId)
+	addRequiredStringError("spec.access.owner.name", logicalDatabase.Spec.Access.Owner.Name)
+	addRequiredStringError("spec.access.owner.principalId", logicalDatabase.Spec.Access.Owner.PrincipalId)
 
 	derivedDatabaseName := dbUtil.DeriveLogicalDatabaseName(
 		logicalDatabase.Spec.Tenant.ID,
@@ -264,6 +300,7 @@ func (r *LogicalDatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&storagev1alpha1.LogicalDatabase{}).
 		Owns(&dbforpostgresqlv1.FlexibleServersDatabase{}).
+		Owns(&batchv1.Job{}).
 		Watches(&storagev1alpha1.Database{}, handler.EnqueueRequestsFromMapFunc(r.mapDatabaseToLogicalDatabases)).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,

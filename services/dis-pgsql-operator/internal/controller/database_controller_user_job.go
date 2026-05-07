@@ -9,6 +9,7 @@ import (
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -42,9 +43,6 @@ func (r *DatabaseReconciler) ensureUserProvisionJob(
 	db *storagev1alpha1.Database,
 	auth resolvedDatabaseAuth,
 ) error {
-	ns := db.Namespace
-	jobName := userProvisionJobName(db.Name, auth)
-
 	if auth.Admin.ServiceAccountName == "" {
 		return fmt.Errorf("admin serviceAccountName must be set for user provisioning")
 	}
@@ -55,22 +53,125 @@ func (r *DatabaseReconciler) ensureUserProvisionJob(
 		return fmt.Errorf("user principal ID must be set for user provisioning")
 	}
 
+	labels := map[string]string{
+		databaseNameLabelKey:              db.Name,
+		"dis.altinn.cloud/user-provision": "true",
+	}
+
+	return r.ensureUserProvisionJobForTarget(ctx, logger, userProvisionJobSpec{
+		Owner:              db,
+		JobName:            userProvisionJobName(db.Name, auth),
+		Labels:             labels,
+		ServiceAccountName: auth.Admin.ServiceAccountName,
+		AdminIdentityName:  auth.Admin.Name,
+		ServerName:         db.Name,
+		SchemaName:         db.Name,
+		AppIdentityName:    auth.User.Name,
+		AppPrincipalID:     auth.User.PrincipalID,
+	})
+}
+
+func (r *DatabaseReconciler) ensureUserProvisionJobForTarget(
+	ctx context.Context,
+	logger logr.Logger,
+	spec userProvisionJobSpec,
+) error {
+	return ensureUserProvisionJobForReconciler(ctx, logger, r, spec)
+}
+
+func (r *LogicalDatabaseReconciler) ensureUserProvisionJobForTarget(
+	ctx context.Context,
+	logger logr.Logger,
+	spec userProvisionJobSpec,
+) error {
+	return ensureUserProvisionJobForReconciler(ctx, logger, r, spec)
+}
+
+type userProvisionJobSpec struct {
+	Owner client.Object
+
+	JobName string
+	Labels  map[string]string
+
+	ServiceAccountName string
+	AdminIdentityName  string
+
+	ServerName   string
+	DatabaseHost string
+	DatabaseName string
+	SchemaName   string
+
+	AppIdentityName string
+	AppPrincipalID  string
+
+	OwnerIdentityName string
+	OwnerPrincipalID  string
+
+	RevokePublicConnect bool
+	SearchPathScope     string
+}
+
+type userProvisionJobReconciler interface {
+	List(context.Context, client.ObjectList, ...client.ListOption) error
+	Delete(context.Context, client.Object, ...client.DeleteOption) error
+	Create(context.Context, client.Object, ...client.CreateOption) error
+
+	userProvisionJobScheme() *runtime.Scheme
+	userProvisionJobImage() string
+	userProvisionJobUseAzFakes() bool
+}
+
+func (r *DatabaseReconciler) userProvisionJobScheme() *runtime.Scheme {
+	return r.Scheme
+}
+
+func (r *DatabaseReconciler) userProvisionJobImage() string {
+	return r.Config.UserProvisionImage
+}
+
+func (r *DatabaseReconciler) userProvisionJobUseAzFakes() bool {
+	return r.Config.UseAzFakes
+}
+
+func (r *LogicalDatabaseReconciler) userProvisionJobScheme() *runtime.Scheme {
+	return r.Scheme
+}
+
+func (r *LogicalDatabaseReconciler) userProvisionJobImage() string {
+	return r.Config.UserProvisionImage
+}
+
+func (r *LogicalDatabaseReconciler) userProvisionJobUseAzFakes() bool {
+	return r.Config.UseAzFakes
+}
+
+func ensureUserProvisionJobForReconciler(
+	ctx context.Context,
+	logger logr.Logger,
+	r userProvisionJobReconciler,
+	spec userProvisionJobSpec,
+) error {
+	ns := spec.Owner.GetNamespace()
+	jobName := spec.JobName
+	useAzFakes := r.userProvisionJobUseAzFakes()
+
+	if err := validateUserProvisionJobSpec(spec, useAzFakes); err != nil {
+		return err
+	}
+
 	ttlSeconds := int32(300)
 	// Run pod at a time
 	parallelism := int32(1)
 	completions := int32(1)
-	image := strings.TrimSpace(r.Config.UserProvisionImage)
+	image := strings.TrimSpace(r.userProvisionJobImage())
 	if image == "" {
 		return fmt.Errorf("user provision image is not configured")
 	}
-	labels := map[string]string{
-		"dis.altinn.cloud/database-name":  db.Name,
-		"dis.altinn.cloud/user-provision": "true",
-	}
+	labels := userProvisionJobLabels(spec.Labels)
 
 	var jobs batchv1.JobList
 	if err := r.List(ctx, &jobs, client.InNamespace(ns), client.MatchingLabels(labels)); err != nil {
-		return fmt.Errorf("list user provisioning jobs for %s/%s: %w", ns, db.Name, err)
+		return fmt.Errorf("list user provisioning jobs for %s/%s: %w", ns, spec.Owner.GetName(), err)
 	}
 
 	hasCurrent := false
@@ -107,65 +208,11 @@ func (r *DatabaseReconciler) ensureUserProvisionJob(
 		return nil
 	}
 
-	podLabels := map[string]string{
-		"azure.workload.identity/use": "true",
-	}
-	maps.Copy(podLabels, labels)
-
-	job := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      jobName,
-			Namespace: ns,
-			Labels:    labels,
-		},
-		Spec: batchv1.JobSpec{
-			Parallelism:             &parallelism,
-			Completions:             &completions,
-			TTLSecondsAfterFinished: &ttlSeconds,
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: podLabels,
-				},
-				Spec: corev1.PodSpec{
-					ServiceAccountName: auth.Admin.ServiceAccountName,
-					RestartPolicy:      corev1.RestartPolicyOnFailure,
-					Containers: []corev1.Container{
-						{
-							Name:  "provision-user",
-							Image: image,
-							Args:  []string{"--provision-user"},
-							Env: []corev1.EnvVar{
-								{
-									Name:  "DISPG_USER_APP_IDENTITY",
-									Value: auth.User.Name,
-								},
-								{
-									Name:  "DISPG_USER_APP_PRINCIPAL_ID",
-									Value: auth.User.PrincipalID,
-								},
-								{
-									Name:  "DISPG_ADMIN_APP_IDENTITY",
-									Value: auth.Admin.Name,
-								},
-								{
-									Name:  "DISPG_DATABASE_NAME",
-									Value: db.Name,
-								},
-								{
-									Name:  "DISPG_DB_SCHEMA",
-									Value: db.Name,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
+	job := buildUserProvisionJob(ns, jobName, image, labels, spec, parallelism, completions, ttlSeconds)
 
 	// If we're using AzFakes, we need to disable AAD authentication in the provisioner
 	// since we're running on Kind
-	if r.Config.UseAzFakes {
+	if useAzFakes {
 		job.Spec.Template.Spec.Containers[0].Env = append(
 			job.Spec.Template.Spec.Containers[0].Env,
 			corev1.EnvVar{
@@ -187,15 +234,15 @@ func (r *DatabaseReconciler) ensureUserProvisionJob(
 		)
 	}
 
-	if err := controllerutil.SetControllerReference(db, job, r.Scheme); err != nil {
+	if err := controllerutil.SetControllerReference(spec.Owner, job, r.userProvisionJobScheme()); err != nil {
 		return fmt.Errorf("set controller reference on user provisioning Job: %w", err)
 	}
 
 	logger.Info("creating user provisioning Job for database",
 		"jobName", jobName,
 		"namespace", ns,
-		"serviceAccount", auth.Admin.ServiceAccountName,
-		"userIdentity", auth.User.Name,
+		"serviceAccount", spec.ServiceAccountName,
+		"userIdentity", spec.AppIdentityName,
 	)
 
 	if err := r.Create(ctx, job); err != nil {
@@ -206,6 +253,121 @@ func (r *DatabaseReconciler) ensureUserProvisionJob(
 	}
 
 	return nil
+}
+
+func validateUserProvisionJobSpec(spec userProvisionJobSpec, useAzFakes bool) error {
+	if spec.ServiceAccountName == "" {
+		return fmt.Errorf("serviceAccountName must be set for user provisioning")
+	}
+	if spec.AdminIdentityName == "" && !useAzFakes {
+		return fmt.Errorf("admin identity name must be set for user provisioning")
+	}
+	if spec.ServerName == "" {
+		return fmt.Errorf("server name must be set for user provisioning")
+	}
+	if spec.AppIdentityName == "" {
+		return fmt.Errorf("app identity name must be set for user provisioning")
+	}
+	if spec.AppPrincipalID == "" && !useAzFakes {
+		return fmt.Errorf("app principal ID must be set for user provisioning")
+	}
+	if spec.SchemaName == "" {
+		return fmt.Errorf("schema name must be set for user provisioning")
+	}
+	if spec.OwnerIdentityName != "" && spec.OwnerPrincipalID == "" && !useAzFakes {
+		return fmt.Errorf("owner principal ID must be set for user provisioning")
+	}
+	return nil
+}
+
+func userProvisionJobLabels(specLabels map[string]string) map[string]string {
+	labels := maps.Clone(specLabels)
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	labels["dis.altinn.cloud/user-provision"] = "true"
+	return labels
+}
+
+func buildUserProvisionJob(
+	namespace,
+	jobName,
+	image string,
+	labels map[string]string,
+	spec userProvisionJobSpec,
+	parallelism,
+	completions,
+	ttlSeconds int32,
+) *batchv1.Job {
+	podLabels := map[string]string{
+		"azure.workload.identity/use": "true",
+	}
+	maps.Copy(podLabels, labels)
+
+	return &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Spec: batchv1.JobSpec{
+			Parallelism:             &parallelism,
+			Completions:             &completions,
+			TTLSecondsAfterFinished: &ttlSeconds,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: podLabels,
+				},
+				Spec: corev1.PodSpec{
+					ServiceAccountName: spec.ServiceAccountName,
+					RestartPolicy:      corev1.RestartPolicyOnFailure,
+					Containers: []corev1.Container{
+						{
+							Name:  "provision-user",
+							Image: image,
+							Args:  []string{"--provision-user"},
+							Env:   userProvisionJobEnv(spec),
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func userProvisionJobEnv(spec userProvisionJobSpec) []corev1.EnvVar {
+	env := []corev1.EnvVar{
+		{Name: "DISPG_USER_APP_IDENTITY", Value: spec.AppIdentityName},
+		{Name: "DISPG_USER_APP_PRINCIPAL_ID", Value: spec.AppPrincipalID},
+		{Name: "DISPG_ADMIN_APP_IDENTITY", Value: spec.AdminIdentityName},
+		{Name: "DISPG_DATABASE_NAME", Value: spec.ServerName},
+		{Name: "DISPG_DB_SCHEMA", Value: spec.SchemaName},
+	}
+	if spec.DatabaseHost != "" {
+		env = append(env, corev1.EnvVar{Name: "DISPG_DB_HOST", Value: spec.DatabaseHost})
+	}
+	if spec.DatabaseName != "" {
+		env = append(env, corev1.EnvVar{Name: "DISPG_DB_NAME", Value: spec.DatabaseName})
+	}
+	if spec.AppIdentityName != "" {
+		env = append(env,
+			corev1.EnvVar{Name: "DISPG_APP_IDENTITY_NAME", Value: spec.AppIdentityName},
+			corev1.EnvVar{Name: "DISPG_APP_IDENTITY_ID", Value: spec.AppPrincipalID},
+		)
+	}
+	if spec.OwnerIdentityName != "" {
+		env = append(env,
+			corev1.EnvVar{Name: "DISPG_OWNER_IDENTITY_NAME", Value: spec.OwnerIdentityName},
+			corev1.EnvVar{Name: "DISPG_OWNER_IDENTITY_ID", Value: spec.OwnerPrincipalID},
+		)
+	}
+	if spec.RevokePublicConnect {
+		env = append(env, corev1.EnvVar{Name: "DISPG_REVOKE_PUBLIC_CONNECT", Value: "1"})
+	}
+	if spec.SearchPathScope != "" {
+		env = append(env, corev1.EnvVar{Name: "DISPG_DB_SEARCH_PATH_SCOPE", Value: spec.SearchPathScope})
+	}
+	return env
 }
 
 func jobConditionTrue(job *batchv1.Job, conditionType batchv1.JobConditionType) bool {

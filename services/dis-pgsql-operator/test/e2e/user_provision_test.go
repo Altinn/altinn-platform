@@ -32,6 +32,7 @@ import (
 
 	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
+	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/test/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -54,6 +55,15 @@ var _ = Describe("User provisioning", Ordered, func() {
 		explicitBackupRetentionDay = 21
 		explicitCustomServerParam  = "autovacuum_naptime"
 		explicitCustomServerValue  = "15"
+		logicalSharedDBName        = "e2e-shared-logical"
+		logicalResourceName        = "e2e-tenant456-dev-app-db"
+		logicalTenantID            = "tenant456"
+		logicalTenantEnvironment   = "dev"
+		logicalDatabaseKey         = "app-db"
+		logicalAppIdentity         = "e2e-logical-app"
+		logicalAppPrincipalID      = "e2e-logical-app-principal-id"
+		logicalOwnerIdentity       = "e2e-logical-owner"
+		logicalOwnerPrincipalID    = "e2e-logical-owner-principal-id"
 	)
 
 	var manifestPath string
@@ -131,6 +141,114 @@ var _ = Describe("User provisioning", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
+	It("provisions LogicalDatabase app and owner access in Postgres", func() {
+		expectedDatabaseName := dbUtil.DeriveLogicalDatabaseName(
+			logicalTenantID,
+			logicalTenantEnvironment,
+			logicalDatabaseKey,
+		)
+		manifestPath := writeLogicalDatabaseTestManifest(
+			logicalSharedDBName,
+			logicalResourceName,
+			namespace,
+			adminIdentityRef,
+			logicalTenantID,
+			logicalTenantEnvironment,
+			logicalDatabaseKey,
+			logicalAppIdentity,
+			logicalAppPrincipalID,
+			logicalOwnerIdentity,
+			logicalOwnerPrincipalID,
+		)
+
+		defer func() {
+			deleteLogicalDatabaseAndProvisionJobs(logicalResourceName, namespace)
+			deleteDatabaseAndProvisionJobs(logicalSharedDBName, namespace)
+			_ = os.Remove(manifestPath)
+			cleanupLogicalPostgresResources(expectedDatabaseName, logicalAppIdentity, logicalOwnerIdentity)
+		}()
+
+		By("cleaning up stale LogicalDatabase resources from previous runs")
+		deleteLogicalDatabaseAndProvisionJobs(logicalResourceName, namespace)
+		deleteDatabaseAndProvisionJobs(logicalSharedDBName, namespace)
+		cleanupLogicalPostgresResources(expectedDatabaseName, logicalAppIdentity, logicalOwnerIdentity)
+
+		By("creating a shared Database and LogicalDatabase")
+		cmd := exec.Command("kubectl", "apply", "-f", manifestPath)
+		_, err := utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed to apply LogicalDatabase manifest")
+		patchApplicationIdentityStatus(adminIdentityRef, namespace, adminIdentity, adminPrincipal)
+
+		By("waiting for the ASO logical database child")
+		asoDatabaseName := waitForLogicalDatabaseASOResource(logicalResourceName, namespace)
+
+		By("creating the real logical database in local Postgres")
+		runPostgresQuery(fmt.Sprintf(
+			"CREATE DATABASE %s;",
+			quoteIdentifier(expectedDatabaseName),
+		))
+
+		By("marking ASO resources ready for the local Postgres stand-in")
+		patchFlexibleServerReady(logicalSharedDBName, namespace, "postgres.default.svc")
+		patchFlexibleServersDatabaseReady(asoDatabaseName, namespace)
+
+		By("waiting for the LogicalDatabase access provisioning job to complete")
+		labelSelector := fmt.Sprintf("dis.altinn.cloud/logical-database-name=%s,dis.altinn.cloud/user-provision=true", logicalResourceName)
+		Eventually(func() error {
+			cmd := exec.Command(
+				"kubectl", "wait",
+				"--for=condition=complete",
+				"job",
+				"-l", labelSelector,
+				"-n", namespace,
+				"--timeout=20s",
+			)
+			_, err := utils.Run(cmd)
+			return err
+		}).WithTimeout(5*time.Minute).WithPolling(2*time.Second).
+			Should(Succeed(), "LogicalDatabase access provisioning job did not complete")
+
+		By("verifying LogicalDatabase Ready status")
+		Eventually(func(g Gomega) string {
+			cmd := exec.Command(
+				"kubectl", "get",
+				"logicaldatabases.storage.dis.altinn.cloud",
+				logicalResourceName,
+				"-n", namespace,
+				"-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}",
+			)
+			output, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			return strings.TrimSpace(output)
+		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).
+			Should(Equal("True"))
+
+		By("verifying app and owner roles exist in Postgres")
+		output := runPostgresQuery("SELECT 1 FROM pg_roles WHERE rolname = '" + logicalAppIdentity + "';")
+		Expect(strings.TrimSpace(output)).To(Equal("1"))
+		output = runPostgresQuery("SELECT 1 FROM pg_roles WHERE rolname = '" + logicalOwnerIdentity + "';")
+		Expect(strings.TrimSpace(output)).To(Equal("1"))
+
+		By("verifying the app can create tables in the logical database schema")
+		_, err = runPostgresQueryAsUserInDatabase(logicalAppIdentity, expectedDatabaseName,
+			"CREATE TABLE e2e_app_table (id int PRIMARY KEY, value text); INSERT INTO e2e_app_table VALUES (1, 'app');")
+		Expect(err).NotTo(HaveOccurred())
+
+		By("verifying the owner can use app-created objects and create objects in the schema")
+		_, err = runPostgresQueryAsUserInDatabase(logicalOwnerIdentity, expectedDatabaseName,
+			"INSERT INTO e2e_app_table VALUES (2, 'owner'); CREATE TABLE e2e_owner_table (id int); DROP TABLE e2e_owner_table;")
+		Expect(err).NotTo(HaveOccurred())
+		output, err = runPostgresQueryAsUserInDatabase(logicalOwnerIdentity, expectedDatabaseName,
+			"SELECT count(*) FROM e2e_app_table;")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(strings.TrimSpace(output)).To(Equal("2"))
+
+		By("verifying public connect was revoked")
+		runPostgresQuery(`DROP ROLE IF EXISTS "e2e-logical-intruder"; CREATE ROLE "e2e-logical-intruder" LOGIN;`)
+		_, err = runPostgresQueryAsUserInDatabase("e2e-logical-intruder", expectedDatabaseName, "SELECT 1;")
+		Expect(err).To(HaveOccurred())
+	})
+
 	It("applies storage settings to the FlexibleServer", func() {
 		By("verifying the FlexibleServer storage size and tier")
 		Eventually(func(g Gomega) struct {
@@ -194,10 +312,8 @@ var _ = Describe("User provisioning", Ordered, func() {
 		)
 
 		defer func() {
-			cmd := exec.Command("kubectl", "delete", "-f", manifestPath, "--ignore-not-found=true")
-			_, _ = utils.Run(cmd)
-			_ = os.Remove(manifestPath)
 			deleteDatabaseAndProvisionJobs(explicitRetentionDBName, namespace)
+			_ = os.Remove(manifestPath)
 		}()
 
 		By("creating a Database custom resource with explicit backup retention")
@@ -254,10 +370,8 @@ var _ = Describe("User provisioning", Ordered, func() {
 		)
 
 		defer func() {
-			cmd := exec.Command("kubectl", "delete", "-f", manifestPath, "--ignore-not-found=true")
-			_, _ = utils.Run(cmd)
-			_ = os.Remove(manifestPath)
 			deleteDatabaseAndProvisionJobs(explicitHADBName, namespace)
+			_ = os.Remove(manifestPath)
 		}()
 
 		By("creating a Database custom resource with explicit HA enabled")
@@ -332,10 +446,8 @@ var _ = Describe("User provisioning", Ordered, func() {
 		)
 
 		defer func() {
-			cmd := exec.Command("kubectl", "delete", "-f", manifestPath, "--ignore-not-found=true")
-			_, _ = utils.Run(cmd)
-			_ = os.Remove(manifestPath)
 			deleteDatabaseAndProvisionJobs(explicitServerParamsDBName, namespace)
+			_ = os.Remove(manifestPath)
 		}()
 
 		By("creating a Database custom resource with explicit server parameters")
@@ -571,6 +683,109 @@ func writeManifestWithApplicationIdentities(
 	return path
 }
 
+func writeLogicalDatabaseTestManifest(
+	sharedDBName,
+	logicalResourceName,
+	namespace,
+	adminIdentityRef,
+	tenantID,
+	tenantEnvironment,
+	databaseKey,
+	appIdentity,
+	appPrincipalID,
+	ownerIdentity,
+	ownerPrincipalID string,
+) string {
+	adminIdentity := &identityv1alpha1.ApplicationIdentity{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "application.dis.altinn.cloud/v1alpha1",
+			Kind:       "ApplicationIdentity",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      adminIdentityRef,
+			Namespace: namespace,
+		},
+		Spec: identityv1alpha1.ApplicationIdentitySpec{},
+	}
+
+	sharedDatabase := &storagev1alpha1.Database{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "storage.dis.altinn.cloud/v1alpha1",
+			Kind:       "Database",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      sharedDBName,
+			Namespace: namespace,
+		},
+		Spec: storagev1alpha1.DatabaseSpec{
+			Mode:       storagev1alpha1.DatabaseModeShared,
+			Version:    17,
+			ServerType: "dev",
+			Network: &storagev1alpha1.DatabaseNetworkSpec{
+				DelegatedSubnetResourceID: "/subscriptions/fake-subscription/resourceGroups/rg-dis-admin-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-admin-dbs/subnets/snet-postgres-shared",
+				PrivateDNSZoneResourceID:  "/subscriptions/fake-subscription/resourceGroups/rg-dis-admin-network/providers/Microsoft.Network/privateDnsZones/shared.private.postgres.database.azure.com",
+			},
+			Auth: storagev1alpha1.DatabaseAuth{
+				Admin: storagev1alpha1.AdminIdentitySpec{
+					Identity: storagev1alpha1.IdentitySource{
+						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: adminIdentityRef},
+					},
+				},
+			},
+		},
+	}
+
+	logicalDatabase := &storagev1alpha1.LogicalDatabase{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "storage.dis.altinn.cloud/v1alpha1",
+			Kind:       "LogicalDatabase",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      logicalResourceName,
+			Namespace: namespace,
+		},
+		Spec: storagev1alpha1.LogicalDatabaseSpec{
+			ServerRef: storagev1alpha1.LogicalDatabaseServerRef{
+				Name: sharedDBName,
+			},
+			DatabaseKey: databaseKey,
+			Tenant: storagev1alpha1.LogicalDatabaseTenantSpec{
+				ID:          tenantID,
+				Environment: tenantEnvironment,
+			},
+			Access: storagev1alpha1.LogicalDatabaseAccessSpec{
+				App: storagev1alpha1.LogicalDatabasePrincipalSpec{
+					Name:        appIdentity,
+					PrincipalId: appPrincipalID,
+				},
+				Owner: storagev1alpha1.LogicalDatabasePrincipalSpec{
+					Name:        ownerIdentity,
+					PrincipalId: ownerPrincipalID,
+				},
+			},
+		},
+	}
+
+	resources := []interface{}{adminIdentity, sharedDatabase, logicalDatabase}
+	docs := make([]string, 0, len(resources))
+	for i := range resources {
+		content, err := yaml.Marshal(resources[i])
+		Expect(err).NotTo(HaveOccurred(), "Failed to marshal test manifest resource")
+		docs = append(docs, string(content))
+	}
+
+	content := strings.Join(docs, "---\n")
+	if !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
+
+	dir := os.TempDir()
+	path := filepath.Join(dir, fmt.Sprintf("logical-db-%s.yaml", logicalResourceName))
+	err := os.WriteFile(path, []byte(content), 0o600)
+	Expect(err).NotTo(HaveOccurred(), "Failed to write temp manifest")
+	return path
+}
+
 func patchApplicationIdentityStatus(identityRef, namespace, managedIdentityName, principalID string) {
 	cmd := exec.Command(
 		"kubectl", "patch",
@@ -598,6 +813,76 @@ func applyManifestWithIdentityPrerequisites(
 	patchApplicationIdentityStatus(userIdentityRef, namespace, userManagedIdentityName, userPrincipalID)
 }
 
+func waitForLogicalDatabaseASOResource(logicalResourceName, namespace string) string {
+	Eventually(func(g Gomega) string {
+		cmd := exec.Command(
+			"kubectl", "get",
+			"flexibleserversdatabases.dbforpostgresql.azure.com",
+			"-n", namespace,
+			"-l", fmt.Sprintf("dis.altinn.cloud/logical-database-name=%s", logicalResourceName),
+			"-o", "jsonpath={.items[0].metadata.name}",
+		)
+		output, err := utils.Run(cmd)
+		g.Expect(err).NotTo(HaveOccurred())
+		return strings.TrimSpace(output)
+	}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).
+		ShouldNot(BeEmpty())
+
+	cmd := exec.Command(
+		"kubectl", "get",
+		"flexibleserversdatabases.dbforpostgresql.azure.com",
+		"-n", namespace,
+		"-l", fmt.Sprintf("dis.altinn.cloud/logical-database-name=%s", logicalResourceName),
+		"-o", "jsonpath={.items[0].metadata.name}",
+	)
+	output, err := utils.Run(cmd)
+	Expect(err).NotTo(HaveOccurred())
+	return strings.TrimSpace(output)
+}
+
+func patchFlexibleServerReady(serverName, namespace, host string) {
+	transitionTime := time.Now().UTC().Format(time.RFC3339)
+	patch := fmt.Sprintf(
+		`{"status":{"fullyQualifiedDomainName":"%s","conditions":[{"type":"Ready","status":"True","reason":"Ready","message":"ready for e2e","lastTransitionTime":"%s"}]}}`,
+		host,
+		transitionTime,
+	)
+	Eventually(func() error {
+		cmd := exec.Command(
+			"kubectl", "patch",
+			"flexibleservers.dbforpostgresql.azure.com", serverName,
+			"-n", namespace,
+			"--subresource=status",
+			"--type=merge",
+			"-p", patch,
+		)
+		_, err := utils.Run(cmd)
+		return err
+	}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).
+		Should(Succeed(), "Failed to patch FlexibleServer status for %s", serverName)
+}
+
+func patchFlexibleServersDatabaseReady(databaseResourceName, namespace string) {
+	transitionTime := time.Now().UTC().Format(time.RFC3339)
+	patch := fmt.Sprintf(
+		`{"status":{"conditions":[{"type":"Ready","status":"True","reason":"Ready","message":"ready for e2e","lastTransitionTime":"%s"}]}}`,
+		transitionTime,
+	)
+	Eventually(func() error {
+		cmd := exec.Command(
+			"kubectl", "patch",
+			"flexibleserversdatabases.dbforpostgresql.azure.com", databaseResourceName,
+			"-n", namespace,
+			"--subresource=status",
+			"--type=merge",
+			"-p", patch,
+		)
+		_, err := utils.Run(cmd)
+		return err
+	}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).
+		Should(Succeed(), "Failed to patch FlexibleServersDatabase status for %s", databaseResourceName)
+}
+
 func runPostgresQuery(query string) string {
 	output, err := runPostgresQueryAsUser("postgres", query)
 	Expect(err).NotTo(HaveOccurred(), "Failed to run Postgres query")
@@ -605,13 +890,17 @@ func runPostgresQuery(query string) string {
 }
 
 func runPostgresQueryAsUser(user, query string) (string, error) {
+	return runPostgresQueryAsUserInDatabase(user, "postgres", query)
+}
+
+func runPostgresQueryAsUserInDatabase(user, databaseName, query string) (string, error) {
 	cmd := exec.Command("kubectl", "get", "pods", "-l", "app=postgres", "-n", "default", "-o", "jsonpath={.items[0].metadata.name}")
 	podName, err := utils.Run(cmd)
 	Expect(err).NotTo(HaveOccurred(), "Failed to get Postgres pod name")
 	podName = strings.TrimSpace(podName)
 
 	cmd = exec.Command("kubectl", "exec", "-n", "default", podName, "--",
-		"psql", "-v", "ON_ERROR_STOP=1", "-U", user, "-d", "postgres", "-tAc", query)
+		"psql", "-v", "ON_ERROR_STOP=1", "-U", user, "-d", databaseName, "-tAc", query)
 	output, err := utils.Run(cmd)
 	if err != nil {
 		return "", err
@@ -678,4 +967,87 @@ func deleteDatabaseAndProvisionJobs(dbName, namespace string) {
 		return strings.TrimSpace(output)
 	}).WithTimeout(30 * time.Second).WithPolling(2 * time.Second).
 		Should(BeEmpty())
+}
+
+func deleteLogicalDatabaseAndProvisionJobs(logicalDatabaseName, namespace string) {
+	logicalDatabaseLabelSelector := fmt.Sprintf("dis.altinn.cloud/logical-database-name=%s", logicalDatabaseName)
+
+	cmd := exec.Command(
+		"kubectl", "delete",
+		"logicaldatabases.storage.dis.altinn.cloud",
+		logicalDatabaseName,
+		"-n", namespace,
+		"--ignore-not-found=true",
+	)
+	_, _ = utils.Run(cmd)
+
+	jobLabelSelector := fmt.Sprintf("%s,dis.altinn.cloud/user-provision=true", logicalDatabaseLabelSelector)
+	cmd = exec.Command(
+		"kubectl", "delete",
+		"job",
+		"-l", jobLabelSelector,
+		"-n", namespace,
+		"--ignore-not-found=true",
+	)
+	_, _ = utils.Run(cmd)
+
+	Eventually(func() string {
+		cmd = exec.Command(
+			"kubectl", "get",
+			"logicaldatabases.storage.dis.altinn.cloud",
+			logicalDatabaseName,
+			"-n", namespace,
+			"--ignore-not-found=true",
+			"-o", "name",
+		)
+		output, err := utils.Run(cmd)
+		if err != nil {
+			return "error"
+		}
+		return strings.TrimSpace(output)
+	}).WithTimeout(30 * time.Second).WithPolling(2 * time.Second).
+		Should(BeEmpty())
+
+	Eventually(func() string {
+		cmd = exec.Command(
+			"kubectl", "get",
+			"flexibleserversdatabases.dbforpostgresql.azure.com",
+			"-l", logicalDatabaseLabelSelector,
+			"-n", namespace,
+			"-o", "name",
+		)
+		output, err := utils.Run(cmd)
+		if err != nil {
+			return "error"
+		}
+		return strings.TrimSpace(output)
+	}).WithTimeout(30 * time.Second).WithPolling(2 * time.Second).
+		Should(BeEmpty())
+
+	Eventually(func() string {
+		cmd = exec.Command(
+			"kubectl", "get",
+			"job",
+			"-l", jobLabelSelector,
+			"-n", namespace,
+			"-o", "name",
+		)
+		output, err := utils.Run(cmd)
+		if err != nil {
+			return "error"
+		}
+		return strings.TrimSpace(output)
+	}).WithTimeout(30 * time.Second).WithPolling(2 * time.Second).
+		Should(BeEmpty())
+}
+
+func cleanupLogicalPostgresResources(databaseName, appIdentity, ownerIdentity string) {
+	_, _ = runPostgresQueryAsUser("postgres", fmt.Sprintf(
+		"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '%s';",
+		strings.ReplaceAll(databaseName, "'", "''"),
+	))
+	_, _ = runPostgresQueryAsUser("postgres", fmt.Sprintf("DROP DATABASE IF EXISTS %s;", quoteIdentifier(databaseName)))
+	_, _ = runPostgresQueryAsUser("postgres", fmt.Sprintf("DROP ROLE IF EXISTS %s;", quoteIdentifier(appIdentity)))
+	_, _ = runPostgresQueryAsUser("postgres", fmt.Sprintf("DROP ROLE IF EXISTS %s;", quoteIdentifier(ownerIdentity)))
+	_, _ = runPostgresQueryAsUser("postgres", `DROP ROLE IF EXISTS "e2e-logical-intruder";`)
 }

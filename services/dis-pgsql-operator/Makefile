@@ -137,6 +137,7 @@ run-checks-ci: ## Run CI checks with local Go caches.
 # CertManager is installed by default; skip with:
 # - CERT_MANAGER_INSTALL_SKIP=true
 KIND_CLUSTER ?= dis-pgsql-operator-test-e2e
+E2E_TEST_TIMEOUT ?= 30m
 
 .PHONY: setup-test-e2e
 setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
@@ -144,17 +145,22 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 		echo "Kind is not installed. Please install Kind manually."; \
 		exit 1; \
 	}
-	@case "$$($(KIND) get clusters)" in \
-		*"$(KIND_CLUSTER)"*) \
-			echo "Kind cluster '$(KIND_CLUSTER)' already exists. Skipping creation." ;; \
-		*) \
-			echo "Creating Kind cluster '$(KIND_CLUSTER)'..."; \
-			$(KIND) create cluster --name $(KIND_CLUSTER) ;; \
-	esac
+	@if $(KIND) get clusters | grep -qx "$(KIND_CLUSTER)"; then \
+		if $(KUBECTL) --context "kind-$(KIND_CLUSTER)" get nodes >/dev/null 2>&1; then \
+			echo "Kind cluster '$(KIND_CLUSTER)' already exists. Skipping creation."; \
+		else \
+			echo "Kind cluster '$(KIND_CLUSTER)' exists but is not reachable. Recreating..."; \
+			$(KIND) delete cluster --name $(KIND_CLUSTER); \
+			$(KIND) create cluster --name $(KIND_CLUSTER); \
+		fi; \
+	else \
+		echo "Creating Kind cluster '$(KIND_CLUSTER)'..."; \
+		$(KIND) create cluster --name $(KIND_CLUSTER); \
+	fi
 
 .PHONY: test-e2e
 test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
-	CERT_MANAGER_INSTALL_SKIP=$(CERT_MANAGER_INSTALL_SKIP) KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
+	CERT_MANAGER_INSTALL_SKIP=$(CERT_MANAGER_INSTALL_SKIP) KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v -timeout=$(E2E_TEST_TIMEOUT)
 	$(MAKE) cleanup-test-e2e
 
 .PHONY: test-e2e-kind
@@ -164,7 +170,7 @@ test-e2e-kind: cleanup-test-e2e setup-test-e2e docker-build kind-load install in
 
 .PHONY: test-e2e-kind-ci
 test-e2e-kind-ci: cleanup-test-e2e setup-test-e2e manifests generate fmt vet install-aso-crds-kind install-dis-identity-crd-kind ## Run the e2e tests on Kind and cleanup (CI).
-	CERT_MANAGER_INSTALL_SKIP=$(CERT_MANAGER_INSTALL_SKIP) KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
+	CERT_MANAGER_INSTALL_SKIP=$(CERT_MANAGER_INSTALL_SKIP) KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v -timeout=$(E2E_TEST_TIMEOUT)
 	$(MAKE) cleanup-test-e2e
 
 .PHONY: cleanup-test-e2e

@@ -31,9 +31,9 @@ type LogicalDatabaseTenantSpec struct {
 	Environment string `json:"environment"`
 }
 
-// LogicalDatabaseIdentitySpec contains the Entra identity that should get
-// access to the logical database in a later reconciliation slice.
-type LogicalDatabaseIdentitySpec struct {
+// LogicalDatabasePrincipalSpec contains an Entra principal that should get
+// access to the logical database.
+type LogicalDatabasePrincipalSpec struct {
 	// name is the Entra principal name.
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
@@ -46,8 +46,11 @@ type LogicalDatabaseIdentitySpec struct {
 // LogicalDatabaseAccessSpec describes access requirements for the logical
 // database.
 type LogicalDatabaseAccessSpec struct {
-	// identity is the Entra principal that should be granted access.
-	Identity LogicalDatabaseIdentitySpec `json:"identity"`
+	// app is the runtime application principal.
+	App LogicalDatabasePrincipalSpec `json:"app"`
+
+	// owner is the Entra group for the team that owns the logical database.
+	Owner LogicalDatabasePrincipalSpec `json:"owner"`
 }
 
 // LogicalDatabaseSpec defines the desired state of LogicalDatabase.

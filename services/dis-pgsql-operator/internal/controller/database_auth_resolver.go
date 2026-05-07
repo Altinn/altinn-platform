@@ -10,6 +10,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 )
@@ -29,12 +30,33 @@ type resolvedDatabaseAuth struct {
 	User  resolvedIdentity
 }
 
+type identitySourceResolver interface {
+	Get(context.Context, types.NamespacedName, client.Object, ...client.GetOption) error
+}
+
 func (r *DatabaseReconciler) resolveAdminIdentity(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
 ) (resolvedAdminIdentity, bool, error) {
-	identity, requeue, err := r.resolveIdentitySource(ctx, logger, db, "admin", db.Spec.Auth.Admin.Identity)
+	return resolveAdminIdentity(ctx, logger, r, db)
+}
+
+func (r *LogicalDatabaseReconciler) resolveAdminIdentity(
+	ctx context.Context,
+	logger logr.Logger,
+	db *storagev1alpha1.Database,
+) (resolvedAdminIdentity, bool, error) {
+	return resolveAdminIdentity(ctx, logger, r, db)
+}
+
+func resolveAdminIdentity(
+	ctx context.Context,
+	logger logr.Logger,
+	r identitySourceResolver,
+	db *storagev1alpha1.Database,
+) (resolvedAdminIdentity, bool, error) {
+	identity, requeue, err := resolveIdentitySource(ctx, logger, r, db, "admin", db.Spec.Auth.Admin.Identity)
 	if err != nil || requeue {
 		return resolvedAdminIdentity{}, requeue, err
 	}
@@ -61,12 +83,13 @@ func (r *DatabaseReconciler) resolveUserIdentity(
 	if db.Spec.Auth.User == nil {
 		return resolvedIdentity{}, false, fmt.Errorf("spec.auth.user must be set")
 	}
-	return r.resolveIdentitySource(ctx, logger, db, "user", db.Spec.Auth.User.Identity)
+	return resolveIdentitySource(ctx, logger, r, db, "user", db.Spec.Auth.User.Identity)
 }
 
-func (r *DatabaseReconciler) resolveIdentitySource(
+func resolveIdentitySource(
 	ctx context.Context,
 	logger logr.Logger,
+	r identitySourceResolver,
 	db *storagev1alpha1.Database,
 	role string,
 	source storagev1alpha1.IdentitySource,

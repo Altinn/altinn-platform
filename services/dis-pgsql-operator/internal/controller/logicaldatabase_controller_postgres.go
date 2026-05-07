@@ -25,10 +25,10 @@ const (
 	logicalDatabaseConditionDatabaseReady = "DatabaseReady"
 	logicalDatabaseConditionAccessReady   = "AccessReady"
 
-	logicalDatabaseReasonValidationFailed     = "ValidationFailed"
-	logicalDatabaseReasonProvisioning         = "Provisioning"
-	logicalDatabaseReasonDatabaseReady        = "Ready"
-	logicalDatabaseReasonProvisioningDeferred = "ProvisioningNotImplemented"
+	logicalDatabaseReasonValidationFailed = "ValidationFailed"
+	logicalDatabaseReasonProvisioning     = "Provisioning"
+	logicalDatabaseReasonReady            = "Ready"
+	logicalDatabaseReasonDatabaseReady    = "Ready"
 
 	logicalDatabasePort         = int32(5432)
 	logicalDatabaseRequeueDelay = 15 * time.Second

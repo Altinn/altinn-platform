@@ -43,9 +43,24 @@ spec:
                 description: access defines the identity that should get access to
                   this logical database.
                 properties:
-                  identity:
-                    description: identity is the Entra principal that should be granted
-                      access.
+                  app:
+                    description: app is the runtime application principal.
+                    properties:
+                      name:
+                        description: name is the Entra principal name.
+                        minLength: 1
+                        type: string
+                      principalId:
+                        description: principalId is the Entra principal object ID.
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    - principalId
+                    type: object
+                  owner:
+                    description: owner is the Entra group for the team that owns the
+                      logical database.
                     properties:
                       name:
                         description: name is the Entra principal name.
@@ -60,7 +75,8 @@ spec:
                     - principalId
                     type: object
                 required:
-                - identity
+                - app
+                - owner
                 type: object
               databaseKey:
                 description: databaseKey is a short database purpose key.

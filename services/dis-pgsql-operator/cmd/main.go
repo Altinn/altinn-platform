@@ -324,6 +324,7 @@ func main() {
 	if err := (&controller.LogicalDatabaseReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Config: *opCfg,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LogicalDatabase")
 		os.Exit(1)

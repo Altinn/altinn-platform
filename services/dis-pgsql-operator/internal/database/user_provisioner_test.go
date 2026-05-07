@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	pgxmock "github.com/pashagolub/pgxmock/v4"
 )
 
@@ -49,8 +51,23 @@ func TestUserProvisionSQL(t *testing.T) {
 		},
 		{
 			name: "set search path",
-			got:  setSearchPathSQL(user, schema),
+			got:  setSearchPathSQL(user, dbName, schema, false),
 			want: `ALTER ROLE "app-user" SET search_path = "app-db", public;`,
+		},
+		{
+			name: "set database scoped search path",
+			got:  setSearchPathSQL(user, dbName, schema, true),
+			want: `ALTER ROLE "app-user" IN DATABASE "app-db" SET search_path = "app-db", public;`,
+		},
+		{
+			name: "revoke public connect",
+			got:  revokePublicConnectSQL(dbName),
+			want: `REVOKE CONNECT ON DATABASE "app-db" FROM PUBLIC;`,
+		},
+		{
+			name: "grant schema access",
+			got:  grantSchemaAccessSQL(schema, "owner-group"),
+			want: `GRANT USAGE, CREATE ON SCHEMA "app-db" TO "owner-group";`,
 		},
 	}
 
@@ -80,8 +97,11 @@ func TestUserProvisionSQLQuoting(t *testing.T) {
 	if got, want := alterSchemaOwnerSQL(schema, user), `ALTER SCHEMA "schema-name" OWNER TO "weird""name";`; got != want {
 		t.Fatalf("alterSchemaOwnerSQL got %q, want %q", got, want)
 	}
-	if got, want := setSearchPathSQL(user, schema), `ALTER ROLE "weird""name" SET search_path = "schema-name", public;`; got != want {
+	if got, want := setSearchPathSQL(user, dbName, schema, false), `ALTER ROLE "weird""name" SET search_path = "schema-name", public;`; got != want {
 		t.Fatalf("setSearchPathSQL got %q, want %q", got, want)
+	}
+	if got, want := setSearchPathSQL(user, dbName, schema, true), `ALTER ROLE "weird""name" IN DATABASE "db-name" SET search_path = "schema-name", public;`; got != want {
+		t.Fatalf("setSearchPathSQL scoped got %q, want %q", got, want)
 	}
 }
 
@@ -178,4 +198,96 @@ func TestEnsureUserSkipsCreateWhenExists(t *testing.T) {
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("expectations: %v", err)
 	}
+}
+
+func TestEnsureAccessCreatesLogicalAppAndOwnerAccess(t *testing.T) {
+	conn := &recordingConn{}
+
+	if err := ensureAccess(context.Background(), conn, accessOptions{
+		DatabaseName:             "logical-db",
+		SchemaName:               "logical-db",
+		AppName:                  "app-user",
+		AppPrincipalID:           "app-principal-id",
+		OwnerName:                "owner-group",
+		OwnerPrincipalID:         "owner-principal-id",
+		UseAAD:                   true,
+		RevokePublicConnect:      true,
+		DatabaseScopedSearchPath: true,
+	}); err != nil {
+		t.Fatalf("ensureAccess: %v", err)
+	}
+
+	if len(conn.execs) == 0 {
+		t.Fatal("expected execs")
+	}
+	if got, want := conn.execs[0].sql, revokePublicConnectSQL("logical-db"); got != want {
+		t.Fatalf("first exec got %q, want %q", got, want)
+	}
+
+	requireExec(t, conn, createAADPrincipalSQL(), "app-user", "app-principal-id", "service")
+	requireExec(t, conn, createAADPrincipalSQL(), "owner-group", "owner-principal-id", "group")
+	requireExec(t, conn, grantConnectSQL("logical-db", "app-user"))
+	requireExec(t, conn, grantConnectSQL("logical-db", "owner-group"))
+	requireExec(t, conn, alterSchemaOwnerSQL("logical-db", "app-user"))
+	requireExec(t, conn, grantSchemaAccessSQL("logical-db", "owner-group"))
+	requireExec(t, conn, alterDefaultTablePrivilegesSQL("app-user", "logical-db", "owner-group"))
+	requireExec(t, conn, setSearchPathSQL("app-user", "logical-db", "logical-db", true))
+	requireExec(t, conn, setSearchPathSQL("owner-group", "logical-db", "logical-db", true))
+}
+
+type recordingConn struct {
+	execs []execCall
+}
+
+type execCall struct {
+	sql  string
+	args []any
+}
+
+func (c *recordingConn) Exec(_ context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	c.execs = append(c.execs, execCall{
+		sql:  sql,
+		args: append([]any(nil), args...),
+	})
+
+	return pgconn.CommandTag{}, nil
+}
+
+func (c *recordingConn) QueryRow(_ context.Context, _ string, _ ...any) pgx.Row {
+	return recordingRow{}
+}
+
+type recordingRow struct{}
+
+func (recordingRow) Scan(dest ...any) error {
+	exists := dest[0].(*bool)
+	*exists = false
+
+	return nil
+}
+
+func requireExec(t *testing.T, conn *recordingConn, sql string, args ...any) {
+	t.Helper()
+
+	for _, exec := range conn.execs {
+		if exec.sql == sql && equalArgs(exec.args, args) {
+			return
+		}
+	}
+
+	t.Fatalf("missing exec %q with args %#v; got %#v", sql, args, conn.execs)
+}
+
+func equalArgs(got, want []any) bool {
+	if len(got) != len(want) {
+		return false
+	}
+
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+
+	return true
 }
