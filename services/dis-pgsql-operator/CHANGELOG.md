@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.6.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.5.3...dis-pgsql-v0.6.0) (2026-05-07)
+
+
+### Features
+
+* **dis-pgsql:** add LogicalDatabase API validation ([#3425](https://github.com/Altinn/altinn-platform/issues/3425)) ([0098d66](https://github.com/Altinn/altinn-platform/commit/0098d6638fcaeb8cf52dfa6327106bcddacf8d14))
+* **dis-pgsql:** add shared database mode ([#3421](https://github.com/Altinn/altinn-platform/issues/3421)) ([bb9a4a4](https://github.com/Altinn/altinn-platform/commit/bb9a4a488bfbf7de0fefbb57002e8b7c90717478))
+* **dis-pgsql:** create logical databases  ([#3430](https://github.com/Altinn/altinn-platform/issues/3430)) ([012d820](https://github.com/Altinn/altinn-platform/commit/012d8205ebe0d9207a84e8ac8d586cb2ef83ac1a))
+* **dis-pgsql:** provision logical database access ([#3437](https://github.com/Altinn/altinn-platform/issues/3437)) ([2a7e8af](https://github.com/Altinn/altinn-platform/commit/2a7e8afdd21e49b87a5e10c841cf3fdfa224eb74))
+
+
+### Dependency Updates
+
+* update github-actions non-major dependencies ([#3018](https://github.com/Altinn/altinn-platform/issues/3018)) ([100ab8d](https://github.com/Altinn/altinn-platform/commit/100ab8d5d0b9f413983c4b6ca7b5baac6afe51ed))
+* update golangci/golangci-lint-action action to v9 ([#3378](https://github.com/Altinn/altinn-platform/issues/3378)) ([7184911](https://github.com/Altinn/altinn-platform/commit/7184911a4fb241f65d7917f3bd04383d6f9aa38f))
+
 ## [0.5.3](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.5.2...dis-pgsql-v0.5.3) (2026-04-24)
 
 
