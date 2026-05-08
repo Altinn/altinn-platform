@@ -154,6 +154,7 @@ var generateExamplesVersion = []string{
 	"v12",
 	"v13",
 	"v14",
+	"smoke",
 }
 
 func TestGenerate(t *testing.T) {

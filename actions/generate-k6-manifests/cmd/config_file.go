@@ -98,7 +98,7 @@ func (cFile *ConfigFile) IsValid() bool {
 }
 
 // Sets defaults for things that the user did not configure.
-func (cFile *ConfigFile) SetDefaults() {
+func (cFile *ConfigFile) SetDefaults(filePath string) {
 	for _, td := range cFile.TestDefinitions {
 
 		if cFile.BaseDir != "" {
@@ -119,12 +119,35 @@ func (cFile *ConfigFile) SetDefaults() {
 		td.TestScope = strings.ReplaceAll(td.TestScope, "_", "-")
 
 		for _, c := range td.Contexts {
-			// If no test types are configured, add a functional test definition by default.
 			if c.TestTypeDefinition == nil {
+				fileName := filepath.Base(filePath)
 				functional := "functional"
-				c.TestTypeDefinition = &TestTypeDefinition{
-					Type:    &functional,
-					Enabled: true,
+				smoke := "smoke"
+				breakpoint := "breakpoint"
+				brower := "browser"
+				if strings.Contains(fileName, smoke) {
+					c.TestTypeDefinition = &TestTypeDefinition{
+						Type:    &smoke,
+						Enabled: true,
+					}
+				} else if strings.Contains(fileName, breakpoint) {
+					c.TestTypeDefinition = &TestTypeDefinition{
+						Type:    &breakpoint,
+						Enabled: true,
+					}
+
+				} else if strings.Contains(fileName, "browser") {
+					c.TestTypeDefinition = &TestTypeDefinition{
+						Type:    &brower,
+						Enabled: true,
+					}
+
+				} else {
+					// If no test types are configured and we can't tell from filename, add a functional test definition by default.
+					c.TestTypeDefinition = &TestTypeDefinition{
+						Type:    &functional,
+						Enabled: true,
+					}
 				}
 			}
 			if c.TestRun == nil {

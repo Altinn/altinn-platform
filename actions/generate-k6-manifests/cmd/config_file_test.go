@@ -80,7 +80,7 @@ test_definitions:
 		t.Errorf("Expected config file to be valid, but it's not")
 	}
 
-	configFile.SetDefaults()
+	configFile.SetDefaults("")
 
 	if configFile.Namespace != "platform" {
 		t.Errorf("setDefaults: expected %s, actual %s", "platform", configFile.Namespace)
@@ -154,7 +154,7 @@ test_definitions:
 		t.Errorf("Expected config file to be valid, but it's not")
 	}
 
-	configFile.SetDefaults()
+	configFile.SetDefaults("")
 
 	if configFile.Namespace != "platform" {
 		t.Errorf("setDefaults: expected %s, actual %s", "platform", configFile.Namespace)
