@@ -40,25 +40,6 @@ resource "kubernetes_config_map_v1" "deploy_environment_at23" {
   }
 }
 
-resource "kubernetes_config_map_v1" "deploy_environment_at24" {
-  depends_on = [kubernetes_namespace.namespace]
-  for_each   = toset(local.namespaces)
-  metadata {
-    name      = "deploy-environments-at24"
-    namespace = each.key
-  }
-  data = {
-    BASE_URL            = "https://platform.at24.altinn.cloud"
-    ALTINN2_BASE_URL    = "https://at24.altinn.cloud"
-    ALTINN_CDN_BASE_URL = "https://altinncdn.no"
-    AM_UI_BASE_URL      = "https://am.ui.at24.altinn.cloud"
-    AF_UI_BASE_URL      = "https://af.at24.altinn.cloud"
-    INFO_CLOUD_URL      = "https://info.at24.altinn.cloud"
-    DEPLOY_ENV          = "at24"
-    ENV_TYPE            = "dev"
-  }
-}
-
 resource "kubernetes_config_map_v1" "deploy_environment_yt01" {
   depends_on = [kubernetes_namespace.namespace]
   for_each   = toset(local.namespaces)
