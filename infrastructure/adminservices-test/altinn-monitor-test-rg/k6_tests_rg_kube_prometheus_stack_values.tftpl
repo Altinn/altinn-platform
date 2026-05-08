@@ -44,3 +44,5 @@ prometheus:
           resources:
             requests:
               storage: 64Gi
+kubeStateMetrics: # Not really used atm. If re-enabled, we need to drop high cardinality metrics.
+  enabled: false
