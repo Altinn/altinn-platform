@@ -89,7 +89,7 @@ func (r K8sManifestGenerator) Initialize(filePath string) *ConfigFile {
 	if !cf.IsValid() {
 		log.Fatal("Config file is not valid.")
 	}
-	cf.SetDefaults()
+	cf.SetDefaults(filePath)
 
 	requiredDirs := []string{
 		r.ConfigDirectory,
