@@ -13,7 +13,6 @@ var validEnvironmentsTests = []struct {
 	{"at21", false},
 	{"at22", true},
 	{"at23", true},
-	{"at24", true},
 	{"at25", false},
 	{"", false},
 	{"yt01", true},
@@ -28,7 +27,6 @@ func TestIsValidDeploymentEnvironment(t *testing.T) {
 		ValidEnvironmentValues: []string{
 			"at22",
 			"at23",
-			"at24",
 			"tt02",
 			"yt01",
 			"prod",
@@ -56,7 +54,6 @@ test_definitions:
 		ValidEnvironmentValues: []string{
 			"at22",
 			"at23",
-			"at24",
 			"yt01",
 			"prod",
 		},
@@ -130,7 +127,6 @@ test_definitions:
 		ValidEnvironmentValues: []string{
 			"at22",
 			"at23",
-			"at24",
 			"yt01",
 			"prod",
 		},

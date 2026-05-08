@@ -65,7 +65,6 @@ func (r K8sManifestGenerator) Initialize(filePath string) *ConfigFile {
 		ValidEnvironmentValues: []string{
 			"at22",
 			"at23",
-			"at24",
 			"tt02",
 			"yt01",
 			"prod",
