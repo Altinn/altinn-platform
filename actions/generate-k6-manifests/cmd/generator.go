@@ -141,6 +141,9 @@ func generate(td *TestDefinition, c *TestContext, r K8sManifestGenerator, cf Con
 		"--env", fmt.Sprintf("%s=%s", "TEST_NAME", *c.TestRun.Name),
 		"--env", fmt.Sprintf("%s=%s", "TESTFILENAME", testFilename),
 	}
+	if *c.TestTypeDefinition.Type == "functional" {
+		k6ArchiveArgs = append(k6ArchiveArgs, "--env", fmt.Sprintf("%s=%s", "K6_PROMETHEUS_RW_PUSH_INTERVAL", "1s"))
+	}
 	for _, env := range mergedEnvs {
 		k6ArchiveArgs = append(k6ArchiveArgs, "--env", fmt.Sprintf("%s=%s", *env.Name, *env.Value))
 	}
