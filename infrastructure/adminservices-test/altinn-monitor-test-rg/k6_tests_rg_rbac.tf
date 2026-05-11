@@ -32,7 +32,7 @@ resource "kubernetes_role_v1" "k6_tests_manager" {
   rule {
     api_groups = [""]
     resources  = ["configmaps"]
-    verbs      = ["get", "list", "watch", "delete", "patch"]
+    verbs      = ["get", "list", "watch", "delete", "patch", "create"]
   }
   rule {
     api_groups = [""]
