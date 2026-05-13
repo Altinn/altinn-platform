@@ -1,10 +1,11 @@
 # Log Analytics Workspace (create only if not reusing)
 resource "azurerm_log_analytics_workspace" "obs" {
-  count               = local.reuse_law ? 0 : 1
-  name                = "${var.prefix}-${var.environment}-obs-law"
-  resource_group_name = local.rg.name
-  location            = local.rg.location
-  retention_in_days   = var.log_analytics_retention_days
+  count                        = local.reuse_law ? 0 : 1
+  name                         = "${var.prefix}-${var.environment}-obs-law"
+  resource_group_name          = local.rg.name
+  location                     = local.rg.location
+  retention_in_days            = var.log_analytics_retention_days
+  local_authentication_enabled = var.log_analytics_local_authentication_enabled
   lifecycle { prevent_destroy = true }
   tags = merge(var.localtags, {
     submodule = "observability"
