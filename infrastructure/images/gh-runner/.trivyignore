@@ -97,3 +97,30 @@ CVE-2026-33810
 
 # docker/docker (Moby): Authorization bypass vulnerability
 CVE-2026-34040
+
+# PackageKit: race condition vulnerability leads to arbitrary code execution
+CVE-2026-41651
+
+# urllib3: Sensitive headers forwarded across origins in redirects
+CVE-2026-44431
+
+# urllib3: Decompression-bomb safeguards bypassed
+CVE-2026-44432
+
+# go.opentelemetry.io/otel: multi-value baggage header extraction
+CVE-2026-29181
+
+# stdlib: DoS in LookupCNAME via cgo DNS resolver
+CVE-2026-33811
+
+# stdlib: HTTP/2 SETTINGS frames cause transport infinite loop
+CVE-2026-33814
+
+# stdlib: DoS via crafted inputs to ParseAddress/ParseAddressList
+CVE-2026-39820
+
+# stdlib: Panic in Dial and LookupPort via NUL byte on Windows
+CVE-2026-39836
+
+# stdlib: DoS via pathological inputs in consumePhrase
+CVE-2026-42499
