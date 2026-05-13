@@ -72,7 +72,7 @@ jobs:
           owner: ${{ steps.get_org.outputs.org }}
 
       - name: Terraform Plan
-        uses: Altinn/altinn-platform/actions/terraform/plan@0be6bf2f191006bb8011ebe55071c6796945cafa # main
+        uses: Altinn/altinn-platform/actions/terraform/plan@dd7b1578787e084472d1e5b5c6ed8a241afd6cdd # main
         env:
           GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
           TF_VAR_subscription_id: ${{ secrets.SYNCROOT_SUBSCRIPTION_ID }}
@@ -109,7 +109,7 @@ jobs:
           owner: ${{ steps.get_org.outputs.org }}
 
       - name: Terraform Apply
-        uses: Altinn/altinn-platform/actions/terraform/apply@0be6bf2f191006bb8011ebe55071c6796945cafa # main
+        uses: Altinn/altinn-platform/actions/terraform/apply@dd7b1578787e084472d1e5b5c6ed8a241afd6cdd # main
         env:
           GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
           TF_VAR_subscription_id: ${{ secrets.SYNCROOT_SUBSCRIPTION_ID }}
