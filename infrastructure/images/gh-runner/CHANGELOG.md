@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.6.1...ghrunner-0.6.2) (2026-05-13)
+
+
+### Bug Fixes
+
+* Update gh-runner base image digest ([#3456](https://github.com/Altinn/altinn-platform/issues/3456)) ([47851aa](https://github.com/Altinn/altinn-platform/commit/47851aa6c7172747657d3bb8cc7fbd20bf4e9450))
+
 ## [0.6.1](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.6.0...ghrunner-0.6.1) (2026-05-13)
 
 
