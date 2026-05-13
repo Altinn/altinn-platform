@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.6.0...ghrunner-0.6.1) (2026-05-13)
+
+
+### Bug Fixes
+
+* Issue with gh-runner create work directory before config ([#3454](https://github.com/Altinn/altinn-platform/issues/3454)) ([400fa6c](https://github.com/Altinn/altinn-platform/commit/400fa6c7e4a24c6f78d343b3c1b980855cbde28f))
+
 ## [0.6.0](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.5.0...ghrunner-0.6.0) (2026-04-27)
 
 
