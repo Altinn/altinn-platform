@@ -1,6 +1,6 @@
 module github.com/Altinn/altinn-platform/services/dis-vault-operator
 
-go 1.26.1
+go 1.26.3
 
 require (
 	github.com/Altinn/altinn-platform/services/dis-identity-operator v0.0.0-20260319083500-bd4f5f84c472
@@ -9,6 +9,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
+	k8s.io/api v0.35.1
 	k8s.io/apiextensions-apiserver v0.35.0
 	k8s.io/apimachinery v0.35.1
 	k8s.io/client-go v0.35.1
@@ -103,7 +104,6 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	k8s.io/api v0.35.1 // indirect
 	k8s.io/apiserver v0.35.0 // indirect
 	k8s.io/component-base v0.35.0 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
