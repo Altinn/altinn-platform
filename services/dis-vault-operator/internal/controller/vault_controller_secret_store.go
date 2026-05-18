@@ -134,7 +134,7 @@ func (r *VaultReconciler) reconcileManagedSecretStore(
 		}, nil
 	}
 
-	desired, err := vaultpkg.BuildManagedSecretStore(vaultObj, r.Config.TenantID, vaultURI)
+	desired, err := vaultpkg.BuildManagedSecretStore(vaultObj, vaultURI)
 	if err != nil {
 		return secretStoreReconcileResult{}, err
 	}

@@ -1350,8 +1350,7 @@ var _ = Describe("Vault controller", func() {
 			g.Expect(*store.Spec.Provider.AzureKV.AuthType).To(Equal(esov1.AzureWorkloadIdentity))
 			g.Expect(store.Spec.Provider.AzureKV.VaultURL).NotTo(BeNil())
 			g.Expect(*store.Spec.Provider.AzureKV.VaultURL).To(Equal(vaultURI))
-			g.Expect(store.Spec.Provider.AzureKV.TenantID).NotTo(BeNil())
-			g.Expect(*store.Spec.Provider.AzureKV.TenantID).To(Equal("00000000-0000-0000-0000-000000000000"))
+			g.Expect(store.Spec.Provider.AzureKV.TenantID).To(BeNil())
 			g.Expect(store.Spec.Provider.AzureKV.ServiceAccountRef).NotTo(BeNil())
 			g.Expect(store.Spec.Provider.AzureKV.ServiceAccountRef.Name).To(Equal(identityName))
 			g.Expect(metav1.IsControlledBy(&store, vaultObj)).To(BeTrue())
@@ -1474,7 +1473,7 @@ var _ = Describe("Vault controller", func() {
 		createIdentity(testCtx, identityName, true)
 
 		conflictOwner := newVault("other-vault", identityName)
-		conflictStore, err := vaultpkg.BuildManagedSecretStore(conflictOwner, "00000000-0000-0000-0000-000000000000", "https://other-vault.vault.azure.net")
+		conflictStore, err := vaultpkg.BuildManagedSecretStore(conflictOwner, "https://other-vault.vault.azure.net")
 		Expect(err).NotTo(HaveOccurred())
 		conflictStore.Name = vaultpkg.DeterministicSecretStoreName(vaultName)
 		conflictStore.Namespace = ns
