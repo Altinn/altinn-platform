@@ -57,5 +57,5 @@ jobs:
 
       - name: Running Tests
         run: |
-          go mod tidy
+          make verify-deps
           make test

@@ -59,6 +59,10 @@ func ActiveAuthReferenceName(r *redisv1alpha1.Redis) (string, error) {
 		return "", fmt.Errorf("redis must not be nil")
 	}
 
+	if r.Spec.IdentityRef != nil && r.Spec.ServiceAccountRef != nil {
+		return "", fmt.Errorf("exactly one of identityRef or serviceAccountRef must be set")
+	}
+
 	switch {
 	case r.Spec.ServiceAccountRef != nil:
 		name := strings.TrimSpace(r.Spec.ServiceAccountRef.Name)

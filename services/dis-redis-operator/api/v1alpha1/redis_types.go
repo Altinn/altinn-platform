@@ -75,6 +75,7 @@ type RedisModule struct {
 
 // RedisPersistence configures AOF / RDB persistence settings for the database.
 // At most one of AOF or RDB may be enabled.
+// +kubebuilder:validation:XValidation:rule="!(has(self.aof) && has(self.rdb))",message="Only one of 'aof' or 'rdb' may be set"
 type RedisPersistence struct {
 	// AOF enables append-only-file persistence with the specified frequency.
 	// +optional
@@ -83,7 +84,7 @@ type RedisPersistence struct {
 
 	// RDB enables snapshot persistence with the specified frequency.
 	// +optional
-	// +kubebuilder:validation:Enum=1h;6h;12h
+	// +kubebuilder:validation:Enum:="1h";"6h";"12h"
 	RDB string `json:"rdb,omitempty"`
 }
 
@@ -206,6 +207,7 @@ const (
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:path=redises
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].reason"
 // +kubebuilder:printcolumn:name="AzureName",type="string",JSONPath=".status.azureName"

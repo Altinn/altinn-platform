@@ -49,6 +49,16 @@ func NewCondition(
 
 // AggregateReadyCondition combines child conditions into a single Ready condition.
 func AggregateReadyCondition(generation int64, conditions ...metav1.Condition) metav1.Condition {
+	if len(conditions) == 0 {
+		return NewCondition(
+			redisv1alpha1.ConditionReady,
+			generation,
+			metav1.ConditionUnknown,
+			"NoDependencies",
+			"no dependency conditions present",
+		)
+	}
+
 	hasFalse := false
 	hasUnknown := false
 	for _, cond := range conditions {

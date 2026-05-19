@@ -176,6 +176,9 @@ func BuildPrivateEndpoint(r *redisv1alpha1.Redis, cfg config.OperatorConfig, clu
 	if r == nil {
 		return nil, fmt.Errorf("redis must not be nil")
 	}
+	if strings.TrimSpace(clusterKubernetesName) == "" {
+		return nil, fmt.Errorf("clusterKubernetesName must not be empty")
+	}
 	subnetID := cfg.PrimarySubnetID()
 	if subnetID == "" {
 		return nil, fmt.Errorf("no AKS subnet configured for private endpoint")

@@ -24,12 +24,13 @@ on:
 
 permissions:
   contents: read
-  packages: write
-  id-token: write
 
 jobs:
   build-and-release-image:
     name: Build, scan and release
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yml
     with:
       release_latest: true
@@ -40,6 +41,10 @@ jobs:
   build-release-flux-oci-latest:
     name: Build latest from main
     if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     defaults:
       run:
         working-directory: ./services/dis-redis-operator/config
@@ -47,6 +52,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - name: Push latest flux oci image from main
         uses: ./actions/flux/build-push-image
         with:
@@ -60,6 +67,10 @@ jobs:
     name: Build release from tag
     if: startsWith(github.ref, 'refs/tags/dis-redis-v')
     environment: flux-release
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     defaults:
       run:
         working-directory: ./services/dis-redis-operator/config
@@ -67,6 +78,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - name: Setup vars
         id: vars
         run: |

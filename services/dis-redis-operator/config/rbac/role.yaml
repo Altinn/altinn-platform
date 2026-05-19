@@ -45,9 +45,9 @@ rules:
 - apiGroups:
   - network.azure.com
   resources:
-  - privateendpoints
   - privatednszones
   - privatednszonesvirtualnetworklinks
+  - privateendpoints
   verbs:
   - create
   - delete
@@ -59,9 +59,9 @@ rules:
 - apiGroups:
   - network.azure.com
   resources:
-  - privateendpoints/status
   - privatednszones/status
   - privatednszonesvirtualnetworklinks/status
+  - privateendpoints/status
   verbs:
   - get
   - patch

@@ -33,30 +33,34 @@ func (r *RedisReconciler) updateStatus(
 	}
 
 	identityCond := applyCondition(buildIdentityCondition(redisObj, identity))
-	clusterCond := applyCondition(asoToStatusCondition(
+	clusterCond := applyCondition(buildDependentCondition(
 		redisObj.Generation,
 		redisv1alpha1.ConditionClusterReady,
+		identity,
 		clusterReady,
 		"ClusterNotReady",
 		"waiting for ASO RedisEnterprise readiness",
 	))
-	databaseCond := applyCondition(asoToStatusCondition(
+	databaseCond := applyCondition(buildDependentCondition(
 		redisObj.Generation,
 		redisv1alpha1.ConditionDatabaseReady,
+		identity,
 		databaseReady,
 		"DatabaseNotReady",
 		"waiting for ASO RedisEnterpriseDatabase readiness",
 	))
-	peCond := applyCondition(asoToStatusCondition(
+	peCond := applyCondition(buildDependentCondition(
 		redisObj.Generation,
 		redisv1alpha1.ConditionPrivateEndpointReady,
+		identity,
 		privateEndpointReady,
 		"PrivateEndpointNotReady",
 		"waiting for ASO PrivateEndpoint readiness",
 	))
-	dnsCond := applyCondition(asoToStatusCondition(
+	dnsCond := applyCondition(buildDependentCondition(
 		redisObj.Generation,
 		redisv1alpha1.ConditionPrivateDNSReady,
+		identity,
 		privateDNSReady,
 		"PrivateDNSNotReady",
 		"waiting for ASO shared private DNS zone readiness",
@@ -116,6 +120,25 @@ func buildIdentityCondition(redisObj *redisv1alpha1.Redis, identity redispkg.Res
 		"IdentityReady",
 		fmt.Sprintf("%s is ready", identity.SourceDescription()),
 	)
+}
+
+func buildDependentCondition(
+	generation int64,
+	conditionType redisv1alpha1.ConditionType,
+	identity redispkg.ResolvedIdentity,
+	input redispkg.ASOReadyCondition,
+	notReadyReason, notReadyMessage string,
+) metav1.Condition {
+	if identity.IsPending() {
+		return redispkg.NewCondition(
+			conditionType,
+			generation,
+			metav1.ConditionFalse,
+			identity.PendingReason,
+			fmt.Sprintf("waiting for owner identity before reconciling dependency: %s", identity.PendingMessage),
+		)
+	}
+	return asoToStatusCondition(generation, conditionType, input, notReadyReason, notReadyMessage)
 }
 
 func asoToStatusCondition(

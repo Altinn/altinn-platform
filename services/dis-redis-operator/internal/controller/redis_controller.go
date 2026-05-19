@@ -163,7 +163,9 @@ func (r *RedisReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	logger.Info("reconciled Redis dependencies", "azureName", azureName, "principalId", identity.PrincipalID)
 
 	if !clusterReady.Found || clusterReady.Status != metav1.ConditionTrue ||
-		!databaseReady.Found || databaseReady.Status != metav1.ConditionTrue {
+		!databaseReady.Found || databaseReady.Status != metav1.ConditionTrue ||
+		!peReady.Found || peReady.Status != metav1.ConditionTrue ||
+		!dnsReady.Found || dnsReady.Status != metav1.ConditionTrue {
 		return ctrl.Result{RequeueAfter: provisioningRequeueDelay}, nil
 	}
 
@@ -277,7 +279,22 @@ func (r *RedisReconciler) getSharedDNSReady(ctx context.Context, redisObj *redis
 		}
 		return redispkg.ASOReadyCondition{}, err
 	}
-	return redispkg.FromASOConditions(zone.Status.Conditions), nil
+	zoneReady := redispkg.FromASOConditions(zone.Status.Conditions)
+	if !zoneReady.Found || zoneReady.Status != metav1.ConditionTrue {
+		return zoneReady, nil
+	}
+
+	link := &networkv1.PrivateDnsZonesVirtualNetworkLink{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Name:      redispkg.SharedVNetLinkName(r.Config.Environment),
+		Namespace: redisObj.Namespace,
+	}, link); err != nil {
+		if apierrors.IsNotFound(err) {
+			return redispkg.ASOReadyCondition{}, nil
+		}
+		return redispkg.ASOReadyCondition{}, err
+	}
+	return redispkg.FromASOConditions(link.Status.Conditions), nil
 }
 
 func setStatusCondition(redisObj *redisv1alpha1.Redis, condition metav1.Condition) bool {
