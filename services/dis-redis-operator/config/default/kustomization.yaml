@@ -1,0 +1,16 @@
+namespace: dis-redis-operator-system
+namePrefix: dis-redis-operator-
+
+resources:
+- ../crd
+- ../rbac
+- ../manager
+- metrics_service.yaml
+
+patches:
+- path: deploy_vars_patch.yaml
+  target:
+    kind: Deployment
+- path: manager_metrics_patch.yaml
+  target:
+    kind: Deployment

@@ -1,0 +1,2 @@
+resources:
+- bases/redis.dis.altinn.cloud_redises.yaml
