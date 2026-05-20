@@ -27,7 +27,7 @@ func (r *LogicalDatabaseReconciler) ensureLogicalDatabaseAccess(
 		return true, logicalDatabaseReasonReady, "Logical database access is ready", nil
 	}
 
-	serverName := strings.TrimSpace(logicalDatabase.Spec.ServerRef.Name)
+	serverName := strings.TrimSpace(logicalDatabase.Spec.Server.Name)
 	var db storagev1alpha1.Database
 	if err := r.Get(ctx, types.NamespacedName{
 		Name:      serverName,

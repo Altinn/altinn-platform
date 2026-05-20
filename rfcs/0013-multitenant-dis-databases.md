@@ -15,16 +15,16 @@ Add a `LogicalDatabase` resource to `dis-pgsql-operator`.
 
 The `Database` CRD needs to support a shared mode that uses existing private access network prerequisites.
 
-`LogicalDatabase` means one database inside a shared `Database`. It is reconciled by `dis-pgsql` in adminservices and can be used by any tenant or system that needs a database on a shared `Database`.
+`LogicalDatabase` means one database inside a shared `Database`. It is reconciled by `dis-pgsql` in adminservices and can be used by any product app or system that needs a database on a shared `Database`.
 
 # Motivation
 [motivation]: #motivation
 
-Some systems do not need one dedicated `Database` each. They need shared `Database` resources that can host one `LogicalDatabase` per tenant.
+Some systems do not need one dedicated `Database` each. They need shared `Database` resources that can host one `LogicalDatabase` per app within a product/environment context.
 
 The current `Database` API creates full servers using delegated subnets. That is still useful, but it needs a shared mode for multitenant cases.
 
-We need a second API that keeps server ownership central, while still making tenant databases declarative.
+We need a second API that keeps server ownership central, while still making app databases declarative.
 
 # Guide-level explanation
 [guide-level-explanation]: #guide-level-explanation
@@ -36,7 +36,11 @@ The platform has two database APIs:
 
 `Database` should support the current dedicated mode and a new shared mode. Shared `Database` networking does not belong to each `LogicalDatabase`.
 
-`LogicalDatabase` is the tenant database API. It creates a database inside a shared `Database` selected by `spec.serverRef.name`.
+`LogicalDatabase` is the app database API. It creates a database inside a shared `Database` selected by `spec.server.name`.
+
+The logical database name is explicit. `spec.name` is the PostgreSQL and Azure database name inside the selected shared server. The operator does not add a suffix or derive the database name from namespace, environment, or app context. If two `LogicalDatabase` resources request the same `spec.name` on the same server, they conflict and the requester must choose a different name.
+
+The Kubernetes ASO `FlexibleServersDatabase.metadata.name` is still operator-generated because ASO resources are namespace-scoped Kubernetes objects. It should be based on the selected server and requested database name, for example `<server>-<database>`. The ASO `spec.azureName` remains exactly `LogicalDatabase.spec.name`.
 
 A shared `Database` runs in admin infrastructure and is managed from admin desired state, for example syncroot. The team or requester that needs the shared database service owns that desired state. Server-level settings such as SKU, storage, backup, HA, PgBouncer, and tags belong to the shared `Database`, not to each logical database.
 
@@ -65,11 +69,10 @@ sequenceDiagram
     Operator->>ASO: creates PostgreSQL server using existing network refs
     ASO->>Postgres: provisions private-access server
 
-    Note over Requester,Postgres: Tenant database
-    Requester->>DesiredState: submits LogicalDatabase with serverRef
+    Note over Requester,Postgres: Logical database
+    Requester->>DesiredState: submits LogicalDatabase with server
     DesiredState->>Operator: applies LogicalDatabase
     Operator->>DesiredState: reads referenced shared Database
-    Operator->>Operator: derives names
     Operator->>Postgres: creates database, user, and grants
     Operator-->>DesiredState: updates status
 
@@ -84,17 +87,15 @@ Example:
 apiVersion: storage.dis.altinn.cloud/v1alpha1
 kind: LogicalDatabase
 metadata:
-  name: tenant123-dev-app-db
+  name: router
+  namespace: product-myproduct
 spec:
-  serverRef:
-    name: shared-postgres-dev
-  databaseKey: app-db
-  tenant:
-    id: tenant123
-    environment: dev
+  name: router
+  server:
+    name: myproduct-dev
   access:
     app:
-      name: my-app-tenant123-dev
+      name: myproduct-router-dev
       principalId: "<app-entra-object-id>"
     owner:
       name: my-team-db-owners
@@ -102,15 +103,15 @@ spec:
   deletionPolicy: Retain
 ```
 
-The resource is generic. It uses `tenant.id`, not any product, system, or organization-specific term.
+The example above creates a PostgreSQL database named `router` on the shared `Database` named `myproduct-dev`.
 
 The `LogicalDatabase` manifest may be delivered to adminservices by GitOps, `azapi`, or another onboarding flow. That delivery flow is out of scope here.
 
 When `dis-pgsql` reconciles it, it:
 
-1. reads `spec.serverRef.name`
+1. reads `spec.server.name`
 2. validates that it points to a shared `Database` in the same namespace
-3. validates tenant and identity values
+3. validates `spec.name` and identity values
 4. creates the PostgreSQL database
 5. creates or maps the app Entra principal and owner Entra group, and grants access
 6. writes status
@@ -127,14 +128,12 @@ This RFC also expects `Database` CRD changes:
 - keep delegated-subnet networking as the default
 - add an explicit shared mode
 - make shared mode consume existing private access network references
-- do not add tenant database fields to `Database`
+- do not add logical database fields to `Database`
 
 Important spec fields:
 
-- `serverRef.name`: same-namespace shared `Database`.
-- `databaseKey`: short database purpose.
-- `tenant.id`: stable tenant id.
-- `tenant.environment`: environment.
+- `name`: PostgreSQL database name inside the selected shared server. It must be unique per shared server.
+- `server.name`: same-namespace shared `Database`.
 - `access.app`: runtime app Entra principal name and object id (`principalId`).
 - `access.owner`: owner/team Entra group name and object id (`principalId`).
 - `deletionPolicy`: defaults to `Retain`.
@@ -156,11 +155,11 @@ For a shared `Database`, `dis-pgsql` creates and updates the database server thr
 
 It does not create tenant VNet peering or private DNS links in v1.
 
-For a `LogicalDatabase`, the request describes the logical database and identity access. The operator resolves the same-namespace `serverRef` and derives the database name.
+For a `LogicalDatabase`, the request describes the database name, app identity access, and selected shared server. The operator resolves the same-namespace `server`, validates that it points to a shared `Database`, and uses `spec.name` as the database name.
 
 The operator creates or updates:
 
-- ASO resource for the `LogicalDatabase`
+- ASO `FlexibleServersDatabase` resource for the `LogicalDatabase`, with `spec.azureName` set to `LogicalDatabase.spec.name`
 - a user provisioning job for Entra app and owner-group grants
 
 The existing direct database provisioning pattern should be reused and extended.
@@ -183,7 +182,7 @@ The database server is created in a delegated subnet in an admin multitenant DBs
 
 `dis-pgsql` does not create the peering or private DNS links for this mode. Those are tenant infrastructure prerequisites and can stay in Terraform or equivalent automation.
 
-This is closest to the current `dis-pgsql` model. It also avoids one private endpoint per tenant or per logical database.
+This is closest to the current `dis-pgsql` model. It also avoids one private endpoint per product app or per logical database.
 
 The shared `Database` should reference or be configured with the existing delegated subnet and private DNS zone needed for private access.
 
@@ -207,7 +206,7 @@ Deleting a `LogicalDatabase` resource must not drop the database by default. Sha
 
 A shared `Database` uses existing private access network prerequisites. It does not create network resources per `LogicalDatabase`.
 
-Multiple shared `Database` resources may exist in the same namespace. `LogicalDatabase.spec.serverRef.name` selects the target.
+Multiple shared `Database` resources may exist in the same namespace. `LogicalDatabase.spec.server.name` selects the target.
 
 Both APIs can exist side by side:
 
@@ -218,25 +217,27 @@ Both APIs can exist side by side:
 [drawbacks]: #drawbacks
 
 - Shared `Database` resources depend on Terraform or equivalent automation creating network prerequisites first.
-- Shared `Database` resources need capacity planning and tenant isolation discipline.
+- Shared `Database` resources need capacity planning and logical database isolation discipline.
 - Backup, HA, PgBouncer, and failover are server-level decisions.
-- Per-tenant restore and cleanup are harder than deleting a dedicated server.
+- Per-logical-database restore and cleanup are harder than deleting a dedicated server.
 
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
 
-This keeps `Database` focused on PostgreSQL servers and puts tenant databases in their own resource.
+This keeps `Database` focused on PostgreSQL servers and puts app-level logical databases in their own resource.
 
 Alternatives:
 
-- Put tenant database fields on `Database`: rejected because one kind would mean two very different things.
+- Put logical database fields on `Database`: rejected because one kind would mean two very different things.
 - Manage logical databases outside DIS: rejected because this should be a DIS database API.
 - Let "tenant" clusters create shared databases directly: possible, but spreads shared `Database` authority too widely.
 - Derive the target `Database` from operator config: rejected because the operator must support multiple shared `Database` resources.
+- Ask users for `tenant`, `databaseKey`, `product`, or `component` fields on each `LogicalDatabase`: rejected because these are not needed to create a PostgreSQL database inside a selected shared server.
+- Derive database names from product, environment, app, and an operator suffix: rejected because PostgreSQL users should be able to choose the actual database name and resolve same-server naming conflicts explicitly.
 - Create private endpoints per logical database: rejected because connectivity is shared `Database` infrastructure.
 - Let `dis-pgsql` own tenant VNet peering and private DNS links: possible later, but v1 keeps those prerequisites in Terraform or equivalent infrastructure automation.
 - Use one shared Private Endpoint per `Database`: possible later if the platform chooses that connectivity model.
-- Keep one server per tenant: simplest isolation, but too costly and heavy for multitenant use cases.
+- Keep one server per product app: simplest isolation, but too costly and heavy for multitenant use cases.
 
 # Prior art
 [prior-art]: #prior-art
@@ -251,10 +252,10 @@ Alternatives:
 
 - Which ASO API versions should back `Database` and `LogicalDatabase` reconciliation?
 - What is the minimum Azure RBAC needed for admin ASO?
-- Which tenant-side fields are required for safe validation?
+- Should `Database.spec.serverType` remain the environment source for logical database naming, or should environment and server profile become separate fields?
 - Should status be copied back to workload clusters and how?
 - What is the long-term cleanup process for retained databases?
-- What are the shared `Database` profiles for tenant count, PgBouncer, HA, backup, and storage?
+- What are the shared `Database` profiles for logical database count, PgBouncer, HA, backup, and storage?
 
 # Future possibilities
 [future-possibilities]: #future-possibilities
