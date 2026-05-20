@@ -52,7 +52,7 @@ permissions:
 jobs:
   plan:
     name: Plan
-    environment: prod
+    environment: reader
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
