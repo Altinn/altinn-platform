@@ -24,12 +24,17 @@ const (
 	// DefaultDatabaseAzureName is the default database name used per cluster.
 	DefaultDatabaseAzureName = "default"
 
-	clusterKubernetesSuffix     = "cluster"
-	databaseKubernetesSuffix    = "db"
-	privateEndpointSuffix       = "pe"
-	privateDNSZoneGroupSuffix   = "pdzg"
-	dnsZoneVNetLinkBaseName     = "aks-link"
-	privateEndpointConnectionID = "redis-enterprise"
+	clusterKubernetesSuffix   = "cluster"
+	databaseKubernetesSuffix  = "db"
+	privateEndpointSuffix     = "pe"
+	privateDNSZoneGroupSuffix = "pdzg"
+	dnsZoneVNetLinkBaseName   = "aks-link"
+
+	// privateLinkGroupID is the Azure subresource ID for a Redis Enterprise private endpoint.
+	privateLinkGroupID = "redisEnterprise"
+
+	// privateDnsZoneConfigName is the per-CR config name within the PrivateEndpointsPrivateDnsZoneGroup.
+	privateDnsZoneConfigName = "redis"
 )
 
 // ClusterKubernetesName returns the Kubernetes name used for the ASO RedisEnterprise CR.
@@ -187,7 +192,7 @@ func BuildPrivateEndpoint(r *redisv1alpha1.Redis, cfg config.OperatorConfig, clu
 	location := cfg.Location
 	connName := PrivateEndpointKubernetesName(r.Name)
 
-	groupID := "redisEnterprise"
+	groupID := privateLinkGroupID
 	pe := &pev1.PrivateEndpoint{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      PrivateEndpointKubernetesName(r.Name),
@@ -224,6 +229,51 @@ func BuildPrivateEndpoint(r *redisv1alpha1.Redis, cfg config.OperatorConfig, clu
 	return pe, nil
 }
 
+// SharedPrivateDNSZoneARMID returns the ARM ID of the shared privatelink.redis.azure.net zone.
+func SharedPrivateDNSZoneARMID(cfg config.OperatorConfig) string {
+	return fmt.Sprintf(
+		"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/privateDnsZones/%s",
+		cfg.SubscriptionID,
+		cfg.DNSZoneResourceGroup,
+		RedisPrivateLinkZoneName,
+	)
+}
+
+// BuildPrivateDnsZoneGroup returns the desired PrivateEndpointsPrivateDnsZoneGroup binding the PE
+// A-record into the shared privatelink.redis.azure.net zone.
+func BuildPrivateDnsZoneGroup(r *redisv1alpha1.Redis, cfg config.OperatorConfig) (*pev1.PrivateEndpointsPrivateDnsZoneGroup, error) {
+	if r == nil {
+		return nil, fmt.Errorf("redis must not be nil")
+	}
+
+	configName := privateDnsZoneConfigName
+	zoneARMID := SharedPrivateDNSZoneARMID(cfg)
+
+	return &pev1.PrivateEndpointsPrivateDnsZoneGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      PrivateDNSZoneGroupKubernetesName(r.Name),
+			Namespace: r.Namespace,
+			Labels: map[string]string{
+				ManagedResourceOwnerLabel: r.Name,
+			},
+		},
+		Spec: pev1.PrivateEndpointsPrivateDnsZoneGroup_Spec{
+			AzureName: PrivateDNSZoneGroupKubernetesName(r.Name),
+			Owner: &genruntime.KnownResourceReference{
+				Name: PrivateEndpointKubernetesName(r.Name),
+			},
+			PrivateDnsZoneConfigs: []pev1.PrivateDnsZoneConfig{
+				{
+					Name: &configName,
+					PrivateDnsZoneReference: &genruntime.ResourceReference{
+						ARMID: zoneARMID,
+					},
+				},
+			},
+		},
+	}, nil
+}
+
 // BuildSharedPrivateDNSZone returns the desired shared privatelink.redis.azure.net zone.
 func BuildSharedPrivateDNSZone(namespace string, cfg config.OperatorConfig) *networkv1.PrivateDnsZone {
 	loc := "global"
@@ -240,6 +290,9 @@ func BuildSharedPrivateDNSZone(namespace string, cfg config.OperatorConfig) *net
 			Location:  &loc,
 			Owner: &genruntime.KnownResourceReference{
 				ARMID: fmt.Sprintf("/subscriptions/%s/resourceGroups/%s", cfg.SubscriptionID, cfg.DNSZoneResourceGroup),
+			},
+			Tags: map[string]string{
+				ManagedByTagKey: ManagedByValue,
 			},
 		},
 	}
@@ -269,6 +322,9 @@ func BuildSharedVNetLink(namespace string, cfg config.OperatorConfig) *networkv1
 				Reference: &genruntime.ResourceReference{
 					ARMID: cfg.AKSVNetID,
 				},
+			},
+			Tags: map[string]string{
+				ManagedByTagKey: ManagedByValue,
 			},
 		},
 	}

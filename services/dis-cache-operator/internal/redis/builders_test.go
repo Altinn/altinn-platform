@@ -131,6 +131,35 @@ func TestBuildPrivateEndpoint(t *testing.T) {
 	}
 }
 
+func TestBuildPrivateDnsZoneGroup(t *testing.T) {
+	t.Parallel()
+
+	r := testRedis()
+	r.Name = testRedisName
+	r.Namespace = testNamespace
+
+	group, err := BuildPrivateDnsZoneGroup(r, testConfig())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if group.Spec.Owner == nil || group.Spec.Owner.Name != PrivateEndpointKubernetesName(testRedisName) {
+		t.Fatalf("expected owner to reference the PE, got %#v", group.Spec.Owner)
+	}
+	if len(group.Spec.PrivateDnsZoneConfigs) != 1 {
+		t.Fatalf("expected exactly one zone config, got %d", len(group.Spec.PrivateDnsZoneConfigs))
+	}
+	cfg := group.Spec.PrivateDnsZoneConfigs[0]
+	if cfg.PrivateDnsZoneReference == nil || cfg.PrivateDnsZoneReference.ARMID == "" {
+		t.Fatalf("expected ARM ID reference to the shared zone, got %#v", cfg.PrivateDnsZoneReference)
+	}
+	if cfg.PrivateDnsZoneReference.ARMID != SharedPrivateDNSZoneARMID(testConfig()) {
+		t.Fatalf("expected ARM ID %q, got %q", SharedPrivateDNSZoneARMID(testConfig()), cfg.PrivateDnsZoneReference.ARMID)
+	}
+	if group.Labels[ManagedResourceOwnerLabel] != testRedisName {
+		t.Fatalf("expected owner label on zone group")
+	}
+}
+
 func TestBuildSharedPrivateDNSZone(t *testing.T) {
 	t.Parallel()
 

@@ -50,6 +50,8 @@ type RedisReconciler struct {
 // ASO: Network
 // +kubebuilder:rbac:groups=network.azure.com,resources=privateendpoints,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=network.azure.com,resources=privateendpoints/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=network.azure.com,resources=privateendpointsprivatednszonegroups,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=network.azure.com,resources=privateendpointsprivatednszonegroups/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=network.azure.com,resources=privatednszones,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=network.azure.com,resources=privatednszones/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=network.azure.com,resources=privatednszonesvirtualnetworklinks,verbs=get;list;watch;create;update;patch;delete
@@ -121,6 +123,14 @@ func (r *RedisReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		if err := r.ensureSharedPrivateDNS(ctx, &redisObj); err != nil {
 			return ctrl.Result{}, err
 		}
+
+		desiredZoneGroup, err := redispkg.BuildPrivateDnsZoneGroup(&redisObj, r.Config)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if err := r.upsertPrivateDnsZoneGroup(ctx, &redisObj, desiredZoneGroup); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	cluster, clusterReady, err = r.getCurrentCluster(ctx, &redisObj)
@@ -179,6 +189,7 @@ func (r *RedisReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&cachev1.RedisEnterprise{}).
 		Owns(&cachev1.RedisEnterpriseDatabase{}).
 		Owns(&pev1.PrivateEndpoint{}).
+		Owns(&pev1.PrivateEndpointsPrivateDnsZoneGroup{}).
 		Watches(&identityv1alpha1.ApplicationIdentity{}, handler.EnqueueRequestsFromMapFunc(r.mapApplicationIdentityToRedises)).
 		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(r.mapServiceAccountToRedises)).
 		WithOptions(controller.Options{
@@ -215,6 +226,19 @@ func (r *RedisReconciler) upsertDatabase(ctx context.Context, owner *redisv1alph
 
 func (r *RedisReconciler) upsertPrivateEndpoint(ctx context.Context, owner *redisv1alpha1.Redis, desired *pev1.PrivateEndpoint) error {
 	current := &pev1.PrivateEndpoint{}
+	current.SetName(desired.GetName())
+	current.SetNamespace(desired.GetNamespace())
+
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, current, func() error {
+		current.Labels = mergeStringMaps(current.Labels, desired.Labels)
+		current.Spec = desired.Spec
+		return ctrl.SetControllerReference(owner, current, r.Scheme)
+	})
+	return err
+}
+
+func (r *RedisReconciler) upsertPrivateDnsZoneGroup(ctx context.Context, owner *redisv1alpha1.Redis, desired *pev1.PrivateEndpointsPrivateDnsZoneGroup) error {
+	current := &pev1.PrivateEndpointsPrivateDnsZoneGroup{}
 	current.SetName(desired.GetName())
 	current.SetNamespace(desired.GetNamespace())
 
@@ -294,7 +318,22 @@ func (r *RedisReconciler) getSharedDNSReady(ctx context.Context, redisObj *redis
 		}
 		return redispkg.ASOReadyCondition{}, err
 	}
-	return redispkg.FromASOConditions(link.Status.Conditions), nil
+	linkReady := redispkg.FromASOConditions(link.Status.Conditions)
+	if !linkReady.Found || linkReady.Status != metav1.ConditionTrue {
+		return linkReady, nil
+	}
+
+	group := &pev1.PrivateEndpointsPrivateDnsZoneGroup{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Name:      redispkg.PrivateDNSZoneGroupKubernetesName(redisObj.Name),
+		Namespace: redisObj.Namespace,
+	}, group); err != nil {
+		if apierrors.IsNotFound(err) {
+			return redispkg.ASOReadyCondition{}, nil
+		}
+		return redispkg.ASOReadyCondition{}, err
+	}
+	return redispkg.FromASOConditions(group.Status.Conditions), nil
 }
 
 func setStatusCondition(redisObj *redisv1alpha1.Redis, condition metav1.Condition) bool {

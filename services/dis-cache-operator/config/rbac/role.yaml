@@ -48,6 +48,7 @@ rules:
   - privatednszones
   - privatednszonesvirtualnetworklinks
   - privateendpoints
+  - privateendpointsprivatednszonegroups
   verbs:
   - create
   - delete
@@ -62,6 +63,7 @@ rules:
   - privatednszones/status
   - privatednszonesvirtualnetworklinks/status
   - privateendpoints/status
+  - privateendpointsprivatednszonegroups/status
   verbs:
   - get
   - patch

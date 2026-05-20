@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	redisv1alpha1 "github.com/Altinn/altinn-platform/services/dis-cache-operator/api/v1alpha1"
+	k8sutil "github.com/Altinn/altinn-platform/services/dis-cache-operator/internal/k8s"
 	redispkg "github.com/Altinn/altinn-platform/services/dis-cache-operator/internal/redis"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -14,7 +15,8 @@ import (
 
 // ensureSharedPrivateDNS get-or-creates the shared privatelink.redis.azure.net zone and AKS VNet link.
 // These are shared across all Redis CRs and are NOT owner-referenced to any single CR — instead they are
-// label-managed via redis.dis.altinn.cloud/managed-by=dis-cache-operator.
+// label-managed via redis.dis.altinn.cloud/managed-by=dis-cache-operator. Spec/label drift on existing
+// resources is reconciled on each pass, mirroring the dis-pgsql-operator DNS reconciliation pattern.
 func (r *RedisReconciler) ensureSharedPrivateDNS(ctx context.Context, redisObj *redisv1alpha1.Redis) error {
 	logger := log.FromContext(ctx).WithValues("redis", types.NamespacedName{Namespace: redisObj.Namespace, Name: redisObj.Name})
 
@@ -33,6 +35,15 @@ func (r *RedisReconciler) ensureSharedDNSZone(ctx context.Context, namespace str
 	current := &networkv1.PrivateDnsZone{}
 	err := r.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: namespace}, current)
 	if err == nil {
+		labels, updated := k8sutil.SyncSpecAndLabels(&current.Spec, desired.Spec, current.Labels, desired.Labels)
+		if !updated {
+			return nil
+		}
+		current.Labels = labels
+		logger.Info("updating shared private DNS zone", "zoneName", desired.Name, "namespace", namespace)
+		if err := r.Update(ctx, current); err != nil {
+			return fmt.Errorf("update PrivateDnsZone %s/%s: %w", namespace, desired.Name, err)
+		}
 		return nil
 	}
 	if !apierrors.IsNotFound(err) {
@@ -55,6 +66,15 @@ func (r *RedisReconciler) ensureSharedVNetLink(ctx context.Context, namespace st
 	current := &networkv1.PrivateDnsZonesVirtualNetworkLink{}
 	err := r.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: namespace}, current)
 	if err == nil {
+		labels, updated := k8sutil.SyncSpecAndLabels(&current.Spec, desired.Spec, current.Labels, desired.Labels)
+		if !updated {
+			return nil
+		}
+		current.Labels = labels
+		logger.Info("updating shared private DNS VNet link", "linkName", desired.Name, "namespace", namespace)
+		if err := r.Update(ctx, current); err != nil {
+			return fmt.Errorf("update PrivateDnsZonesVirtualNetworkLink %s/%s: %w", namespace, desired.Name, err)
+		}
 		return nil
 	}
 	if !apierrors.IsNotFound(err) {

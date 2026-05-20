@@ -7,4 +7,6 @@ const (
 	ManagedByLabel = "redis.dis.altinn.cloud/managed-by"
 	// ManagedByValue is the canonical operator identifier.
 	ManagedByValue = "dis-cache-operator"
+	// ManagedByTagKey is the Azure tag key used on shared resources to identify the managing operator.
+	ManagedByTagKey = "managed-by"
 )
