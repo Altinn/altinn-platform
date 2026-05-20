@@ -73,7 +73,7 @@ tidy: ## Run go mod tidy.
 .PHONY: verify-deps
 verify-deps: ## Verify go.mod/go.sum resolve from a clean module cache.
 	@tmp_modcache="$$(mktemp -d)"; \
-	trap 'rm -rf "$$tmp_modcache"' EXIT INT TERM; \
+	trap 'chmod -R u+w "$$tmp_modcache" 2>/dev/null; rm -rf "$$tmp_modcache"' EXIT INT TERM; \
 	echo "Verifying module pins with clean module cache: $$tmp_modcache"; \
 	GOWORK=off GOFLAGS=-mod=readonly GOMODCACHE="$$tmp_modcache" go mod download
 
