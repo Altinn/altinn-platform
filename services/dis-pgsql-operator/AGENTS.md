@@ -24,6 +24,9 @@
 - Unit tests: `make test-cache`
 - Build manager binary: `make build-cache`
 
+For agent runs, use the `*-cache` targets for verification commands so
+checks stay sandbox-friendly and use the repository's local tooling setup.
+
 ## Required verification for code changes
 If you modify any files under:
 - `api/**`, `cmd/**`, `internal/**`, `test/**`, `config/**`
