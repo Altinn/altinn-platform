@@ -1,6 +1,6 @@
-# Add dis-redis-operator (RFC 0014) — self-service Azure Managed Redis
+# Add dis-cache-operator (RFC 0014) — self-service Azure Managed Redis
 
-This PR scaffolds a new operator, `dis-redis-operator`, that reconciles a `Redis` CR into Azure Managed Redis (`Microsoft.Cache/redisEnterprise`) via Azure Service Operator. It mirrors the proven patterns from `dis-vault-operator` (single-resource-per-CR, federated-identity-owned) and `dis-pgsql-operator` (private endpoint + shared private DNS + AKS VNet link).
+This PR scaffolds a new operator, `dis-cache-operator`, that reconciles a `Redis` CR into Azure Managed Redis (`Microsoft.Cache/redisEnterprise`) via Azure Service Operator. It mirrors the proven patterns from `dis-vault-operator` (single-resource-per-CR, federated-identity-owned) and `dis-pgsql-operator` (private endpoint + shared private DNS + AKS VNet link).
 
 See [RFC 0014](rfcs/0014-self-service-managed-redis.md) for the full design.
 
@@ -44,7 +44,7 @@ See [RFC 0014](rfcs/0014-self-service-managed-redis.md) for the full design.
                              │                  │
                              ▼                  │
             ┌────────────────────────────┐      │
-            │ dis-redis-operator         │      │
+            │ dis-cache-operator         │      │
             └─────┬───────────┬──────────┘      │
                   │           │                 │
        owns: ┌────▼───┐  ┌────▼──────┐          │

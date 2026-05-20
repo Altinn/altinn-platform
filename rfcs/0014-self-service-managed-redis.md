@@ -7,7 +7,7 @@
 
 # Summary
 
-This RFC proposes a new Kubernetes operator, `dis-redis-operator`, that provides self-service Azure Managed Redis (`Microsoft.Cache/redisEnterprise`) provisioning for DIS applications. App teams declare a `Redis` custom resource in Kubernetes, and the operator reconciles it into Azure resources through Azure Service Operator (ASO). The proposal is opinionated: one Redis Enterprise cluster + one database per CR, Entra-only data-plane authentication via federated identity, and private-endpoint-only network access with a shared private DNS zone linked to the AKS VNet. No shared access keys are exposed to workloads.
+This RFC proposes a new Kubernetes operator, `dis-cache-operator`, that provides self-service Azure Managed Redis (`Microsoft.Cache/redisEnterprise`) provisioning for DIS applications. App teams declare a `Redis` custom resource in Kubernetes, and the operator reconciles it into Azure resources through Azure Service Operator (ASO). The proposal is opinionated: one Redis Enterprise cluster + one database per CR, Entra-only data-plane authentication via federated identity, and private-endpoint-only network access with a shared private DNS zone linked to the AKS VNet. No shared access keys are exposed to workloads.
 
 # Motivation
 
@@ -138,7 +138,7 @@ Application code connects to the cache over TLS on port 10000, using an Entra-aw
 
 `dis-pgsql-operator` uses a per-instance private DNS zone (`{db-name}.private.postgres.database.azure.com`), which works because PG Flexible Server supports BYO-DNS. Azure Managed Redis does not: the private endpoint CNAME chain hard-codes `<cluster>.<region>.privatelink.redis.azure.net` as the target, so the zone literally has to be named `privatelink.redis.azure.net` for resolution to work. Splitting it per-CR would break DNS resolution.
 
-The operator therefore uses an idempotent get-or-create for the zone + VNet link, identified by a `redis.dis.altinn.cloud/managed-by=dis-redis-operator` label rather than an owner-ref. The per-instance `privateEndpoint` and `privateDnsZoneGroup` keep their owner-refs to the `Redis` CR, so deletion cascades correctly for those.
+The operator therefore uses an idempotent get-or-create for the zone + VNet link, identified by a `redis.dis.altinn.cloud/managed-by=dis-cache-operator` label rather than an owner-ref. The per-instance `privateEndpoint` and `privateDnsZoneGroup` keep their owner-refs to the `Redis` CR, so deletion cascades correctly for those.
 
 ## Reconciliation flow
 
@@ -146,7 +146,7 @@ The operator therefore uses an idempotent get-or-create for the zone + VNet link
 sequenceDiagram
 participant dev as App Team
 participant kapi as Kubernetes API
-participant redisop as dis-redis-operator
+participant redisop as dis-cache-operator
 participant aso as Azure Service Operator
 participant azure as Azure Redis/Network/RBAC
 
