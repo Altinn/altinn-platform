@@ -23,3 +23,9 @@ variable "host_ip" {
   type        = string
   description = "Host IP address for Key Vault IP rules"
 }
+
+variable "container_apps_managers" {
+  type        = list(string)
+  description = "Object IDs of users and groups allowed to manage deployed Container Apps infrastructure"
+  default     = []
+}

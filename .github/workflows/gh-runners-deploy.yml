@@ -39,7 +39,7 @@ on:
 
 env:
   ENVIRONMENT: prod
-  TF_STATE_NAME: gh-runners.tfstate
+  TF_STATE_NAME: altinn-org-gh-runners.tfstate
   TF_PROJECT: ./infrastructure/gh-runners
   ARM_CLIENT_ID: ${{ secrets.TF_AZURE_CLIENT_ID }}
   ARM_SUBSCRIPTION_ID: d43d5057-8389-40d5-88c4-04db9275cbf2
