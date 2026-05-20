@@ -1,3 +1,8 @@
+import {
+  to = azurerm_resource_group.gh_runners
+  id = "/subscriptions/d43d5057-8389-40d5-88c4-04db9275cbf2/resourceGroups/altinn-org-gh-runners"
+}
+
 resource "azurerm_resource_group" "gh_runners" {
   name     = "altinn-org-gh-runners"
   location = "norwayeast"
