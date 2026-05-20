@@ -145,18 +145,16 @@ var _ = Describe("Database controller", func() {
 	}
 
 	ensureNamespace := func(ctx context.Context, namespace string) {
-		var nsObject corev1.Namespace
-		err := k8sClient.Get(ctx, types.NamespacedName{Name: namespace}, &nsObject)
-		if apierrors.IsNotFound(err) {
-			nsObject = corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: namespace,
-				},
-			}
-			Expect(k8sClient.Create(ctx, &nsObject)).To(Succeed())
-			return
+		nsObject := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespace,
+			},
 		}
-		Expect(err).NotTo(HaveOccurred())
+		if err := k8sClient.Create(ctx, nsObject); apierrors.IsAlreadyExists(err) {
+			return
+		} else {
+			Expect(err).NotTo(HaveOccurred())
+		}
 	}
 
 	waitForProvisionJob := func(ctx context.Context, dbName, namespace string) batchv1.Job {
