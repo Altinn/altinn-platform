@@ -43,6 +43,7 @@ env:
   TF_PROJECT: ./infrastructure/gh-runners
   ARM_CLIENT_ID: ${{ secrets.TF_AZURE_CLIENT_ID }}
   ARM_SUBSCRIPTION_ID: d43d5057-8389-40d5-88c4-04db9275cbf2
+  ARM_TENANT_ID: cd0026d8-283b-4a55-9bfa-d0ef4a8ba21c
 
 permissions:
   id-token: write
@@ -79,8 +80,17 @@ jobs:
           tf_state_name: ${{ env.TF_STATE_NAME }}
           gh_token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Login to Azure
+        if: always()
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3
+        with:
+          client-id: ${{ env.ARM_CLIENT_ID }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
+          subscription-id: ${{ env.ARM_SUBSCRIPTION_ID }}
+
       - name: Remove Runner IP from Key Vault Whitelist
         if: always()
+        continue-on-error: true
         uses: azure/CLI@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3.0.0
         with:
           inlineScript: |
@@ -121,6 +131,14 @@ jobs:
           arm_client_id: ${{ env.ARM_CLIENT_ID }}
           arm_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
           tf_state_name: ${{ env.TF_STATE_NAME }}
+
+      - name: Login to Azure
+        if: always()
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3
+        with:
+          client-id: ${{ env.ARM_CLIENT_ID }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
+          subscription-id: ${{ env.ARM_SUBSCRIPTION_ID }}
 
       - name: Remove Runner IP from Key Vault Whitelist
         if: always()

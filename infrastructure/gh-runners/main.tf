@@ -9,6 +9,18 @@ resource "azurerm_resource_group" "gh_runners" {
   tags     = local.tags
 }
 
+resource "azurerm_role_assignment" "terraform_reader_kv_secrets" {
+  scope                = azurerm_resource_group.gh_runners.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = var.terraform_reader_principal_id
+}
+
+resource "azurerm_role_assignment" "terraform_reader_kv_contributor" {
+  scope                = azurerm_resource_group.gh_runners.id
+  role_definition_name = "Key Vault Contributor"
+  principal_id         = var.terraform_reader_principal_id
+}
+
 resource "azurerm_role_assignment" "container_apps_managers" {
   for_each             = toset(var.container_apps_managers)
   scope                = azurerm_resource_group.gh_runners.id

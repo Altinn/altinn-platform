@@ -29,3 +29,8 @@ variable "container_apps_managers" {
   description = "Object IDs of users and groups allowed to manage deployed Container Apps infrastructure"
   default     = []
 }
+
+variable "terraform_reader_principal_id" {
+  type        = string
+  description = "Object ID of the service principal used for Terraform plan (reader environment)"
+}
