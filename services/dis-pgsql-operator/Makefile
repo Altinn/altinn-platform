@@ -7,6 +7,8 @@ KIND_IMAGE_ARCHIVE := bin/dis-pgsql-operator_image.tar
 # Local Go cache settings for CI check runs
 CACHE_DIR ?= $(CURDIR)/.cache
 GOCACHE ?= $(CACHE_DIR)/go-build
+GOLANGCI_LINT_CACHE ?= $(CACHE_DIR)/golangci-lint
+CACHE_GOWORK ?= off
 WORKSPACE_ROOT ?= $(abspath $(CURDIR)/../..)
 
 # Operator config test defaults
@@ -101,11 +103,16 @@ CACHE_TARGETS := run-checks-ci
 .PHONY: cache-setup
 cache-setup:
 	@mkdir -p "$(GOCACHE)"
+	@mkdir -p "$(GOLANGCI_LINT_CACHE)"
 
 $(CACHE_TARGETS): export GOCACHE := $(GOCACHE)
+$(CACHE_TARGETS): export GOLANGCI_LINT_CACHE := $(GOLANGCI_LINT_CACHE)
+$(CACHE_TARGETS): export GOWORK := $(CACHE_GOWORK)
 $(CACHE_TARGETS): cache-setup
 
 %-cache: export GOCACHE := $(GOCACHE)
+%-cache: export GOLANGCI_LINT_CACHE := $(GOLANGCI_LINT_CACHE)
+%-cache: export GOWORK := $(CACHE_GOWORK)
 %-cache: cache-setup
 	$(MAKE) $*
 
