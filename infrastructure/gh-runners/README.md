@@ -19,7 +19,7 @@ Add Azure AD object IDs (users or groups) to `terraform.tfvars` under `container
 
 ## Deployment
 
-Triggered automatically via [gh-runners-deploy.yml](../../.github/workflows/gh-runners-deploy.yml) on changes to this directory or the shared module.
+Triggered automatically via [altinn-org-gh-runners-deploy.yml](../../.github/workflows/altinn-org-gh-runners-deploy.yml) on changes to this directory or the shared module.
 
 Required GitHub secrets/variables:
 

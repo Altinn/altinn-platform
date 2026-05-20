@@ -1,4 +1,4 @@
-name: GitHub Runners
+name: Altinn Org GitHub Runners
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -9,7 +9,7 @@ on:
     branches:
       - main
     paths:
-      - .github/workflows/gh-runners-deploy.yml
+      - .github/workflows/altinn-org-gh-runners-deploy.yml
       - actions/terraform/apply/**
       - actions/terraform/plan/**
       - infrastructure/gh-runners/**
@@ -18,7 +18,7 @@ on:
     branches:
       - main
     paths:
-      - .github/workflows/gh-runners-deploy.yml
+      - .github/workflows/altinn-org-gh-runners-deploy.yml
       - actions/terraform/apply/**
       - actions/terraform/plan/**
       - infrastructure/gh-runners/**
@@ -52,7 +52,7 @@ permissions:
 jobs:
   plan:
     name: Plan
-    environment: reader
+    environment: prod
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
