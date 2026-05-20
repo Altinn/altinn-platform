@@ -78,10 +78,6 @@ spec:
                 - app
                 - owner
                 type: object
-              databaseKey:
-                description: databaseKey is a short database purpose key.
-                minLength: 1
-                type: string
               deletionPolicy:
                 default: Retain
                 description: |-
@@ -90,8 +86,16 @@ spec:
                 enum:
                 - Retain
                 type: string
-              serverRef:
-                description: serverRef points to a same-namespace shared Database.
+              name:
+                description: |-
+                  name is the PostgreSQL database name to create inside the shared server.
+                  It must be unique per shared server.
+                maxLength: 63
+                minLength: 1
+                type: string
+              server:
+                description: server identifies the same-namespace shared Database
+                  server.
                 properties:
                   name:
                     description: name is the same-namespace Database resource to use
@@ -101,26 +105,10 @@ spec:
                 required:
                 - name
                 type: object
-              tenant:
-                description: tenant identifies the tenant that owns this logical database.
-                properties:
-                  environment:
-                    description: environment is the tenant environment.
-                    minLength: 1
-                    type: string
-                  id:
-                    description: id is the stable tenant identifier.
-                    minLength: 1
-                    type: string
-                required:
-                - environment
-                - id
-                type: object
             required:
             - access
-            - databaseKey
-            - serverRef
-            - tenant
+            - name
+            - server
             type: object
           status:
             description: status defines the observed state of LogicalDatabase.
@@ -187,9 +175,8 @@ spec:
                 - type
                 x-kubernetes-list-type: map
               databaseName:
-                description: |-
-                  databaseName is the PostgreSQL database name derived by the operator.
-                  It is populated in a later reconciliation slice.
+                description: databaseName is the PostgreSQL database name managed
+                  by the operator.
                 type: string
               host:
                 description: |-

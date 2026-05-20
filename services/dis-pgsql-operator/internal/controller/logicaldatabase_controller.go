@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -28,8 +29,12 @@ const (
 	logicalDatabaseValidationReasonNotFound      = "NotFound"
 	logicalDatabaseValidationReasonNotShared     = "NotShared"
 	logicalDatabaseValidationReasonUnsupported   = "Unsupported"
+	logicalDatabaseValidationReasonInvalid       = "Invalid"
+	logicalDatabaseValidationReasonConflict      = "Conflict"
 	logicalDatabaseValidationReasonImmutable     = "Immutable"
-	logicalDatabaseValidationFieldServerRefName  = "spec.serverRef.name"
+	logicalDatabaseValidationFieldMetadataName   = "metadata.name"
+	logicalDatabaseValidationFieldSpecName       = "spec.name"
+	logicalDatabaseValidationFieldServerName     = "spec.server.name"
 	logicalDatabaseValidationFieldDeletionPolicy = "spec.deletionPolicy"
 	logicalDatabaseValidationFieldDatabaseName   = "status.databaseName"
 )
@@ -67,7 +72,7 @@ func (r *LogicalDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	original := logicalDatabase.DeepCopy()
-	validationErrors, err := r.validateLogicalDatabase(ctx, &logicalDatabase)
+	validationErrors, databaseName, err := r.validateLogicalDatabase(ctx, &logicalDatabase)
 	if err != nil {
 		logger.Error(err, "failed to validate LogicalDatabase")
 		return ctrl.Result{}, err
@@ -84,94 +89,104 @@ func (r *LogicalDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			"LogicalDatabase validation failed",
 		)
 	} else {
-		databaseName := dbUtil.DeriveLogicalDatabaseName(
-			logicalDatabase.Spec.Tenant.ID,
-			logicalDatabase.Spec.Tenant.Environment,
-			logicalDatabase.Spec.DatabaseKey,
-		)
-		logicalDatabase.Status.DatabaseName = databaseName
-
-		if err := r.ensureFlexibleServersDatabase(ctx, &logicalDatabase); err != nil {
-			logger.Error(err, "failed to ensure FlexibleServersDatabase for LogicalDatabase")
-			return ctrl.Result{}, err
-		}
-
-		ready, host, err := r.logicalDatabaseReady(ctx, logger, &logicalDatabase)
-		if err != nil {
-			logger.Error(err, "failed to check LogicalDatabase readiness")
-			return ctrl.Result{}, err
-		}
-		if ready {
-			logicalDatabase.Status.Host = host
-			logicalDatabase.Status.Port = logicalDatabasePort
-			setLogicalDatabaseCondition(
-				&logicalDatabase,
-				logicalDatabaseConditionDatabaseReady,
-				metav1.ConditionTrue,
-				logicalDatabaseReasonDatabaseReady,
-				"Logical database is ready",
-			)
-
-			accessReady, accessReason, accessMessage, err := r.ensureLogicalDatabaseAccess(ctx, logger, &logicalDatabase)
-			if err != nil {
-				logger.Error(err, "failed to ensure LogicalDatabase access")
+		if err := r.ensureFlexibleServersDatabase(ctx, &logicalDatabase, databaseName); err != nil {
+			var conflictErr *logicalDatabaseASOResourceConflictError
+			if !errors.As(err, &conflictErr) {
+				logger.Error(err, "failed to ensure FlexibleServersDatabase for LogicalDatabase")
 				return ctrl.Result{}, err
 			}
-			if accessReady {
+
+			logicalDatabase.Status.ValidationErrors = append(logicalDatabase.Status.ValidationErrors, storagev1alpha1.LogicalDatabaseValidationError{
+				Field:   logicalDatabaseValidationFieldSpecName,
+				Reason:  logicalDatabaseValidationReasonConflict,
+				Message: fmt.Sprintf("database %q on server %q is already managed by %s; choose another spec.name", databaseName, logicalDatabase.Spec.Server.Name, conflictErr.ownerDescription()),
+			})
+			setLogicalDatabaseConditions(
+				&logicalDatabase,
+				metav1.ConditionFalse,
+				logicalDatabaseReasonValidationFailed,
+				"LogicalDatabase validation failed",
+			)
+		} else {
+			logicalDatabase.Status.DatabaseName = databaseName
+
+			ready, host, err := r.logicalDatabaseReady(ctx, logger, &logicalDatabase)
+			if err != nil {
+				logger.Error(err, "failed to check LogicalDatabase readiness")
+				return ctrl.Result{}, err
+			}
+			if ready {
+				logicalDatabase.Status.Host = host
+				logicalDatabase.Status.Port = logicalDatabasePort
 				setLogicalDatabaseCondition(
 					&logicalDatabase,
-					logicalDatabaseConditionAccessReady,
+					logicalDatabaseConditionDatabaseReady,
 					metav1.ConditionTrue,
-					accessReason,
-					accessMessage,
+					logicalDatabaseReasonDatabaseReady,
+					"Logical database is ready",
 				)
-				setLogicalDatabaseCondition(
-					&logicalDatabase,
-					logicalDatabaseConditionReady,
-					metav1.ConditionTrue,
-					logicalDatabaseReasonReady,
-					"Logical database and access are ready",
-				)
+
+				accessReady, accessReason, accessMessage, err := r.ensureLogicalDatabaseAccess(ctx, logger, &logicalDatabase)
+				if err != nil {
+					logger.Error(err, "failed to ensure LogicalDatabase access")
+					return ctrl.Result{}, err
+				}
+				if accessReady {
+					setLogicalDatabaseCondition(
+						&logicalDatabase,
+						logicalDatabaseConditionAccessReady,
+						metav1.ConditionTrue,
+						accessReason,
+						accessMessage,
+					)
+					setLogicalDatabaseCondition(
+						&logicalDatabase,
+						logicalDatabaseConditionReady,
+						metav1.ConditionTrue,
+						logicalDatabaseReasonReady,
+						"Logical database and access are ready",
+					)
+				} else {
+					setLogicalDatabaseCondition(
+						&logicalDatabase,
+						logicalDatabaseConditionAccessReady,
+						metav1.ConditionFalse,
+						accessReason,
+						accessMessage,
+					)
+					setLogicalDatabaseCondition(
+						&logicalDatabase,
+						logicalDatabaseConditionReady,
+						metav1.ConditionFalse,
+						logicalDatabaseReasonProvisioning,
+						"Logical database access is provisioning",
+					)
+					result = ctrl.Result{RequeueAfter: logicalDatabaseRequeueDelay}
+				}
 			} else {
+				setLogicalDatabaseCondition(
+					&logicalDatabase,
+					logicalDatabaseConditionDatabaseReady,
+					metav1.ConditionFalse,
+					logicalDatabaseReasonProvisioning,
+					"Logical database is provisioning",
+				)
 				setLogicalDatabaseCondition(
 					&logicalDatabase,
 					logicalDatabaseConditionAccessReady,
 					metav1.ConditionFalse,
-					accessReason,
-					accessMessage,
+					logicalDatabaseReasonProvisioning,
+					"Logical database access is waiting for the database",
 				)
 				setLogicalDatabaseCondition(
 					&logicalDatabase,
 					logicalDatabaseConditionReady,
 					metav1.ConditionFalse,
 					logicalDatabaseReasonProvisioning,
-					"Logical database access is provisioning",
+					"Logical database is provisioning",
 				)
 				result = ctrl.Result{RequeueAfter: logicalDatabaseRequeueDelay}
 			}
-		} else {
-			setLogicalDatabaseCondition(
-				&logicalDatabase,
-				logicalDatabaseConditionDatabaseReady,
-				metav1.ConditionFalse,
-				logicalDatabaseReasonProvisioning,
-				"Logical database is provisioning",
-			)
-			setLogicalDatabaseCondition(
-				&logicalDatabase,
-				logicalDatabaseConditionAccessReady,
-				metav1.ConditionFalse,
-				logicalDatabaseReasonProvisioning,
-				"Logical database access is waiting for the database",
-			)
-			setLogicalDatabaseCondition(
-				&logicalDatabase,
-				logicalDatabaseConditionReady,
-				metav1.ConditionFalse,
-				logicalDatabaseReasonProvisioning,
-				"Logical database is provisioning",
-			)
-			result = ctrl.Result{RequeueAfter: logicalDatabaseRequeueDelay}
 		}
 	}
 
@@ -194,8 +209,10 @@ func (r *LogicalDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 	ctx context.Context,
 	logicalDatabase *storagev1alpha1.LogicalDatabase,
-) ([]storagev1alpha1.LogicalDatabaseValidationError, error) {
+) ([]storagev1alpha1.LogicalDatabaseValidationError, string, error) {
 	var validationErrors []storagev1alpha1.LogicalDatabaseValidationError
+	databaseName := dbUtil.LogicalDatabaseName(logicalDatabase.Spec.Name)
+	serverName := strings.TrimSpace(logicalDatabase.Spec.Server.Name)
 
 	addRequiredStringError := func(field, value string) {
 		if strings.TrimSpace(value) != "" {
@@ -208,25 +225,43 @@ func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 		})
 	}
 
-	addRequiredStringError(logicalDatabaseValidationFieldServerRefName, logicalDatabase.Spec.ServerRef.Name)
-	addRequiredStringError("spec.databaseKey", logicalDatabase.Spec.DatabaseKey)
-	addRequiredStringError("spec.tenant.id", logicalDatabase.Spec.Tenant.ID)
-	addRequiredStringError("spec.tenant.environment", logicalDatabase.Spec.Tenant.Environment)
+	addRequiredStringError(logicalDatabaseValidationFieldServerName, logicalDatabase.Spec.Server.Name)
+	addRequiredStringError(logicalDatabaseValidationFieldMetadataName, logicalDatabase.Name)
+	addRequiredStringError(logicalDatabaseValidationFieldSpecName, logicalDatabase.Spec.Name)
 	addRequiredStringError("spec.access.app.name", logicalDatabase.Spec.Access.App.Name)
 	addRequiredStringError("spec.access.app.principalId", logicalDatabase.Spec.Access.App.PrincipalId)
 	addRequiredStringError("spec.access.owner.name", logicalDatabase.Spec.Access.Owner.Name)
 	addRequiredStringError("spec.access.owner.principalId", logicalDatabase.Spec.Access.Owner.PrincipalId)
 
-	derivedDatabaseName := dbUtil.DeriveLogicalDatabaseName(
-		logicalDatabase.Spec.Tenant.ID,
-		logicalDatabase.Spec.Tenant.Environment,
-		logicalDatabase.Spec.DatabaseKey,
-	)
-	if logicalDatabase.Status.DatabaseName != "" && logicalDatabase.Status.DatabaseName != derivedDatabaseName {
+	if logicalDatabase.Spec.Name != "" && strings.TrimSpace(logicalDatabase.Spec.Name) != logicalDatabase.Spec.Name {
+		validationErrors = append(validationErrors, storagev1alpha1.LogicalDatabaseValidationError{
+			Field:   logicalDatabaseValidationFieldSpecName,
+			Reason:  logicalDatabaseValidationReasonInvalid,
+			Message: "spec.name must not have leading or trailing whitespace",
+		})
+	}
+
+	if len(databaseName) > dbUtil.MaxLogicalDatabaseNameLength {
+		validationErrors = append(validationErrors, storagev1alpha1.LogicalDatabaseValidationError{
+			Field:   logicalDatabaseValidationFieldSpecName,
+			Reason:  logicalDatabaseValidationReasonInvalid,
+			Message: fmt.Sprintf("spec.name must be at most %d characters", dbUtil.MaxLogicalDatabaseNameLength),
+		})
+	}
+
+	if logicalDatabase.Spec.Server.Name != "" && serverName != logicalDatabase.Spec.Server.Name {
+		validationErrors = append(validationErrors, storagev1alpha1.LogicalDatabaseValidationError{
+			Field:   logicalDatabaseValidationFieldServerName,
+			Reason:  logicalDatabaseValidationReasonInvalid,
+			Message: "spec.server.name must not have leading or trailing whitespace",
+		})
+	}
+
+	if logicalDatabase.Status.DatabaseName != "" && databaseName != "" && logicalDatabase.Status.DatabaseName != databaseName {
 		validationErrors = append(validationErrors, storagev1alpha1.LogicalDatabaseValidationError{
 			Field:   logicalDatabaseValidationFieldDatabaseName,
 			Reason:  logicalDatabaseValidationReasonImmutable,
-			Message: fmt.Sprintf("derived database name changed from %q to %q; recreate LogicalDatabase to use a new name", logicalDatabase.Status.DatabaseName, derivedDatabaseName),
+			Message: fmt.Sprintf("database name changed from %q to %q; recreate LogicalDatabase to use a new name", logicalDatabase.Status.DatabaseName, databaseName),
 		})
 	}
 
@@ -239,9 +274,8 @@ func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 		})
 	}
 
-	serverName := strings.TrimSpace(logicalDatabase.Spec.ServerRef.Name)
 	if serverName == "" {
-		return validationErrors, nil
+		return validationErrors, databaseName, nil
 	}
 
 	var db storagev1alpha1.Database
@@ -251,24 +285,24 @@ func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 	}, &db); err != nil {
 		if apierrors.IsNotFound(err) {
 			validationErrors = append(validationErrors, storagev1alpha1.LogicalDatabaseValidationError{
-				Field:   logicalDatabaseValidationFieldServerRefName,
+				Field:   logicalDatabaseValidationFieldServerName,
 				Reason:  logicalDatabaseValidationReasonNotFound,
 				Message: fmt.Sprintf("Database %q was not found in namespace %q", serverName, logicalDatabase.Namespace),
 			})
-			return validationErrors, nil
+			return validationErrors, databaseName, nil
 		}
-		return nil, fmt.Errorf("get Database %s/%s: %w", logicalDatabase.Namespace, serverName, err)
+		return nil, databaseName, fmt.Errorf("get Database %s/%s: %w", logicalDatabase.Namespace, serverName, err)
 	}
 
 	if databaseMode(&db) != storagev1alpha1.DatabaseModeShared {
 		validationErrors = append(validationErrors, storagev1alpha1.LogicalDatabaseValidationError{
-			Field:   logicalDatabaseValidationFieldServerRefName,
+			Field:   logicalDatabaseValidationFieldServerName,
 			Reason:  logicalDatabaseValidationReasonNotShared,
 			Message: fmt.Sprintf("Database %q must have spec.mode Shared", serverName),
 		})
 	}
 
-	return validationErrors, nil
+	return validationErrors, databaseName, nil
 }
 
 func (r *LogicalDatabaseReconciler) mapDatabaseToLogicalDatabases(
@@ -283,7 +317,7 @@ func (r *LogicalDatabaseReconciler) mapDatabaseToLogicalDatabases(
 	requests := make([]ctrl.Request, 0)
 	for i := range list.Items {
 		logicalDatabase := list.Items[i]
-		if logicalDatabase.Spec.ServerRef.Name != obj.GetName() {
+		if strings.TrimSpace(logicalDatabase.Spec.Server.Name) != obj.GetName() {
 			continue
 		}
 		requests = append(requests, ctrl.Request{

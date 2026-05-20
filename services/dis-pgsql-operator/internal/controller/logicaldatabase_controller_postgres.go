@@ -38,10 +38,10 @@ const (
 func (r *LogicalDatabaseReconciler) ensureFlexibleServersDatabase(
 	ctx context.Context,
 	logicalDatabase *storagev1alpha1.LogicalDatabase,
+	databaseName string,
 ) error {
 	ns := logicalDatabase.Namespace
-	serverName := strings.TrimSpace(logicalDatabase.Spec.ServerRef.Name)
-	databaseName := logicalDatabase.Status.DatabaseName
+	serverName := strings.TrimSpace(logicalDatabase.Spec.Server.Name)
 	resourceName := logicalDatabaseASOResourceName(serverName, databaseName)
 
 	desiredSpec := dbforpostgresqlv1.FlexibleServersDatabase_Spec{
@@ -121,7 +121,7 @@ func (r *LogicalDatabaseReconciler) logicalDatabaseReady(
 	logicalDatabase *storagev1alpha1.LogicalDatabase,
 ) (bool, string, error) {
 	ns := logicalDatabase.Namespace
-	serverName := strings.TrimSpace(logicalDatabase.Spec.ServerRef.Name)
+	serverName := strings.TrimSpace(logicalDatabase.Spec.Server.Name)
 	resourceName := logicalDatabaseASOResourceName(serverName, logicalDatabase.Status.DatabaseName)
 
 	var flexibleServersDatabase dbforpostgresqlv1.FlexibleServersDatabase
@@ -176,17 +176,55 @@ func ensureLogicalDatabaseASOResourceOwnedBy(
 	resource := fmt.Sprintf("%s/%s", asoDatabase.Namespace, asoDatabase.Name)
 	controllerRef := metav1.GetControllerOf(asoDatabase)
 	if controllerRef == nil {
-		return fmt.Errorf("FlexibleServersDatabase %s exists but is not controlled by LogicalDatabase %s/%s", resource, logicalDatabase.Namespace, logicalDatabase.Name)
+		return &logicalDatabaseASOResourceConflictError{
+			resource:                 resource,
+			logicalDatabaseNamespace: logicalDatabase.Namespace,
+			logicalDatabaseName:      logicalDatabase.Name,
+		}
 	}
 
-	return fmt.Errorf(
+	return &logicalDatabaseASOResourceConflictError{
+		resource:                 resource,
+		controllerKind:           controllerRef.Kind,
+		controllerName:           controllerRef.Name,
+		logicalDatabaseNamespace: logicalDatabase.Namespace,
+		logicalDatabaseName:      logicalDatabase.Name,
+	}
+}
+
+type logicalDatabaseASOResourceConflictError struct {
+	resource                 string
+	controllerKind           string
+	controllerName           string
+	logicalDatabaseNamespace string
+	logicalDatabaseName      string
+}
+
+func (err *logicalDatabaseASOResourceConflictError) Error() string {
+	if err.controllerKind == "" {
+		return fmt.Sprintf(
+			"FlexibleServersDatabase %s exists but is not controlled by LogicalDatabase %s/%s",
+			err.resource,
+			err.logicalDatabaseNamespace,
+			err.logicalDatabaseName,
+		)
+	}
+
+	return fmt.Sprintf(
 		"FlexibleServersDatabase %s is controlled by %s %s, not LogicalDatabase %s/%s",
-		resource,
-		controllerRef.Kind,
-		controllerRef.Name,
-		logicalDatabase.Namespace,
-		logicalDatabase.Name,
+		err.resource,
+		err.controllerKind,
+		err.controllerName,
+		err.logicalDatabaseNamespace,
+		err.logicalDatabaseName,
 	)
+}
+
+func (err *logicalDatabaseASOResourceConflictError) ownerDescription() string {
+	if err.controllerKind == "" {
+		return "an existing Kubernetes resource"
+	}
+	return fmt.Sprintf("%s %s", err.controllerKind, err.controllerName)
 }
 
 func logicalDatabaseASOResourceName(serverName, databaseName string) string {

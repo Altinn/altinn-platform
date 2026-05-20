@@ -11,24 +11,12 @@ const (
 	LogicalDatabaseDeletionPolicyRetain LogicalDatabaseDeletionPolicy = "Retain"
 )
 
-// LogicalDatabaseServerRef references the shared Database that hosts this
-// logical database.
-type LogicalDatabaseServerRef struct {
+// LogicalDatabaseServerSpec identifies the shared Database server that hosts
+// this logical database.
+type LogicalDatabaseServerSpec struct {
 	// name is the same-namespace Database resource to use as the shared server.
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
-}
-
-// LogicalDatabaseTenantSpec identifies the tenant that owns this logical
-// database.
-type LogicalDatabaseTenantSpec struct {
-	// id is the stable tenant identifier.
-	// +kubebuilder:validation:MinLength=1
-	ID string `json:"id"`
-
-	// environment is the tenant environment.
-	// +kubebuilder:validation:MinLength=1
-	Environment string `json:"environment"`
 }
 
 // LogicalDatabasePrincipalSpec contains an Entra principal that should get
@@ -54,16 +42,17 @@ type LogicalDatabaseAccessSpec struct {
 }
 
 // LogicalDatabaseSpec defines the desired state of LogicalDatabase.
+//
+// The PostgreSQL database name is spec.name.
 type LogicalDatabaseSpec struct {
-	// serverRef points to a same-namespace shared Database.
-	ServerRef LogicalDatabaseServerRef `json:"serverRef"`
-
-	// databaseKey is a short database purpose key.
+	// name is the PostgreSQL database name to create inside the shared server.
+	// It must be unique per shared server.
 	// +kubebuilder:validation:MinLength=1
-	DatabaseKey string `json:"databaseKey"`
+	// +kubebuilder:validation:MaxLength=63
+	Name string `json:"name"`
 
-	// tenant identifies the tenant that owns this logical database.
-	Tenant LogicalDatabaseTenantSpec `json:"tenant"`
+	// server identifies the same-namespace shared Database server.
+	Server LogicalDatabaseServerSpec `json:"server"`
 
 	// access defines the identity that should get access to this logical database.
 	Access LogicalDatabaseAccessSpec `json:"access"`
@@ -93,8 +82,7 @@ type LogicalDatabaseValidationError struct {
 
 // LogicalDatabaseStatus defines the observed state of LogicalDatabase.
 type LogicalDatabaseStatus struct {
-	// databaseName is the PostgreSQL database name derived by the operator.
-	// It is populated in a later reconciliation slice.
+	// databaseName is the PostgreSQL database name managed by the operator.
 	// +optional
 	DatabaseName string `json:"databaseName,omitempty"`
 

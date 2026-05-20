@@ -32,7 +32,6 @@ import (
 
 	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
-	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/test/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -56,10 +55,7 @@ var _ = Describe("User provisioning", Ordered, func() {
 		explicitCustomServerParam  = "autovacuum_naptime"
 		explicitCustomServerValue  = "15"
 		logicalSharedDBName        = "e2e-shared-logical"
-		logicalResourceName        = "e2e-tenant456-dev-app-db"
-		logicalTenantID            = "tenant456"
-		logicalTenantEnvironment   = "dev"
-		logicalDatabaseKey         = "app-db"
+		logicalResourceName        = "e2e-router"
 		logicalAppIdentity         = "e2e-logical-app"
 		logicalAppPrincipalID      = "e2e-logical-app-principal-id"
 		logicalOwnerIdentity       = "e2e-logical-owner"
@@ -142,19 +138,12 @@ var _ = Describe("User provisioning", Ordered, func() {
 	})
 
 	It("provisions LogicalDatabase app and owner access in Postgres", func() {
-		expectedDatabaseName := dbUtil.DeriveLogicalDatabaseName(
-			logicalTenantID,
-			logicalTenantEnvironment,
-			logicalDatabaseKey,
-		)
+		expectedDatabaseName := logicalResourceName
 		manifestPath := writeLogicalDatabaseTestManifest(
 			logicalSharedDBName,
 			logicalResourceName,
 			namespace,
 			adminIdentityRef,
-			logicalTenantID,
-			logicalTenantEnvironment,
-			logicalDatabaseKey,
 			logicalAppIdentity,
 			logicalAppPrincipalID,
 			logicalOwnerIdentity,
@@ -688,9 +677,6 @@ func writeLogicalDatabaseTestManifest(
 	logicalResourceName,
 	namespace,
 	adminIdentityRef,
-	tenantID,
-	tenantEnvironment,
-	databaseKey,
 	appIdentity,
 	appPrincipalID,
 	ownerIdentity,
@@ -745,13 +731,9 @@ func writeLogicalDatabaseTestManifest(
 			Namespace: namespace,
 		},
 		Spec: storagev1alpha1.LogicalDatabaseSpec{
-			ServerRef: storagev1alpha1.LogicalDatabaseServerRef{
+			Name: logicalResourceName,
+			Server: storagev1alpha1.LogicalDatabaseServerSpec{
 				Name: sharedDBName,
-			},
-			DatabaseKey: databaseKey,
-			Tenant: storagev1alpha1.LogicalDatabaseTenantSpec{
-				ID:          tenantID,
-				Environment: tenantEnvironment,
 			},
 			Access: storagev1alpha1.LogicalDatabaseAccessSpec{
 				App: storagev1alpha1.LogicalDatabasePrincipalSpec{
@@ -858,7 +840,7 @@ func patchFlexibleServerReady(serverName, namespace, host string) {
 		)
 		_, err := utils.Run(cmd)
 		return err
-	}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).
+	}).WithTimeout(2*time.Minute).WithPolling(2*time.Second).
 		Should(Succeed(), "Failed to patch FlexibleServer status for %s", serverName)
 }
 
@@ -879,7 +861,7 @@ func patchFlexibleServersDatabaseReady(databaseResourceName, namespace string) {
 		)
 		_, err := utils.Run(cmd)
 		return err
-	}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).
+	}).WithTimeout(2*time.Minute).WithPolling(2*time.Second).
 		Should(Succeed(), "Failed to patch FlexibleServersDatabase status for %s", databaseResourceName)
 }
 
