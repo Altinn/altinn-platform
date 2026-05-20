@@ -2490,6 +2490,51 @@ var _ = Describe("Database controller", func() {
 			Should(BeEmpty())
 	})
 
+	It("rejects LogicalDatabase name and server references with surrounding whitespace", func() {
+		db := newSharedDatabase("shared-db-logical-whitespace")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		logicalDatabase := newLogicalDatabase("router-whitespace", db.Name)
+		logicalDatabase.Spec.Name = " router-whitespace "
+		logicalDatabase.Spec.Server.Name = " " + db.Name + " "
+		Expect(k8sClient.Create(ctx, logicalDatabase)).To(Succeed())
+
+		Eventually(func(g Gomega) map[string]string {
+			var updated storagev1alpha1.LogicalDatabase
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      logicalDatabase.Name,
+				Namespace: logicalDatabase.Namespace,
+			}, &updated)).To(Succeed())
+
+			reasons := make(map[string]string, len(updated.Status.ValidationErrors))
+			for _, validationError := range updated.Status.ValidationErrors {
+				reasons[validationError.Field] = validationError.Reason
+			}
+			return reasons
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(HaveKeyWithValue(logicalDatabaseValidationFieldSpecName, logicalDatabaseValidationReasonInvalid))
+
+		Eventually(func(g Gomega) map[string]string {
+			var updated storagev1alpha1.LogicalDatabase
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      logicalDatabase.Name,
+				Namespace: logicalDatabase.Namespace,
+			}, &updated)).To(Succeed())
+
+			reasons := make(map[string]string, len(updated.Status.ValidationErrors))
+			for _, validationError := range updated.Status.ValidationErrors {
+				reasons[validationError.Field] = validationError.Reason
+			}
+			return reasons
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(HaveKeyWithValue(logicalDatabaseValidationFieldServerName, logicalDatabaseValidationReasonInvalid))
+
+		Consistently(func(g Gomega) []dbforpostgresqlv1.FlexibleServersDatabase {
+			return listLogicalDatabaseASOChildren(g, logicalDatabase.Name)
+		}).WithTimeout(2 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+	})
+
 	It("revalidates LogicalDatabase when the referenced shared Database is created later", func() {
 		const serverName = "shared-db-created-later"
 		logicalDatabase := newLogicalDatabase("router-late-server", serverName)
@@ -2594,6 +2639,7 @@ var _ = Describe("Database controller", func() {
 				Name:      secondLogicalDatabase.Name,
 				Namespace: secondLogicalDatabase.Namespace,
 			}, &secondUpdated)).To(Succeed())
+			g.Expect(secondUpdated.Status.DatabaseName).To(BeEmpty())
 
 			ready := meta.FindStatusCondition(secondUpdated.Status.Conditions, logicalDatabaseConditionReady)
 			g.Expect(ready).NotTo(BeNil())
@@ -2617,6 +2663,39 @@ var _ = Describe("Database controller", func() {
 		}, &existingASODatabase)).To(Succeed())
 		Expect(existingASODatabase.Labels).To(HaveKeyWithValue(logicalDatabaseLabelKey, firstLogicalDatabase.Name))
 		Expect(metav1.IsControlledBy(&existingASODatabase, &firstUpdated)).To(BeTrue())
+
+		fixedDatabaseName := "router-owner-two-fixed"
+		Eventually(func() error {
+			var secondUpdated storagev1alpha1.LogicalDatabase
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      secondLogicalDatabase.Name,
+				Namespace: secondLogicalDatabase.Namespace,
+			}, &secondUpdated); err != nil {
+				return err
+			}
+			secondUpdated.Spec.Name = fixedDatabaseName
+			return k8sClient.Update(ctx, &secondUpdated)
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func(g Gomega) []storagev1alpha1.LogicalDatabaseValidationError {
+			var secondUpdated storagev1alpha1.LogicalDatabase
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      secondLogicalDatabase.Name,
+				Namespace: secondLogicalDatabase.Namespace,
+			}, &secondUpdated)).To(Succeed())
+			g.Expect(secondUpdated.Status.DatabaseName).To(Equal(fixedDatabaseName))
+			return secondUpdated.Status.ValidationErrors
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+
+		var secondASODatabase dbforpostgresqlv1.FlexibleServersDatabase
+		Expect(k8sClient.Get(ctx, types.NamespacedName{
+			Name:      logicalDatabaseASOResourceName(db.Name, fixedDatabaseName),
+			Namespace: secondLogicalDatabase.Namespace,
+		}, &secondASODatabase)).To(Succeed())
+		Expect(secondASODatabase.Spec.AzureName).To(Equal(fixedDatabaseName))
+		Expect(secondASODatabase.Labels).To(HaveKeyWithValue(logicalDatabaseLabelKey, secondLogicalDatabase.Name))
 	})
 
 	It("sets LogicalDatabase Ready after the access provisioning Job completes", func() {

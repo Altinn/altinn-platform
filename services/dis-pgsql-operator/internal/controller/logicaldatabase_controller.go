@@ -89,9 +89,7 @@ func (r *LogicalDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			"LogicalDatabase validation failed",
 		)
 	} else {
-		logicalDatabase.Status.DatabaseName = databaseName
-
-		if err := r.ensureFlexibleServersDatabase(ctx, &logicalDatabase); err != nil {
+		if err := r.ensureFlexibleServersDatabase(ctx, &logicalDatabase, databaseName); err != nil {
 			var conflictErr *logicalDatabaseASOResourceConflictError
 			if !errors.As(err, &conflictErr) {
 				logger.Error(err, "failed to ensure FlexibleServersDatabase for LogicalDatabase")
@@ -110,6 +108,8 @@ func (r *LogicalDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				"LogicalDatabase validation failed",
 			)
 		} else {
+			logicalDatabase.Status.DatabaseName = databaseName
+
 			ready, host, err := r.logicalDatabaseReady(ctx, logger, &logicalDatabase)
 			if err != nil {
 				logger.Error(err, "failed to check LogicalDatabase readiness")
@@ -212,6 +212,7 @@ func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 ) ([]storagev1alpha1.LogicalDatabaseValidationError, string, error) {
 	var validationErrors []storagev1alpha1.LogicalDatabaseValidationError
 	databaseName := dbUtil.LogicalDatabaseName(logicalDatabase.Spec.Name)
+	serverName := strings.TrimSpace(logicalDatabase.Spec.Server.Name)
 
 	addRequiredStringError := func(field, value string) {
 		if strings.TrimSpace(value) != "" {
@@ -232,11 +233,27 @@ func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 	addRequiredStringError("spec.access.owner.name", logicalDatabase.Spec.Access.Owner.Name)
 	addRequiredStringError("spec.access.owner.principalId", logicalDatabase.Spec.Access.Owner.PrincipalId)
 
+	if logicalDatabase.Spec.Name != "" && strings.TrimSpace(logicalDatabase.Spec.Name) != logicalDatabase.Spec.Name {
+		validationErrors = append(validationErrors, storagev1alpha1.LogicalDatabaseValidationError{
+			Field:   logicalDatabaseValidationFieldSpecName,
+			Reason:  logicalDatabaseValidationReasonInvalid,
+			Message: "spec.name must not have leading or trailing whitespace",
+		})
+	}
+
 	if len(databaseName) > dbUtil.MaxLogicalDatabaseNameLength {
 		validationErrors = append(validationErrors, storagev1alpha1.LogicalDatabaseValidationError{
 			Field:   logicalDatabaseValidationFieldSpecName,
 			Reason:  logicalDatabaseValidationReasonInvalid,
 			Message: fmt.Sprintf("spec.name must be at most %d characters", dbUtil.MaxLogicalDatabaseNameLength),
+		})
+	}
+
+	if logicalDatabase.Spec.Server.Name != "" && serverName != logicalDatabase.Spec.Server.Name {
+		validationErrors = append(validationErrors, storagev1alpha1.LogicalDatabaseValidationError{
+			Field:   logicalDatabaseValidationFieldServerName,
+			Reason:  logicalDatabaseValidationReasonInvalid,
+			Message: "spec.server.name must not have leading or trailing whitespace",
 		})
 	}
 
@@ -257,7 +274,6 @@ func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 		})
 	}
 
-	serverName := strings.TrimSpace(logicalDatabase.Spec.Server.Name)
 	if serverName == "" {
 		return validationErrors, databaseName, nil
 	}
@@ -301,7 +317,7 @@ func (r *LogicalDatabaseReconciler) mapDatabaseToLogicalDatabases(
 	requests := make([]ctrl.Request, 0)
 	for i := range list.Items {
 		logicalDatabase := list.Items[i]
-		if logicalDatabase.Spec.Server.Name != obj.GetName() {
+		if strings.TrimSpace(logicalDatabase.Spec.Server.Name) != obj.GetName() {
 			continue
 		}
 		requests = append(requests, ctrl.Request{

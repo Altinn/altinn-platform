@@ -38,10 +38,10 @@ const (
 func (r *LogicalDatabaseReconciler) ensureFlexibleServersDatabase(
 	ctx context.Context,
 	logicalDatabase *storagev1alpha1.LogicalDatabase,
+	databaseName string,
 ) error {
 	ns := logicalDatabase.Namespace
 	serverName := strings.TrimSpace(logicalDatabase.Spec.Server.Name)
-	databaseName := logicalDatabase.Status.DatabaseName
 	resourceName := logicalDatabaseASOResourceName(serverName, databaseName)
 
 	desiredSpec := dbforpostgresqlv1.FlexibleServersDatabase_Spec{
