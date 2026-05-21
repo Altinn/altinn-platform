@@ -11,6 +11,14 @@ resource "azurerm_subnet" "gh_runners" {
   virtual_network_name = azurerm_virtual_network.gh_runners.name
   address_prefixes     = [var.private_runners_address_space]
   service_endpoints    = ["Microsoft.KeyVault"]
+
+  delegation {
+    name = "Microsoft.App.environments"
+    service_delegation {
+      name    = "Microsoft.App/environments"
+      actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
+    }
+  }
 }
 
 module "container_apps_gh_runners" {
