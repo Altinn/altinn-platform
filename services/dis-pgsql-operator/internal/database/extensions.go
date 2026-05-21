@@ -13,24 +13,24 @@ import (
 
 // Here for getting better reconcile error messages
 // before we send a bad parameter to ASO/Azure
-var allowedDatabaseExtensions = map[storagev1alpha1.DatabaseExtension]struct{}{
-	storagev1alpha1.DatabaseExtensionHstore:           {},
-	storagev1alpha1.DatabaseExtensionPgCron:           {},
-	storagev1alpha1.DatabaseExtensionPgStatStatements: {},
-	storagev1alpha1.DatabaseExtensionPgAudit:          {},
-	storagev1alpha1.DatabaseExtensionUUIDOSSP:         {},
+var allowedDatabaseServerExtensions = map[storagev1alpha1.DatabaseServerExtension]struct{}{
+	storagev1alpha1.DatabaseServerExtensionHstore:           {},
+	storagev1alpha1.DatabaseServerExtensionPgCron:           {},
+	storagev1alpha1.DatabaseServerExtensionPgStatStatements: {},
+	storagev1alpha1.DatabaseServerExtensionPgAudit:          {},
+	storagev1alpha1.DatabaseServerExtensionUUIDOSSP:         {},
 }
 
-var extensionSharedPreloadLibraries = map[storagev1alpha1.DatabaseExtension]string{
-	storagev1alpha1.DatabaseExtensionPgCron:           "pg_cron",
-	storagev1alpha1.DatabaseExtensionPgStatStatements: "pg_stat_statements",
-	storagev1alpha1.DatabaseExtensionPgAudit:          "pgaudit",
+var extensionSharedPreloadLibraries = map[storagev1alpha1.DatabaseServerExtension]string{
+	storagev1alpha1.DatabaseServerExtensionPgCron:           "pg_cron",
+	storagev1alpha1.DatabaseServerExtensionPgStatStatements: "pg_stat_statements",
+	storagev1alpha1.DatabaseServerExtensionPgAudit:          "pgaudit",
 }
 
 // ResolveExtensionSettings validates and normalizes extension settings into
 // Azure configuration values for azure.extensions and shared_preload_libraries.
 func ResolveExtensionSettings(
-	extensions []storagev1alpha1.DatabaseExtension,
+	extensions []storagev1alpha1.DatabaseServerExtension,
 ) (string, string, error) {
 	enabledExtensions := make(map[string]struct{}, len(extensions))
 	preloadLibraries := make(map[string]struct{})
@@ -41,8 +41,8 @@ func ResolveExtensionSettings(
 			return "", "", fmt.Errorf("extension value must not be empty")
 		}
 
-		extension := storagev1alpha1.DatabaseExtension(extensionName)
-		if _, ok := allowedDatabaseExtensions[extension]; !ok {
+		extension := storagev1alpha1.DatabaseServerExtension(extensionName)
+		if _, ok := allowedDatabaseServerExtensions[extension]; !ok {
 			return "", "", fmt.Errorf("unsupported extension %q", extensionName)
 		}
 

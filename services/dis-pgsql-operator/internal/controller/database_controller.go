@@ -28,7 +28,7 @@ import (
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/network"
 )
 
-// DatabaseServerReconciler reconciles the current Database CRD as a PostgreSQL server.
+// DatabaseServerReconciler reconciles the current DatabaseServer CRD as a PostgreSQL server.
 type DatabaseServerReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -41,12 +41,12 @@ type DatabaseServerReconciler struct {
 	Config config.OperatorConfig
 }
 
-// +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=databases,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=databases/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=databaseservers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=databaseservers/status,verbs=get;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// It compares the Database server object against the actual cluster state, and then
+// It compares the DatabaseServer object against the actual cluster state, and then
 // performs operations to make the cluster state reflect the state specified by
 // the user.
 //
@@ -74,7 +74,7 @@ type DatabaseServerReconciler struct {
 func (r *DatabaseServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("databaseServer", req.NamespacedName)
 
-	var db storagev1alpha1.Database
+	var db storagev1alpha1.DatabaseServer
 	if err := r.Get(ctx, req.NamespacedName, &db); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Deleted
@@ -87,23 +87,23 @@ func (r *DatabaseServerReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
-	if databaseServerMode(&db) == storagev1alpha1.DatabaseModeShared {
+	if databaseServerMode(&db) == storagev1alpha1.DatabaseServerModeShared {
 		return r.reconcileSharedDatabaseServer(ctx, logger, &db)
 	}
 	return r.reconcileDedicatedDatabaseServer(ctx, logger, &db)
 }
 
-func databaseServerMode(db *storagev1alpha1.Database) storagev1alpha1.DatabaseMode {
-	if db.Spec.Mode == storagev1alpha1.DatabaseModeShared {
-		return storagev1alpha1.DatabaseModeShared
+func databaseServerMode(db *storagev1alpha1.DatabaseServer) storagev1alpha1.DatabaseServerMode {
+	if db.Spec.Mode == storagev1alpha1.DatabaseServerModeShared {
+		return storagev1alpha1.DatabaseServerModeShared
 	}
-	return storagev1alpha1.DatabaseModeDedicated
+	return storagev1alpha1.DatabaseServerModeDedicated
 }
 
 func (r *DatabaseServerReconciler) reconcileDedicatedDatabaseServer(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 ) (ctrl.Result, error) {
 	if r.SubnetCatalog == nil {
 		return ctrl.Result{}, fmt.Errorf("SubnetCatalog is not configured on DatabaseServerReconciler")
@@ -207,7 +207,7 @@ func (r *DatabaseServerReconciler) reconcileDedicatedDatabaseServer(
 func (r *DatabaseServerReconciler) reconcileSharedDatabaseServer(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 ) (ctrl.Result, error) {
 	networkConfig, err := r.sharedPostgresNetworkConfig(db)
 	if err != nil {
@@ -226,7 +226,7 @@ func (r *DatabaseServerReconciler) reconcileSharedDatabaseServer(
 func (r *DatabaseServerReconciler) reconcileCommonDatabaseServerResources(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 ) (ctrl.Result, error) {
 	if err := r.ensurePostgresExtensionSettings(ctx, logger, db); err != nil {
 		logger.Error(err, "failed to ensure PostgreSQL extension settings for database server")
@@ -272,10 +272,10 @@ func (r *DatabaseServerReconciler) reconcileCommonDatabaseServerResources(
 func (r *DatabaseServerReconciler) allocateSubnetForDatabaseServer(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 ) error {
-	// Collect used subnets from all Database resources that currently represent servers.
-	var dbList storagev1alpha1.DatabaseList
+	// Collect used subnets from all DatabaseServer resources that currently represent servers.
+	var dbList storagev1alpha1.DatabaseServerList
 	if err := r.List(ctx, &dbList); err != nil {
 		return fmt.Errorf("list database servers: %w", err)
 	}
@@ -308,7 +308,7 @@ func (r *DatabaseServerReconciler) allocateSubnetForDatabaseServer(
 func (r *DatabaseServerReconciler) asoResourcesReady(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 ) (bool, error) {
 	ns := db.Namespace
 
@@ -372,7 +372,7 @@ func readyConditionInfo(
 
 func (r *DatabaseServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&storagev1alpha1.Database{}).
+		For(&storagev1alpha1.DatabaseServer{}).
 		Owns(&networkv1.PrivateDnsZone{}).
 		Owns(&networkv1.PrivateDnsZonesVirtualNetworkLink{}).
 		Owns(&dbforpostgresqlv1.FlexibleServer{}).

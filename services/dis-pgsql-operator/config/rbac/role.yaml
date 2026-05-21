@@ -86,7 +86,7 @@ rules:
 - apiGroups:
   - storage.dis.altinn.cloud
   resources:
-  - databases
+  - databaseservers
   verbs:
   - create
   - delete
@@ -98,7 +98,7 @@ rules:
 - apiGroups:
   - storage.dis.altinn.cloud
   resources:
-  - databases/status
+  - databaseservers/status
   - logicaldatabases/status
   verbs:
   - get

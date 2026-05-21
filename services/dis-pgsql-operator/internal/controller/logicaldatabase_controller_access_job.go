@@ -28,15 +28,15 @@ func (r *LogicalDatabaseReconciler) ensureLogicalDatabaseAccess(
 	}
 
 	serverName := strings.TrimSpace(logicalDatabase.Spec.Server.Name)
-	var db storagev1alpha1.Database
+	var db storagev1alpha1.DatabaseServer
 	if err := r.Get(ctx, types.NamespacedName{
 		Name:      serverName,
 		Namespace: logicalDatabase.Namespace,
 	}, &db); err != nil {
 		if apierrors.IsNotFound(err) {
-			return false, logicalDatabaseReasonProvisioning, "Referenced Database server is not available", nil
+			return false, logicalDatabaseReasonProvisioning, "Referenced DatabaseServer is not available", nil
 		}
-		return false, "", "", fmt.Errorf("get Database %s/%s: %w", logicalDatabase.Namespace, serverName, err)
+		return false, "", "", fmt.Errorf("get DatabaseServer %s/%s: %w", logicalDatabase.Namespace, serverName, err)
 	}
 
 	adminIdentity, requeue, err := r.resolveAdminIdentity(ctx, logger, &db)
@@ -44,7 +44,7 @@ func (r *LogicalDatabaseReconciler) ensureLogicalDatabaseAccess(
 		return false, "", "", err
 	}
 	if requeue {
-		return false, logicalDatabaseReasonProvisioning, "Waiting for Database server admin identity", nil
+		return false, logicalDatabaseReasonProvisioning, "Waiting for DatabaseServer admin identity", nil
 	}
 
 	jobName := logicalDatabaseAccessProvisionJobName(logicalDatabase, serverName, adminIdentity)

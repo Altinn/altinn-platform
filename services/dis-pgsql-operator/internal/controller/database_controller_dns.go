@@ -20,15 +20,15 @@ import (
 const postgresPrivateZoneSuffix = "private.postgres.database.azure.com"
 
 // zoneNameForDatabaseServer computes the Private DNS zone name for a server.
-func zoneNameForDatabaseServer(db *storagev1alpha1.Database) string {
+func zoneNameForDatabaseServer(db *storagev1alpha1.DatabaseServer) string {
 	return fmt.Sprintf("%s.%s", db.Name, postgresPrivateZoneSuffix)
 }
 
-func dbVNetLinkNameForDatabaseServer(db *storagev1alpha1.Database) string {
+func dbVNetLinkNameForDatabaseServer(db *storagev1alpha1.DatabaseServer) string {
 	return fmt.Sprintf("%s-vnetlink", db.Name)
 }
 
-func aksVNetLinkNameForDatabaseServer(db *storagev1alpha1.Database) string {
+func aksVNetLinkNameForDatabaseServer(db *storagev1alpha1.DatabaseServer) string {
 	return fmt.Sprintf("%s-aks-vnetlink", db.Name)
 }
 
@@ -36,7 +36,7 @@ func aksVNetLinkNameForDatabaseServer(db *storagev1alpha1.Database) string {
 func (r *DatabaseServerReconciler) ensurePrivateDNSZone(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 ) error {
 	if r.Config.ResourceGroup == "" {
 		return fmt.Errorf("ResourceGroup is not configured on DatabaseServerReconciler")
@@ -112,7 +112,7 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSZone(
 func (r *DatabaseServerReconciler) ensurePrivateDNSVNetLink(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 	zoneName string,
 	linkName string,
 	targetVNetName string,

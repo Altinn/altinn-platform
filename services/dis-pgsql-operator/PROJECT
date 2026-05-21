@@ -15,7 +15,7 @@ resources:
   controller: true
   domain: dis.altinn.cloud
   group: storage
-  kind: Database
+  kind: DatabaseServer
   path: github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1
   version: v1alpha1
 - api:

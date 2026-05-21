@@ -4,20 +4,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.20.0
-  name: databases.storage.dis.altinn.cloud
+  name: databaseservers.storage.dis.altinn.cloud
 spec:
   group: storage.dis.altinn.cloud
   names:
-    kind: Database
-    listKind: DatabaseList
-    plural: databases
-    singular: database
+    kind: DatabaseServer
+    listKind: DatabaseServerList
+    plural: databaseservers
+    singular: databaseserver
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Database is the Schema for the databases API.
+        description: DatabaseServer is the Schema for the databases API.
         properties:
           apiVersion:
             description: |-
@@ -37,7 +37,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of Database.
+            description: spec defines the desired state of DatabaseServer.
             properties:
               auth:
                 description: auth defines the identities used for server administration.
@@ -92,7 +92,7 @@ spec:
                       rule: has(self.identity.identityRef) || has(self.serviceAccountName)
                   user:
                     description: |-
-                      user is retained for compatibility with early Database manifests.
+                      user is retained for compatibility with early DatabaseServer manifests.
                       Server reconciliation ignores this field; use LogicalDatabase resources
                       to provision app and owner access.
                     properties:
@@ -145,7 +145,7 @@ spec:
                   enableExtensions is the curated list of PostgreSQL extensions that should be enabled.
                   Some extensions require shared_preload_libraries and are configured automatically.
                 items:
-                  description: DatabaseExtension is a curated PostgreSQL extension
+                  description: DatabaseServerExtension is a curated PostgreSQL extension
                     allowed by this operator.
                   enum:
                   - hstore
@@ -164,7 +164,7 @@ spec:
               mode:
                 default: Dedicated
                 description: |-
-                  mode controls whether this Database provisions a dedicated server or a shared server.
+                  mode controls whether this DatabaseServer provisions a dedicated server or a shared server.
                   Defaults to Dedicated.
                 enum:
                 - Dedicated
@@ -261,11 +261,11 @@ spec:
               rule: '(has(self.mode) && self.mode == ''Shared'') ? has(self.network)
                 : !has(self.network)'
           status:
-            description: status defines the observed state of Database.
+            description: status defines the observed state of DatabaseServer.
             properties:
               conditions:
                 description: |-
-                  conditions represent the current state of the Database resource.
+                  conditions represent the current state of the DatabaseServer resource.
                   Each condition has a unique type and reflects the status of a specific aspect of the resource.
 
                   Standard condition types might include:

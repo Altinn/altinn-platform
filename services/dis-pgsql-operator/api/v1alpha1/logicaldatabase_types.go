@@ -11,10 +11,10 @@ const (
 	LogicalDatabaseDeletionPolicyRetain LogicalDatabaseDeletionPolicy = "Retain"
 )
 
-// LogicalDatabaseServerSpec identifies the Database server that hosts this
+// LogicalDatabaseServerSpec identifies the DatabaseServer that hosts this
 // logical database.
 type LogicalDatabaseServerSpec struct {
-	// name is the same-namespace Database resource to use as the server.
+	// name is the same-namespace DatabaseServer resource to use as the server.
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 }
@@ -51,7 +51,7 @@ type LogicalDatabaseSpec struct {
 	// +kubebuilder:validation:MaxLength=63
 	Name string `json:"name"`
 
-	// server identifies the same-namespace Database server.
+	// server identifies the same-namespace DatabaseServer.
 	Server LogicalDatabaseServerSpec `json:"server"`
 
 	// access defines the identity that should get access to this logical database.

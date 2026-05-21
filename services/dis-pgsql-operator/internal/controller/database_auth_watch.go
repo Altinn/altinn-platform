@@ -17,7 +17,7 @@ func (r *DatabaseServerReconciler) mapApplicationIdentityToDatabaseServers(
 	identityName := obj.GetName()
 	identityNamespace := obj.GetNamespace()
 
-	var dbList storagev1alpha1.DatabaseList
+	var dbList storagev1alpha1.DatabaseServerList
 	if err := r.List(ctx, &dbList, client.InNamespace(identityNamespace)); err != nil {
 		return nil
 	}
@@ -38,7 +38,7 @@ func (r *DatabaseServerReconciler) mapApplicationIdentityToDatabaseServers(
 	return requests
 }
 
-func databaseServerReferencesIdentity(db *storagev1alpha1.Database, identityName string) bool {
+func databaseServerReferencesIdentity(db *storagev1alpha1.DatabaseServer, identityName string) bool {
 	if db.Spec.Auth.Admin.Identity.IdentityRef != nil && db.Spec.Auth.Admin.Identity.IdentityRef.Name == identityName {
 		return true
 	}

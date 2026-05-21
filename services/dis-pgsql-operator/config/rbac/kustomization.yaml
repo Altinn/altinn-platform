@@ -22,7 +22,7 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the dis-pgsql-operator itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
-- database_admin_role.yaml
-- database_editor_role.yaml
-- database_viewer_role.yaml
+- databaseserver_admin_role.yaml
+- databaseserver_editor_role.yaml
+- databaseserver_viewer_role.yaml
 

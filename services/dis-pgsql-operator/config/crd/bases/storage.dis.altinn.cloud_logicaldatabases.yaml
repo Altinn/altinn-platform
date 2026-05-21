@@ -94,11 +94,11 @@ spec:
                 minLength: 1
                 type: string
               server:
-                description: server identifies the same-namespace Database server.
+                description: server identifies the same-namespace DatabaseServer.
                 properties:
                   name:
-                    description: name is the same-namespace Database resource to use
-                      as the server.
+                    description: name is the same-namespace DatabaseServer resource
+                      to use as the server.
                     minLength: 1
                     type: string
                 required:

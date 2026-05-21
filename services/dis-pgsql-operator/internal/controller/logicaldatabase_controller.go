@@ -48,7 +48,7 @@ type LogicalDatabaseReconciler struct {
 
 // +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=logicaldatabases,verbs=get;list;watch
 // +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=logicaldatabases/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=databases,verbs=get;list;watch
+// +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=databaseservers,verbs=get;list;watch
 // +kubebuilder:rbac:groups=application.dis.altinn.cloud,resources=applicationidentities,verbs=get;list;watch
 // +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleservers,verbs=get;list;watch
 // +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversdatabases,verbs=get;list;watch;create;update;patch;delete
@@ -278,7 +278,7 @@ func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 		return validationErrors, databaseName, nil
 	}
 
-	var db storagev1alpha1.Database
+	var db storagev1alpha1.DatabaseServer
 	if err := r.Get(ctx, types.NamespacedName{
 		Name:      serverName,
 		Namespace: logicalDatabase.Namespace,
@@ -287,17 +287,17 @@ func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 			validationErrors = append(validationErrors, storagev1alpha1.LogicalDatabaseValidationError{
 				Field:   logicalDatabaseValidationFieldServerName,
 				Reason:  logicalDatabaseValidationReasonNotFound,
-				Message: fmt.Sprintf("Database %q was not found in namespace %q", serverName, logicalDatabase.Namespace),
+				Message: fmt.Sprintf("DatabaseServer %q was not found in namespace %q", serverName, logicalDatabase.Namespace),
 			})
 			return validationErrors, databaseName, nil
 		}
-		return nil, databaseName, fmt.Errorf("get Database %s/%s: %w", logicalDatabase.Namespace, serverName, err)
+		return nil, databaseName, fmt.Errorf("get DatabaseServer %s/%s: %w", logicalDatabase.Namespace, serverName, err)
 	}
 
 	return validationErrors, databaseName, nil
 }
 
-func (r *LogicalDatabaseReconciler) mapDatabaseToLogicalDatabases(
+func (r *LogicalDatabaseReconciler) mapDatabaseServerToLogicalDatabases(
 	ctx context.Context,
 	obj client.Object,
 ) []ctrl.Request {
@@ -327,7 +327,7 @@ func (r *LogicalDatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&storagev1alpha1.LogicalDatabase{}).
 		Owns(&dbforpostgresqlv1.FlexibleServersDatabase{}).
 		Owns(&batchv1.Job{}).
-		Watches(&storagev1alpha1.Database{}, handler.EnqueueRequestsFromMapFunc(r.mapDatabaseToLogicalDatabases)).
+		Watches(&storagev1alpha1.DatabaseServer{}, handler.EnqueueRequestsFromMapFunc(r.mapDatabaseServerToLogicalDatabases)).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,
 		}).
