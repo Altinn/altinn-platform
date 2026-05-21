@@ -42,7 +42,7 @@ env:
 
 jobs:
   create-issue:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: (github.event_name == 'release' && github.event.action == 'created' && startsWith(github.event.release.tag_name, 'flux-oci-')) || (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.tag_name, 'flux-oci-'))
     steps:
       - name: Create issue
@@ -92,7 +92,7 @@ jobs:
             });
             console.log(`Issue created: ${response.data.html_url}`);
   create-release-pr:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: github.event_name == 'issues' && github.event.action == 'edited' && startsWith(github.event.issue.title, 'Gitops OCI image promotion:') && github.event.issue.draft == false && github.event.issue.state == 'open'
     steps:
       - name: Authorize user
@@ -242,7 +242,7 @@ jobs:
               });
             }
   generate-matrix:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: github.event_name == 'push' && github.event.ref == 'refs/heads/main'
     outputs:
       matrix: ${{ steps.generate-matrix.outputs.matrix }}
@@ -259,7 +259,7 @@ jobs:
           echo "Generated matrix: $matrix"
 
   retag-release:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: generate-matrix
     if: github.event_name == 'push' && github.event.ref == 'refs/heads/main'
     environment: flux-release

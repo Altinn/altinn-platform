@@ -51,7 +51,7 @@ jobs:
   plan:
     name: Plan
     environment: reader
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       TF_VAR_subs_to_monitor: '{platform-test:"${{secrets.AZR_PLATFORM_TEST_SUB_ID}}",platform-staging:"${{secrets.AZR_PLATFORM_STAGING_SUB_ID}}",platform-prod:"${{secrets.AZR_PLATFORM_PROD_SUB_ID}}"}'
     steps:
@@ -102,7 +102,7 @@ jobs:
     environment: test
     if: github.ref == 'refs/heads/main'
     needs: plan
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       TF_VAR_subs_to_monitor: '{platform-test:"${{secrets.AZR_PLATFORM_TEST_SUB_ID}}",platform-staging:"${{secrets.AZR_PLATFORM_STAGING_SUB_ID}}",platform-prod:"${{secrets.AZR_PLATFORM_PROD_SUB_ID}}"}'
     steps:
