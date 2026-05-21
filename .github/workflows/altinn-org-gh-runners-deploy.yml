@@ -154,14 +154,8 @@ jobs:
               az keyvault network-rule add --name "$kv" --ip-address "$RUNNER_IP"
             done
 
-      - name: Terraform Apply
-        uses: Altinn/altinn-platform/actions/terraform/apply@dd7b1578787e084472d1e5b5c6ed8a241afd6cdd # main
-        env:
-          TF_VAR_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
-          TF_VAR_altinn_app_id: ${{ vars.GH_RUNNERS_APP_ID }}
-          TF_VAR_altinn_app_install_id: ${{ vars.GH_RUNNERS_APP_INSTALL_ID }}
-          TF_VAR_altinn_app_key: ${{ secrets.GH_RUNNERS_APP_KEY }}
-          TF_VAR_host_ip: ${{ steps.host_ip.outputs.ip }}
+      - name: Terraform Init
+        uses: Altinn/altinn-platform/actions/terraform/init@dd7b1578787e084472d1e5b5c6ed8a241afd6cdd # main
         with:
           working_directory: ${{ env.TF_PROJECT }}
           oidc_type: environment
@@ -169,6 +163,20 @@ jobs:
           arm_client_id: ${{ env.ARM_CLIENT_ID }}
           arm_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
           tf_state_name: ${{ env.TF_STATE_NAME }}
+
+      - name: Terraform Apply
+        working-directory: ${{ env.TF_PROJECT }}
+        run: terraform apply -input=false -auto-approve
+        env:
+          ARM_CLIENT_ID: ${{ env.ARM_CLIENT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ env.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ env.ARM_TENANT_ID }}
+          ARM_USE_OIDC: "true"
+          TF_VAR_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
+          TF_VAR_altinn_app_id: ${{ vars.GH_RUNNERS_APP_ID }}
+          TF_VAR_altinn_app_install_id: ${{ vars.GH_RUNNERS_APP_INSTALL_ID }}
+          TF_VAR_altinn_app_key: ${{ secrets.GH_RUNNERS_APP_KEY }}
+          TF_VAR_host_ip: ${{ steps.host_ip.outputs.ip }}
 
       - name: Remove Runner IP from Key Vault Whitelist
         if: always()
