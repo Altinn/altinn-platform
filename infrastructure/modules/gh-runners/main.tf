@@ -3,6 +3,10 @@ resource "azurerm_virtual_network" "gh_runners" {
   address_space       = [var.private_runners_address_space]
   location            = "norwayeast"
   resource_group_name = var.resource_group_name
+
+  lifecycle {
+    ignore_changes = [tags["costcenter"], tags["solution"]]
+  }
 }
 
 resource "azurerm_subnet" "gh_runners" {
