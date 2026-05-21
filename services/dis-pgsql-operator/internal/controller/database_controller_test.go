@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-var _ = Describe("Database controller", func() {
+var _ = Describe("DatabaseServer controller", func() {
 	var (
 		ctx    context.Context
 		cancel context.CancelFunc
@@ -70,7 +70,7 @@ var _ = Describe("Database controller", func() {
 		}
 	}
 
-	newDatabaseForJob := func(name string, auth storagev1alpha1.DatabaseAuth) *storagev1alpha1.Database {
+	newDedicatedDatabaseServer := func(name string, auth storagev1alpha1.DatabaseAuth) *storagev1alpha1.Database {
 		return &storagev1alpha1.Database{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
@@ -91,7 +91,7 @@ var _ = Describe("Database controller", func() {
 		}
 	}
 
-	newSharedDatabase := func(name string) *storagev1alpha1.Database {
+	newSharedDatabaseServer := func(name string) *storagev1alpha1.Database {
 		return &storagev1alpha1.Database{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
@@ -157,7 +157,7 @@ var _ = Describe("Database controller", func() {
 		}
 	}
 
-	waitForProvisionJob := func(ctx context.Context, dbName, namespace string) batchv1.Job {
+	waitForServerProvisionJob := func(ctx context.Context, dbName, namespace string) batchv1.Job {
 		var job batchv1.Job
 		Eventually(func(g Gomega) string {
 			var jobs batchv1.JobList
@@ -409,7 +409,7 @@ var _ = Describe("Database controller", func() {
 		Expect(subnetCIDR).To(Equal("10.100.1.0/28"))
 	})
 
-	It("allocates different /28 blocks for two databases", func() {
+	It("allocates different /28 blocks for two database servers", func() {
 		db1 := &storagev1alpha1.Database{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "db1-subnet",
@@ -490,8 +490,8 @@ var _ = Describe("Database controller", func() {
 		Expect(cidr1).NotTo(Equal(cidr2))
 	})
 
-	// Database Private DNS Zone integration tests
-	It("creates a Private DNS zone per Database", func() {
+	// Database server Private DNS Zone integration tests
+	It("creates a Private DNS zone per database server", func() {
 		db := &storagev1alpha1.Database{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-dns",
@@ -523,7 +523,7 @@ var _ = Describe("Database controller", func() {
 			err := k8sClient.Get(ctx, key, &zone)
 			return err
 		}).WithTimeout(20*time.Second).WithPolling(500*time.Millisecond).
-			Should(Succeed(), "expected Private DNS zone for Database to be created by controller")
+			Should(Succeed(), "expected Private DNS zone for database server to be created by controller")
 
 		// Inspect metadata of created Private DNS zone
 		var zone networkv1.PrivateDnsZone
@@ -569,11 +569,11 @@ var _ = Describe("Database controller", func() {
 			}
 			return k8sClient.Get(ctx, key, &zone)
 		}).WithTimeout(20*time.Second).WithPolling(500*time.Millisecond).
-			Should(Succeed(), "expected Private DNS zone for Database to be created")
+			Should(Succeed(), "expected Private DNS zone for database server to be created")
 
 		// Expect two VNet links
-		expectedDBLinkName := vnetLinkNameForDB(db)
-		expectedAKSLinkName := vnetLinkNameForAKS(db)
+		expectedDBLinkName := dbVNetLinkNameForDatabaseServer(db)
+		expectedAKSLinkName := aksVNetLinkNameForDatabaseServer(db)
 
 		Eventually(func(g Gomega) []string {
 			var list networkv1.PrivateDnsZonesVirtualNetworkLinkList
@@ -623,7 +623,7 @@ var _ = Describe("Database controller", func() {
 		}
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
-		expectedAKSLinkName := vnetLinkNameForAKS(db)
+		expectedAKSLinkName := aksVNetLinkNameForDatabaseServer(db)
 		expectedAKSVNetARMID := "/subscriptions/my-subscription-id/resourceGroups/aks-vnet-rg/providers/Microsoft.Network/virtualNetworks/aks-vnet-dis-dev-001"
 
 		Eventually(func(g Gomega) string {
@@ -665,7 +665,7 @@ var _ = Describe("Database controller", func() {
 			Should(Equal(expectedAKSVNetARMID))
 	})
 
-	It("rejects dedicated Databases without user auth", func() {
+	It("rejects dedicated database servers without user auth", func() {
 		db := &storagev1alpha1.Database{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-dedicated-no-user",
@@ -687,11 +687,11 @@ var _ = Describe("Database controller", func() {
 		}
 
 		err := k8sClient.Create(ctx, db)
-		Expect(apierrors.IsInvalid(err)).To(BeTrue(), "expected dedicated Database without auth.user to be rejected")
+		Expect(apierrors.IsInvalid(err)).To(BeTrue(), "expected dedicated database server without auth.user to be rejected")
 	})
 
-	It("rejects dedicated Databases with shared network config", func() {
-		db := newDatabaseForJob("my-app-db-dedicated-network", directAuth(
+	It("rejects dedicated database servers with shared network config", func() {
+		db := newDedicatedDatabaseServer("my-app-db-dedicated-network", directAuth(
 			"admin-mi",
 			"admin-mi-id",
 			"admin-mi",
@@ -701,23 +701,23 @@ var _ = Describe("Database controller", func() {
 		db.Spec.Network = sharedNetwork()
 
 		err := k8sClient.Create(ctx, db)
-		Expect(apierrors.IsInvalid(err)).To(BeTrue(), "expected dedicated Database with spec.network to be rejected")
+		Expect(apierrors.IsInvalid(err)).To(BeTrue(), "expected dedicated database server with spec.network to be rejected")
 	})
 
-	It("rejects shared Databases without network config", func() {
-		db := newSharedDatabase("my-app-db-shared-no-network")
+	It("rejects shared database servers without network config", func() {
+		db := newSharedDatabaseServer("my-app-db-shared-no-network")
 		db.Spec.Network = nil
 
 		err := k8sClient.Create(ctx, db)
-		Expect(apierrors.IsInvalid(err)).To(BeTrue(), "expected shared Database without spec.network to be rejected")
+		Expect(apierrors.IsInvalid(err)).To(BeTrue(), "expected shared database server without spec.network to be rejected")
 	})
 
 	DescribeTable("rejects shared network ARM IDs outside the allowed scope or expected type",
 		func(mutate func(*storagev1alpha1.DatabaseNetworkSpec), expectedError string) {
-			db := newSharedDatabase("my-app-db-shared-invalid-network")
+			db := newSharedDatabaseServer("my-app-db-shared-invalid-network")
 			mutate(db.Spec.Network)
 
-			reconciler := DatabaseReconciler{
+			reconciler := DatabaseServerReconciler{
 				Config: config.OperatorConfig{SubscriptionId: "my-subscription-id"},
 			}
 			_, err := reconciler.sharedPostgresNetworkConfig(db)
@@ -751,7 +751,7 @@ var _ = Describe("Database controller", func() {
 	)
 
 	It("creates a shared FlexibleServer with existing network references and skips dedicated side effects", func() {
-		db := newSharedDatabase("my-app-db-shared")
+		db := newSharedDatabaseServer("my-app-db-shared")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		Eventually(func(g Gomega) struct {
@@ -795,7 +795,7 @@ var _ = Describe("Database controller", func() {
 		Consistently(func() bool {
 			var zone networkv1.PrivateDnsZone
 			err := k8sClient.Get(ctx, types.NamespacedName{
-				Name:      zoneNameForDatabase(db),
+				Name:      zoneNameForDatabaseServer(db),
 				Namespace: db.Namespace,
 			}, &zone)
 			return apierrors.IsNotFound(err)
@@ -807,7 +807,7 @@ var _ = Describe("Database controller", func() {
 			g.Expect(k8sClient.List(ctx, &links, client.InNamespace(db.Namespace))).To(Succeed())
 			found := make([]string, 0)
 			for _, link := range links.Items {
-				if link.Name == vnetLinkNameForDB(db) || link.Name == vnetLinkNameForAKS(db) {
+				if link.Name == dbVNetLinkNameForDatabaseServer(db) || link.Name == aksVNetLinkNameForDatabaseServer(db) {
 					found = append(found, link.Name)
 				}
 			}
@@ -834,7 +834,7 @@ var _ = Describe("Database controller", func() {
 		tier := "P15"
 		retentionDays := 21
 		highAvailabilityEnabled := true
-		db := newSharedDatabase("my-app-db-shared-settings")
+		db := newSharedDatabaseServer("my-app-db-shared-settings")
 		db.Spec.Storage = &storagev1alpha1.DatabaseStorageSpec{
 			SizeGB: &sizeGB,
 			Tier:   &tier,
@@ -917,9 +917,9 @@ var _ = Describe("Database controller", func() {
 		}
 	})
 
-	It("allows multiple shared Databases in one namespace without subnet allocation", func() {
-		db1 := newSharedDatabase("my-app-db-shared-one")
-		db2 := newSharedDatabase("my-app-db-shared-two")
+	It("allows multiple shared database servers in one namespace without subnet allocation", func() {
+		db1 := newSharedDatabaseServer("my-app-db-shared-one")
+		db2 := newSharedDatabaseServer("my-app-db-shared-two")
 
 		Expect(k8sClient.Create(ctx, db1)).To(Succeed())
 		Expect(k8sClient.Create(ctx, db2)).To(Succeed())
@@ -951,8 +951,8 @@ var _ = Describe("Database controller", func() {
 			Should(ConsistOf("", ""))
 	})
 
-	// Database testing
-	It("creates a FlexibleServer for the Database", func() {
+	// Database server testing
+	It("creates a FlexibleServer for the database server", func() {
 		db := &storagev1alpha1.Database{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql",
@@ -981,7 +981,7 @@ var _ = Describe("Database controller", func() {
 				Namespace: db.Namespace,
 			}, &s)
 		}).WithTimeout(30*time.Second).WithPolling(500*time.Millisecond).
-			Should(Succeed(), "expected FlexibleServer ASO resource to be created for Database")
+			Should(Succeed(), "expected FlexibleServer ASO resource to be created for database server")
 
 		var s dbforpostgresqlv1.FlexibleServer
 		Expect(k8sClient.Get(ctx, types.NamespacedName{
@@ -1550,7 +1550,7 @@ var _ = Describe("Database controller", func() {
 			Should(BeTrue())
 	})
 
-	It("writes ASO server parameter errors to Database status", func() {
+	It("writes ASO server parameter errors to database server status", func() {
 		db := &storagev1alpha1.Database{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-server-params-status",
@@ -1881,7 +1881,7 @@ var _ = Describe("Database controller", func() {
 			Should(BeEmpty())
 	})
 
-	It("updates the FlexibleServer when Database storage spec changes", func() {
+	It("updates the FlexibleServer when database server storage spec changes", func() {
 		initialSize := int32(32)
 		initialTier := "P10"
 		updatedSize := int32(64)
@@ -2002,7 +2002,7 @@ var _ = Describe("Database controller", func() {
 			Should(Equal(expectedTier))
 	})
 
-	It("creates a FlexibleServersAdministrator for the Database", func() {
+	It("creates a FlexibleServersAdministrator for the database server", func() {
 		db := &storagev1alpha1.Database{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-admin",
@@ -2118,7 +2118,7 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("creates a Job to provision the normal database user", func() {
-		db := newDatabaseForJob("my-app-db-user-job", directAuth(
+		db := newDedicatedDatabaseServer("my-app-db-user-job", directAuth(
 			"admin-mi",
 			"admin-mi-id",
 			"admin-mi",
@@ -2129,7 +2129,7 @@ var _ = Describe("Database controller", func() {
 
 		markASOReady(ctx, db)
 
-		job := waitForProvisionJob(ctx, db.Name, db.Namespace)
+		job := waitForServerProvisionJob(ctx, db.Name, db.Namespace)
 
 		Expect(job.Labels["dis.altinn.cloud/database-name"]).To(Equal(db.Name))
 		Expect(job.Spec.Template.Labels["azure.workload.identity/use"]).To(Equal("true"))
@@ -2155,7 +2155,7 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("recreates the user provisioning Job when the spec changes", func() {
-		db := newDatabaseForJob("my-app-db-user-job-update", directAuth(
+		db := newDedicatedDatabaseServer("my-app-db-user-job-update", directAuth(
 			"admin-mi",
 			"admin-mi-id",
 			"admin-mi",
@@ -2166,7 +2166,7 @@ var _ = Describe("Database controller", func() {
 
 		markASOReady(ctx, db)
 
-		oldJob := waitForProvisionJob(ctx, db.Name, db.Namespace)
+		oldJob := waitForServerProvisionJob(ctx, db.Name, db.Namespace)
 		oldJobName := oldJob.Name
 
 		var updated storagev1alpha1.Database
@@ -2216,7 +2216,7 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("recreates the user provisioning Job when the current Job is failed", func() {
-		db := newDatabaseForJob("my-app-db-user-job-failed", directAuth(
+		db := newDedicatedDatabaseServer("my-app-db-user-job-failed", directAuth(
 			"admin-mi",
 			"admin-mi-id",
 			"admin-mi",
@@ -2227,7 +2227,7 @@ var _ = Describe("Database controller", func() {
 
 		markASOReady(ctx, db)
 
-		oldJob := waitForProvisionJob(ctx, db.Name, db.Namespace)
+		oldJob := waitForServerProvisionJob(ctx, db.Name, db.Namespace)
 		oldUID := oldJob.UID
 
 		Eventually(func() error {
@@ -2275,7 +2275,7 @@ var _ = Describe("Database controller", func() {
 		createApplicationIdentity(ctx, "adminidentity", ns, "admin-mi", "admin-mi-id")
 		createApplicationIdentity(ctx, "useridentity", ns, "user-mi", "user-mi-id")
 
-		db := newDatabaseForJob("my-app-db-appid-ref", identityRefAuth("adminidentity", "useridentity"))
+		db := newDedicatedDatabaseServer("my-app-db-appid-ref", identityRefAuth("adminidentity", "useridentity"))
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		adminName := fmt.Sprintf("%s-admin", db.Name)
@@ -2308,7 +2308,7 @@ var _ = Describe("Database controller", func() {
 
 		markASOReady(ctx, db)
 
-		job := waitForProvisionJob(ctx, db.Name, db.Namespace)
+		job := waitForServerProvisionJob(ctx, db.Name, db.Namespace)
 		Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal("adminidentity"))
 		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
 			corev1.EnvVar{Name: "DISPG_USER_APP_IDENTITY", Value: "user-mi"},
@@ -2322,7 +2322,7 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("creates a FlexibleServersDatabase and publishes LogicalDatabase status", func() {
-		db := newSharedDatabase("shared-db-logical-valid")
+		db := newSharedDatabaseServer("shared-db-logical-valid")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		logicalDatabase := newLogicalDatabase("router-valid", db.Name)
@@ -2455,8 +2455,8 @@ var _ = Describe("Database controller", func() {
 			Should(BeEmpty())
 	})
 
-	It("reports NotShared when LogicalDatabase server points to a dedicated Database", func() {
-		db := newDatabaseForJob("dedicated-db-logical-invalid", directAuth(
+	It("reports NotShared when LogicalDatabase server points to a dedicated database server", func() {
+		db := newDedicatedDatabaseServer("dedicated-db-logical-invalid", directAuth(
 			"admin-mi",
 			"admin-mi-id",
 			"admin-mi",
@@ -2491,7 +2491,7 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("rejects LogicalDatabase name and server references with surrounding whitespace", func() {
-		db := newSharedDatabase("shared-db-logical-whitespace")
+		db := newSharedDatabaseServer("shared-db-logical-whitespace")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		logicalDatabase := newLogicalDatabase("router-whitespace", db.Name)
@@ -2535,7 +2535,7 @@ var _ = Describe("Database controller", func() {
 			Should(BeEmpty())
 	})
 
-	It("revalidates LogicalDatabase when the referenced shared Database is created later", func() {
+	It("revalidates LogicalDatabase when the referenced shared database server is created later", func() {
 		const serverName = "shared-db-created-later"
 		logicalDatabase := newLogicalDatabase("router-late-server", serverName)
 		Expect(k8sClient.Create(ctx, logicalDatabase)).To(Succeed())
@@ -2555,7 +2555,7 @@ var _ = Describe("Database controller", func() {
 		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
 			Should(Equal(logicalDatabaseValidationReasonNotFound))
 
-		Expect(k8sClient.Create(ctx, newSharedDatabase(serverName))).To(Succeed())
+		Expect(k8sClient.Create(ctx, newSharedDatabaseServer(serverName))).To(Succeed())
 
 		Eventually(func(g Gomega) []storagev1alpha1.LogicalDatabaseValidationError {
 			var updated storagev1alpha1.LogicalDatabase
@@ -2573,9 +2573,9 @@ var _ = Describe("Database controller", func() {
 			Should(Equal(1))
 	})
 
-	It("allows the same database name on different shared Databases", func() {
-		db1 := newSharedDatabase("shared-db-logical-one")
-		db2 := newSharedDatabase("shared-db-logical-two")
+	It("allows the same database name on different shared database servers", func() {
+		db1 := newSharedDatabaseServer("shared-db-logical-one")
+		db2 := newSharedDatabaseServer("shared-db-logical-two")
 		Expect(k8sClient.Create(ctx, db1)).To(Succeed())
 		Expect(k8sClient.Create(ctx, db2)).To(Succeed())
 
@@ -2605,7 +2605,7 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("reports Conflict when another LogicalDatabase manages the same database on the same server", func() {
-		db := newSharedDatabase("shared-db-logical-owner-guard")
+		db := newSharedDatabaseServer("shared-db-logical-owner-guard")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		firstLogicalDatabase := newLogicalDatabase("router-owner-one", db.Name)
@@ -2699,7 +2699,7 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("sets LogicalDatabase Ready after the access provisioning Job completes", func() {
-		db := newSharedDatabase("shared-db-logical-access-ready")
+		db := newSharedDatabaseServer("shared-db-logical-access-ready")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		logicalDatabase := newLogicalDatabase("router-access-ready", db.Name)
@@ -2764,7 +2764,7 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("recreates the LogicalDatabase access provisioning Job when the current Job is failed", func() {
-		db := newSharedDatabase("shared-db-logical-access-job-failed")
+		db := newSharedDatabaseServer("shared-db-logical-access-job-failed")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		logicalDatabase := newLogicalDatabase("router-access-job-failed", db.Name)
@@ -2822,7 +2822,7 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("fails validation instead of creating a second database when spec.name changes", func() {
-		db := newSharedDatabase("shared-db-logical-name-change")
+		db := newSharedDatabaseServer("shared-db-logical-name-change")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		logicalDatabase := newLogicalDatabase("router", db.Name)
@@ -2873,7 +2873,7 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("defaults LogicalDatabase deletionPolicy to Retain", func() {
-		db := newSharedDatabase("shared-db-logical-default-policy")
+		db := newSharedDatabaseServer("shared-db-logical-default-policy")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		logicalDatabase := newLogicalDatabase("router-default-policy", db.Name)

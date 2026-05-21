@@ -37,7 +37,7 @@ func userProvisionSpecHash(dbName string, auth resolvedDatabaseAuth) string {
 	return naming.StableSHA256Hex(payload)[:8]
 }
 
-func (r *DatabaseReconciler) ensureUserProvisionJob(
+func (r *DatabaseServerReconciler) ensureUserProvisionJob(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
@@ -71,7 +71,7 @@ func (r *DatabaseReconciler) ensureUserProvisionJob(
 	})
 }
 
-func (r *DatabaseReconciler) ensureUserProvisionJobForTarget(
+func (r *DatabaseServerReconciler) ensureUserProvisionJobForTarget(
 	ctx context.Context,
 	logger logr.Logger,
 	spec userProvisionJobSpec,
@@ -121,15 +121,15 @@ type userProvisionJobReconciler interface {
 	userProvisionJobUseAzFakes() bool
 }
 
-func (r *DatabaseReconciler) userProvisionJobScheme() *runtime.Scheme {
+func (r *DatabaseServerReconciler) userProvisionJobScheme() *runtime.Scheme {
 	return r.Scheme
 }
 
-func (r *DatabaseReconciler) userProvisionJobImage() string {
+func (r *DatabaseServerReconciler) userProvisionJobImage() string {
 	return r.Config.UserProvisionImage
 }
 
-func (r *DatabaseReconciler) userProvisionJobUseAzFakes() bool {
+func (r *DatabaseServerReconciler) userProvisionJobUseAzFakes() bool {
 	return r.Config.UseAzFakes
 }
 
@@ -186,7 +186,7 @@ func ensureUserProvisionJobForReconciler(
 				}); err != nil && !apierrors.IsNotFound(err) {
 					return fmt.Errorf("delete failed user provisioning Job %s/%s: %w", job.Namespace, job.Name, err)
 				}
-				logger.Info("deleting failed user provisioning Job for database",
+				logger.Info("deleting failed user provisioning Job for target database",
 					"jobName", job.Name,
 					"namespace", job.Namespace,
 				)
@@ -238,7 +238,7 @@ func ensureUserProvisionJobForReconciler(
 		return fmt.Errorf("set controller reference on user provisioning Job: %w", err)
 	}
 
-	logger.Info("creating user provisioning Job for database",
+	logger.Info("creating user provisioning Job for target database",
 		"jobName", jobName,
 		"namespace", ns,
 		"serviceAccount", spec.ServiceAccountName,

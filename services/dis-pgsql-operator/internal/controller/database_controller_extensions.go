@@ -52,7 +52,7 @@ func serverParameterConfigResourceName(dbName, parameterName string) string {
 	return naming.WithRequiredSuffix(dbName, suffix, maxResourceNameLen, "db")
 }
 
-func (r *DatabaseReconciler) ensurePostgresExtensionSettings(
+func (r *DatabaseServerReconciler) ensurePostgresExtensionSettings(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
@@ -93,7 +93,7 @@ func (r *DatabaseReconciler) ensurePostgresExtensionSettings(
 	return nil
 }
 
-func (r *DatabaseReconciler) ensurePostgresServerParameters(
+func (r *DatabaseServerReconciler) ensurePostgresServerParameters(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
@@ -133,7 +133,7 @@ func (r *DatabaseReconciler) ensurePostgresServerParameters(
 	return r.updateServerParameterStatusFromASO(ctx, db, desiredResources)
 }
 
-func (r *DatabaseReconciler) clearOwnedManagedServerParameterConfigurations(
+func (r *DatabaseServerReconciler) clearOwnedManagedServerParameterConfigurations(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
@@ -156,7 +156,7 @@ func (r *DatabaseReconciler) clearOwnedManagedServerParameterConfigurations(
 		configuration := &configurations.Items[i]
 		if !metav1.IsControlledBy(configuration, db) {
 			logger.Info(
-				"skipping server parameter configuration that is not controlled by Database",
+				"skipping server parameter configuration that is not controlled by database server",
 				"configurationName", configuration.Name,
 				"namespace", db.Namespace,
 			)
@@ -180,7 +180,7 @@ func (r *DatabaseReconciler) clearOwnedManagedServerParameterConfigurations(
 	return nil
 }
 
-func (r *DatabaseReconciler) updateServerParameterStatusFromASO(
+func (r *DatabaseServerReconciler) updateServerParameterStatusFromASO(
 	ctx context.Context,
 	db *storagev1alpha1.Database,
 	desiredResources map[string]string,
@@ -248,7 +248,7 @@ func (r *DatabaseReconciler) updateServerParameterStatusFromASO(
 
 	if !equality.Semantic.DeepEqual(previousStatus, &db.Status) {
 		if err := r.Status().Update(ctx, db); err != nil {
-			return fmt.Errorf("update Database status with server parameter results: %w", err)
+			return fmt.Errorf("update database server status with server parameter results: %w", err)
 		}
 	}
 
@@ -287,13 +287,13 @@ func summarizeServerParameterErrors(errors []storagev1alpha1.DatabaseServerParam
 	return strings.Join(summary, "; ")
 }
 
-func (r *DatabaseReconciler) clearOwnedManagedExtensionConfigurations(
+func (r *DatabaseServerReconciler) clearOwnedManagedExtensionConfigurations(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
 ) error {
 	// Reconcile only the two extension configs this controller owns, identified by
-	// deterministic names derived from the Database name. We intentionally do not
+	// deterministic names derived from the database server name. We intentionally do not
 	// iterate all FlexibleServersConfiguration objects in the namespace.
 	candidates := []struct {
 		resourceName  string
@@ -321,7 +321,7 @@ func (r *DatabaseReconciler) clearOwnedManagedExtensionConfigurations(
 
 		if !metav1.IsControlledBy(&configuration, db) {
 			logger.Info(
-				"skipping extension configuration that is not controlled by Database",
+				"skipping extension configuration that is not controlled by database server",
 				"configurationName", candidate.resourceName,
 				"namespace", db.Namespace,
 			)
@@ -348,7 +348,7 @@ func (r *DatabaseReconciler) clearOwnedManagedExtensionConfigurations(
 	return nil
 }
 
-func (r *DatabaseReconciler) ensureFlexibleServerConfiguration(
+func (r *DatabaseServerReconciler) ensureFlexibleServerConfiguration(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
@@ -370,7 +370,7 @@ func (r *DatabaseReconciler) ensureFlexibleServerConfiguration(
 // ensureFlexibleServerConfigurationWithLabels is the generalized implementation.
 // ensureFlexibleServerConfiguration is kept as a convenience wrapper for call sites
 // that do not need additional labels.
-func (r *DatabaseReconciler) ensureFlexibleServerConfigurationWithLabels(
+func (r *DatabaseServerReconciler) ensureFlexibleServerConfigurationWithLabels(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
@@ -407,7 +407,7 @@ func (r *DatabaseReconciler) ensureFlexibleServerConfigurationWithLabels(
 			return fmt.Errorf("set controller reference on FlexibleServersConfiguration: %w", err)
 		}
 
-		logger.Info("creating FlexibleServersConfiguration for database",
+		logger.Info("creating FlexibleServersConfiguration for database server",
 			"configurationName", resourceName,
 			"namespace", db.Namespace,
 			"parameter", parameterName,
@@ -449,7 +449,7 @@ func desiredFlexibleServerConfiguration(
 	return desiredSpec, desiredLabels
 }
 
-func (r *DatabaseReconciler) updateFlexibleServerConfiguration(
+func (r *DatabaseServerReconciler) updateFlexibleServerConfiguration(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
@@ -468,7 +468,7 @@ func (r *DatabaseReconciler) updateFlexibleServerConfiguration(
 	)
 }
 
-func (r *DatabaseReconciler) updateFlexibleServerConfigurationWithLabels(
+func (r *DatabaseServerReconciler) updateFlexibleServerConfigurationWithLabels(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
@@ -491,7 +491,7 @@ func (r *DatabaseReconciler) updateFlexibleServerConfigurationWithLabels(
 		return nil
 	}
 
-	logger.Info("updating FlexibleServersConfiguration to match Database",
+	logger.Info("updating FlexibleServersConfiguration to match database server",
 		"configurationName", configuration.Name,
 		"namespace", db.Namespace,
 		"parameter", parameterName,

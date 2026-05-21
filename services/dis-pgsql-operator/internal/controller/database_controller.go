@@ -29,8 +29,8 @@ import (
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/network"
 )
 
-// DatabaseReconciler reconciles a Database object
-type DatabaseReconciler struct {
+// DatabaseServerReconciler reconciles the current Database CRD as a PostgreSQL server.
+type DatabaseServerReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 
@@ -47,8 +47,8 @@ type DatabaseReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// the Database object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
+// It compares the Database server object against the actual cluster state, and then
+// performs operations to make the cluster state reflect the state specified by
 // the user.
 //
 // For more details, check Reconcile and its Result here:
@@ -76,8 +76,8 @@ type DatabaseReconciler struct {
 // ApplicationIdentity (dis-application)
 // +kubebuilder:rbac:groups=application.dis.altinn.cloud,resources=applicationidentities,verbs=get;list;watch
 
-func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx).WithValues("database", req.NamespacedName)
+func (r *DatabaseServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	logger := log.FromContext(ctx).WithValues("databaseServer", req.NamespacedName)
 
 	var db storagev1alpha1.Database
 	if err := r.Get(ctx, req.NamespacedName, &db); err != nil {
@@ -92,32 +92,32 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil
 	}
 
-	if databaseMode(&db) == storagev1alpha1.DatabaseModeShared {
-		return r.reconcileSharedDatabase(ctx, logger, &db)
+	if databaseServerMode(&db) == storagev1alpha1.DatabaseModeShared {
+		return r.reconcileSharedDatabaseServer(ctx, logger, &db)
 	}
-	return r.reconcileDedicatedDatabase(ctx, logger, &db)
+	return r.reconcileDedicatedDatabaseServer(ctx, logger, &db)
 }
 
-func databaseMode(db *storagev1alpha1.Database) storagev1alpha1.DatabaseMode {
+func databaseServerMode(db *storagev1alpha1.Database) storagev1alpha1.DatabaseMode {
 	if db.Spec.Mode == storagev1alpha1.DatabaseModeShared {
 		return storagev1alpha1.DatabaseModeShared
 	}
 	return storagev1alpha1.DatabaseModeDedicated
 }
 
-func (r *DatabaseReconciler) reconcileDedicatedDatabase(
+func (r *DatabaseServerReconciler) reconcileDedicatedDatabaseServer(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
 ) (ctrl.Result, error) {
 	if r.SubnetCatalog == nil {
-		return ctrl.Result{}, fmt.Errorf("SubnetCatalog is not configured on DatabaseReconciler")
+		return ctrl.Result{}, fmt.Errorf("SubnetCatalog is not configured on DatabaseServerReconciler")
 	}
 
-	// Only allocate if we don't already have one
+	// Only allocate if the server doesn't already have one.
 	if db.Status.SubnetCIDR == "" {
-		logger.Info("allocating subnet for database")
-		if err := r.allocateSubnetForDatabase(ctx, logger, db); err != nil {
+		logger.Info("allocating subnet for database server")
+		if err := r.allocateSubnetForDatabaseServer(ctx, logger, db); err != nil {
 			if errors.Is(err, network.ErrNoFreeSubnets) {
 				logger.Info("no free subnets available, will retry later", "error", err.Error())
 
@@ -129,12 +129,12 @@ func (r *DatabaseReconciler) reconcileDedicatedDatabase(
 				})
 
 				if err := r.Status().Update(ctx, db); err != nil {
-					logger.Error(err, "failed to update Database status after no free subnets")
+					logger.Error(err, "failed to update database server status after no free subnets")
 					return ctrl.Result{}, err
 				}
 
 				// Requeue after some delay so we can pick up newly freed subnets.
-				// e.g. if another Database is deleted and frees a CIDR.
+				// e.g. if another database server is deleted and frees a CIDR.
 				// TODO: define later if 5 minutes is a good interval here.
 				return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 			}
@@ -147,7 +147,7 @@ func (r *DatabaseReconciler) reconcileDedicatedDatabase(
 		// will trigger another reconciliation.
 		return ctrl.Result{}, nil
 	} else {
-		logger.Info("database already has subnetCIDR", "subnetCIDR", db.Status.SubnetCIDR)
+		logger.Info("database server already has subnetCIDR", "subnetCIDR", db.Status.SubnetCIDR)
 	}
 
 	// Private Dns zone
@@ -174,8 +174,8 @@ func (r *DatabaseReconciler) reconcileDedicatedDatabase(
 	// DB VNet link
 	if err := r.ensurePrivateDNSVNetLink(
 		ctx, logger, db,
-		zoneNameForDatabase(db),
-		vnetLinkNameForDB(db),
+		zoneNameForDatabaseServer(db),
+		dbVNetLinkNameForDatabaseServer(db),
 		r.Config.DBVNetName,
 		dbVnetID,
 	); err != nil {
@@ -186,8 +186,8 @@ func (r *DatabaseReconciler) reconcileDedicatedDatabase(
 	// AKS VNet link
 	if err := r.ensurePrivateDNSVNetLink(
 		ctx, logger, db,
-		zoneNameForDatabase(db),
-		vnetLinkNameForAKS(db),
+		zoneNameForDatabaseServer(db),
+		aksVNetLinkNameForDatabaseServer(db),
 		r.Config.AKSVNetName,
 		aksVnetID,
 	); err != nil {
@@ -195,21 +195,21 @@ func (r *DatabaseReconciler) reconcileDedicatedDatabase(
 		return ctrl.Result{}, err
 	}
 
-	networkConfig, err := r.dedicatedPostgresNetworkConfig(db, zoneNameForDatabase(db))
+	networkConfig, err := r.dedicatedPostgresNetworkConfig(db, zoneNameForDatabaseServer(db))
 	if err != nil {
 		logger.Error(err, "failed to build dedicated PostgreSQL network config")
 		return ctrl.Result{}, err
 	}
 
 	if err := r.ensurePostgresServer(ctx, logger, db, networkConfig); err != nil {
-		logger.Error(err, "failed to ensure PostgreSQLFlexibleServer for database")
+		logger.Error(err, "failed to ensure PostgreSQLFlexibleServer for database server")
 		return ctrl.Result{}, err
 	}
 
-	return r.reconcileCommonDatabaseResources(ctx, logger, db, true)
+	return r.reconcileCommonDatabaseServerResources(ctx, logger, db, true)
 }
 
-func (r *DatabaseReconciler) reconcileSharedDatabase(
+func (r *DatabaseServerReconciler) reconcileSharedDatabaseServer(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
@@ -221,26 +221,26 @@ func (r *DatabaseReconciler) reconcileSharedDatabase(
 	}
 
 	if err := r.ensurePostgresServer(ctx, logger, db, networkConfig); err != nil {
-		logger.Error(err, "failed to ensure PostgreSQLFlexibleServer for shared database")
+		logger.Error(err, "failed to ensure PostgreSQLFlexibleServer for shared database server")
 		return ctrl.Result{}, err
 	}
 
-	return r.reconcileCommonDatabaseResources(ctx, logger, db, false)
+	return r.reconcileCommonDatabaseServerResources(ctx, logger, db, false)
 }
 
-func (r *DatabaseReconciler) reconcileCommonDatabaseResources(
+func (r *DatabaseServerReconciler) reconcileCommonDatabaseServerResources(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
 	provisionUser bool,
 ) (ctrl.Result, error) {
 	if err := r.ensurePostgresExtensionSettings(ctx, logger, db); err != nil {
-		logger.Error(err, "failed to ensure PostgreSQL extension settings for database")
+		logger.Error(err, "failed to ensure PostgreSQL extension settings for database server")
 		return ctrl.Result{}, err
 	}
 
 	if err := r.ensurePostgresServerParameters(ctx, logger, db); err != nil {
-		logger.Error(err, "failed to ensure PostgreSQL server parameters for database")
+		logger.Error(err, "failed to ensure PostgreSQL server parameters for database server")
 		return ctrl.Result{}, err
 	}
 
@@ -256,14 +256,14 @@ func (r *DatabaseReconciler) reconcileCommonDatabaseResources(
 
 	// Flexible Server admin
 	if err := r.ensureFlexibleServerAdministrator(ctx, logger, db, adminIdentity); err != nil {
-		logger.Error(err, "failed to ensure FlexibleServerAdministrator for database")
+		logger.Error(err, "failed to ensure FlexibleServerAdministrator for database server")
 		return ctrl.Result{}, err
 	}
 
 	if !r.Config.UseAzFakes {
 		ready, err := r.asoResourcesReady(ctx, logger, db)
 		if err != nil {
-			logger.Error(err, "failed to check ASO readiness for database")
+			logger.Error(err, "failed to check ASO readiness for database server")
 			return ctrl.Result{}, err
 		}
 		if !ready {
@@ -286,27 +286,27 @@ func (r *DatabaseReconciler) reconcileCommonDatabaseResources(
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
 
-	// Normal DB user provisioning job
+	// Normal DB user provisioning job for the current server path.
 	if err := r.ensureUserProvisionJob(ctx, logger, db, resolvedDatabaseAuth{
 		Admin: adminIdentity,
 		User:  userIdentity,
 	}); err != nil {
-		logger.Error(err, "failed to ensure user provisioning job for database")
+		logger.Error(err, "failed to ensure user provisioning job for database server")
 		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
 }
 
-func (r *DatabaseReconciler) allocateSubnetForDatabase(
+func (r *DatabaseServerReconciler) allocateSubnetForDatabaseServer(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
 ) error {
-	// Collect used subnets from all Database resources.
+	// Collect used subnets from all Database resources that currently represent servers.
 	var dbList storagev1alpha1.DatabaseList
 	if err := r.List(ctx, &dbList); err != nil {
-		return fmt.Errorf("list Databases: %w", err)
+		return fmt.Errorf("list database servers: %w", err)
 	}
 
 	var used []string
@@ -328,13 +328,13 @@ func (r *DatabaseReconciler) allocateSubnetForDatabase(
 	// Write to status and persist it
 	db.Status.SubnetCIDR = free.CIDR
 	if err := r.Status().Update(ctx, db); err != nil {
-		return fmt.Errorf("update Database status with SubnetCIDR: %w", err)
+		return fmt.Errorf("update database server status with SubnetCIDR: %w", err)
 	}
 
 	return nil
 }
 
-func (r *DatabaseReconciler) asoResourcesReady(
+func (r *DatabaseServerReconciler) asoResourcesReady(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
@@ -399,7 +399,7 @@ func readyConditionInfo(
 	return "", "", "", false
 }
 
-func (r *DatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *DatabaseServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&storagev1alpha1.Database{}).
 		Owns(&networkv1.PrivateDnsZone{}).
@@ -408,7 +408,7 @@ func (r *DatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&dbforpostgresqlv1.FlexibleServersConfiguration{}).
 		Owns(&dbforpostgresqlv1.FlexibleServersAdministrator{}).
 		Owns(&batchv1.Job{}).
-		Watches(&identityv1alpha1.ApplicationIdentity{}, handler.EnqueueRequestsFromMapFunc(r.mapApplicationIdentityToDatabases)).
+		Watches(&identityv1alpha1.ApplicationIdentity{}, handler.EnqueueRequestsFromMapFunc(r.mapApplicationIdentityToDatabaseServers)).
 		WithOptions(controller.Options{
 			// Force single-threaded reconciliation
 			MaxConcurrentReconciles: 1,
