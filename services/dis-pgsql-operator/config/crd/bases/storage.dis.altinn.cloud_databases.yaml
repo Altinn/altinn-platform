@@ -4,20 +4,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.20.0
-  name: logicaldatabases.storage.dis.altinn.cloud
+  name: databases.storage.dis.altinn.cloud
 spec:
   group: storage.dis.altinn.cloud
   names:
-    kind: LogicalDatabase
-    listKind: LogicalDatabaseList
-    plural: logicaldatabases
-    singular: logicaldatabase
+    kind: Database
+    listKind: DatabaseList
+    plural: databases
+    singular: database
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: LogicalDatabase is the Schema for the logicaldatabases API.
+        description: Database is the Schema for the databases API.
         properties:
           apiVersion:
             description: |-
@@ -37,11 +37,11 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of LogicalDatabase.
+            description: spec defines the desired state of Database.
             properties:
               access:
                 description: access defines the identity that should get access to
-                  this logical database.
+                  this database.
                 properties:
                   app:
                     description: app is the runtime application principal.
@@ -60,7 +60,7 @@ spec:
                     type: object
                   owner:
                     description: owner is the Entra group for the team that owns the
-                      logical database.
+                      database.
                     properties:
                       name:
                         description: name is the Entra principal name.
@@ -110,7 +110,7 @@ spec:
             - server
             type: object
           status:
-            description: status defines the observed state of LogicalDatabase.
+            description: status defines the observed state of Database.
             properties:
               conditions:
                 description: conditions represent the current validation/provisioning
@@ -179,7 +179,7 @@ spec:
                 type: string
               host:
                 description: |-
-                  host is the PostgreSQL server host for this logical database.
+                  host is the PostgreSQL server host for this database.
                   It is populated in a later reconciliation slice.
                 type: string
               observedGeneration:
@@ -189,7 +189,7 @@ spec:
                 type: integer
               port:
                 description: |-
-                  port is the PostgreSQL server port for this logical database.
+                  port is the PostgreSQL server port for this database.
                   It is populated in a later reconciliation slice.
                 format: int32
                 type: integer
@@ -197,7 +197,7 @@ spec:
                 description: validationErrors contains field-level validation failures.
                 items:
                   description: |-
-                    LogicalDatabaseValidationError captures a validation failure observed by the
+                    DatabaseValidationError captures a validation failure observed by the
                     controller.
                   properties:
                     field:

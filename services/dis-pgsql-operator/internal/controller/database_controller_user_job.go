@@ -17,7 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-func (r *LogicalDatabaseReconciler) ensureUserProvisionJobForTarget(
+func (r *DatabaseReconciler) ensureUserProvisionJobForTarget(
 	ctx context.Context,
 	logger logr.Logger,
 	spec userProvisionJobSpec,
@@ -59,15 +59,15 @@ type userProvisionJobReconciler interface {
 	userProvisionJobUseAzFakes() bool
 }
 
-func (r *LogicalDatabaseReconciler) userProvisionJobScheme() *runtime.Scheme {
+func (r *DatabaseReconciler) userProvisionJobScheme() *runtime.Scheme {
 	return r.Scheme
 }
 
-func (r *LogicalDatabaseReconciler) userProvisionJobImage() string {
+func (r *DatabaseReconciler) userProvisionJobImage() string {
 	return r.Config.UserProvisionImage
 }
 
-func (r *LogicalDatabaseReconciler) userProvisionJobUseAzFakes() bool {
+func (r *DatabaseReconciler) userProvisionJobUseAzFakes() bool {
 	return r.Config.UseAzFakes
 }
 

@@ -2,26 +2,26 @@ package v1alpha1
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-// LogicalDatabaseDeletionPolicy controls what happens to the PostgreSQL
-// database when the LogicalDatabase resource is deleted.
+// DatabaseDeletionPolicy controls what happens to the PostgreSQL
+// database when the Database resource is deleted.
 // +kubebuilder:validation:Enum=Retain
-type LogicalDatabaseDeletionPolicy string
+type DatabaseDeletionPolicy string
 
 const (
-	LogicalDatabaseDeletionPolicyRetain LogicalDatabaseDeletionPolicy = "Retain"
+	DatabaseDeletionPolicyRetain DatabaseDeletionPolicy = "Retain"
 )
 
-// LogicalDatabaseServerSpec identifies the DatabaseServer that hosts this
-// logical database.
-type LogicalDatabaseServerSpec struct {
+// DatabaseServerReference identifies the DatabaseServer that hosts this
+// database.
+type DatabaseServerReference struct {
 	// name is the same-namespace DatabaseServer resource to use as the server.
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 }
 
-// LogicalDatabasePrincipalSpec contains an Entra principal that should get
-// access to the logical database.
-type LogicalDatabasePrincipalSpec struct {
+// DatabasePrincipalSpec contains an Entra principal that should get
+// access to the database.
+type DatabasePrincipalSpec struct {
 	// name is the Entra principal name.
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
@@ -31,20 +31,20 @@ type LogicalDatabasePrincipalSpec struct {
 	PrincipalId string `json:"principalId"`
 }
 
-// LogicalDatabaseAccessSpec describes access requirements for the logical
+// DatabaseAccessSpec describes access requirements for the
 // database.
-type LogicalDatabaseAccessSpec struct {
+type DatabaseAccessSpec struct {
 	// app is the runtime application principal.
-	App LogicalDatabasePrincipalSpec `json:"app"`
+	App DatabasePrincipalSpec `json:"app"`
 
-	// owner is the Entra group for the team that owns the logical database.
-	Owner LogicalDatabasePrincipalSpec `json:"owner"`
+	// owner is the Entra group for the team that owns the database.
+	Owner DatabasePrincipalSpec `json:"owner"`
 }
 
-// LogicalDatabaseSpec defines the desired state of LogicalDatabase.
+// DatabaseSpec defines the desired state of Database.
 //
 // The PostgreSQL database name is spec.name.
-type LogicalDatabaseSpec struct {
+type DatabaseSpec struct {
 	// name is the PostgreSQL database name to create inside the selected server.
 	// It must be unique per server.
 	// +kubebuilder:validation:MinLength=1
@@ -52,21 +52,21 @@ type LogicalDatabaseSpec struct {
 	Name string `json:"name"`
 
 	// server identifies the same-namespace DatabaseServer.
-	Server LogicalDatabaseServerSpec `json:"server"`
+	Server DatabaseServerReference `json:"server"`
 
-	// access defines the identity that should get access to this logical database.
-	Access LogicalDatabaseAccessSpec `json:"access"`
+	// access defines the identity that should get access to this database.
+	Access DatabaseAccessSpec `json:"access"`
 
 	// deletionPolicy controls database cleanup when this resource is deleted.
 	// Only Retain is supported in this API slice.
 	// +optional
 	// +kubebuilder:default=Retain
-	DeletionPolicy LogicalDatabaseDeletionPolicy `json:"deletionPolicy,omitempty"`
+	DeletionPolicy DatabaseDeletionPolicy `json:"deletionPolicy,omitempty"`
 }
 
-// LogicalDatabaseValidationError captures a validation failure observed by the
+// DatabaseValidationError captures a validation failure observed by the
 // controller.
-type LogicalDatabaseValidationError struct {
+type DatabaseValidationError struct {
 	// field is the JSON path of the invalid field.
 	// +kubebuilder:validation:MinLength=1
 	Field string `json:"field"`
@@ -80,18 +80,18 @@ type LogicalDatabaseValidationError struct {
 	Message string `json:"message"`
 }
 
-// LogicalDatabaseStatus defines the observed state of LogicalDatabase.
-type LogicalDatabaseStatus struct {
+// DatabaseStatus defines the observed state of Database.
+type DatabaseStatus struct {
 	// databaseName is the PostgreSQL database name managed by the operator.
 	// +optional
 	DatabaseName string `json:"databaseName,omitempty"`
 
-	// host is the PostgreSQL server host for this logical database.
+	// host is the PostgreSQL server host for this database.
 	// It is populated in a later reconciliation slice.
 	// +optional
 	Host string `json:"host,omitempty"`
 
-	// port is the PostgreSQL server port for this logical database.
+	// port is the PostgreSQL server port for this database.
 	// It is populated in a later reconciliation slice.
 	// +optional
 	Port int32 `json:"port,omitempty"`
@@ -110,38 +110,38 @@ type LogicalDatabaseStatus struct {
 	// +listType=map
 	// +listMapKey=field
 	// +optional
-	ValidationErrors []LogicalDatabaseValidationError `json:"validationErrors,omitempty"`
+	ValidationErrors []DatabaseValidationError `json:"validationErrors,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// LogicalDatabase is the Schema for the logicaldatabases API.
-type LogicalDatabase struct {
+// Database is the Schema for the databases API.
+type Database struct {
 	metav1.TypeMeta `json:",inline"`
 
 	// metadata is standard object metadata.
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitzero"`
 
-	// spec defines the desired state of LogicalDatabase.
+	// spec defines the desired state of Database.
 	// +required
-	Spec LogicalDatabaseSpec `json:"spec"`
+	Spec DatabaseSpec `json:"spec"`
 
-	// status defines the observed state of LogicalDatabase.
+	// status defines the observed state of Database.
 	// +optional
-	Status LogicalDatabaseStatus `json:"status,omitzero"`
+	Status DatabaseStatus `json:"status,omitzero"`
 }
 
 // +kubebuilder:object:root=true
 
-// LogicalDatabaseList contains a list of LogicalDatabase.
-type LogicalDatabaseList struct {
+// DatabaseList contains a list of Database.
+type DatabaseList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitzero"`
-	Items           []LogicalDatabase `json:"items"`
+	Items           []Database `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&LogicalDatabase{}, &LogicalDatabaseList{})
+	SchemeBuilder.Register(&Database{}, &DatabaseList{})
 }

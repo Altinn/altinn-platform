@@ -79,7 +79,7 @@ spec:
                       serviceAccountName:
                         description: |-
                           serviceAccountName is the ServiceAccount name used for workload identity
-                          when provisioning database access for child LogicalDatabase resources.
+                          when provisioning database access for child Database resources.
                           Optional when identityRef is set; defaults to identityRef.name.
                         minLength: 1
                         type: string
@@ -93,7 +93,7 @@ spec:
                   user:
                     description: |-
                       user is retained for compatibility with early DatabaseServer manifests.
-                      Server reconciliation ignores this field; use LogicalDatabase resources
+                      Server reconciliation ignores this field; use Database resources
                       to provision app and owner access.
                     properties:
                       identity:

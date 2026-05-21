@@ -127,7 +127,7 @@ var _ = BeforeSuite(func() {
 		Config:        config,
 	}).SetupWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())
-	err = (&LogicalDatabaseReconciler{
+	err = (&DatabaseReconciler{
 		Client: k8sManager.GetClient(),
 		Scheme: k8sManager.GetScheme(),
 		Config: config,
