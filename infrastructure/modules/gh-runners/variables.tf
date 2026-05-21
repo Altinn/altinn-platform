@@ -46,3 +46,15 @@ variable "tags" {
   description = "Tags to apply to all resources"
   default     = {}
 }
+
+variable "runner_cpu" {
+  type        = string
+  description = "CPU allocated to a runner"
+  default     = "2.0"
+}
+
+variable "runner_memory" {
+  type        = string
+  description = "Memory allocated to a runner"
+  default     = "4Gi"
+}

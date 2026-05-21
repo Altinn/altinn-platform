@@ -39,8 +39,8 @@ module "container_apps_gh_runners" {
   resource_prefix          = var.private_runners_prefix
   infrastructure_subnet_id = azurerm_subnet.gh_runners.id
   resource_group_name      = var.resource_group_name
-  runner_cpu               = "2.0"
-  runner_memory            = "4Gi"
+  runner_cpu               = var.runner_cpu
+  runner_memory            = var.runner_memory
   # renovate: datasource=docker depName=ghcr.io/altinn/altinn-platform/gh-runner
   runner_image = "ghcr.io/altinn/altinn-platform/gh-runner:v0.6.2"
   additional_tags = merge(
