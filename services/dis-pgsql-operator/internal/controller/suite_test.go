@@ -120,7 +120,7 @@ var _ = BeforeSuite(func() {
 		AKSResourceGroup:   "aks-vnet-rg",
 		UserProvisionImage: "controller:latest",
 	}
-	err = (&DatabaseReconciler{
+	err = (&DatabaseServerReconciler{
 		Client:        k8sManager.GetClient(),
 		Scheme:        k8sManager.GetScheme(),
 		SubnetCatalog: testCatalog,

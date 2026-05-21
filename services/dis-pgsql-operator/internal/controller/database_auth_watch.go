@@ -10,7 +10,7 @@ import (
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 )
 
-func (r *DatabaseReconciler) mapApplicationIdentityToDatabases(
+func (r *DatabaseServerReconciler) mapApplicationIdentityToDatabaseServers(
 	ctx context.Context,
 	obj client.Object,
 ) []ctrl.Request {
@@ -25,7 +25,7 @@ func (r *DatabaseReconciler) mapApplicationIdentityToDatabases(
 	requests := make([]ctrl.Request, 0)
 	for i := range dbList.Items {
 		db := dbList.Items[i]
-		if databaseReferencesIdentity(&db, identityName) {
+		if databaseServerReferencesIdentity(&db, identityName) {
 			requests = append(requests, ctrl.Request{
 				NamespacedName: types.NamespacedName{
 					Name:      db.Name,
@@ -38,7 +38,7 @@ func (r *DatabaseReconciler) mapApplicationIdentityToDatabases(
 	return requests
 }
 
-func databaseReferencesIdentity(db *storagev1alpha1.Database, identityName string) bool {
+func databaseServerReferencesIdentity(db *storagev1alpha1.Database, identityName string) bool {
 	if db.Spec.Auth.Admin.Identity.IdentityRef != nil && db.Spec.Auth.Admin.Identity.IdentityRef.Name == identityName {
 		return true
 	}
