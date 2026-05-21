@@ -5,12 +5,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// DatabaseAuth contains identities used for server administration.
-type DatabaseAuth struct {
+// DatabaseServerAuth contains identities used for server administration.
+type DatabaseServerAuth struct {
 	// admin defines the identity used for admin access.
 	Admin AdminIdentitySpec `json:"admin"`
 
-	// user is retained for compatibility with early Database manifests.
+	// user is retained for compatibility with early DatabaseServer manifests.
 	// Server reconciliation ignores this field; use LogicalDatabase resources
 	// to provision app and owner access.
 	// +optional
@@ -63,24 +63,24 @@ type ApplicationIdentityRef struct {
 }
 
 // +kubebuilder:validation:Enum=hstore;pg_cron;pg_stat_statements;pgaudit;uuid-ossp
-// DatabaseExtension is a curated PostgreSQL extension allowed by this operator.
-type DatabaseExtension string
+// DatabaseServerExtension is a curated PostgreSQL extension allowed by this operator.
+type DatabaseServerExtension string
 
 const (
-	DatabaseExtensionHstore           DatabaseExtension = "hstore"
-	DatabaseExtensionPgCron           DatabaseExtension = "pg_cron"
-	DatabaseExtensionPgStatStatements DatabaseExtension = "pg_stat_statements"
-	DatabaseExtensionPgAudit          DatabaseExtension = "pgaudit"
-	DatabaseExtensionUUIDOSSP         DatabaseExtension = "uuid-ossp"
+	DatabaseServerExtensionHstore           DatabaseServerExtension = "hstore"
+	DatabaseServerExtensionPgCron           DatabaseServerExtension = "pg_cron"
+	DatabaseServerExtensionPgStatStatements DatabaseServerExtension = "pg_stat_statements"
+	DatabaseServerExtensionPgAudit          DatabaseServerExtension = "pgaudit"
+	DatabaseServerExtensionUUIDOSSP         DatabaseServerExtension = "uuid-ossp"
 )
 
 // +kubebuilder:validation:Enum=Dedicated;Shared
-// DatabaseMode defines whether a Database owns dedicated infrastructure or hosts logical databases.
-type DatabaseMode string
+// DatabaseServerMode defines whether a DatabaseServer owns dedicated infrastructure or hosts logical databases.
+type DatabaseServerMode string
 
 const (
-	DatabaseModeDedicated DatabaseMode = "Dedicated"
-	DatabaseModeShared    DatabaseMode = "Shared"
+	DatabaseServerModeDedicated DatabaseServerMode = "Dedicated"
+	DatabaseServerModeShared    DatabaseServerMode = "Shared"
 )
 
 // +kubebuilder:validation:XValidation:rule="self.name != 'azure.extensions' && self.name != 'shared_preload_libraries' && self.name != 'pgbouncer.enabled' && self.name != 'pgbouncer.max_prepared_statements' && self.name != 'pgbouncer.pool_mode' && self.name != 'max_connections'",message="azure.extensions/shared_preload_libraries are managed via enableExtensions, and pgbouncer/max_connections are managed by the operator."
@@ -94,8 +94,8 @@ type DatabaseServerParameter struct {
 	Value intstr.IntOrString `json:"value"`
 }
 
-// DatabaseNetworkSpec references pre-existing network resources for shared databases.
-type DatabaseNetworkSpec struct {
+// DatabaseServerNetworkSpec references pre-existing network resources for shared databases.
+type DatabaseServerNetworkSpec struct {
 	// delegatedSubnetResourceId is the Azure ARM ID of an existing delegated subnet.
 	// +kubebuilder:validation:MinLength=1
 	DelegatedSubnetResourceID string `json:"delegatedSubnetResourceId"`
@@ -105,15 +105,15 @@ type DatabaseNetworkSpec struct {
 	PrivateDNSZoneResourceID string `json:"privateDnsZoneResourceId"`
 }
 
-// DatabaseSpec defines the desired state of Database.
+// DatabaseServerSpec defines the desired state of DatabaseServer.
 // +kubebuilder:validation:XValidation:rule="(has(self.mode) && self.mode == 'Shared') ? has(self.network) : !has(self.network)",message="spec.network is required when mode is Shared and must be omitted when mode is Dedicated."
-type DatabaseSpec struct {
-	// mode controls whether this Database provisions a dedicated server or a shared server.
+type DatabaseServerSpec struct {
+	// mode controls whether this DatabaseServer provisions a dedicated server or a shared server.
 	// Defaults to Dedicated.
 	// +optional
 	// +kubebuilder:default=Dedicated
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="mode is immutable"
-	Mode DatabaseMode `json:"mode,omitempty"`
+	Mode DatabaseServerMode `json:"mode,omitempty"`
 
 	// version is the major version of PostgreSQL to run (e.g. 17).
 	// +kubebuilder:validation:Minimum=9
@@ -124,18 +124,18 @@ type DatabaseSpec struct {
 	ServerType string `json:"serverType"`
 
 	// auth defines the identities used for server administration.
-	Auth DatabaseAuth `json:"auth"`
+	Auth DatabaseServerAuth `json:"auth"`
 
 	// network references existing private access resources for shared databases.
 	// It must be omitted for dedicated databases.
 	// +optional
-	Network *DatabaseNetworkSpec `json:"network,omitempty"`
+	Network *DatabaseServerNetworkSpec `json:"network,omitempty"`
 
 	// enableExtensions is the curated list of PostgreSQL extensions that should be enabled.
 	// Some extensions require shared_preload_libraries and are configured automatically.
 	// +optional
 	// +listType=set
-	EnableExtensions []DatabaseExtension `json:"enableExtensions,omitempty"`
+	EnableExtensions []DatabaseServerExtension `json:"enableExtensions,omitempty"`
 
 	// serverParams configures allowed PostgreSQL server parameters.
 	// azure.extensions and shared_preload_libraries are managed via enableExtensions.
@@ -146,7 +146,7 @@ type DatabaseSpec struct {
 	ServerParams []DatabaseServerParameter `json:"serverParams,omitempty"`
 
 	// +optional
-	Storage *DatabaseStorageSpec `json:"storage,omitempty"`
+	Storage *DatabaseServerStorageSpec `json:"storage,omitempty"`
 
 	// highAvailabilityEnabled controls whether PostgreSQL high availability is enabled.
 	// If omitted, it defaults to true for prod/production server types and false otherwise.
@@ -161,7 +161,7 @@ type DatabaseSpec struct {
 	BackupRetentionDays *int `json:"backupRetentionDays,omitempty"`
 }
 
-type DatabaseStorageSpec struct {
+type DatabaseServerStorageSpec struct {
 	// sizeGB is the initial storage size in GB.
 	// If omitted, the operator will default it.
 	// +optional
@@ -188,14 +188,14 @@ type DatabaseServerParameterError struct {
 	Message string `json:"message,omitempty"`
 }
 
-// DatabaseStatus defines the observed state of Database.
-type DatabaseStatus struct {
+// DatabaseServerStatus defines the observed state of DatabaseServer.
+type DatabaseServerStatus struct {
 	// subnetCIDR is the /28 network block allocated for this database's subnet.
 	// It is set by the controller once allocation succeeds.
 	// +optional
 	SubnetCIDR string `json:"subnetCIDR,omitempty"`
 
-	// conditions represent the current state of the Database resource.
+	// conditions represent the current state of the DatabaseServer resource.
 	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
 	//
 	// Standard condition types might include:
@@ -220,32 +220,32 @@ type DatabaseStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// Database is the Schema for the databases API.
-type Database struct {
+// DatabaseServer is the Schema for the databases API.
+type DatabaseServer struct {
 	metav1.TypeMeta `json:",inline"`
 
 	// metadata is standard object metadata.
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitzero"`
 
-	// spec defines the desired state of Database.
+	// spec defines the desired state of DatabaseServer.
 	// +required
-	Spec DatabaseSpec `json:"spec"`
+	Spec DatabaseServerSpec `json:"spec"`
 
-	// status defines the observed state of Database.
+	// status defines the observed state of DatabaseServer.
 	// +optional
-	Status DatabaseStatus `json:"status,omitzero"`
+	Status DatabaseServerStatus `json:"status,omitzero"`
 }
 
 // +kubebuilder:object:root=true
 
-// DatabaseList contains a list of Database.
-type DatabaseList struct {
+// DatabaseServerList contains a list of DatabaseServer.
+type DatabaseServerList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitzero"`
-	Items           []Database `json:"items"`
+	Items           []DatabaseServer `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Database{}, &DatabaseList{})
+	SchemeBuilder.Register(&DatabaseServer{}, &DatabaseServerList{})
 }

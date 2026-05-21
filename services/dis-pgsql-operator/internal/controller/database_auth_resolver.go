@@ -32,7 +32,7 @@ type identitySourceResolver interface {
 func (r *DatabaseServerReconciler) resolveAdminIdentity(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 ) (resolvedAdminIdentity, bool, error) {
 	return resolveAdminIdentity(ctx, logger, r, db)
 }
@@ -40,7 +40,7 @@ func (r *DatabaseServerReconciler) resolveAdminIdentity(
 func (r *LogicalDatabaseReconciler) resolveAdminIdentity(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 ) (resolvedAdminIdentity, bool, error) {
 	return resolveAdminIdentity(ctx, logger, r, db)
 }
@@ -49,7 +49,7 @@ func resolveAdminIdentity(
 	ctx context.Context,
 	logger logr.Logger,
 	r identitySourceResolver,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 ) (resolvedAdminIdentity, bool, error) {
 	identity, requeue, err := resolveIdentitySource(ctx, logger, r, db, "admin", db.Spec.Auth.Admin.Identity)
 	if err != nil || requeue {
@@ -74,7 +74,7 @@ func resolveIdentitySource(
 	ctx context.Context,
 	logger logr.Logger,
 	r identitySourceResolver,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 	role string,
 	source storagev1alpha1.IdentitySource,
 ) (resolvedIdentity, bool, error) {

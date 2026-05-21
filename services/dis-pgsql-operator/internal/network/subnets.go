@@ -29,7 +29,7 @@ type SubnetInfo struct {
 // the first free one given a set of used CIDRs.
 //
 // The catalog itself is static (loaded at startup). Which DB uses which subnet
-// is persisted in Kubernetes objects (e.g. Database.status.subnetCIDR).
+// is persisted in Kubernetes objects (e.g. DatabaseServer.status.subnetCIDR).
 type SubnetCatalog struct {
 	subnets []SubnetInfo
 }
@@ -68,7 +68,7 @@ func NewSubnetCatalog(infos []SubnetInfo) (*SubnetCatalog, error) {
 // is not present in used.
 //
 // `used` should contain already allocated subnet CIDR strings, these
-// come from Database.status.subnetCIDR
+// come from DatabaseServer.status.subnetCIDR
 //
 // Returns an ErrNoFreeSubnets if all subnets are used.
 func (c *SubnetCatalog) FirstFreeSubnet(used []string) (SubnetInfo, error) {

@@ -183,7 +183,7 @@ test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expect
 
 .PHONY: test-e2e-kind
 test-e2e-kind: cleanup-test-e2e setup-test-e2e docker-build kind-load install install-aso-crds-kind install-dis-identity-crd-kind deploy-kind
-	kubectl apply -f config/samples/storage_v1alpha1_database.yaml
+	kubectl apply -f config/samples/storage_v1alpha1_databaseserver.yaml
 	$(MAKE) seed-dis-identity-kind
 
 .PHONY: test-e2e-kind-ci

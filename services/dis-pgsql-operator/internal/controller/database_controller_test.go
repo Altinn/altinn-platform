@@ -37,8 +37,8 @@ var _ = Describe("DatabaseServer controller", func() {
 	const sharedDelegatedSubnetResourceID = "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-dev-001/subnets/shared-postgres"
 	const sharedPrivateDNSZoneResourceID = "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/privateDnsZones/shared.private.postgres.database.azure.com"
 
-	adminAuth := func(adminName, adminPrincipalID, adminServiceAccount string) storagev1alpha1.DatabaseAuth {
-		return storagev1alpha1.DatabaseAuth{
+	adminAuth := func(adminName, adminPrincipalID, adminServiceAccount string) storagev1alpha1.DatabaseServerAuth {
+		return storagev1alpha1.DatabaseServerAuth{
 			Admin: storagev1alpha1.AdminIdentitySpec{
 				Identity: storagev1alpha1.IdentitySource{
 					Name:        adminName,
@@ -49,7 +49,7 @@ var _ = Describe("DatabaseServer controller", func() {
 		}
 	}
 
-	directAuth := func(adminName, adminPrincipalID, adminServiceAccount, userName, userPrincipalID string) storagev1alpha1.DatabaseAuth {
+	directAuth := func(adminName, adminPrincipalID, adminServiceAccount, userName, userPrincipalID string) storagev1alpha1.DatabaseServerAuth {
 		auth := adminAuth(adminName, adminPrincipalID, adminServiceAccount)
 		auth.User = &storagev1alpha1.UserIdentitySpec{
 			Identity: storagev1alpha1.IdentitySource{
@@ -60,8 +60,8 @@ var _ = Describe("DatabaseServer controller", func() {
 		return auth
 	}
 
-	adminIdentityRefAuth := func(adminRefName string) storagev1alpha1.DatabaseAuth {
-		return storagev1alpha1.DatabaseAuth{
+	adminIdentityRefAuth := func(adminRefName string) storagev1alpha1.DatabaseServerAuth {
+		return storagev1alpha1.DatabaseServerAuth{
 			Admin: storagev1alpha1.AdminIdentitySpec{
 				Identity: storagev1alpha1.IdentitySource{
 					IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: adminRefName},
@@ -70,13 +70,13 @@ var _ = Describe("DatabaseServer controller", func() {
 		}
 	}
 
-	newDedicatedDatabaseServer := func(name string, auth storagev1alpha1.DatabaseAuth) *storagev1alpha1.Database {
-		return &storagev1alpha1.Database{
+	newDedicatedDatabaseServer := func(name string, auth storagev1alpha1.DatabaseServerAuth) *storagev1alpha1.DatabaseServer {
+		return &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
 				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "dev",
 				Auth:       auth,
@@ -84,25 +84,25 @@ var _ = Describe("DatabaseServer controller", func() {
 		}
 	}
 
-	sharedNetwork := func() *storagev1alpha1.DatabaseNetworkSpec {
-		return &storagev1alpha1.DatabaseNetworkSpec{
+	sharedNetwork := func() *storagev1alpha1.DatabaseServerNetworkSpec {
+		return &storagev1alpha1.DatabaseServerNetworkSpec{
 			DelegatedSubnetResourceID: sharedDelegatedSubnetResourceID,
 			PrivateDNSZoneResourceID:  sharedPrivateDNSZoneResourceID,
 		}
 	}
 
-	newSharedDatabaseServer := func(name string) *storagev1alpha1.Database {
-		return &storagev1alpha1.Database{
+	newSharedDatabaseServer := func(name string) *storagev1alpha1.DatabaseServer {
+		return &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
 				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
-				Mode:       storagev1alpha1.DatabaseModeShared,
+			Spec: storagev1alpha1.DatabaseServerSpec{
+				Mode:       storagev1alpha1.DatabaseServerModeShared,
 				Version:    17,
 				ServerType: "dev",
 				Network:    sharedNetwork(),
-				Auth: storagev1alpha1.DatabaseAuth{
+				Auth: storagev1alpha1.DatabaseServerAuth{
 					Admin: storagev1alpha1.AdminIdentitySpec{
 						Identity: storagev1alpha1.IdentitySource{
 							Name:        "admin-mi",
@@ -194,7 +194,7 @@ var _ = Describe("DatabaseServer controller", func() {
 		Expect(k8sClient.Status().Update(ctx, appIdentity)).To(Succeed())
 	}
 
-	markASOReady := func(ctx context.Context, db *storagev1alpha1.Database) {
+	markASOReady := func(ctx context.Context, db *storagev1alpha1.DatabaseServer) {
 		serverName := db.Name
 		adminName := fmt.Sprintf("%s-admin", db.Name)
 
@@ -303,7 +303,7 @@ var _ = Describe("DatabaseServer controller", func() {
 		// Delete reconciling parents first so they cannot recreate children while
 		// this cleanup is draining the namespace.
 		deleteAll(&storagev1alpha1.LogicalDatabase{})
-		deleteAll(&storagev1alpha1.Database{})
+		deleteAll(&storagev1alpha1.DatabaseServer{})
 
 		deleteAll(&batchv1.Job{})
 		deleteAll(&dbforpostgresqlv1.FlexibleServersDatabase{})
@@ -315,7 +315,7 @@ var _ = Describe("DatabaseServer controller", func() {
 		deleteAll(&identityv1alpha1.ApplicationIdentity{})
 
 		Eventually(func(g Gomega) int {
-			var list storagev1alpha1.DatabaseList
+			var list storagev1alpha1.DatabaseServerList
 			g.Expect(k8sClient.List(ctx, &list, client.InNamespace(namespace))).To(Succeed())
 			return len(list.Items)
 		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
@@ -353,12 +353,12 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("allocates a subnet and writes it to status", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-subnet",
 				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "dev",
 				Auth: directAuth(
@@ -374,7 +374,7 @@ var _ = Describe("DatabaseServer controller", func() {
 
 		var subnetCIDR string
 		Eventually(func(g Gomega) string {
-			var updated storagev1alpha1.Database
+			var updated storagev1alpha1.DatabaseServer
 			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      "my-app-db-subnet",
 				Namespace: ns,
@@ -389,12 +389,12 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("allocates different /28 blocks for two database servers", func() {
-		db1 := &storagev1alpha1.Database{
+		db1 := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "db1-subnet",
 				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "dev",
 				Auth: directAuth(
@@ -411,7 +411,7 @@ var _ = Describe("DatabaseServer controller", func() {
 		// Wait until db1 has a subnet assigned
 		var cidr1 string
 		Eventually(func(g Gomega) string {
-			var updated storagev1alpha1.Database
+			var updated storagev1alpha1.DatabaseServer
 			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      "db1-subnet",
 				Namespace: ns,
@@ -422,7 +422,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			ShouldNot(BeEmpty())
 
 		Eventually(func(g Gomega) bool {
-			var list storagev1alpha1.DatabaseList
+			var list storagev1alpha1.DatabaseServerList
 			g.Expect(k8sClient.List(ctx, &list)).To(Succeed())
 			for _, item := range list.Items {
 				if item.Name == db1.Name && item.Status.SubnetCIDR == cidr1 {
@@ -432,12 +432,12 @@ var _ = Describe("DatabaseServer controller", func() {
 			return false
 		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).Should(BeTrue())
 
-		db2 := &storagev1alpha1.Database{
+		db2 := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "db2-subnet",
 				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "dev",
 				Auth: directAuth(
@@ -454,7 +454,7 @@ var _ = Describe("DatabaseServer controller", func() {
 		// Wait until db2 has a subnet assigned
 		var cidr2 string
 		Eventually(func(g Gomega) string {
-			var updated storagev1alpha1.Database
+			var updated storagev1alpha1.DatabaseServer
 			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      "db2-subnet",
 				Namespace: ns,
@@ -469,14 +469,14 @@ var _ = Describe("DatabaseServer controller", func() {
 		Expect(cidr1).NotTo(Equal(cidr2))
 	})
 
-	// Database server Private DNS Zone integration tests
+	// DatabaseServer Private DNS Zone integration tests
 	It("creates a Private DNS zone per database server", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-dns",
 				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "dev",
 				Auth: directAuth(
@@ -518,12 +518,12 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("creates Private DNS zone virtual network links for DB and AKS VNets", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db",
 				Namespace: "default",
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "dev",
 				Auth: directAuth(
@@ -583,12 +583,12 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("reconciles existing Private DNS AKS VNet link when ARM ID drifts", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-vnet-drift",
 				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "dev",
 				Auth: directAuth(
@@ -645,15 +645,15 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("allows dedicated database servers without user auth", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-dedicated-no-user",
 				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "dev",
-				Auth: storagev1alpha1.DatabaseAuth{
+				Auth: storagev1alpha1.DatabaseServerAuth{
 					Admin: storagev1alpha1.AdminIdentitySpec{
 						Identity: storagev1alpha1.IdentitySource{
 							Name:        "admin-mi",
@@ -714,7 +714,7 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	DescribeTable("rejects shared network ARM IDs outside the allowed scope or expected type",
-		func(mutate func(*storagev1alpha1.DatabaseNetworkSpec), expectedError string) {
+		func(mutate func(*storagev1alpha1.DatabaseServerNetworkSpec), expectedError string) {
 			db := newSharedDatabaseServer("my-app-db-shared-invalid-network")
 			mutate(db.Spec.Network)
 
@@ -726,25 +726,25 @@ var _ = Describe("DatabaseServer controller", func() {
 			Expect(err).To(MatchError(ContainSubstring(expectedError)))
 		},
 		Entry("subnet in a different subscription",
-			func(network *storagev1alpha1.DatabaseNetworkSpec) {
+			func(network *storagev1alpha1.DatabaseServerNetworkSpec) {
 				network.DelegatedSubnetResourceID = "/subscriptions/other-subscription/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-dev-001/subnets/shared-postgres"
 			},
 			"spec.network.delegatedSubnetResourceId must be in subscription",
 		),
 		Entry("private DNS zone in a different subscription",
-			func(network *storagev1alpha1.DatabaseNetworkSpec) {
+			func(network *storagev1alpha1.DatabaseServerNetworkSpec) {
 				network.PrivateDNSZoneResourceID = "/subscriptions/other-subscription/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/privateDnsZones/shared.private.postgres.database.azure.com"
 			},
 			"spec.network.privateDnsZoneResourceId must be in subscription",
 		),
 		Entry("subnet reference with the wrong resource type",
-			func(network *storagev1alpha1.DatabaseNetworkSpec) {
+			func(network *storagev1alpha1.DatabaseServerNetworkSpec) {
 				network.DelegatedSubnetResourceID = "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-dev-001"
 			},
 			"spec.network.delegatedSubnetResourceId must reference Microsoft.Network/virtualNetworks/subnets",
 		),
 		Entry("private DNS zone reference with the wrong resource type",
-			func(network *storagev1alpha1.DatabaseNetworkSpec) {
+			func(network *storagev1alpha1.DatabaseServerNetworkSpec) {
 				network.PrivateDNSZoneResourceID = "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-dev-001/subnets/shared-postgres"
 			},
 			"spec.network.privateDnsZoneResourceId must reference Microsoft.Network/privateDnsZones",
@@ -784,7 +784,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			}))
 
 		Consistently(func(g Gomega) string {
-			var updated storagev1alpha1.Database
+			var updated storagev1alpha1.DatabaseServer
 			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      db.Name,
 				Namespace: db.Namespace,
@@ -836,15 +836,15 @@ var _ = Describe("DatabaseServer controller", func() {
 		retentionDays := 21
 		highAvailabilityEnabled := true
 		db := newSharedDatabaseServer("my-app-db-shared-settings")
-		db.Spec.Storage = &storagev1alpha1.DatabaseStorageSpec{
+		db.Spec.Storage = &storagev1alpha1.DatabaseServerStorageSpec{
 			SizeGB: &sizeGB,
 			Tier:   &tier,
 		}
 		db.Spec.BackupRetentionDays = &retentionDays
 		db.Spec.HighAvailabilityEnabled = &highAvailabilityEnabled
-		db.Spec.EnableExtensions = []storagev1alpha1.DatabaseExtension{
-			storagev1alpha1.DatabaseExtensionHstore,
-			storagev1alpha1.DatabaseExtensionPgCron,
+		db.Spec.EnableExtensions = []storagev1alpha1.DatabaseServerExtension{
+			storagev1alpha1.DatabaseServerExtensionHstore,
+			storagev1alpha1.DatabaseServerExtensionPgCron,
 		}
 		db.Spec.ServerParams = []storagev1alpha1.DatabaseServerParameter{
 			{
@@ -939,7 +939,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			Should(ConsistOf(db1.Name, db2.Name))
 
 		Consistently(func(g Gomega) []string {
-			var dbList storagev1alpha1.DatabaseList
+			var dbList storagev1alpha1.DatabaseServerList
 			g.Expect(k8sClient.List(ctx, &dbList, client.InNamespace(ns))).To(Succeed())
 			subnets := make([]string, 0)
 			for _, item := range dbList.Items {
@@ -952,14 +952,14 @@ var _ = Describe("DatabaseServer controller", func() {
 			Should(ConsistOf("", ""))
 	})
 
-	// Database server testing
+	// DatabaseServer testing
 	It("creates a FlexibleServer for the database server", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql",
 				Namespace: "default",
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "dev",
 				Auth: directAuth(
@@ -1022,12 +1022,12 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("defaults highAvailabilityEnabled to true for prod server types", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-ha-prod-default",
 				Namespace: "default",
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "prod",
 				Auth: directAuth(
@@ -1074,12 +1074,12 @@ var _ = Describe("DatabaseServer controller", func() {
 	It("uses explicit highAvailabilityEnabled false when set", func() {
 		highAvailabilityEnabled := false
 
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-ha-explicit-false",
 				Namespace: "default",
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:                 17,
 				ServerType:              "prod",
 				HighAvailabilityEnabled: &highAvailabilityEnabled,
@@ -1130,12 +1130,12 @@ var _ = Describe("DatabaseServer controller", func() {
 	It("updates the FlexibleServer when highAvailabilityEnabled changes", func() {
 		highAvailabilityEnabled := true
 
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-ha-update",
 				Namespace: "default",
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:                 17,
 				ServerType:              "dev",
 				HighAvailabilityEnabled: &highAvailabilityEnabled,
@@ -1180,7 +1180,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			}))
 
 		highAvailabilityDisabled := false
-		var updated storagev1alpha1.Database
+		var updated storagev1alpha1.DatabaseServer
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
 		updated.Spec.HighAvailabilityEnabled = &highAvailabilityDisabled
 		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
@@ -1219,12 +1219,12 @@ var _ = Describe("DatabaseServer controller", func() {
 
 	It("uses explicit backupRetentionDays when set", func() {
 		requestedRetentionDays := 21
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-backup-retention",
 				Namespace: "default",
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:             17,
 				ServerType:          "dev",
 				BackupRetentionDays: &requestedRetentionDays,
@@ -1255,12 +1255,12 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("defaults backupRetentionDays to 30 for prod server types", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-backup-retention-prod-default",
 				Namespace: "default",
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "prod",
 				Auth: directAuth(
@@ -1290,12 +1290,12 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("forces GeoRedundantBackup to Disabled when backupRetentionDays changes", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-backup-geo",
 				Namespace: "default",
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "dev",
 				Auth: directAuth(
@@ -1349,7 +1349,7 @@ var _ = Describe("DatabaseServer controller", func() {
 		Expect(k8sClient.Update(ctx, &server)).To(Succeed())
 
 		requestedRetentionDays := 22
-		var updated storagev1alpha1.Database
+		var updated storagev1alpha1.DatabaseServer
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
 		updated.Spec.BackupRetentionDays = &requestedRetentionDays
 		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
@@ -1385,12 +1385,12 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("sets fixed server defaults on FlexibleServer", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-server-defaults",
 				Namespace: "default",
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "prod",
 				Auth: directAuth(
@@ -1468,12 +1468,12 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("creates fixed and user-defined server parameter configurations", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-server-params",
 				Namespace: "default",
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "dev",
 				Auth: directAuth(
@@ -1534,7 +1534,7 @@ var _ = Describe("DatabaseServer controller", func() {
 				}))
 		}
 
-		var updated storagev1alpha1.Database
+		var updated storagev1alpha1.DatabaseServer
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
 		updated.Spec.ServerParams = nil
 		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
@@ -1552,12 +1552,12 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("writes ASO server parameter errors to database server status", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-server-params-status",
 				Namespace: "default",
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "dev",
 				Auth: directAuth(
@@ -1607,7 +1607,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			condReason  string
 			condStatus  metav1.ConditionStatus
 		} {
-			var updated storagev1alpha1.Database
+			var updated storagev1alpha1.DatabaseServer
 			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      db.Name,
 				Namespace: db.Namespace,
@@ -1651,12 +1651,12 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("does not create FlexibleServersConfiguration resources when enableExtensions is omitted", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-no-extensions",
 				Namespace: "default",
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "dev",
 				Auth: directAuth(
@@ -1695,12 +1695,12 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("creates FlexibleServersConfiguration resources for enabled extensions", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-extensions",
 				Namespace: "default",
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "dev",
 				Auth: directAuth(
@@ -1710,12 +1710,12 @@ var _ = Describe("DatabaseServer controller", func() {
 					"user-mi",
 					"user-mi-id",
 				),
-				EnableExtensions: []storagev1alpha1.DatabaseExtension{
-					storagev1alpha1.DatabaseExtensionUUIDOSSP,
-					storagev1alpha1.DatabaseExtensionPgCron,
-					storagev1alpha1.DatabaseExtensionPgAudit,
-					storagev1alpha1.DatabaseExtensionPgStatStatements,
-					storagev1alpha1.DatabaseExtensionHstore,
+				EnableExtensions: []storagev1alpha1.DatabaseServerExtension{
+					storagev1alpha1.DatabaseServerExtensionUUIDOSSP,
+					storagev1alpha1.DatabaseServerExtensionPgCron,
+					storagev1alpha1.DatabaseServerExtensionPgAudit,
+					storagev1alpha1.DatabaseServerExtensionPgStatStatements,
+					storagev1alpha1.DatabaseServerExtensionHstore,
 				},
 			},
 		}
@@ -1778,12 +1778,12 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("updates FlexibleServersConfiguration resources when extensions change", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-extensions-update",
 				Namespace: "default",
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "dev",
 				Auth: directAuth(
@@ -1793,8 +1793,8 @@ var _ = Describe("DatabaseServer controller", func() {
 					"user-mi",
 					"user-mi-id",
 				),
-				EnableExtensions: []storagev1alpha1.DatabaseExtension{
-					storagev1alpha1.DatabaseExtensionHstore,
+				EnableExtensions: []storagev1alpha1.DatabaseServerExtension{
+					storagev1alpha1.DatabaseServerExtensionHstore,
 				},
 			},
 		}
@@ -1825,11 +1825,11 @@ var _ = Describe("DatabaseServer controller", func() {
 		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
 			Should(BeEmpty())
 
-		var updated storagev1alpha1.Database
+		var updated storagev1alpha1.DatabaseServer
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
-		updated.Spec.EnableExtensions = []storagev1alpha1.DatabaseExtension{
-			storagev1alpha1.DatabaseExtensionHstore,
-			storagev1alpha1.DatabaseExtensionPgCron,
+		updated.Spec.EnableExtensions = []storagev1alpha1.DatabaseServerExtension{
+			storagev1alpha1.DatabaseServerExtensionHstore,
+			storagev1alpha1.DatabaseServerExtensionPgCron,
 		}
 		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
 
@@ -1888,12 +1888,12 @@ var _ = Describe("DatabaseServer controller", func() {
 		updatedSize := int32(64)
 		updatedTier := "P15"
 
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-update",
 				Namespace: "default",
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "dev",
 				Auth: directAuth(
@@ -1903,7 +1903,7 @@ var _ = Describe("DatabaseServer controller", func() {
 					"user-mi",
 					"user-mi-id",
 				),
-				Storage: &storagev1alpha1.DatabaseStorageSpec{
+				Storage: &storagev1alpha1.DatabaseServerStorageSpec{
 					SizeGB: &initialSize,
 					Tier:   &initialTier,
 				},
@@ -1924,9 +1924,9 @@ var _ = Describe("DatabaseServer controller", func() {
 		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
 			Should(Equal(int(initialSize)))
 
-		var updated storagev1alpha1.Database
+		var updated storagev1alpha1.DatabaseServer
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
-		updated.Spec.Storage = &storagev1alpha1.DatabaseStorageSpec{
+		updated.Spec.Storage = &storagev1alpha1.DatabaseServerStorageSpec{
 			SizeGB: &updatedSize,
 			Tier:   &updatedTier,
 		}
@@ -1966,12 +1966,12 @@ var _ = Describe("DatabaseServer controller", func() {
 		requestedTier := "P80"
 		expectedTier := "P50"
 
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-tier-clamp",
 				Namespace: "default",
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "dev",
 				Auth: directAuth(
@@ -1981,7 +1981,7 @@ var _ = Describe("DatabaseServer controller", func() {
 					"user-mi",
 					"user-mi-id",
 				),
-				Storage: &storagev1alpha1.DatabaseStorageSpec{
+				Storage: &storagev1alpha1.DatabaseServerStorageSpec{
 					SizeGB: &size,
 					Tier:   &requestedTier,
 				},
@@ -2004,12 +2004,12 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("creates a FlexibleServersAdministrator for the database server", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-admin",
 				Namespace: "default",
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "dev",
 				Auth: directAuth(
@@ -2053,12 +2053,12 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("updates the FlexibleServersAdministrator when admin identity changes", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-admin-update",
 				Namespace: "default",
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
 				ServerType: "dev",
 				Auth: directAuth(
@@ -2085,7 +2085,7 @@ var _ = Describe("DatabaseServer controller", func() {
 		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
 			Should(Equal("admin-old"))
 
-		var updated storagev1alpha1.Database
+		var updated storagev1alpha1.DatabaseServer
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
 		updated.Spec.Auth.Admin.Identity.Name = "admin-new"
 		updated.Spec.Auth.Admin.Identity.PrincipalId = "admin-new-id"
@@ -2401,7 +2401,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			Should(BeEmpty())
 	})
 
-	It("revalidates LogicalDatabase when the referenced Database server is created later", func() {
+	It("revalidates LogicalDatabase when the referenced DatabaseServer is created later", func() {
 		const serverName = "shared-db-created-later"
 		logicalDatabase := newLogicalDatabase("router-late-server", serverName)
 		Expect(k8sClient.Create(ctx, logicalDatabase)).To(Succeed())

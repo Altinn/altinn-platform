@@ -11,12 +11,12 @@ metadata:
   labels:
     app.kubernetes.io/name: dis-pgsql-operator
     app.kubernetes.io/managed-by: kustomize
-  name: database-editor-role
+  name: databaseserver-editor-role
 rules:
 - apiGroups:
   - storage.dis.altinn.cloud
   resources:
-  - databases
+  - databaseservers
   - logicaldatabases
   verbs:
   - create
@@ -29,7 +29,7 @@ rules:
 - apiGroups:
   - storage.dis.altinn.cloud
   resources:
-  - databases/status
+  - databaseservers/status
   - logicaldatabases/status
   verbs:
   - get

@@ -1,5 +1,5 @@
 apiVersion: storage.dis.altinn.cloud/v1alpha1
-kind: Database
+kind: DatabaseServer
 metadata:
   name: shared-db
   namespace: default
@@ -17,7 +17,7 @@ spec:
           name: adminidentity
 ---
 apiVersion: storage.dis.altinn.cloud/v1alpha1
-kind: Database
+kind: DatabaseServer
 metadata:
   name: db1
   namespace: default
@@ -36,7 +36,7 @@ spec:
           name: adminidentity
 ---
 apiVersion: storage.dis.altinn.cloud/v1alpha1
-kind: Database
+kind: DatabaseServer
 metadata:
   name: db2
   namespace: default
@@ -61,7 +61,7 @@ spec:
           name: adminidentity
 ---
 apiVersion: storage.dis.altinn.cloud/v1alpha1
-kind: Database
+kind: DatabaseServer
 metadata:
   name: db4
   namespace: default
@@ -78,7 +78,7 @@ spec:
           name: adminidentity
 ---
 apiVersion: storage.dis.altinn.cloud/v1alpha1
-kind: Database
+kind: DatabaseServer
 metadata:
   name: db5
   namespace: default
@@ -95,7 +95,7 @@ spec:
           name: adminidentity
 # ---
 # apiVersion: storage.dis.altinn.cloud/v1alpha1
-# kind: Database
+# kind: DatabaseServer
 # metadata:
 #   name: db6
 #   namespace: test
@@ -109,7 +109,7 @@ spec:
 #           name: adminidentity
 # ---
 # apiVersion: storage.dis.altinn.cloud/v1alpha1
-# kind: Database
+# kind: DatabaseServer
 # metadata:
 #   name: db9
 #   namespace: test

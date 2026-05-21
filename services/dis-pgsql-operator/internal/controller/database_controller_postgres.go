@@ -46,7 +46,7 @@ const (
 )
 
 // Reuse the defaults for now
-func desiredStorage(db *storagev1alpha1.Database) *dbforpostgresqlv1.Storage {
+func desiredStorage(db *storagev1alpha1.DatabaseServer) *dbforpostgresqlv1.Storage {
 	sizeGB := defaultStorageGB
 	autoGrow := dbforpostgresqlv1.Storage_AutoGrow_Enabled
 	storageType := dbforpostgresqlv1.Storage_Type_Premium_LRS
@@ -72,7 +72,7 @@ func desiredStorage(db *storagev1alpha1.Database) *dbforpostgresqlv1.Storage {
 	}
 }
 
-func desiredBackup(db *storagev1alpha1.Database) *dbforpostgresqlv1.Backup {
+func desiredBackup(db *storagev1alpha1.DatabaseServer) *dbforpostgresqlv1.Backup {
 	geoRedundantBackup := dbforpostgresqlv1.Backup_GeoRedundantBackup_Disabled
 	return &dbforpostgresqlv1.Backup{
 		BackupRetentionDays: to.Ptr(dbUtil.ResolveBackupRetentionDays(db.Spec.ServerType, db.Spec.BackupRetentionDays)),
@@ -80,7 +80,7 @@ func desiredBackup(db *storagev1alpha1.Database) *dbforpostgresqlv1.Backup {
 	}
 }
 
-func desiredHighAvailability(db *storagev1alpha1.Database) *dbforpostgresqlv1.HighAvailability {
+func desiredHighAvailability(db *storagev1alpha1.DatabaseServer) *dbforpostgresqlv1.HighAvailability {
 	mode := dbUtil.ResolveHighAvailabilityMode(db.Spec.ServerType, db.Spec.HighAvailabilityEnabled)
 	highAvailability := &dbforpostgresqlv1.HighAvailability{
 		Mode: &mode,
@@ -117,7 +117,7 @@ func (r *DatabaseServerReconciler) subnetARMIDResourceReference(subnetName strin
 }
 
 func (r *DatabaseServerReconciler) dedicatedPostgresNetworkConfig(
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 	zoneName string,
 ) (postgresNetworkConfig, error) {
 	// Use the subnet allocated to this database server from the status.
@@ -144,7 +144,7 @@ func (r *DatabaseServerReconciler) dedicatedPostgresNetworkConfig(
 	}, nil
 }
 
-func (r *DatabaseServerReconciler) sharedPostgresNetworkConfig(db *storagev1alpha1.Database) (postgresNetworkConfig, error) {
+func (r *DatabaseServerReconciler) sharedPostgresNetworkConfig(db *storagev1alpha1.DatabaseServer) (postgresNetworkConfig, error) {
 	if db.Spec.Network == nil {
 		return postgresNetworkConfig{}, fmt.Errorf("spec.network must be set when mode is Shared")
 	}
@@ -226,12 +226,12 @@ func resourceReferenceLogValue(ref *genruntime.ResourceReference) string {
 func (r *DatabaseServerReconciler) ensurePostgresServer(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 	networkConfig postgresNetworkConfig,
 ) error {
 	ns := db.Namespace
 
-	// The current Database CR represents a PostgreSQL server, so the FlexibleServer
+	// The current DatabaseServer CR represents a PostgreSQL server, so the FlexibleServer
 	// uses the CR name.
 	serverName := db.Name
 

@@ -20,7 +20,7 @@ import (
 func (r *DatabaseServerReconciler) ensureFlexibleServerAdministrator(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 	adminIdentity resolvedAdminIdentity,
 ) error {
 	ns := db.Namespace
