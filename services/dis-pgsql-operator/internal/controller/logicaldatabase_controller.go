@@ -294,7 +294,7 @@ func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 		return nil, databaseName, fmt.Errorf("get Database %s/%s: %w", logicalDatabase.Namespace, serverName, err)
 	}
 
-	if databaseMode(&db) != storagev1alpha1.DatabaseModeShared {
+	if databaseServerMode(&db) != storagev1alpha1.DatabaseModeShared {
 		validationErrors = append(validationErrors, storagev1alpha1.LogicalDatabaseValidationError{
 			Field:   logicalDatabaseValidationFieldServerName,
 			Reason:  logicalDatabaseValidationReasonNotShared,

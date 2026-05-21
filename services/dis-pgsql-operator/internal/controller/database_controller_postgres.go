@@ -22,7 +22,7 @@ import (
 )
 
 // TODO: at the moment location is hardcoded here, but maybe
-// in the future we want to derive it from the Database spec?
+// in the future we want to derive it from the database server spec?
 // The defaults for storage size and tier are also hardcoded
 // until we release the beta version.
 const (
@@ -103,7 +103,7 @@ func desiredMaintenanceWindow() *dbforpostgresqlv1.MaintenanceWindow {
 }
 
 // subnetARMID builds the ARM ID for a subnet in the DB VNet.
-func (r *DatabaseReconciler) subnetARMIDResourceReference(subnetName string) *genruntime.ResourceReference {
+func (r *DatabaseServerReconciler) subnetARMIDResourceReference(subnetName string) *genruntime.ResourceReference {
 
 	return &genruntime.ResourceReference{
 		ARMID: fmt.Sprintf(
@@ -116,13 +116,13 @@ func (r *DatabaseReconciler) subnetARMIDResourceReference(subnetName string) *ge
 	}
 }
 
-func (r *DatabaseReconciler) dedicatedPostgresNetworkConfig(
+func (r *DatabaseServerReconciler) dedicatedPostgresNetworkConfig(
 	db *storagev1alpha1.Database,
 	zoneName string,
 ) (postgresNetworkConfig, error) {
-	// Use the subnet allocated to this database from the status.
+	// Use the subnet allocated to this database server from the status.
 	if db.Status.SubnetCIDR == "" {
-		return postgresNetworkConfig{}, fmt.Errorf("database status has no SubnetCIDR; cannot build network for server")
+		return postgresNetworkConfig{}, fmt.Errorf("database server status has no SubnetCIDR; cannot build network for server")
 	}
 
 	// Make sure the subnet exists in our catalog, and therefore in the vnet.
@@ -144,7 +144,7 @@ func (r *DatabaseReconciler) dedicatedPostgresNetworkConfig(
 	}, nil
 }
 
-func (r *DatabaseReconciler) sharedPostgresNetworkConfig(db *storagev1alpha1.Database) (postgresNetworkConfig, error) {
+func (r *DatabaseServerReconciler) sharedPostgresNetworkConfig(db *storagev1alpha1.Database) (postgresNetworkConfig, error) {
 	if db.Spec.Network == nil {
 		return postgresNetworkConfig{}, fmt.Errorf("spec.network must be set when mode is Shared")
 	}
@@ -181,7 +181,7 @@ func (r *DatabaseReconciler) sharedPostgresNetworkConfig(db *storagev1alpha1.Dat
 	}, nil
 }
 
-func (r *DatabaseReconciler) validateSharedNetworkResourceID(fieldPath, resourceID, expectedResourceType string) (string, error) {
+func (r *DatabaseServerReconciler) validateSharedNetworkResourceID(fieldPath, resourceID, expectedResourceType string) (string, error) {
 	resourceID = strings.TrimSpace(resourceID)
 	if resourceID == "" {
 		return "", fmt.Errorf("%s must be set when mode is Shared", fieldPath)
@@ -222,8 +222,8 @@ func resourceReferenceLogValue(ref *genruntime.ResourceReference) string {
 }
 
 // ensurePostgresServer ensures a PostgreSQL Flexible Server ASO resource exists
-// for the given Database.
-func (r *DatabaseReconciler) ensurePostgresServer(
+// for the given database server.
+func (r *DatabaseServerReconciler) ensurePostgresServer(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
@@ -231,7 +231,8 @@ func (r *DatabaseReconciler) ensurePostgresServer(
 ) error {
 	ns := db.Namespace
 
-	// use the Database resource name for now.
+	// The current Database CR represents a PostgreSQL server, so the FlexibleServer
+	// uses the CR name.
 	serverName := db.Name
 
 	key := types.NamespacedName{
@@ -322,7 +323,7 @@ func (r *DatabaseReconciler) ensurePostgresServer(
 			return fmt.Errorf("set controller reference on FlexibleServer: %w", err)
 		}
 
-		logger.Info("creating PostgreSQL FlexibleServer for database",
+		logger.Info("creating PostgreSQL FlexibleServer for database server",
 			"serverName", serverName,
 			"namespace", ns,
 			"location", loc,
@@ -345,7 +346,7 @@ func (r *DatabaseReconciler) ensurePostgresServer(
 	var updated bool
 	existing.Labels, updated = k8sutil.SyncSpecAndLabels(&existing.Spec, desiredSpec, existing.Labels, desiredLabels)
 	if updated {
-		logger.Info("updating PostgreSQL FlexibleServer to match Database",
+		logger.Info("updating PostgreSQL FlexibleServer to match database server",
 			"serverName", serverName,
 			"namespace", ns,
 		)

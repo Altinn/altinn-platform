@@ -34,7 +34,7 @@ type identitySourceResolver interface {
 	Get(context.Context, types.NamespacedName, client.Object, ...client.GetOption) error
 }
 
-func (r *DatabaseReconciler) resolveAdminIdentity(
+func (r *DatabaseServerReconciler) resolveAdminIdentity(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
@@ -75,7 +75,7 @@ func resolveAdminIdentity(
 	}, false, nil
 }
 
-func (r *DatabaseReconciler) resolveUserIdentity(
+func (r *DatabaseServerReconciler) resolveUserIdentity(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
