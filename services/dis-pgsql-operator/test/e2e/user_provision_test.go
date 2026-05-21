@@ -20,6 +20,7 @@ limitations under the License.
 package e2e
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -33,6 +34,7 @@ import (
 	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/test/utils"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/yaml"
@@ -926,18 +928,42 @@ func runPostgresQueryAsUser(user, query string) (string, error) {
 }
 
 func runPostgresQueryAsUserInDatabase(user, databaseName, query string) (string, error) {
-	cmd := exec.Command("kubectl", "get", "pods", "-l", "app=postgres", "-n", "default", "-o", "jsonpath={.items[0].metadata.name}")
-	podName, err := utils.Run(cmd)
-	Expect(err).NotTo(HaveOccurred(), "Failed to get Postgres pod name")
-	podName = strings.TrimSpace(podName)
+	podName := waitForReadyPostgresPod()
 
-	cmd = exec.Command("kubectl", "exec", "-n", "default", podName, "--",
+	cmd := exec.Command("kubectl", "exec", "-n", "default", podName, "--",
 		"psql", "-v", "ON_ERROR_STOP=1", "-U", user, "-d", databaseName, "-tAc", query)
 	output, err := utils.Run(cmd)
 	if err != nil {
 		return "", err
 	}
 	return output, nil
+}
+
+func waitForReadyPostgresPod() string {
+	var podName string
+	Eventually(func(g Gomega) string {
+		cmd := exec.Command("kubectl", "get", "pods", "-l", "app=postgres", "-n", "default", "-o", "json")
+		output, err := utils.Run(cmd)
+		g.Expect(err).NotTo(HaveOccurred(), "Failed to get Postgres pods")
+
+		var pods corev1.PodList
+		g.Expect(json.Unmarshal([]byte(output), &pods)).To(Succeed(), "Failed to parse Postgres pods")
+		for i := range pods.Items {
+			pod := pods.Items[i]
+			if pod.DeletionTimestamp != nil || pod.Status.Phase != corev1.PodRunning {
+				continue
+			}
+			for _, condition := range pod.Status.Conditions {
+				if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
+					podName = pod.Name
+					return podName
+				}
+			}
+		}
+		return ""
+	}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).
+		ShouldNot(BeEmpty(), "expected a ready Postgres pod")
+	return podName
 }
 
 func quoteIdentifier(value string) string {
