@@ -1,0 +1,16 @@
+name: Test Self-Hosted Runners
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-altinn-platform:
+    name: Test altinn-platform runner
+    runs-on: self-hosted
+    steps:
+      - name: Print runner info
+        run: |
+          echo "Hostname: $(hostname)"
+          echo "Runner OS: $RUNNER_OS"
+          echo "Runner arch: $RUNNER_ARCH"
+
