@@ -30,8 +30,6 @@ rules:
   - jobs/status
   verbs:
   - get
-  - patch
-  - update
 - apiGroups:
   - dbforpostgresql.azure.com
   resources:

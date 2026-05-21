@@ -15,69 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
-	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
-	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/naming"
 )
-
-func userProvisionJobName(dbName string, auth resolvedDatabaseAuth) string {
-	hash := userProvisionSpecHash(dbName, auth)
-	base := fmt.Sprintf("%s-user-provision", dbName)
-	return naming.WithRequiredSuffix(base, "-"+hash, 63, "db")
-}
-
-func userProvisionSpecHash(dbName string, auth resolvedDatabaseAuth) string {
-	payload := fmt.Sprintf("adminSA=%s;admin=%s;user=%s;userPID=%s;db=%s",
-		auth.Admin.ServiceAccountName,
-		auth.Admin.Name,
-		auth.User.Name,
-		auth.User.PrincipalID,
-		dbName,
-	)
-	return naming.StableSHA256Hex(payload)[:8]
-}
-
-func (r *DatabaseServerReconciler) ensureUserProvisionJob(
-	ctx context.Context,
-	logger logr.Logger,
-	db *storagev1alpha1.Database,
-	auth resolvedDatabaseAuth,
-) error {
-	if auth.Admin.ServiceAccountName == "" {
-		return fmt.Errorf("admin serviceAccountName must be set for user provisioning")
-	}
-	if auth.User.Name == "" {
-		return fmt.Errorf("user identity name must be set for user provisioning")
-	}
-	if auth.User.PrincipalID == "" {
-		return fmt.Errorf("user principal ID must be set for user provisioning")
-	}
-
-	labels := map[string]string{
-		databaseNameLabelKey:              db.Name,
-		"dis.altinn.cloud/user-provision": "true",
-	}
-
-	return r.ensureUserProvisionJobForTarget(ctx, logger, userProvisionJobSpec{
-		Owner:              db,
-		JobName:            userProvisionJobName(db.Name, auth),
-		Labels:             labels,
-		ServiceAccountName: auth.Admin.ServiceAccountName,
-		AdminIdentityName:  auth.Admin.Name,
-		ServerName:         db.Name,
-		SchemaName:         db.Name,
-		AppIdentityName:    auth.User.Name,
-		AppPrincipalID:     auth.User.PrincipalID,
-	})
-}
-
-func (r *DatabaseServerReconciler) ensureUserProvisionJobForTarget(
-	ctx context.Context,
-	logger logr.Logger,
-	spec userProvisionJobSpec,
-) error {
-	return ensureUserProvisionJobForReconciler(ctx, logger, r, spec)
-}
 
 func (r *LogicalDatabaseReconciler) ensureUserProvisionJobForTarget(
 	ctx context.Context,
@@ -119,18 +57,6 @@ type userProvisionJobReconciler interface {
 	userProvisionJobScheme() *runtime.Scheme
 	userProvisionJobImage() string
 	userProvisionJobUseAzFakes() bool
-}
-
-func (r *DatabaseServerReconciler) userProvisionJobScheme() *runtime.Scheme {
-	return r.Scheme
-}
-
-func (r *DatabaseServerReconciler) userProvisionJobImage() string {
-	return r.Config.UserProvisionImage
-}
-
-func (r *DatabaseServerReconciler) userProvisionJobUseAzFakes() bool {
-	return r.Config.UseAzFakes
 }
 
 func (r *LogicalDatabaseReconciler) userProvisionJobScheme() *runtime.Scheme {
@@ -186,7 +112,7 @@ func ensureUserProvisionJobForReconciler(
 				}); err != nil && !apierrors.IsNotFound(err) {
 					return fmt.Errorf("delete failed user provisioning Job %s/%s: %w", job.Namespace, job.Name, err)
 				}
-				logger.Info("deleting failed user provisioning Job for target database",
+				logger.Info("deleting failed user provisioning Job for database access",
 					"jobName", job.Name,
 					"namespace", job.Namespace,
 				)
@@ -238,7 +164,7 @@ func ensureUserProvisionJobForReconciler(
 		return fmt.Errorf("set controller reference on user provisioning Job: %w", err)
 	}
 
-	logger.Info("creating user provisioning Job for target database",
+	logger.Info("creating user provisioning Job for database access",
 		"jobName", jobName,
 		"namespace", ns,
 		"serviceAccount", spec.ServiceAccountName,

@@ -5,14 +5,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// DatabaseAuth contains the identities that should get access to the database.
+// DatabaseAuth contains identities used for server administration.
 type DatabaseAuth struct {
 	// admin defines the identity used for admin access.
 	Admin AdminIdentitySpec `json:"admin"`
 
-	// user defines the identity used for normal user access.
-	// Required for dedicated databases. Optional for shared databases because
-	// normal user provisioning is handled by LogicalDatabase resources.
+	// user is retained for compatibility with early Database manifests.
+	// Server reconciliation ignores this field; use LogicalDatabase resources
+	// to provision app and owner access.
 	// +optional
 	User *UserIdentitySpec `json:"user,omitempty"`
 }
@@ -24,7 +24,7 @@ type AdminIdentitySpec struct {
 	Identity IdentitySource `json:"identity"`
 
 	// serviceAccountName is the ServiceAccount name used for workload identity
-	// when provisioning normal DB users for this database.
+	// when provisioning database access for child LogicalDatabase resources.
 	// Optional when identityRef is set; defaults to identityRef.name.
 	// +optional
 	// +kubebuilder:validation:MinLength=1
@@ -107,7 +107,6 @@ type DatabaseNetworkSpec struct {
 
 // DatabaseSpec defines the desired state of Database.
 // +kubebuilder:validation:XValidation:rule="(has(self.mode) && self.mode == 'Shared') ? has(self.network) : !has(self.network)",message="spec.network is required when mode is Shared and must be omitted when mode is Dedicated."
-// +kubebuilder:validation:XValidation:rule="(has(self.mode) && self.mode == 'Shared') || has(self.auth.user)",message="spec.auth.user is required when mode is Dedicated."
 type DatabaseSpec struct {
 	// mode controls whether this Database provisions a dedicated server or a shared server.
 	// Defaults to Dedicated.
@@ -124,7 +123,7 @@ type DatabaseSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	ServerType string `json:"serverType"`
 
-	// auth defines which AppIdentities should have access to this database.
+	// auth defines the identities used for server administration.
 	Auth DatabaseAuth `json:"auth"`
 
 	// network references existing private access resources for shared databases.

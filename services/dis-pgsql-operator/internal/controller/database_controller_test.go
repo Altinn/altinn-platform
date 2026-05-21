@@ -37,7 +37,7 @@ var _ = Describe("DatabaseServer controller", func() {
 	const sharedDelegatedSubnetResourceID = "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-dev-001/subnets/shared-postgres"
 	const sharedPrivateDNSZoneResourceID = "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/privateDnsZones/shared.private.postgres.database.azure.com"
 
-	directAuth := func(adminName, adminPrincipalID, adminServiceAccount, userName, userPrincipalID string) storagev1alpha1.DatabaseAuth {
+	adminAuth := func(adminName, adminPrincipalID, adminServiceAccount string) storagev1alpha1.DatabaseAuth {
 		return storagev1alpha1.DatabaseAuth{
 			Admin: storagev1alpha1.AdminIdentitySpec{
 				Identity: storagev1alpha1.IdentitySource{
@@ -46,25 +46,25 @@ var _ = Describe("DatabaseServer controller", func() {
 				},
 				ServiceAccountName: adminServiceAccount,
 			},
-			User: &storagev1alpha1.UserIdentitySpec{
-				Identity: storagev1alpha1.IdentitySource{
-					Name:        userName,
-					PrincipalId: userPrincipalID,
-				},
-			},
 		}
 	}
 
-	identityRefAuth := func(adminRefName, userRefName string) storagev1alpha1.DatabaseAuth {
+	directAuth := func(adminName, adminPrincipalID, adminServiceAccount, userName, userPrincipalID string) storagev1alpha1.DatabaseAuth {
+		auth := adminAuth(adminName, adminPrincipalID, adminServiceAccount)
+		auth.User = &storagev1alpha1.UserIdentitySpec{
+			Identity: storagev1alpha1.IdentitySource{
+				Name:        userName,
+				PrincipalId: userPrincipalID,
+			},
+		}
+		return auth
+	}
+
+	adminIdentityRefAuth := func(adminRefName string) storagev1alpha1.DatabaseAuth {
 		return storagev1alpha1.DatabaseAuth{
 			Admin: storagev1alpha1.AdminIdentitySpec{
 				Identity: storagev1alpha1.IdentitySource{
 					IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: adminRefName},
-				},
-			},
-			User: &storagev1alpha1.UserIdentitySpec{
-				Identity: storagev1alpha1.IdentitySource{
-					IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: userRefName},
 				},
 			},
 		}
@@ -155,27 +155,6 @@ var _ = Describe("DatabaseServer controller", func() {
 		} else {
 			Expect(err).NotTo(HaveOccurred())
 		}
-	}
-
-	waitForServerProvisionJob := func(ctx context.Context, dbName, namespace string) batchv1.Job {
-		var job batchv1.Job
-		Eventually(func(g Gomega) string {
-			var jobs batchv1.JobList
-			g.Expect(k8sClient.List(ctx, &jobs,
-				client.InNamespace(namespace),
-				client.MatchingLabels(map[string]string{
-					"dis.altinn.cloud/database-name":  dbName,
-					"dis.altinn.cloud/user-provision": "true",
-				}),
-			)).To(Succeed())
-			if len(jobs.Items) != 1 {
-				return ""
-			}
-			job = jobs.Items[0]
-			return job.Name
-		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
-			ShouldNot(BeEmpty())
-		return job
 	}
 
 	waitForLogicalAccessJob := func(ctx context.Context, logicalDatabaseName, namespace string) batchv1.Job {
@@ -665,7 +644,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			Should(Equal(expectedAKSVNetARMID))
 	})
 
-	It("rejects dedicated database servers without user auth", func() {
+	It("allows dedicated database servers without user auth", func() {
 		db := &storagev1alpha1.Database{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-dedicated-no-user",
@@ -686,8 +665,30 @@ var _ = Describe("DatabaseServer controller", func() {
 			},
 		}
 
-		err := k8sClient.Create(ctx, db)
-		Expect(apierrors.IsInvalid(err)).To(BeTrue(), "expected dedicated database server without auth.user to be rejected")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		Eventually(func(g Gomega) string {
+			var server dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &server)).To(Succeed())
+			return server.Name
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(db.Name))
+
+		Consistently(func(g Gomega) int {
+			var jobs batchv1.JobList
+			g.Expect(k8sClient.List(ctx, &jobs,
+				client.InNamespace(db.Namespace),
+				client.MatchingLabels(map[string]string{
+					"dis.altinn.cloud/database-name":  db.Name,
+					"dis.altinn.cloud/user-provision": "true",
+				}),
+			)).To(Succeed())
+			return len(jobs.Items)
+		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(0))
 	})
 
 	It("rejects dedicated database servers with shared network config", func() {
@@ -2117,8 +2118,8 @@ var _ = Describe("DatabaseServer controller", func() {
 			}))
 	})
 
-	It("creates a Job to provision the normal database user", func() {
-		db := newDedicatedDatabaseServer("my-app-db-user-job", directAuth(
+	It("does not create a database server-owned user provisioning Job from legacy user auth", func() {
+		db := newDedicatedDatabaseServer("my-app-db-user-job-ignored", directAuth(
 			"admin-mi",
 			"admin-mi-id",
 			"admin-mi",
@@ -2129,57 +2130,7 @@ var _ = Describe("DatabaseServer controller", func() {
 
 		markASOReady(ctx, db)
 
-		job := waitForServerProvisionJob(ctx, db.Name, db.Namespace)
-
-		Expect(job.Labels["dis.altinn.cloud/database-name"]).To(Equal(db.Name))
-		Expect(job.Spec.Template.Labels["azure.workload.identity/use"]).To(Equal("true"))
-		Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(db.Spec.Auth.Admin.ServiceAccountName))
-		Expect(job.Spec.Template.Spec.RestartPolicy).To(Equal(corev1.RestartPolicyOnFailure))
-		Expect(job.Spec.Template.Spec.Containers).To(HaveLen(1))
-		Expect(job.Spec.Template.Spec.Containers[0].Args).To(ContainElement("--provision-user"))
-		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_USER_APP_IDENTITY", Value: db.Spec.Auth.User.Identity.Name},
-		))
-		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_USER_APP_PRINCIPAL_ID", Value: db.Spec.Auth.User.Identity.PrincipalId},
-		))
-		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_ADMIN_APP_IDENTITY", Value: db.Spec.Auth.Admin.Identity.Name},
-		))
-		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_DATABASE_NAME", Value: db.Name},
-		))
-		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_DB_SCHEMA", Value: db.Name},
-		))
-	})
-
-	It("recreates the user provisioning Job when the spec changes", func() {
-		db := newDedicatedDatabaseServer("my-app-db-user-job-update", directAuth(
-			"admin-mi",
-			"admin-mi-id",
-			"admin-mi",
-			"user-mi",
-			"user-mi-id",
-		))
-		Expect(k8sClient.Create(ctx, db)).To(Succeed())
-
-		markASOReady(ctx, db)
-
-		oldJob := waitForServerProvisionJob(ctx, db.Name, db.Namespace)
-		oldJobName := oldJob.Name
-
-		var updated storagev1alpha1.Database
-		Expect(k8sClient.Get(ctx, types.NamespacedName{
-			Name:      db.Name,
-			Namespace: db.Namespace,
-		}, &updated)).To(Succeed())
-		updated.Spec.Auth.User.Identity.Name = "user-mi-2"
-		updated.Spec.Auth.User.Identity.PrincipalId = "user-mi-2-id"
-		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
-
-		var newJob batchv1.Job
-		Eventually(func(g Gomega) string {
+		Consistently(func(g Gomega) int {
 			var jobs batchv1.JobList
 			g.Expect(k8sClient.List(ctx, &jobs,
 				client.InNamespace(db.Namespace),
@@ -2188,94 +2139,15 @@ var _ = Describe("DatabaseServer controller", func() {
 					"dis.altinn.cloud/user-provision": "true",
 				}),
 			)).To(Succeed())
-			for i := range jobs.Items {
-				if jobs.Items[i].Name != oldJobName {
-					newJob = jobs.Items[i]
-					return newJob.Name
-				}
-			}
-			return ""
-		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
-			ShouldNot(BeEmpty())
-
-		Eventually(func() error {
-			var job batchv1.Job
-			err := k8sClient.Get(ctx, types.NamespacedName{
-				Name:      oldJobName,
-				Namespace: db.Namespace,
-			}, &job)
-			if err == nil {
-				return fmt.Errorf("old job still exists")
-			}
-			if !apierrors.IsNotFound(err) {
-				return err
-			}
-			return nil
-		}).WithTimeout(30*time.Second).WithPolling(500*time.Millisecond).
-			Should(Succeed(), "expected old user-provisioning Job to be deleted")
+			return len(jobs.Items)
+		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(0))
 	})
 
-	It("recreates the user provisioning Job when the current Job is failed", func() {
-		db := newDedicatedDatabaseServer("my-app-db-user-job-failed", directAuth(
-			"admin-mi",
-			"admin-mi-id",
-			"admin-mi",
-			"user-mi",
-			"user-mi-id",
-		))
-		Expect(k8sClient.Create(ctx, db)).To(Succeed())
-
-		markASOReady(ctx, db)
-
-		oldJob := waitForServerProvisionJob(ctx, db.Name, db.Namespace)
-		oldUID := oldJob.UID
-
-		Eventually(func() error {
-			var failedJob batchv1.Job
-			if err := k8sClient.Get(ctx, types.NamespacedName{
-				Name:      oldJob.Name,
-				Namespace: db.Namespace,
-			}, &failedJob); err != nil {
-				return err
-			}
-			now := metav1.Now()
-			failedJob.Status.StartTime = &now
-			failedJob.Status.CompletionTime = nil
-			failedJob.Status.Failed = 1
-			failedJob.Status.Conditions = []batchv1.JobCondition{
-				{
-					Type:               batchv1.JobFailureTarget,
-					Status:             corev1.ConditionTrue,
-					Reason:             "BackoffLimitExceeded",
-					LastTransitionTime: now,
-				},
-				{
-					Type:               batchv1.JobFailed,
-					Status:             corev1.ConditionTrue,
-					Reason:             "BackoffLimitExceeded",
-					LastTransitionTime: now,
-				},
-			}
-			return k8sClient.Status().Update(ctx, &failedJob)
-		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
-			Should(Succeed())
-
-		Eventually(func(g Gomega) types.UID {
-			var recreatedJob batchv1.Job
-			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      oldJob.Name,
-				Namespace: db.Namespace,
-			}, &recreatedJob)).To(Succeed())
-			return recreatedJob.UID
-		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
-			ShouldNot(Equal(oldUID))
-	})
-
-	It("resolves ApplicationIdentity references for admin and user", func() {
+	It("resolves ApplicationIdentity references for server admin", func() {
 		createApplicationIdentity(ctx, "adminidentity", ns, "admin-mi", "admin-mi-id")
-		createApplicationIdentity(ctx, "useridentity", ns, "user-mi", "user-mi-id")
 
-		db := newDedicatedDatabaseServer("my-app-db-appid-ref", identityRefAuth("adminidentity", "useridentity"))
+		db := newDedicatedDatabaseServer("my-app-db-appid-ref", adminIdentityRefAuth("adminidentity"))
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		adminName := fmt.Sprintf("%s-admin", db.Name)
@@ -2305,20 +2177,6 @@ var _ = Describe("DatabaseServer controller", func() {
 				azureName:     "admin-mi-id",
 				principalName: "admin-mi",
 			}))
-
-		markASOReady(ctx, db)
-
-		job := waitForServerProvisionJob(ctx, db.Name, db.Namespace)
-		Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal("adminidentity"))
-		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_USER_APP_IDENTITY", Value: "user-mi"},
-		))
-		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_USER_APP_PRINCIPAL_ID", Value: "user-mi-id"},
-		))
-		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_ADMIN_APP_IDENTITY", Value: "admin-mi"},
-		))
 	})
 
 	It("creates a FlexibleServersDatabase and publishes LogicalDatabase status", func() {
@@ -2455,39 +2313,47 @@ var _ = Describe("DatabaseServer controller", func() {
 			Should(BeEmpty())
 	})
 
-	It("reports NotShared when LogicalDatabase server points to a dedicated database server", func() {
-		db := newDedicatedDatabaseServer("dedicated-db-logical-invalid", directAuth(
+	It("creates a LogicalDatabase and access Job on a dedicated database server", func() {
+		db := newDedicatedDatabaseServer("dedicated-db-logical-valid", adminAuth(
 			"admin-mi",
 			"admin-mi-id",
 			"admin-mi",
-			"user-mi",
-			"user-mi-id",
 		))
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		logicalDatabase := newLogicalDatabase("router-dedicated-server", db.Name)
 		Expect(k8sClient.Create(ctx, logicalDatabase)).To(Succeed())
 
-		Eventually(func(g Gomega) string {
-			var updated storagev1alpha1.LogicalDatabase
-			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      logicalDatabase.Name,
-				Namespace: logicalDatabase.Namespace,
-			}, &updated)).To(Succeed())
-			g.Expect(updated.Status.ObservedGeneration).To(Equal(updated.Generation))
-			for _, validationError := range updated.Status.ValidationErrors {
-				if validationError.Field == logicalDatabaseValidationFieldServerName {
-					return validationError.Reason
-				}
-			}
-			return ""
-		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
-			Should(Equal(logicalDatabaseValidationReasonNotShared))
+		expectedDatabaseName := expectedLogicalDatabaseName(logicalDatabase)
+		expectedResourceName := logicalDatabaseASOResourceName(db.Name, expectedDatabaseName)
 
-		Consistently(func(g Gomega) []dbforpostgresqlv1.FlexibleServersDatabase {
-			return listLogicalDatabaseASOChildren(g, logicalDatabase.Name)
-		}).WithTimeout(2 * time.Second).WithPolling(250 * time.Millisecond).
-			Should(BeEmpty())
+		Eventually(func(g Gomega) dbforpostgresqlv1.FlexibleServersDatabase_Spec {
+			var asoDatabase dbforpostgresqlv1.FlexibleServersDatabase
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      expectedResourceName,
+				Namespace: logicalDatabase.Namespace,
+			}, &asoDatabase)).To(Succeed())
+			g.Expect(asoDatabase.Spec.AzureName).To(Equal(expectedDatabaseName))
+			g.Expect(asoDatabase.Spec.Owner).NotTo(BeNil())
+			g.Expect(asoDatabase.Spec.Owner.Name).To(Equal(db.Name))
+			g.Expect(asoDatabase.Labels).To(HaveKeyWithValue(databaseNameLabelKey, db.Name))
+			g.Expect(asoDatabase.Labels).To(HaveKeyWithValue(logicalDatabaseLabelKey, logicalDatabase.Name))
+			return asoDatabase.Spec
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			ShouldNot(BeZero())
+
+		markLogicalDatabaseASOReady(ctx, logicalDatabase)
+
+		job := waitForLogicalAccessJob(ctx, logicalDatabase.Name, logicalDatabase.Namespace)
+		Expect(job.Labels).To(HaveKeyWithValue(databaseNameLabelKey, db.Name))
+		Expect(job.Labels).To(HaveKeyWithValue(logicalDatabaseLabelKey, logicalDatabase.Name))
+		Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(db.Spec.Auth.Admin.ServiceAccountName))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: "DISPG_DATABASE_NAME", Value: db.Name},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: "DISPG_DB_NAME", Value: expectedDatabaseName},
+		))
 	})
 
 	It("rejects LogicalDatabase name and server references with surrounding whitespace", func() {
@@ -2535,7 +2401,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			Should(BeEmpty())
 	})
 
-	It("revalidates LogicalDatabase when the referenced shared database server is created later", func() {
+	It("revalidates LogicalDatabase when the referenced Database server is created later", func() {
 		const serverName = "shared-db-created-later"
 		logicalDatabase := newLogicalDatabase("router-late-server", serverName)
 		Expect(k8sClient.Create(ctx, logicalDatabase)).To(Succeed())
