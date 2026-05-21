@@ -28,7 +28,7 @@ module "container_apps_gh_runners" {
   install_id  = var.altinn_app_install_id
   app_key     = var.altinn_app_key
   kv_ip_rules = [var.host_ip]
-  owner       = "altinn"
+  owner       = "Altinn"
   repos = [
     var.repository_name
   ]
