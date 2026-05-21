@@ -48,9 +48,10 @@ var _ = Describe("User provisioning", Ordered, func() {
 		adminIdentityRef           = "adminidentity"
 		adminIdentity              = "adminidentity"
 		adminPrincipal             = "adminidentity-principal-id"
-		userIdentityRef            = "useridentity"
 		userIdentity               = "user1"
 		userPrincipalId            = "user1-principal-id"
+		userOwnerIdentity          = "e2e-user-owner"
+		userOwnerPrincipalID       = "e2e-user-owner-principal-id"
 		explicitBackupRetentionDay = 21
 		explicitCustomServerParam  = "autovacuum_naptime"
 		explicitCustomServerValue  = "15"
@@ -66,6 +67,7 @@ var _ = Describe("User provisioning", Ordered, func() {
 
 	BeforeAll(func() {
 		By("cleaning up stale Database and Job resources from previous runs")
+		deleteLogicalDatabaseAndProvisionJobs(dbName, namespace)
 		deleteDatabaseAndProvisionJobs(dbName, namespace)
 		deleteDatabaseAndProvisionJobs(explicitRetentionDBName, namespace)
 		deleteDatabaseAndProvisionJobs(explicitHADBName, namespace)
@@ -75,18 +77,14 @@ var _ = Describe("User provisioning", Ordered, func() {
 			dbName,
 			namespace,
 			adminIdentityRef,
-			userIdentityRef,
 		)
-		By("creating a Database custom resource with identity prerequisites")
+		By("creating a Database server custom resource with identity prerequisites")
 		applyManifestWithIdentityPrerequisites(
 			manifestPath,
 			namespace,
 			adminIdentityRef,
 			adminIdentity,
 			adminPrincipal,
-			userIdentityRef,
-			userIdentity,
-			userPrincipalId,
 			"Failed to apply Database manifest",
 		)
 
@@ -102,9 +100,48 @@ var _ = Describe("User provisioning", Ordered, func() {
 		_ = os.Remove(manifestPath)
 	})
 
-	It("provisions the user and schema in Postgres", func() {
-		By("waiting for the user provisioning job to complete")
-		labelSelector := fmt.Sprintf("dis.altinn.cloud/database-name=%s,dis.altinn.cloud/user-provision=true", dbName)
+	It("provisions single-tenant LogicalDatabase app and owner access in Postgres", func() {
+		expectedDatabaseName := dbName
+		logicalManifestPath := writeLogicalDatabaseOnlyTestManifest(
+			dbName,
+			dbName,
+			namespace,
+			userIdentity,
+			userPrincipalId,
+			userOwnerIdentity,
+			userOwnerPrincipalID,
+		)
+
+		defer func() {
+			deleteLogicalDatabaseAndProvisionJobs(dbName, namespace)
+			_ = os.Remove(logicalManifestPath)
+			cleanupLogicalPostgresResources(expectedDatabaseName, userIdentity, userOwnerIdentity)
+		}()
+
+		By("cleaning up stale single-tenant LogicalDatabase resources from previous runs")
+		deleteLogicalDatabaseAndProvisionJobs(dbName, namespace)
+		cleanupLogicalPostgresResources(expectedDatabaseName, userIdentity, userOwnerIdentity)
+
+		By("creating the child LogicalDatabase")
+		cmd := exec.Command("kubectl", "apply", "-f", logicalManifestPath)
+		_, err := utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed to apply LogicalDatabase manifest")
+
+		By("waiting for the ASO logical database child")
+		asoDatabaseName := waitForLogicalDatabaseASOResource(dbName, namespace)
+
+		By("creating the real app database in local Postgres")
+		runPostgresQuery(fmt.Sprintf(
+			"CREATE DATABASE %s;",
+			quoteIdentifier(expectedDatabaseName),
+		))
+
+		By("marking ASO resources ready for the local Postgres stand-in")
+		patchFlexibleServerReady(dbName, namespace, "postgres.default.svc")
+		patchFlexibleServersDatabaseReady(asoDatabaseName, namespace)
+
+		By("waiting for the LogicalDatabase access provisioning job to complete")
+		labelSelector := fmt.Sprintf("dis.altinn.cloud/logical-database-name=%s,dis.altinn.cloud/user-provision=true", dbName)
 		Eventually(func() error {
 			cmd := exec.Command(
 				"kubectl", "wait",
@@ -117,19 +154,23 @@ var _ = Describe("User provisioning", Ordered, func() {
 			_, err := utils.Run(cmd)
 			return err
 		}).WithTimeout(5*time.Minute).WithPolling(2*time.Second).
-			Should(Succeed(), "User provisioning job did not complete")
+			Should(Succeed(), "LogicalDatabase access provisioning job did not complete")
 
 		By("verifying the role exists in Postgres")
 		output := runPostgresQuery("SELECT 1 FROM pg_roles WHERE rolname = '" + userIdentity + "';")
 		Expect(strings.TrimSpace(output)).To(Equal("1"))
 
-		By("verifying the schema exists in Postgres")
-		output = runPostgresQuery("SELECT 1 FROM pg_namespace WHERE nspname = '" + dbName + "';")
+		By("verifying the schema exists in the app database")
+		output, err = runPostgresQueryAsUserInDatabase("postgres", expectedDatabaseName, fmt.Sprintf(
+			"SELECT 1 FROM pg_namespace WHERE nspname = '%s';",
+			strings.ReplaceAll(dbName, "'", "''"),
+		))
+		Expect(err).NotTo(HaveOccurred())
 		Expect(strings.TrimSpace(output)).To(Equal("1"))
 
 		By("verifying the user can create tables in its schema")
 		tableName := fmt.Sprintf("%s.e2e_check", quoteIdentifier(dbName))
-		_, err := runPostgresQueryAsUser(userIdentity, fmt.Sprintf(
+		_, err = runPostgresQueryAsUserInDatabase(userIdentity, expectedDatabaseName, fmt.Sprintf(
 			"CREATE TABLE %s (id int); DROP TABLE %s;",
 			tableName,
 			tableName,
@@ -296,7 +337,6 @@ var _ = Describe("User provisioning", Ordered, func() {
 			explicitRetentionDBName,
 			namespace,
 			adminIdentityRef,
-			userIdentityRef,
 			explicitBackupRetentionDay,
 		)
 
@@ -312,9 +352,6 @@ var _ = Describe("User provisioning", Ordered, func() {
 			adminIdentityRef,
 			adminIdentity,
 			adminPrincipal,
-			userIdentityRef,
-			userIdentity,
-			userPrincipalId,
 			"Failed to apply Database manifest with explicit backup retention",
 		)
 
@@ -354,7 +391,6 @@ var _ = Describe("User provisioning", Ordered, func() {
 			explicitHADBName,
 			namespace,
 			adminIdentityRef,
-			userIdentityRef,
 			true,
 		)
 
@@ -370,9 +406,6 @@ var _ = Describe("User provisioning", Ordered, func() {
 			adminIdentityRef,
 			adminIdentity,
 			adminPrincipal,
-			userIdentityRef,
-			userIdentity,
-			userPrincipalId,
 			"Failed to apply Database manifest with explicit HA",
 		)
 
@@ -431,7 +464,6 @@ var _ = Describe("User provisioning", Ordered, func() {
 			explicitServerParamsDBName,
 			namespace,
 			adminIdentityRef,
-			userIdentityRef,
 		)
 
 		defer func() {
@@ -446,9 +478,6 @@ var _ = Describe("User provisioning", Ordered, func() {
 			adminIdentityRef,
 			adminIdentity,
 			adminPrincipal,
-			userIdentityRef,
-			userIdentity,
-			userPrincipalId,
 			"Failed to apply Database manifest with explicit server parameters",
 		)
 
@@ -487,12 +516,12 @@ var _ = Describe("User provisioning", Ordered, func() {
 	})
 })
 
-func writeTestManifest(dbName, namespace, adminIdentityRef, userIdentityRef string) string {
-	return writeTestManifestWithBackupRetention(dbName, namespace, adminIdentityRef, userIdentityRef, 0)
+func writeTestManifest(dbName, namespace, adminIdentityRef string) string {
+	return writeTestManifestWithBackupRetention(dbName, namespace, adminIdentityRef, 0)
 }
 
 func writeTestManifestWithBackupRetention(
-	dbName, namespace, adminIdentityRef, userIdentityRef string,
+	dbName, namespace, adminIdentityRef string,
 	backupRetentionDays int,
 ) string {
 	sizeGB := int32(32)
@@ -520,11 +549,6 @@ func writeTestManifestWithBackupRetention(
 						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: adminIdentityRef},
 					},
 				},
-				User: &storagev1alpha1.UserIdentitySpec{
-					Identity: storagev1alpha1.IdentitySource{
-						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: userIdentityRef},
-					},
-				},
 			},
 		},
 	}
@@ -532,11 +556,11 @@ func writeTestManifestWithBackupRetention(
 		database.Spec.BackupRetentionDays = &backupRetentionDays
 	}
 
-	return writeManifestWithApplicationIdentities(database, namespace, adminIdentityRef, userIdentityRef)
+	return writeManifestWithAdminIdentity(database, namespace, adminIdentityRef)
 }
 
 func writeTestManifestWithHighAvailability(
-	dbName, namespace, adminIdentityRef, userIdentityRef string,
+	dbName, namespace, adminIdentityRef string,
 	highAvailabilityEnabled bool,
 ) string {
 	sizeGB := int32(32)
@@ -565,20 +589,15 @@ func writeTestManifestWithHighAvailability(
 						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: adminIdentityRef},
 					},
 				},
-				User: &storagev1alpha1.UserIdentitySpec{
-					Identity: storagev1alpha1.IdentitySource{
-						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: userIdentityRef},
-					},
-				},
 			},
 		},
 	}
 
-	return writeManifestWithApplicationIdentities(database, namespace, adminIdentityRef, userIdentityRef)
+	return writeManifestWithAdminIdentity(database, namespace, adminIdentityRef)
 }
 
 func writeTestManifestWithServerParameters(
-	dbName, namespace, adminIdentityRef, userIdentityRef string,
+	dbName, namespace, adminIdentityRef string,
 ) string {
 	sizeGB := int32(32)
 	tier := "P80"
@@ -611,21 +630,16 @@ func writeTestManifestWithServerParameters(
 						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: adminIdentityRef},
 					},
 				},
-				User: &storagev1alpha1.UserIdentitySpec{
-					Identity: storagev1alpha1.IdentitySource{
-						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: userIdentityRef},
-					},
-				},
 			},
 		},
 	}
 
-	return writeManifestWithApplicationIdentities(database, namespace, adminIdentityRef, userIdentityRef)
+	return writeManifestWithAdminIdentity(database, namespace, adminIdentityRef)
 }
 
-func writeManifestWithApplicationIdentities(
+func writeManifestWithAdminIdentity(
 	database *storagev1alpha1.Database,
-	namespace, adminIdentityRef, userIdentityRef string,
+	namespace, adminIdentityRef string,
 ) string {
 
 	adminIdentity := &identityv1alpha1.ApplicationIdentity{
@@ -640,19 +654,7 @@ func writeManifestWithApplicationIdentities(
 		Spec: identityv1alpha1.ApplicationIdentitySpec{},
 	}
 
-	userIdentity := &identityv1alpha1.ApplicationIdentity{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "application.dis.altinn.cloud/v1alpha1",
-			Kind:       "ApplicationIdentity",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      userIdentityRef,
-			Namespace: namespace,
-		},
-		Spec: identityv1alpha1.ApplicationIdentitySpec{},
-	}
-
-	resources := []interface{}{adminIdentity, userIdentity, database}
+	resources := []interface{}{adminIdentity, database}
 	docs := make([]string, 0, len(resources))
 	for i := range resources {
 		content, err := yaml.Marshal(resources[i])
@@ -668,6 +670,56 @@ func writeManifestWithApplicationIdentities(
 	dir := os.TempDir()
 	path := filepath.Join(dir, fmt.Sprintf("db-%s.yaml", database.Name))
 	err := os.WriteFile(path, []byte(content), 0o600)
+	Expect(err).NotTo(HaveOccurred(), "Failed to write temp manifest")
+	return path
+}
+
+func writeLogicalDatabaseOnlyTestManifest(
+	serverName,
+	logicalResourceName,
+	namespace,
+	appIdentity,
+	appPrincipalID,
+	ownerIdentity,
+	ownerPrincipalID string,
+) string {
+	logicalDatabase := &storagev1alpha1.LogicalDatabase{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "storage.dis.altinn.cloud/v1alpha1",
+			Kind:       "LogicalDatabase",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      logicalResourceName,
+			Namespace: namespace,
+		},
+		Spec: storagev1alpha1.LogicalDatabaseSpec{
+			Name: logicalResourceName,
+			Server: storagev1alpha1.LogicalDatabaseServerSpec{
+				Name: serverName,
+			},
+			Access: storagev1alpha1.LogicalDatabaseAccessSpec{
+				App: storagev1alpha1.LogicalDatabasePrincipalSpec{
+					Name:        appIdentity,
+					PrincipalId: appPrincipalID,
+				},
+				Owner: storagev1alpha1.LogicalDatabasePrincipalSpec{
+					Name:        ownerIdentity,
+					PrincipalId: ownerPrincipalID,
+				},
+			},
+		},
+	}
+
+	contentBytes, err := yaml.Marshal(logicalDatabase)
+	Expect(err).NotTo(HaveOccurred(), "Failed to marshal LogicalDatabase test manifest")
+	content := string(contentBytes)
+	if !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
+
+	dir := os.TempDir()
+	path := filepath.Join(dir, fmt.Sprintf("logical-db-%s.yaml", logicalResourceName))
+	err = os.WriteFile(path, []byte(content), 0o600)
 	Expect(err).NotTo(HaveOccurred(), "Failed to write temp manifest")
 	return path
 }
@@ -784,7 +836,6 @@ func patchApplicationIdentityStatus(identityRef, namespace, managedIdentityName,
 func applyManifestWithIdentityPrerequisites(
 	manifestPath, namespace,
 	adminIdentityRef, adminManagedIdentityName, adminPrincipalID,
-	userIdentityRef, userManagedIdentityName, userPrincipalID,
 	applyFailureMessage string,
 ) {
 	cmd := exec.Command("kubectl", "apply", "-f", manifestPath)
@@ -792,7 +843,6 @@ func applyManifestWithIdentityPrerequisites(
 	Expect(err).NotTo(HaveOccurred(), applyFailureMessage)
 
 	patchApplicationIdentityStatus(adminIdentityRef, namespace, adminManagedIdentityName, adminPrincipalID)
-	patchApplicationIdentityStatus(userIdentityRef, namespace, userManagedIdentityName, userPrincipalID)
 }
 
 func waitForLogicalDatabaseASOResource(logicalResourceName, namespace string) string {

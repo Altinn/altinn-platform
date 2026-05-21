@@ -34,10 +34,6 @@ spec:
       identity:
         identityRef:
           name: adminidentity
-    user:
-      identity:
-        identityRef:
-          name: useridentity
 ---
 apiVersion: storage.dis.altinn.cloud/v1alpha1
 kind: Database
@@ -63,10 +59,6 @@ spec:
       identity:
         identityRef:
           name: adminidentity
-    user:
-      identity:
-        identityRef:
-          name: useridentity2
 ---
 apiVersion: storage.dis.altinn.cloud/v1alpha1
 kind: Database
@@ -84,10 +76,6 @@ spec:
       identity:
         identityRef:
           name: adminidentity
-    user:
-      identity:
-        identityRef:
-          name: useridentity
 ---
 apiVersion: storage.dis.altinn.cloud/v1alpha1
 kind: Database
@@ -105,10 +93,6 @@ spec:
       identity:
         identityRef:
           name: adminidentity
-    user:
-      identity:
-        identityRef:
-          name: useridentity2
 # ---
 # apiVersion: storage.dis.altinn.cloud/v1alpha1
 # kind: Database
@@ -123,10 +107,6 @@ spec:
 #       identity:
 #         identityRef:
 #           name: adminidentity
-#     user:
-#       identity:
-#         identityRef:
-#           name: useridentity
 # ---
 # apiVersion: storage.dis.altinn.cloud/v1alpha1
 # kind: Database
@@ -141,7 +121,3 @@ spec:
 #       identity:
 #         identityRef:
 #           name: adminidentity
-#     user:
-#       identity:
-#         identityRef:
-#           name: useridentity2

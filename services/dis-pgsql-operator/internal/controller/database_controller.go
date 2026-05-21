@@ -17,7 +17,6 @@ import (
 
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
-	batchv1 "k8s.io/api/batch/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -68,10 +67,6 @@ type DatabaseServerReconciler struct {
 // +kubebuilder:rbac:groups=network.azure.com,resources=privatednszones/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=network.azure.com,resources=privatednszonesvirtualnetworklinks,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=network.azure.com,resources=privatednszonesvirtualnetworklinks/status,verbs=get;update;patch
-
-// Jobs: user provisioning
-// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=batch,resources=jobs/status,verbs=get;update;patch
 
 // ApplicationIdentity (dis-application)
 // +kubebuilder:rbac:groups=application.dis.altinn.cloud,resources=applicationidentities,verbs=get;list;watch
@@ -206,7 +201,7 @@ func (r *DatabaseServerReconciler) reconcileDedicatedDatabaseServer(
 		return ctrl.Result{}, err
 	}
 
-	return r.reconcileCommonDatabaseServerResources(ctx, logger, db, true)
+	return r.reconcileCommonDatabaseServerResources(ctx, logger, db)
 }
 
 func (r *DatabaseServerReconciler) reconcileSharedDatabaseServer(
@@ -225,14 +220,13 @@ func (r *DatabaseServerReconciler) reconcileSharedDatabaseServer(
 		return ctrl.Result{}, err
 	}
 
-	return r.reconcileCommonDatabaseServerResources(ctx, logger, db, false)
+	return r.reconcileCommonDatabaseServerResources(ctx, logger, db)
 }
 
 func (r *DatabaseServerReconciler) reconcileCommonDatabaseServerResources(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.Database,
-	provisionUser bool,
 ) (ctrl.Result, error) {
 	if err := r.ensurePostgresExtensionSettings(ctx, logger, db); err != nil {
 		logger.Error(err, "failed to ensure PostgreSQL extension settings for database server")
@@ -270,29 +264,6 @@ func (r *DatabaseServerReconciler) reconcileCommonDatabaseServerResources(
 			logger.Info("waiting for ASO resources to be ready")
 			return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 		}
-	}
-
-	if !provisionUser {
-		return ctrl.Result{}, nil
-	}
-
-	userIdentity, requeue, err := r.resolveUserIdentity(ctx, logger, db)
-	if err != nil {
-		logger.Error(err, "failed to resolve user identity")
-		return ctrl.Result{}, err
-	}
-	if requeue {
-		logger.Info("waiting for user ApplicationIdentity to be ready")
-		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
-	}
-
-	// Normal DB user provisioning job for the current server path.
-	if err := r.ensureUserProvisionJob(ctx, logger, db, resolvedDatabaseAuth{
-		Admin: adminIdentity,
-		User:  userIdentity,
-	}); err != nil {
-		logger.Error(err, "failed to ensure user provisioning job for database server")
-		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
@@ -407,7 +378,6 @@ func (r *DatabaseServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&dbforpostgresqlv1.FlexibleServer{}).
 		Owns(&dbforpostgresqlv1.FlexibleServersConfiguration{}).
 		Owns(&dbforpostgresqlv1.FlexibleServersAdministrator{}).
-		Owns(&batchv1.Job{}).
 		Watches(&identityv1alpha1.ApplicationIdentity{}, handler.EnqueueRequestsFromMapFunc(r.mapApplicationIdentityToDatabaseServers)).
 		WithOptions(controller.Options{
 			// Force single-threaded reconciliation

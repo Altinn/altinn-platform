@@ -88,18 +88,17 @@ spec:
                 type: string
               name:
                 description: |-
-                  name is the PostgreSQL database name to create inside the shared server.
-                  It must be unique per shared server.
+                  name is the PostgreSQL database name to create inside the selected server.
+                  It must be unique per server.
                 maxLength: 63
                 minLength: 1
                 type: string
               server:
-                description: server identifies the same-namespace shared Database
-                  server.
+                description: server identifies the same-namespace Database server.
                 properties:
                   name:
                     description: name is the same-namespace Database resource to use
-                      as the shared server.
+                      as the server.
                     minLength: 1
                     type: string
                 required:

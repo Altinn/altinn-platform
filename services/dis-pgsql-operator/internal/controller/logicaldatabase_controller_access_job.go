@@ -34,7 +34,7 @@ func (r *LogicalDatabaseReconciler) ensureLogicalDatabaseAccess(
 		Namespace: logicalDatabase.Namespace,
 	}, &db); err != nil {
 		if apierrors.IsNotFound(err) {
-			return false, logicalDatabaseReasonProvisioning, "Referenced shared Database is not available", nil
+			return false, logicalDatabaseReasonProvisioning, "Referenced Database server is not available", nil
 		}
 		return false, "", "", fmt.Errorf("get Database %s/%s: %w", logicalDatabase.Namespace, serverName, err)
 	}
@@ -44,7 +44,7 @@ func (r *LogicalDatabaseReconciler) ensureLogicalDatabaseAccess(
 		return false, "", "", err
 	}
 	if requeue {
-		return false, logicalDatabaseReasonProvisioning, "Waiting for shared Database admin identity", nil
+		return false, logicalDatabaseReasonProvisioning, "Waiting for Database server admin identity", nil
 	}
 
 	jobName := logicalDatabaseAccessProvisionJobName(logicalDatabase, serverName, adminIdentity)

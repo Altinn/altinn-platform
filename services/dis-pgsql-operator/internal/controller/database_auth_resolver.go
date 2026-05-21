@@ -25,11 +25,6 @@ type resolvedAdminIdentity struct {
 	ServiceAccountName string
 }
 
-type resolvedDatabaseAuth struct {
-	Admin resolvedAdminIdentity
-	User  resolvedIdentity
-}
-
 type identitySourceResolver interface {
 	Get(context.Context, types.NamespacedName, client.Object, ...client.GetOption) error
 }
@@ -73,17 +68,6 @@ func resolveAdminIdentity(
 		resolvedIdentity:   identity,
 		ServiceAccountName: serviceAccountName,
 	}, false, nil
-}
-
-func (r *DatabaseServerReconciler) resolveUserIdentity(
-	ctx context.Context,
-	logger logr.Logger,
-	db *storagev1alpha1.Database,
-) (resolvedIdentity, bool, error) {
-	if db.Spec.Auth.User == nil {
-		return resolvedIdentity{}, false, fmt.Errorf("spec.auth.user must be set")
-	}
-	return resolveIdentitySource(ctx, logger, r, db, "user", db.Spec.Auth.User.Identity)
 }
 
 func resolveIdentitySource(

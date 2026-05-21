@@ -11,10 +11,10 @@ const (
 	LogicalDatabaseDeletionPolicyRetain LogicalDatabaseDeletionPolicy = "Retain"
 )
 
-// LogicalDatabaseServerSpec identifies the shared Database server that hosts
-// this logical database.
+// LogicalDatabaseServerSpec identifies the Database server that hosts this
+// logical database.
 type LogicalDatabaseServerSpec struct {
-	// name is the same-namespace Database resource to use as the shared server.
+	// name is the same-namespace Database resource to use as the server.
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 }
@@ -45,13 +45,13 @@ type LogicalDatabaseAccessSpec struct {
 //
 // The PostgreSQL database name is spec.name.
 type LogicalDatabaseSpec struct {
-	// name is the PostgreSQL database name to create inside the shared server.
-	// It must be unique per shared server.
+	// name is the PostgreSQL database name to create inside the selected server.
+	// It must be unique per server.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=63
 	Name string `json:"name"`
 
-	// server identifies the same-namespace shared Database server.
+	// server identifies the same-namespace Database server.
 	Server LogicalDatabaseServerSpec `json:"server"`
 
 	// access defines the identity that should get access to this logical database.

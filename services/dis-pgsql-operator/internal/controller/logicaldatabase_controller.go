@@ -27,7 +27,6 @@ import (
 const (
 	logicalDatabaseValidationReasonRequired      = "Required"
 	logicalDatabaseValidationReasonNotFound      = "NotFound"
-	logicalDatabaseValidationReasonNotShared     = "NotShared"
 	logicalDatabaseValidationReasonUnsupported   = "Unsupported"
 	logicalDatabaseValidationReasonInvalid       = "Invalid"
 	logicalDatabaseValidationReasonConflict      = "Conflict"
@@ -50,6 +49,7 @@ type LogicalDatabaseReconciler struct {
 // +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=logicaldatabases,verbs=get;list;watch
 // +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=logicaldatabases/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=databases,verbs=get;list;watch
+// +kubebuilder:rbac:groups=application.dis.altinn.cloud,resources=applicationidentities,verbs=get;list;watch
 // +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleservers,verbs=get;list;watch
 // +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversdatabases,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversdatabases/status,verbs=get
@@ -292,14 +292,6 @@ func (r *LogicalDatabaseReconciler) validateLogicalDatabase(
 			return validationErrors, databaseName, nil
 		}
 		return nil, databaseName, fmt.Errorf("get Database %s/%s: %w", logicalDatabase.Namespace, serverName, err)
-	}
-
-	if databaseServerMode(&db) != storagev1alpha1.DatabaseModeShared {
-		validationErrors = append(validationErrors, storagev1alpha1.LogicalDatabaseValidationError{
-			Field:   logicalDatabaseValidationFieldServerName,
-			Reason:  logicalDatabaseValidationReasonNotShared,
-			Message: fmt.Sprintf("Database %q must have spec.mode Shared", serverName),
-		})
 	}
 
 	return validationErrors, databaseName, nil

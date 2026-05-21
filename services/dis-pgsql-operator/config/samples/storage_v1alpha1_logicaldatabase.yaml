@@ -2,11 +2,11 @@ apiVersion: storage.dis.altinn.cloud/v1alpha1
 kind: LogicalDatabase
 metadata:
   name: router
-  namespace: product-myproduct
+  namespace: default
 spec:
   name: router
   server:
-    name: myproduct-dev
+    name: db1
   access:
     app:
       name: myproduct-router-dev
