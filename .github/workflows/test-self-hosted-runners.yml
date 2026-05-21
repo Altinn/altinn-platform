@@ -6,9 +6,7 @@ on:
 jobs:
   test-altinn-platform:
     name: Test altinn-platform runner
-    runs-on:
-      - self-hosted
-      - default
+    runs-on: self-hosted
     steps:
       - name: Print runner info
         run: |
