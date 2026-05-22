@@ -1,0 +1,90 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - application.dis.altinn.cloud
+  resources:
+  - applicationidentities
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cache.azure.com
+  resources:
+  - redisenterprises
+  - redisenterprisesdatabases
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cache.azure.com
+  resources:
+  - redisenterprises/status
+  - redisenterprisesdatabases/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - network.azure.com
+  resources:
+  - privatednszones
+  - privatednszonesvirtualnetworklinks
+  - privateendpoints
+  - privateendpointsprivatednszonegroups
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - network.azure.com
+  resources:
+  - privatednszones/status
+  - privatednszonesvirtualnetworklinks/status
+  - privateendpoints/status
+  - privateendpointsprivatednszonegroups/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - redis.dis.altinn.cloud
+  resources:
+  - redises
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - redis.dis.altinn.cloud
+  resources:
+  - redises/status
+  verbs:
+  - get
+  - patch
+  - update

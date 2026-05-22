@@ -1,0 +1,19 @@
+- op: add
+  path: /spec/template/spec/containers/0/env
+  value:
+    - name: DISREDIS_AZURE_SUBSCRIPTION_ID
+      value: "${DISREDIS_AZURE_SUBSCRIPTION_ID}"
+    - name: DISREDIS_RESOURCE_GROUP
+      value: "${DISREDIS_RESOURCE_GROUP}"
+    - name: DISREDIS_AZURE_TENANT_ID
+      value: "${DISREDIS_AZURE_TENANT_ID}"
+    - name: DISREDIS_LOCATION
+      value: "${DISREDIS_LOCATION}"
+    - name: DISREDIS_ENV
+      value: "${DISREDIS_ENV}"
+    - name: DISREDIS_AKS_SUBNET_IDS
+      value: "${DISREDIS_AKS_SUBNET_IDS}"
+    - name: DISREDIS_AKS_VNET_ID
+      value: "${DISREDIS_AKS_VNET_ID}"
+    - name: DISREDIS_DNS_ZONE_RESOURCE_GROUP
+      value: "${DISREDIS_DNS_ZONE_RESOURCE_GROUP}"
