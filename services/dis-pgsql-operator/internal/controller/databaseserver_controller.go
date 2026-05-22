@@ -9,6 +9,7 @@ import (
 	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	asoconditions "github.com/Azure/azure-service-operator/v2/pkg/genruntime/conditions"
 	"github.com/go-logr/logr"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,6 +27,12 @@ import (
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/network"
+)
+
+const (
+	databaseServerConditionReady = "Ready"
+	databaseServerReasonReady    = "Ready"
+	databaseServerReasonWaiting  = "Waiting"
 )
 
 // DatabaseServerReconciler reconciles the current DatabaseServer CRD as a PostgreSQL server.
@@ -116,14 +123,7 @@ func (r *DatabaseServerReconciler) reconcileDedicatedDatabaseServer(
 			if errors.Is(err, network.ErrNoFreeSubnets) {
 				logger.Info("no free subnets available, will retry later", "error", err.Error())
 
-				meta.SetStatusCondition(&db.Status.Conditions, metav1.Condition{
-					Type:    "Ready",
-					Status:  metav1.ConditionFalse,
-					Reason:  "NoFreeSubnets",
-					Message: "No free subnet CIDRs available in the configured catalog",
-				})
-
-				if err := r.Status().Update(ctx, db); err != nil {
+				if err := r.setDatabaseServerReadyCondition(ctx, db, metav1.ConditionFalse, "NoFreeSubnets", "No free subnet CIDRs available in the configured catalog"); err != nil {
 					logger.Error(err, "failed to update database server status after no free subnets")
 					return ctrl.Result{}, err
 				}
@@ -245,6 +245,10 @@ func (r *DatabaseServerReconciler) reconcileCommonDatabaseServerResources(
 	}
 	if requeue {
 		logger.Info("waiting for admin ApplicationIdentity to be ready")
+		if err := r.setDatabaseServerReadyCondition(ctx, db, metav1.ConditionFalse, databaseServerReasonWaiting, "Waiting for admin ApplicationIdentity to be ready"); err != nil {
+			logger.Error(err, "failed to update database server readiness while waiting for admin identity")
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
 
@@ -262,11 +266,43 @@ func (r *DatabaseServerReconciler) reconcileCommonDatabaseServerResources(
 		}
 		if !ready {
 			logger.Info("waiting for ASO resources to be ready")
+			if err := r.setDatabaseServerReadyCondition(ctx, db, metav1.ConditionFalse, databaseServerReasonWaiting, "Waiting for ASO resources to be ready"); err != nil {
+				logger.Error(err, "failed to update database server readiness while waiting for ASO resources")
+				return ctrl.Result{}, err
+			}
 			return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 		}
 	}
 
+	if err := r.setDatabaseServerReadyCondition(ctx, db, metav1.ConditionTrue, databaseServerReasonReady, "DatabaseServer is ready"); err != nil {
+		logger.Error(err, "failed to update database server readiness")
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
+}
+
+func (r *DatabaseServerReconciler) setDatabaseServerReadyCondition(
+	ctx context.Context,
+	db *storagev1alpha1.DatabaseServer,
+	status metav1.ConditionStatus,
+	reason,
+	message string,
+) error {
+	previousStatus := db.Status.DeepCopy()
+	meta.SetStatusCondition(&db.Status.Conditions, metav1.Condition{
+		Type:               databaseServerConditionReady,
+		Status:             status,
+		Reason:             reason,
+		Message:            message,
+		ObservedGeneration: db.Generation,
+	})
+
+	if apiequality.Semantic.DeepEqual(previousStatus, &db.Status) {
+		return nil
+	}
+
+	return r.Status().Update(ctx, db)
 }
 
 func (r *DatabaseServerReconciler) allocateSubnetForDatabaseServer(

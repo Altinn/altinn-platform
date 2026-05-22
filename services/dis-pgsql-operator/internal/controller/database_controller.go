@@ -20,7 +20,6 @@ import (
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
-	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 )
 
@@ -36,6 +35,7 @@ const (
 	databaseValidationFieldServerName     = "spec.server.name"
 	databaseValidationFieldDeletionPolicy = "spec.deletionPolicy"
 	databaseValidationFieldDatabaseName   = "status.databaseName"
+	databaseMaxNameLength                 = 63
 )
 
 // DatabaseReconciler reconciles a Database object.
@@ -96,11 +96,12 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				return ctrl.Result{}, err
 			}
 
-			database.Status.ValidationErrors = append(database.Status.ValidationErrors, storagev1alpha1.DatabaseValidationError{
-				Field:   databaseValidationFieldSpecName,
-				Reason:  databaseValidationReasonConflict,
-				Message: fmt.Sprintf("database %q on server %q is already managed by %s; choose another spec.name", databaseName, database.Spec.Server.Name, conflictErr.ownerDescription()),
-			})
+			database.Status.ValidationErrors = appendDatabaseValidationError(
+				database.Status.ValidationErrors,
+				databaseValidationFieldSpecName,
+				databaseValidationReasonConflict,
+				fmt.Sprintf("database %q on server %q is already managed by %s; choose another spec.name", databaseName, database.Spec.Server.Name, conflictErr.ownerDescription()),
+			)
 			setDatabaseConditions(
 				&database,
 				metav1.ConditionFalse,
@@ -206,6 +207,23 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	return result, nil
 }
 
+func appendDatabaseValidationError(
+	validationErrors []storagev1alpha1.DatabaseValidationError,
+	field, reason, message string,
+) []storagev1alpha1.DatabaseValidationError {
+	for i := range validationErrors {
+		if validationErrors[i].Field == field {
+			return validationErrors
+		}
+	}
+
+	return append(validationErrors, storagev1alpha1.DatabaseValidationError{
+		Field:   field,
+		Reason:  reason,
+		Message: message,
+	})
+}
+
 func (r *DatabaseReconciler) validateDatabase(
 	ctx context.Context,
 	database *storagev1alpha1.Database,
@@ -218,11 +236,12 @@ func (r *DatabaseReconciler) validateDatabase(
 		if strings.TrimSpace(value) != "" {
 			return
 		}
-		validationErrors = append(validationErrors, storagev1alpha1.DatabaseValidationError{
-			Field:   field,
-			Reason:  databaseValidationReasonRequired,
-			Message: fmt.Sprintf("%s must be set", field),
-		})
+		validationErrors = appendDatabaseValidationError(
+			validationErrors,
+			field,
+			databaseValidationReasonRequired,
+			fmt.Sprintf("%s must be set", field),
+		)
 	}
 
 	addRequiredStringError(databaseValidationFieldServerName, database.Spec.Server.Name)
@@ -234,44 +253,49 @@ func (r *DatabaseReconciler) validateDatabase(
 	addRequiredStringError("spec.access.owner.principalId", database.Spec.Access.Owner.PrincipalId)
 
 	if database.Spec.Name != "" && strings.TrimSpace(database.Spec.Name) != database.Spec.Name {
-		validationErrors = append(validationErrors, storagev1alpha1.DatabaseValidationError{
-			Field:   databaseValidationFieldSpecName,
-			Reason:  databaseValidationReasonInvalid,
-			Message: "spec.name must not have leading or trailing whitespace",
-		})
+		validationErrors = appendDatabaseValidationError(
+			validationErrors,
+			databaseValidationFieldSpecName,
+			databaseValidationReasonInvalid,
+			"spec.name must not have leading or trailing whitespace",
+		)
 	}
 
-	if len(databaseName) > dbUtil.MaxDatabaseNameLength {
-		validationErrors = append(validationErrors, storagev1alpha1.DatabaseValidationError{
-			Field:   databaseValidationFieldSpecName,
-			Reason:  databaseValidationReasonInvalid,
-			Message: fmt.Sprintf("spec.name must be at most %d characters", dbUtil.MaxDatabaseNameLength),
-		})
+	if len(databaseName) > databaseMaxNameLength {
+		validationErrors = appendDatabaseValidationError(
+			validationErrors,
+			databaseValidationFieldSpecName,
+			databaseValidationReasonInvalid,
+			fmt.Sprintf("spec.name must be at most %d characters", databaseMaxNameLength),
+		)
 	}
 
 	if database.Spec.Server.Name != "" && serverName != database.Spec.Server.Name {
-		validationErrors = append(validationErrors, storagev1alpha1.DatabaseValidationError{
-			Field:   databaseValidationFieldServerName,
-			Reason:  databaseValidationReasonInvalid,
-			Message: "spec.server.name must not have leading or trailing whitespace",
-		})
+		validationErrors = appendDatabaseValidationError(
+			validationErrors,
+			databaseValidationFieldServerName,
+			databaseValidationReasonInvalid,
+			"spec.server.name must not have leading or trailing whitespace",
+		)
 	}
 
 	if database.Status.DatabaseName != "" && databaseName != "" && database.Status.DatabaseName != databaseName {
-		validationErrors = append(validationErrors, storagev1alpha1.DatabaseValidationError{
-			Field:   databaseValidationFieldDatabaseName,
-			Reason:  databaseValidationReasonImmutable,
-			Message: fmt.Sprintf("database name changed from %q to %q; recreate Database to use a new name", database.Status.DatabaseName, databaseName),
-		})
+		validationErrors = appendDatabaseValidationError(
+			validationErrors,
+			databaseValidationFieldDatabaseName,
+			databaseValidationReasonImmutable,
+			fmt.Sprintf("database name changed from %q to %q; recreate Database to use a new name", database.Status.DatabaseName, databaseName),
+		)
 	}
 
 	if database.Spec.DeletionPolicy != "" &&
 		database.Spec.DeletionPolicy != storagev1alpha1.DatabaseDeletionPolicyRetain {
-		validationErrors = append(validationErrors, storagev1alpha1.DatabaseValidationError{
-			Field:   databaseValidationFieldDeletionPolicy,
-			Reason:  databaseValidationReasonUnsupported,
-			Message: "spec.deletionPolicy only supports Retain",
-		})
+		validationErrors = appendDatabaseValidationError(
+			validationErrors,
+			databaseValidationFieldDeletionPolicy,
+			databaseValidationReasonUnsupported,
+			"spec.deletionPolicy only supports Retain",
+		)
 	}
 
 	if serverName == "" {
@@ -284,11 +308,12 @@ func (r *DatabaseReconciler) validateDatabase(
 		Namespace: database.Namespace,
 	}, &db); err != nil {
 		if apierrors.IsNotFound(err) {
-			validationErrors = append(validationErrors, storagev1alpha1.DatabaseValidationError{
-				Field:   databaseValidationFieldServerName,
-				Reason:  databaseValidationReasonNotFound,
-				Message: fmt.Sprintf("DatabaseServer %q was not found in namespace %q", serverName, database.Namespace),
-			})
+			validationErrors = appendDatabaseValidationError(
+				validationErrors,
+				databaseValidationFieldServerName,
+				databaseValidationReasonNotFound,
+				fmt.Sprintf("DatabaseServer %q was not found in namespace %q", serverName, database.Namespace),
+			)
 			return validationErrors, databaseName, nil
 		}
 		return nil, databaseName, fmt.Errorf("get DatabaseServer %s/%s: %w", database.Namespace, serverName, err)

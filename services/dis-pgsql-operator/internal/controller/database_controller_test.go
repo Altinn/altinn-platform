@@ -2144,6 +2144,31 @@ var _ = Describe("DatabaseServer controller", func() {
 			Should(Equal(0))
 	})
 
+	It("sets DatabaseServer Ready after ASO resources are ready", func() {
+		db := newDedicatedDatabaseServer("my-app-db-ready", adminAuth(
+			"admin-mi",
+			"admin-mi-id",
+			"admin-mi",
+		))
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		markASOReady(ctx, db)
+
+		Eventually(func(g Gomega) metav1.ConditionStatus {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &updated)).To(Succeed())
+			ready := meta.FindStatusCondition(updated.Status.Conditions, databaseServerConditionReady)
+			g.Expect(ready).NotTo(BeNil())
+			g.Expect(ready.Reason).To(Equal(databaseServerReasonReady))
+			g.Expect(ready.ObservedGeneration).To(Equal(updated.Generation))
+			return ready.Status
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(metav1.ConditionTrue))
+	})
+
 	It("resolves ApplicationIdentity references for server admin", func() {
 		createApplicationIdentity(ctx, "adminidentity", ns, "admin-mi", "admin-mi-id")
 
@@ -2399,6 +2424,36 @@ var _ = Describe("DatabaseServer controller", func() {
 			return listDatabaseASOChildren(g, database.Name)
 		}).WithTimeout(2 * time.Second).WithPolling(250 * time.Millisecond).
 			Should(BeEmpty())
+	})
+
+	It("reports at most one Database validation error per field", func() {
+		database := newDatabase("router-duplicate-validation", "missing-shared-db")
+		database.Spec.Name = "   "
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      database.Name,
+				Namespace: database.Namespace,
+			}, &updated)).To(Succeed())
+
+			ready := meta.FindStatusCondition(updated.Status.Conditions, databaseConditionReady)
+			g.Expect(ready).NotTo(BeNil())
+			g.Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(ready.Reason).To(Equal(databaseReasonValidationFailed))
+
+			specNameErrorCount := 0
+			for _, validationError := range updated.Status.ValidationErrors {
+				if validationError.Field != databaseValidationFieldSpecName {
+					continue
+				}
+				specNameErrorCount++
+				g.Expect(validationError.Reason).To(Equal(databaseValidationReasonRequired))
+			}
+			return specNameErrorCount
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
 	})
 
 	It("revalidates Database when the referenced DatabaseServer is created later", func() {
