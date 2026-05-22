@@ -13,9 +13,32 @@ INTEG_WAIT_S    ?= 5
 GO ?= go
 CONTAINER_RUNTIME ?= podman   # override with CONTAINER_RUNTIME=docker
 
-.PHONY: all test test-integration build clean docker-build docker-run fmt lint tidy
+.PHONY: all test test-integration build clean docker-build docker-run fmt lint tidy manifests manifests-imports manifests-verify
 
 all: fmt lint tidy test test-integration
+
+ROOT_DIR_REPO := $(shell git rev-parse --show-toplevel)
+PROJECT_DIR   ?= $(ROOT_DIR_REPO)/services/lakmus
+CONFIG_DIR    := $(PROJECT_DIR)/config
+
+## Generate Kubernetes manifests in config
+manifests:
+	@echo ">> Synthesizing Kubernetes manifests into $(CONFIG_DIR)"
+	cd "$(PROJECT_DIR)" && $(GO) run ./manifests
+
+## Refresh generated Go imports for the Kubernetes core API
+manifests-imports:
+	@echo ">> Refreshing Go cdk8s imports into $(PROJECT_DIR)/imports"
+	cd "$(PROJECT_DIR)" && cdk8s import k8s --language go --output imports
+
+## Re-generate manifests and fail if generated files were not committed
+manifests-verify: manifests
+	@echo ">> Verifying generated manifests are committed under $(CONFIG_DIR)"
+	@if [ -n "$$(git status --porcelain -- "$(CONFIG_DIR)")" ]; then \
+		echo "Generated manifests are out of date. Run 'make manifests' and commit config changes."; \
+		git --no-pager diff -- "$(CONFIG_DIR)"; \
+		exit 1; \
+	fi
 
 ## Unit tests
 test:
@@ -69,7 +92,7 @@ fmt:
 	$(GO) fmt ./...
 
 lint:
-	golangci-lint run
+	golangci-lint run ./cmd/... ./internal/... ./manifests/... ./pkg/... ./test/azfakes/...
 
 tidy:
 	${GO} mod tidy

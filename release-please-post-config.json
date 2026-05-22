@@ -1,0 +1,72 @@
+{
+  "post-release-hooks": {
+    "flux/.*": {
+      "dispatch-pipelines": [
+        {
+          "filename": "flux-release-artifact.yml",
+          "inputs": {
+            "tag_name": "{{tag_name}}"
+          }
+        },
+        {
+          "filename": "flux-manage-releases.yml",
+          "inputs": {
+            "tag_name": "{{tag_name}}",
+            "release_url": "{{release_url}}",
+            "release_sha": "{{release_sha}}"
+          }
+        }
+      ]
+    },
+    "services/dis-pgsql-operator": {
+      "dispatch-pipelines": [
+        {"filename": "dis-pgsql-release.yml"}
+      ]
+    },
+    "services/dis-identity-operator": {
+      "dispatch-pipelines": [
+        {"filename": "dis-identity-release.yml"}
+      ]
+    },
+    "services/dis-apim-operator": {
+      "dispatch-pipelines": [
+        {"filename": "dis-apim-release.yml"}
+      ]
+    },
+    "services/dis-vault-operator": {
+      "dispatch-pipelines": [
+        {"filename": "dis-vault-release.yml"}
+      ]
+    },
+    "services/lakmus": {
+      "dispatch-pipelines": [
+        {"filename": "lakmus-release.yml"}
+      ]
+    },
+    "infrastructure/images/azure-devops-agent": {
+      "dispatch-pipelines": [
+        {"filename": "azdevops-agent-release.yml"}
+      ]
+    },
+    "infrastructure/images/gh-runner": {
+      "dispatch-pipelines": [
+        {"filename": "gh-runner-release.yml"}
+      ]
+    },
+    "infrastructure/images/k6-action": {
+      "dispatch-pipelines": [
+        {"filename": "k6-action-image-release.yml"}
+      ]
+    },
+    "infrastructure/images/k6-image": {
+      "dispatch-pipelines": [
+        {"filename": "k6-custom-image-release.yml"}
+      ]
+    },
+    "infrastructure/images/terraform-azure-devops-agent": {
+      "dispatch-pipelines": [
+        {"filename": "terraform-azdev-agent-release.yml"}
+      ]
+    }
+  }
+}

@@ -20,12 +20,9 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	apimv1alpha1 "github.com/Altinn/altinn-platform/services/dis-apim-operator/api/v1alpha1"
 )
@@ -36,7 +33,7 @@ var backendlog = logf.Log.WithName("backend-resource")
 
 // SetupBackendWebhookWithManager registers the webhook for Backend in the manager.
 func SetupBackendWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).For(&apimv1alpha1.Backend{}).
+	return ctrl.NewWebhookManagedBy(mgr, &apimv1alpha1.Backend{}).
 		WithDefaulter(&BackendCustomDefaulter{}).
 		Complete()
 }
@@ -54,15 +51,8 @@ type BackendCustomDefaulter struct {
 	// TODO(user): Add more fields as needed for defaulting
 }
 
-var _ webhook.CustomDefaulter = &BackendCustomDefaulter{}
-
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind Backend.
-func (d *BackendCustomDefaulter) Default(_ context.Context, obj runtime.Object) error {
-	backend, ok := obj.(*apimv1alpha1.Backend)
-
-	if !ok {
-		return fmt.Errorf("expected an Backend object but got %T", obj)
-	}
+func (d *BackendCustomDefaulter) Default(_ context.Context, backend *apimv1alpha1.Backend) error {
 	backendlog.Info("Defaulting for Backend", "name", backend.GetName())
 	if backend.Spec.AzureResourcePrefix == nil {
 		randomString, err := generateRandomString(8)

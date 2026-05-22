@@ -25,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Describe("ApiVersion Controller", func() {
@@ -41,24 +42,12 @@ var _ = Describe("ApiVersion Controller", func() {
 		}
 
 		It("should successfully reconcile the ApiVersion resource", func() {
-			resource := &apimv1alpha1.ApiVersion{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: resourceNamespace,
-				},
-				Spec: apimv1alpha1.ApiVersionSpec{
-					Path: "/test-api",
-					ApiVersionSubSpec: apimv1alpha1.ApiVersionSubSpec{
-						Name:        ptr.To("v1"),
-						Content:     ptr.To(`{"openapi": "3.0.0","info": {"title": "Minimal API v1","version": "1.0.0"},"paths": {}}`),
-						DisplayName: "the default version",
-					},
-					Contact: &apimv1alpha1.APIContactInformation{
-						Name:  ptr.To("Test Contact"),
-						Email: ptr.To("test@example.com"),
-						URL:   ptr.To("https://example.com/contact"),
-					},
-				},
+			resource := newTestApiVersion(resourceName, "/test-api", "the default version")
+			resource.Spec.Content = ptr.To(`{"openapi": "3.0.0","info": {"title": "Minimal API v1","version": "1.0.0"},"paths": {}}`)
+			resource.Spec.Contact = &apimv1alpha1.APIContactInformation{
+				Name:  ptr.To("Test Contact"),
+				Email: ptr.To("test@example.com"),
+				URL:   ptr.To("https://example.com/contact"),
 			}
 			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 
@@ -127,8 +116,148 @@ var _ = Describe("ApiVersion Controller", func() {
 				g.Expect(err).To(HaveOccurred())
 			}, timeout, interval).Should(Succeed(), "apiVersion should eventually be deleted")
 		})
+
+		It("should clear stale resume token when delete is attempted with create/update token", func() {
+			const localName = "test-apiversion-stale-token"
+			localNamespacedName := types.NamespacedName{Name: localName, Namespace: resourceNamespace}
+
+			resource := newTestApiVersion(localName, "/test-stale-token", "stale token test version")
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
+			By("waiting for the resource to reach Succeeded state")
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, localNamespacedName, resource)).To(Succeed())
+				g.Expect(resource.Status.ProvisioningState).To(Equal(apimv1alpha1.ProvisioningStateSucceeded))
+			}, timeout, interval).Should(Succeed())
+
+			By("patching status with a stale resume token")
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, localNamespacedName, resource)).To(Succeed())
+				orig := resource.DeepCopy()
+				resource.Status.ResumeToken = "stale-create-token"
+				resource.Status.ProvisioningState = apimv1alpha1.ProvisioningStateUpdating
+				g.Expect(k8sClient.Status().Patch(ctx, resource, client.MergeFrom(orig))).To(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			By("deleting the resource")
+			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+
+			By("verifying the resource is fully deleted")
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(ctx, localNamespacedName, resource)
+				g.Expect(err).To(HaveOccurred())
+			}, timeout, interval).Should(Succeed())
+
+			Expect(fakeApim.APIMVersions).NotTo(HaveKey(resource.GetApiVersionAzureFullName()))
+		})
+
+		It("should recover from failed LRO during create/update", func() {
+			const localName = "test-apiversion-lro-create-fail"
+			localNamespacedName := types.NamespacedName{Name: localName, Namespace: resourceNamespace}
+
+			resource := newTestApiVersion(localName, "/test-lro-create-fail", "lro create fail test version")
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
+			By("waiting for the resource to reach Succeeded state")
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, localNamespacedName, resource)).To(Succeed())
+				g.Expect(resource.Status.ProvisioningState).To(Equal(apimv1alpha1.ProvisioningStateSucceeded))
+			}, timeout, interval).Should(Succeed())
+
+			By("enabling LRO failure for create/update")
+			fakeApim.CreateUpdateApiLROFail = true
+
+			By("triggering a reconcile by updating the spec")
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, localNamespacedName, resource)).To(Succeed())
+				resource.Spec.Content = ptr.To(`{"openapi": "3.0.0","info": {"title": "LRO Fail API updated","version": "1.0.0"},"paths": {}}`)
+				g.Expect(k8sClient.Update(ctx, resource)).To(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			By("verifying the resource reaches Failed state with empty resume token")
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, localNamespacedName, resource)).To(Succeed())
+				g.Expect(resource.Status.ProvisioningState).To(Equal(apimv1alpha1.ProvisioningStateFailed))
+				g.Expect(resource.Status.ResumeToken).To(BeEmpty())
+			}, timeout, interval).Should(Succeed())
+
+			By("disabling LRO failure and triggering recovery")
+			fakeApim.CreateUpdateApiLROFail = false
+
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, localNamespacedName, resource)).To(Succeed())
+				resource.Spec.Content = ptr.To(`{"openapi": "3.0.0","info": {"title": "LRO Fail API recovered","version": "1.0.0"},"paths": {}}`)
+				g.Expect(k8sClient.Update(ctx, resource)).To(Succeed())
+			}, timeout, interval).Should(Succeed())
+
+			By("verifying the resource reaches Succeeded state")
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, localNamespacedName, resource)).To(Succeed())
+				g.Expect(resource.Status.ProvisioningState).To(Equal(apimv1alpha1.ProvisioningStateSucceeded))
+			}, timeout, interval).Should(Succeed())
+
+			By("cleaning up")
+			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(ctx, localNamespacedName, resource)
+				g.Expect(err).To(HaveOccurred())
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("should recover from failed LRO during delete", func() {
+			const localName = "test-apiversion-lro-delete-fail"
+			localNamespacedName := types.NamespacedName{Name: localName, Namespace: resourceNamespace}
+
+			resource := newTestApiVersion(localName, "/test-lro-delete-fail", "lro delete fail test version")
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
+			By("waiting for the resource to reach Succeeded state")
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, localNamespacedName, resource)).To(Succeed())
+				g.Expect(resource.Status.ProvisioningState).To(Equal(apimv1alpha1.ProvisioningStateSucceeded))
+			}, timeout, interval).Should(Succeed())
+
+			By("enabling LRO failure for delete")
+			fakeApim.DeleteApiLROFail = true
+
+			By("deleting the resource")
+			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+
+			By("verifying the resource reaches Failed state with empty resume token")
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, localNamespacedName, resource)).To(Succeed())
+				g.Expect(resource.Status.ProvisioningState).To(Equal(apimv1alpha1.ProvisioningStateFailed))
+				g.Expect(resource.Status.ResumeToken).To(BeEmpty())
+			}, timeout, interval).Should(Succeed())
+
+			By("disabling LRO failure to allow retry")
+			fakeApim.DeleteApiLROFail = false
+
+			By("verifying the resource is eventually fully deleted")
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(ctx, localNamespacedName, resource)
+				g.Expect(err).To(HaveOccurred())
+			}, timeout, interval).Should(Succeed())
+		})
 	})
 })
+
+func newTestApiVersion(name string, path string, displayName string) *apimv1alpha1.ApiVersion {
+	return &apimv1alpha1.ApiVersion{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: "default-test",
+		},
+		Spec: apimv1alpha1.ApiVersionSpec{
+			Path: path,
+			ApiVersionSubSpec: apimv1alpha1.ApiVersionSubSpec{
+				Name:        ptr.To("v1"),
+				Content:     ptr.To(`{"openapi": "3.0.0","info": {"title": "Test API","version": "1.0.0"},"paths": {}}`),
+				DisplayName: displayName,
+			},
+		},
+	}
+}
 
 func getUpdatedApiVersion(ctx context.Context, typeNamespacedName types.NamespacedName) apimv1alpha1.ApiVersion {
 	resource := apimv1alpha1.ApiVersion{}

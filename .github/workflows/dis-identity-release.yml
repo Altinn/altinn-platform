@@ -19,8 +19,8 @@ on:
       - services/dis-identity-operator/**
       - .github/workflows/reusable-image-scan-and-release-ghcr.yml
     tags:
-      - "dis-identity-*"
-      - "kustomize-dis-identity-*"
+      - "dis-identity-v*"
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Push latest flux oci image from main
         uses: ./actions/flux/build-push-image
         with:
@@ -58,7 +58,7 @@ jobs:
           azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
   build-release-flux-oci-release:
     name: Build release from tag
-    if: startsWith(github.ref, 'refs/tags/kustomize-dis-identity-')
+    if: startsWith(github.ref, 'refs/tags/dis-identity-v')
     environment: flux-release
     defaults:
       run:
@@ -66,13 +66,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Setup vars
         id: vars
         run: |
-          tag=${GITHUB_REF/refs\/tags\/kustomize-dis-identity-/}
+          tag=${GITHUB_REF/refs\/tags\/dis-identity-/}
           echo "tag=${tag}" >> ${GITHUB_OUTPUT}
-      - name: Push latest flux oci image from main
+      - name: Push flux oci image from release tag
         uses: ./actions/flux/build-push-image
         with:
           workdir: ./services/dis-identity-operator/config

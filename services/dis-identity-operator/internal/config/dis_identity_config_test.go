@@ -24,6 +24,7 @@ var _ = Describe("LoadConfig", func() {
 		configContent := `
 issuerUrl = "https://test-issuer-url.local"
 targetResourceGroup = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/dis-operator-test"
+targetTenantId = "00000000-0000-0000-0000-000000000000"
 `
 		configFile, err = os.CreateTemp("", "config-*.toml")
 		Expect(err).NotTo(HaveOccurred())
@@ -42,16 +43,21 @@ targetResourceGroup = "/subscriptions/00000000-0000-0000-0000-000000000000/resou
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg.IssuerURL).To(Equal("https://test-issuer-url.local"))
 		Expect(cfg.TargetResourceGroup).To(Equal("/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/dis-operator-test"))
+		Expect(cfg.TargetTenantID).To(Equal("00000000-0000-0000-0000-000000000000"))
 	})
 
 	It("should load config from environment variables", func() {
 		Expect(os.Setenv("DISID_ISSUER_URL", "https://env-issuer-url.local")).To(Succeed())
 		Expect(os.Setenv("DISID_TARGET_RESOURCE_GROUP", "env-resource-group")).To(Succeed())
+		Expect(os.Setenv("DISID_TARGET_TENANT_ID", "env-tenant-id")).To(Succeed())
 		defer func() {
 			_ = os.Unsetenv("DISID_ISSUER_URL")
 		}()
 		defer func() {
 			_ = os.Unsetenv("DISID_TARGET_RESOURCE_GROUP")
+		}()
+		defer func() {
+			_ = os.Unsetenv("DISID_TARGET_TENANT_ID")
 		}()
 
 		flagset := pflag.NewFlagSet("test", pflag.ContinueOnError)
@@ -59,6 +65,7 @@ targetResourceGroup = "/subscriptions/00000000-0000-0000-0000-000000000000/resou
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg.IssuerURL).To(Equal("https://env-issuer-url.local"))
 		Expect(cfg.TargetResourceGroup).To(Equal("env-resource-group"))
+		Expect(cfg.TargetTenantID).To(Equal("env-tenant-id"))
 	})
 
 	It("should ignore double underscores in non DISID prefixed variables", func() {
@@ -73,6 +80,7 @@ targetResourceGroup = "/subscriptions/00000000-0000-0000-0000-000000000000/resou
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg.IssuerURL).To(Equal("https://env-issuer-url.local"))
 		Expect(cfg.TargetResourceGroup).To(Equal("/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/dis-operator-test"))
+		Expect(cfg.TargetTenantID).To(Equal("00000000-0000-0000-0000-000000000000"))
 	})
 
 	It("should panic if environment has double underscores", func() {
@@ -115,14 +123,17 @@ targetResourceGroup = "/subscriptions/00000000-0000-0000-0000-000000000000/resou
 		flagset := pflag.NewFlagSet(configFile.Name(), pflag.ContinueOnError)
 		flagset.String("issuerUrl", "flag-subscription-id", "subscription id")
 		flagset.String("targetResourceGroup", "flag-resource-group", "resource group")
+		flagset.String("targetTenantId", "flag-tenant-id", "resource group tenant id")
 		_ = flagset.Parse([]string{
 			"--issuerUrl=https://flag-issuer-url.local",
 			"--targetResourceGroup=flag-resource-group",
+			"--targetTenantId=11111111-1111-1111-1111-111111111111",
 		})
 
 		cfg := LoadConfigOrDie("", flagset)
 		Expect(cfg.IssuerURL).To(Equal("https://flag-issuer-url.local"))
 		Expect(cfg.TargetResourceGroup).To(Equal("flag-resource-group"))
+		Expect(cfg.TargetTenantID).To(Equal("11111111-1111-1111-1111-111111111111"))
 	})
 })
 

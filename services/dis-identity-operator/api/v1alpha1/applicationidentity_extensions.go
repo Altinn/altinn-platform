@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 
 	managedidentity "github.com/Azure/azure-service-operator/v2/api/managedidentity/v1api20230131"
@@ -36,9 +37,7 @@ func (a *ApplicationIdentity) GenerateUserAssignedIdentity(ownerARMID string) *m
 
 func (a *ApplicationIdentity) GetUserAssignedIdentityTags() map[string]string {
 	result := make(map[string]string)
-	for k, v := range a.Spec.Tags {
-		result[k] = v
-	}
+	maps.Copy(result, a.Spec.Tags)
 	// Add the managed-by tag to the tags map
 	result[managedByDisIdentityTag] = "true"
 	return result
@@ -93,15 +92,20 @@ func (a *ApplicationIdentity) OutdatedFederatedCredentials(credential *managedid
 	return !reflect.DeepEqual(expectedAudiences, credential.Spec.Audiences)
 }
 
-func (a *ApplicationIdentity) OutdatedServiceAccount(serviceAccount *corev1.ServiceAccount) bool {
+func (a *ApplicationIdentity) OutdatedServiceAccount(serviceAccount *corev1.ServiceAccount, tenantID string) bool {
 	if serviceAccount == nil {
 		return true
 	}
-	id, ok := serviceAccount.Annotations["serviceaccount.azure.com/azure-identity"]
-	if !ok && a.Status.ClientID != nil {
+	if a.Status.ClientID == nil {
+		return false
+	}
+	if serviceAccount.Annotations["serviceaccount.azure.com/azure-identity"] != *a.Status.ClientID {
 		return true
 	}
-	if a.Status.ClientID != nil && *a.Status.ClientID != id {
+	if serviceAccount.Annotations["azure.workload.identity/client-id"] != *a.Status.ClientID {
+		return true
+	}
+	if serviceAccount.Annotations["azure.workload.identity/tenant-id"] != tenantID {
 		return true
 	}
 	return false

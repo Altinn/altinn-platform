@@ -2,15 +2,21 @@
    "apiVersion": "k6.io/v1alpha1",
    "kind": "TestRun",
    "metadata": {
-      "labels": {
-         "generated-by": "k6-action-image"
+      "annotations": {
+         "k6-action-image/test_name": "get-daemonsets",
+         "k6-action-image/test_scope": "k8s-wrapper",
+         "k6-action-image/testfilename": "actions/generate-k6-manifests/test_service/k8s_wrapper/get_daemonsets.js",
+         "k6-action-image/testid": "yt01-get-daemonsets"
       },
-      "name": "{{ .UniqueName }}",
+      "labels": {
+         "generated-by": "k6-action-image",
+         "uniq_name": "{{ .UniqName }}"
+      },
+      "name": "{{ .UniqName }}",
       "namespace": "platform"
    },
    "spec": {
-      "arguments": "--tag testid={{ .UniqueName }} --tag namespace=platform --tag deploy_env=yt01 --tag test_name=k8s-wrapper-ds --out experimental-prometheus-rw",
-      "cleanup": "post",
+      "arguments": "--tag testid=yt01-get-daemonsets --tag namespace=platform --tag deploy_env=yt01 --tag test_name=get-daemonsets --tag test_scope=k8s-wrapper --out experimental-prometheus-rw",
       "parallelism": 1,
       "runner": {
          "env": [
@@ -20,7 +26,7 @@
             },
             {
                "name": "ENVIRONMENT",
-               "value": "{{ .DeployEnv }}"
+               "value": "yt01"
             },
             {
                "name": "FEATURE_FLAG1",
@@ -47,8 +53,20 @@
                "value": "platform"
             },
             {
+               "name": "RUNNING_IN_K8S",
+               "value": "true"
+            },
+            {
+               "name": "TESTFILENAME",
+               "value": "actions/generate-k6-manifests/test_service/k8s_wrapper/get_daemonsets.js"
+            },
+            {
                "name": "TESTID",
-               "value": "{{ .UniqueName }}"
+               "value": "yt01-get-daemonsets"
+            },
+            {
+               "name": "TEST_SCOPE",
+               "value": "k8s-wrapper"
             }
          ],
          "envFrom": [
@@ -59,13 +77,26 @@
             },
             {
                "secretRef": {
+                  "name": "token-generator-creds"
+               }
+            },
+            {
+               "secretRef": {
                   "name": "slack-test"
                }
             }
          ],
+         "image": "ghcr.io/altinn/altinn-platform/k6-image:latest",
          "metadata": {
+            "annotations": {
+               "k6-action-image/test_name": "get-daemonsets",
+               "k6-action-image/test_scope": "k8s-wrapper",
+               "k6-action-image/testfilename": "actions/generate-k6-manifests/test_service/k8s_wrapper/get_daemonsets.js",
+               "k6-action-image/testid": "yt01-get-daemonsets"
+            },
             "labels": {
-               "k6-test": "{{ .UniqueName }}"
+               "generated-by": "k6-action-image",
+               "uniq_name": "{{ .UniqName }}"
             }
          },
          "nodeSelector": { },
@@ -80,7 +111,7 @@
       "script": {
          "configMap": {
             "file": "archive.tar",
-            "name": "{{ .DirName }}"
+            "name": "k8s-wrapper-yt01-get-daemonsets"
          }
       }
    }

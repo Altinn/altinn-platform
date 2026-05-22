@@ -1,0 +1,114 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - application.dis.altinn.cloud
+  resources:
+  - applicationidentities
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - jobs/status
+  verbs:
+  - get
+- apiGroups:
+  - dbforpostgresql.azure.com
+  resources:
+  - flexibleservers
+  - flexibleserversadministrators
+  - flexibleserversconfigurations
+  - flexibleserversdatabases
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - dbforpostgresql.azure.com
+  resources:
+  - flexibleservers/status
+  - flexibleserversadministrators/status
+  - flexibleserversconfigurations/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - dbforpostgresql.azure.com
+  resources:
+  - flexibleserversdatabases/status
+  verbs:
+  - get
+- apiGroups:
+  - network.azure.com
+  resources:
+  - privatednszones
+  - privatednszonesvirtualnetworklinks
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - network.azure.com
+  resources:
+  - privatednszones/status
+  - privatednszonesvirtualnetworklinks/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - storage.dis.altinn.cloud
+  resources:
+  - databases
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - storage.dis.altinn.cloud
+  resources:
+  - databases/status
+  - databaseservers/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - storage.dis.altinn.cloud
+  resources:
+  - databaseservers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch

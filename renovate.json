@@ -1,7 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "local>Altinn/renovate-config"
+    "local>Altinn/renovate-config",
+    ":semanticCommitTypeAll(deps)",
+    ":semanticCommitScopeDisabled"
   ],
   "schedule": [
     "* 5-7 * * 1-4"
@@ -25,21 +27,56 @@
       "matchPackageNames": [
         "*"
       ]
+    },
+    {
+      "matchDatasources": [
+        "helm"
+      ],
+      "matchPackageNames": [
+        "linkerd-crds",
+        "linkerd-control-plane"
+      ],
+      "groupName": "linkerd core charts",
+      "groupSlug": "linkerd-core",
+      "dependencyDashboardApproval": true,
+      "prCreation": "not-pending",
+      "minimumReleaseAge": "3 days",
+      "prBodyNotes": [
+        "⚠️ **Please verify the release status before merging:**",
+        "1. Check https://github.com/linkerd/linkerd2/releases/ release notes",
+        "2. Only deploy releases marked as **RECOMMENDED**",
+        "3. Review the changelog for breaking changes or known issues"
+      ]
+    },
+    {
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchDatasources": [
+        "helm"
+      ],
+      "matchPackageNames": [
+        "traefik",
+        "traefik-crds"
+      ],
+      "groupName": "traefik helm charts",
+      "groupSlug": "traefik-helm"
     }
   ],
   "customManagers": [
-      {
-        "customType": "regex",
-        "managerFilePatterns": [
-          "/(^|/)(.*?/)*.*?\\.ya?ml$/",
-          "/(^|/)(.*?/)*.*?\\.sh$/",
-          "/(^|/)(.*?/)*Dockerfile$/"
-        ],
-        "matchStrings": [
-          "# renovate: datasource=(?<datasource>[a-z-]+?)(?: depName=(?<depName>.+?))? packageName=(?<packageName>.+?)(?: versioning=(?<versioning>[a-z-]+?))?\\s+?default: (?<currentValue>.+?)\\s",
-          "# renovate: datasource=(?<datasource>[a-z-]+?)(?: depName=(?<depName>.+?))? packageName=(?<packageName>.+?)(?: versioning=(?<versioning>[a-z-]+?))?(?: extractVersion=(?<extractVersion>.+?))?\\s+?.+?_VERSION\\s?=\\s?\"?v?(?<currentValue>.+?)\"?(\\s|$)"
-        ],
-        "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}"
-      }
-    ]
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/(^|/)(.*?/)*.*?\\.ya?ml$/",
+        "/(^|/)(.*?/)*.*?\\.sh$/",
+        "/(^|/)(.*?/)*Dockerfile$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[a-z-]+?)(?: depName=(?<depName>.+?))? packageName=(?<packageName>.+?)(?: versioning=(?<versioning>[a-z-]+?))?\\s+?default: (?<currentValue>.+?)\\s",
+        "# renovate: datasource=(?<datasource>[a-z-]+?)(?: depName=(?<depName>.+?))? packageName=(?<packageName>.+?)(?: versioning=(?<versioning>[a-z-]+?))?(?: extractVersion=(?<extractVersion>.+?))?\\s+?.+?_VERSION\\s?=\\s?\"?v?(?<currentValue>.+?)\"?(\\s|$)",
+        "# renovate: datasource=(?<datasource>helm) registryUrl=(?<registryUrl>(?:https://|oci://)[^\\s]+) packageName=(?<packageName>.+?)\\s+?version:\\s['\"]?(?<currentValue>[^\\s'\"#]+)['\"]?"
+      ],
+      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}"
+    }
+  ]
 }

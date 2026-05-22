@@ -5,7 +5,8 @@ inputs:
   flux_version:
     description: "Version of flux to use"
     required: false
-    default: "latest"
+    # renovate: datasource=github-releases depName=flux-cli packageName=fluxcd/flux2 versioning=semver
+    default: "2.6.4"
     type: string
   azure_app_id:
     description: "Azure application id used to authenticate to altinncr"
@@ -27,11 +28,11 @@ runs:
   using: composite
   steps:
     - name: Setup flux
-      uses: fluxcd/flux2/action@6bf37f6a560fd84982d67f853162e4b3c2235edb # v2.6.4
+      uses: fluxcd/flux2/action@04acaec6161ac4fb1a82ffafa88901c03271d34f # v2.8.6
       with:
         version: ${{ inputs.flux_version }}
     - name: az login
-      uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+      uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3
       with:
         client-id: ${{ inputs.azure_app_id }}
         subscription-id: ${{ inputs.azure_subscription_id }}

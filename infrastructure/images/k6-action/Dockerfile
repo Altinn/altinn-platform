@@ -1,15 +1,13 @@
-FROM golang:1.25-alpine@sha256:b6ed3fd0452c0e9bcdef5597f29cc1418f61672e9d3a2f55bf02e7222c014abd AS builder
+FROM golang:1.26-alpine@sha256:f85330846cde1e57ca9ec309382da3b8e6ae3ab943d2739500e08c86393a21b1  AS builder
 # renovate: datasource=github-tags depName=kubectl packageName=kubernetes/kubectl versioning=semver extractVersion=^kubernetes-(?<version>.*)$
-ARG KUBECTL_VERSION=1.33.4
+ARG KUBECTL_VERSION=1.36.0
 # renovate: datasource=github-releases depName=kubeseal packageName=bitnami-labs/sealed-secrets versioning=semver extractVersion=^sealed-secrets-(?<version>.*)$
-ARG KUBESEAL_VERSION=0.30.0
+ARG KUBESEAL_VERSION=0.36.6
 # renovate: datasource=github-releases depName=jsonnet packageName=google/jsonnet versioning=semver
-ARG JSONNET_VERSION=0.21.0
-# renovate: datasource=github-releases depName=k6 packageName=grafana/k6 versioning=semver
-ARG K6_VERSION=1.2.3
+ARG JSONNET_VERSION=0.22.0
 # renovate: datasource=github-releases depName=jsonnet-bundler packageName=jsonnet-bundler/jsonnet-bundler versioning=semver extractVersion=^v(?<version>.*)$
 ARG JB_VERSION=0.6.0
-ARG K8S_LIBSONNET_VERSION=1.32
+ARG K8S_LIBSONNET_VERSION=1.33
 
 RUN apk --update-cache upgrade && \
     apk add --no-cache \
@@ -44,11 +42,6 @@ RUN curl -L "https://github.com/google/jsonnet/archive/refs/tags/v${JSONNET_VERS
 RUN curl -OL "https://github.com/jsonnet-bundler/jsonnet-bundler/releases/download/v${JB_VERSION}/jb-linux-amd64" &&\
     chmod +x jb-linux-amd64 && mv jb-linux-amd64 /usr/local/bin/jb
 
-# Install k6
-RUN curl -OL "https://github.com/grafana/k6/releases/download/v${K6_VERSION}/k6-v${K6_VERSION}-linux-amd64.tar.gz" &&\
-    tar -xvzf k6-v${K6_VERSION}-linux-amd64.tar.gz k6-v${K6_VERSION}-linux-amd64/k6 &&\
-    chmod +x k6-v${K6_VERSION}-linux-amd64/k6 && mv k6-v${K6_VERSION}-linux-amd64/k6 /usr/local/bin
-
 WORKDIR /jsonnet/vendor
 
 # Download k8s libsonnet library
@@ -58,20 +51,26 @@ RUN jb init && \
 # Build Generator code
 WORKDIR /actions/generate-k6-manifests
 COPY actions/generate-k6-manifests .
+RUN go mod download
 RUN go build . && \
     chmod +x generate-k6-manifests && \
     mv generate-k6-manifests /usr/local/bin
 
+FROM ghcr.io/altinn/altinn-platform/k6-image:v1.7.0@sha256:5e88f2669758eac8f5a58efe51654c585ea5435d9787d6ccf54e989198395f10 AS k6image
+
 # Final image with the needed binaries and helper files
-FROM alpine:3.22.1@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1
+FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /jsonnet/vendor /jsonnet/vendor
+
+COPY --from=k6image /usr/bin/k6 /usr/bin/k6
+
 COPY infrastructure/images/k6-action/default_scenarios /actions/generate-k6-manifests/default_scenarios/
 COPY infrastructure/images/k6-action/infra /actions/generate-k6-manifests/infra/
 COPY infrastructure/images/k6-action/jsonnet /actions/generate-k6-manifests/jsonnet/
 
 # err:Error loading shared library libstdc++.so.6: No such file or directory (needed by /usr/local/bin/jsonnet)
-RUN apk add --no-cache libstdc++
+RUN apk add --no-cache libstdc++ git
 WORKDIR /workspace
 
 CMD ["generate-k6-manifests"]

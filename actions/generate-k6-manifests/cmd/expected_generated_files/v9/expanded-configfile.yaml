@@ -1,6 +1,8 @@
 namespace: platform
+base_dir: ""
 test_definitions:
-    - test_file: actions/generate-k6-manifests/test_service/k8s_wrapper/get_deployments.js
+    - test_scope: k8s-wrapper
+      test_file: actions/generate-k6-manifests/test_service/k8s_wrapper/get_deployments.js
       config_file: ""
       env_file: actions/generate-k6-manifests/test_service/env_file.env
       contexts:
@@ -12,6 +14,7 @@ test_definitions:
             config_file: ""
           test_run:
             name: get-deployments
+            id: at22-get-deployments
             parallelism: 1
             resources:
                 requests:
@@ -20,4 +23,5 @@ test_definitions:
             env:
                 - name: FOO
                   value: BAR
-            secrets: []
+            secrets:
+                - token-generator-creds

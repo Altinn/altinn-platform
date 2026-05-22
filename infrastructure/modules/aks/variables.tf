@@ -95,6 +95,12 @@ variable "subnet_address_prefixes" {
   }
 }
 
+variable "subnet_service_endpoints" {
+  type        = list(string)
+  default     = []
+  description = "List of service endpoints to associate with the AKS subnets"
+}
+
 variable "vnet_address_space" {
   type        = list(string)
   description = "VNet address space"
@@ -102,6 +108,12 @@ variable "vnet_address_space" {
     condition     = length(var.vnet_address_space) > 0
     error_message = "You must provide a vnet address space with ipv4 and ipv6 addresses."
   }
+}
+
+variable "enable_multi_tenancy" {
+  type        = bool
+  default     = false
+  description = "Enable multi tenancy in the cluster"
 }
 
 # Optional explicit variables to override values derived from prefix and environment

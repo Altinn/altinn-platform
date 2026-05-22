@@ -26,11 +26,11 @@ permissions:
 
 jobs:
   deploy-annotation:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     environment: ${{ github.event.inputs.environment }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Create Grafana Annotation
         run: |
@@ -48,11 +48,3 @@ jobs:
               ],
               \"time\": ${timestamp}
             }"
-
-      - name: Send Trace to Azure Monitor
-        uses: altinn/altinn-platform/actions/send-ci-cd-trace@cc4b775eb4d7015674bfcaac762e40f270afab87 # v1.0.1
-        with:
-            connection_string: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
-            app: "${{ github.event.inputs.app }}"
-            team: "${{ github.event.inputs.team }}"
-            repo_token: ${{ secrets.GITHUB_TOKEN }}

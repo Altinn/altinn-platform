@@ -1,66 +1,76 @@
 namespace: platform
+base_dir: ""
 test_definitions:
-    - test_file: actions/generate-k6-manifests/test_service/k8s_wrapper/get_deployments.js
+    - test_scope: k8s-wrapper
+      test_file: actions/generate-k6-manifests/test_service/k8s_wrapper/get_deployments.js
       config_file: ""
       env_file: ""
       contexts:
         - environment: at22
-          node_type: spot
+          node_type: default
           test_type:
             type: functional
             enabled: true
             config_file: ""
           test_run:
             name: get-deployments
+            id: at22-get-deployments
             parallelism: 1
             resources:
                 requests:
                     memory: 200Mi
                     cpu: 250m
             env: []
-            secrets: []
+            secrets:
+                - token-generator-creds
         - environment: yt01
-          node_type: spot
+          node_type: default
           test_type:
             type: functional
             enabled: true
             config_file: ""
           test_run:
             name: get-deployments
+            id: yt01-get-deployments
             parallelism: 1
             resources:
                 requests:
                     memory: 200Mi
                     cpu: 250m
             env: []
-            secrets: []
+            secrets:
+                - token-generator-creds
         - environment: tt02
-          node_type: spot
+          node_type: default
           test_type:
             type: functional
             enabled: true
             config_file: ""
           test_run:
             name: get-deployments
+            id: tt02-get-deployments
             parallelism: 1
             resources:
                 requests:
                     memory: 200Mi
                     cpu: 250m
             env: []
-            secrets: []
+            secrets:
+                - token-generator-creds
         - environment: prod
-          node_type: spot
+          node_type: default
           test_type:
             type: functional
             enabled: true
             config_file: ""
           test_run:
             name: get-deployments
+            id: prod-get-deployments
             parallelism: 1
             resources:
                 requests:
                     memory: 200Mi
                     cpu: 250m
             env: []
-            secrets: []
+            secrets:
+                - token-generator-creds

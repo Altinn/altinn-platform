@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/azure"
 	"github.com/Altinn/altinn-platform/services/dis-apim-operator/internal/config"
@@ -52,7 +53,7 @@ var k8sManager manager.Manager
 var testEnv *envtest.Environment
 var ctx context.Context
 var cancel context.CancelFunc
-var fakeApim testutils.AzureApimFake
+var fakeApim *testutils.AzureApimFake
 
 func TestControllers(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -158,8 +159,9 @@ var _ = BeforeSuite(func() {
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
 	cancel()
-	err := testEnv.Stop()
-	Expect(err).NotTo(HaveOccurred())
+	Eventually(func() error {
+		return testEnv.Stop()
+	}, time.Minute, time.Second).Should(Succeed())
 })
 
 // getFirstFoundEnvTestBinaryDir locates the first binary in the specified path.

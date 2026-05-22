@@ -1,9 +1,53 @@
-# Calling Verify with a VerifyOptions.KeyUsages that contains ExtKeyUsageAny unintentionally disabledpolicy validation.
-# This only affected certificate chains which contain policy graphs, which are rather uncommon.
-CVE-2025-22874
-
-# Calling Decoder.Decode on a message which contains deeply nested structures can cause a panic due to stack exhaustion. This is a follow-up to CVE-2022-30635.
+# https://avd.aquasec.com/nvd/cve-2024-34156
 CVE-2024-34156
 
-# database/sql: Postgres Scan Race Condition https://avd.aquasec.com/nvd/cve-2025-47907
+# https://avd.aquasec.com/nvd/cve-2025-47907
 CVE-2025-47907
+
+# https://avd.aquasec.com/nvd/cve-2025-58183
+CVE-2025-58183
+
+# https://avd.aquasec.com/nvd/cve-2025-61729
+CVE-2025-61729
+
+# https://avd.aquasec.com/nvd/cve-2025-68121
+CVE-2025-68121
+
+# https://avd.aquasec.com/nvd/cve-2025-61726
+CVE-2025-61726
+
+# https://avd.aquasec.com/nvd/cve-2025-61728
+CVE-2025-61728
+
+# https://avd.aquasec.com/nvd/cve-2025-61730
+CVE-2025-61730
+
+# https://avd.aquasec.com/nvd/cve-2026-22184
+CVE-2026-22184
+
+# https://avd.aquasec.com/nvd/cve-2026-24051
+CVE-2026-24051
+
+# https://avd.aquasec.com/nvd/cve-2026-33186
+CVE-2026-33186
+
+# https://avd.aquasec.com/nvd/cve-2026-25679
+CVE-2026-25679
+
+# https://avd.aquasec.com/nvd/cve-2026-39883
+CVE-2026-39883
+
+# https://avd.aquasec.com/nvd/cve-2026-32280
+CVE-2026-32280
+
+# https://avd.aquasec.com/nvd/cve-2026-32281
+CVE-2026-32281
+
+# https://avd.aquasec.com/nvd/cve-2026-32283
+CVE-2026-32283
+
+# https://avd.aquasec.com/nvd/cve-2026-33810
+CVE-2026-33810
+
+# https://avd.aquasec.com/nvd/cve-2026-29181
+CVE-2026-29181

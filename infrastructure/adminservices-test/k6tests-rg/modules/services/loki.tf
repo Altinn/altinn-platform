@@ -53,7 +53,7 @@ resource "helm_release" "loki" {
   create_namespace = false
   repository       = "https://grafana.github.io/helm-charts"
   chart            = "loki-distributed"
-  version          = "0.80.5"
+  version          = "0.80.6"
 
   values = [
     "${templatefile(

@@ -1,0 +1,72 @@
+{
+  "packages": {
+    "services/dis-pgsql-operator": {
+      "release-type": "simple",
+      "component": "dis-pgsql"
+    },
+    "services/dis-identity-operator": {
+      "release-type": "simple",
+      "component": "dis-identity"
+    },
+    "services/dis-apim-operator": {
+      "release-type": "simple",
+      "component": "dis-apim"
+    },
+    "services/dis-vault-operator": {
+      "release-type": "simple",
+      "component": "dis-vault"
+    },
+    "services/lakmus": {
+      "release-type": "simple",
+      "component": "lakmus"
+    },
+    "infrastructure/images/azure-devops-agent": {
+      "release-type": "simple",
+      "component": "azdevops-agent",
+      "include-v-in-tag": false
+    },
+    "infrastructure/images/gh-runner": {
+      "release-type": "simple",
+      "component": "ghrunner",
+      "include-v-in-tag": false
+    },
+    "infrastructure/images/k6-action": {
+      "release-type": "simple",
+      "component": "k6-action-image",
+      "include-v-in-tag": false
+    },
+    "infrastructure/images/k6-image": {
+      "release-type": "simple",
+      "component": "k6-image",
+      "include-v-in-tag": false
+    },
+    "infrastructure/images/terraform-azure-devops-agent": {
+      "release-type": "simple",
+      "component": "tf-azdev-agent",
+      "include-v-in-tag": false
+    }
+  },
+  "separate-pull-requests": true,
+  "tag-separator": "-",
+  "changelog-path": "CHANGELOG.md",
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": false,
+  "draft": false,
+  "prerelease": false,
+  "include-component-in-tag": true,
+  "include-v-in-tag": true,
+  "changelog-sections": [
+    { "type": "feat", "hidden": false, "section": "Features" },
+    { "type": "fix", "hidden": false, "section": "Bug Fixes" },
+    { "type": "deps", "hidden": false, "section": "Dependency Updates" },
+    { "type": "chore", "hidden": true, "section": "Chores" },
+    { "type": "docs", "hidden": true, "section": "Documentation" },
+    { "type": "style", "hidden": true, "section": "Styles" },
+    { "type": "refactor", "hidden": true, "section": "Code Refactoring" },
+    { "type": "build", "hidden": true, "section": "Builds" },
+    { "type": "ci", "hidden": true, "section": "Continuous Integration" },
+    { "type": "revert", "hidden": true, "section": "Reverts" },
+    { "type": "test", "hidden": true, "section": "Tests" }
+  ],
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
+}

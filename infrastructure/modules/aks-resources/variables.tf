@@ -8,6 +8,11 @@ variable "aks_node_resource_group" {
   description = "AKS node resource group name"
 }
 
+variable "aks_resource_group" {
+  type        = string
+  description = "AKS resource group name"
+}
+
 variable "azurerm_kubernetes_cluster_id" {
   type        = string
   description = "AKS cluster resource id"
@@ -54,6 +59,37 @@ variable "grafana_endpoint" {
   }
 }
 
+variable "grafana_redirect_dns" {
+  type        = string
+  description = "External DNS name used for Grafana redirect; must resolve to the AKS cluster where the Grafana operator is deployed."
+  default     = ""
+  validation {
+    condition     = var.enable_grafana_operator == false || (var.enable_grafana_operator == true && length(var.grafana_redirect_dns) > 0)
+    error_message = "You must provide a value for grafana_redirect_dns when enable_grafana_operator is true and the DNS must point to the target cluster."
+  }
+}
+
+
+variable "linkerd_default_inbound_policy" {
+  description = "Default inbound policy for Linkerd"
+  type        = string
+  default     = "all-unauthenticated"
+  validation {
+    condition     = contains(["all-unauthenticated", "all-authenticated", "cluster-authenticated", "deny"], var.linkerd_default_inbound_policy)
+    error_message = "linkerd_default_inbound_policy must be one of: all-unauthenticated, all-authenticated, cluster-authenticated, deny."
+  }
+}
+
+variable "linkerd_disable_ipv6" {
+  description = "Disable IPv6 for Linkerd"
+  type        = string
+  default     = "false"
+  validation {
+    condition     = contains(["true", "false"], var.linkerd_disable_ipv6)
+    error_message = "linkerd_disable_ipv6 must be either 'true' or 'false'."
+  }
+}
+
 variable "obs_client_id" {
   type        = string
   description = "Client id for the obs app"
@@ -67,6 +103,11 @@ variable "obs_kv_uri" {
 variable "obs_tenant_id" {
   type        = string
   description = "Tenant id for the obs app"
+}
+
+variable "obs_amw_write_endpoint" {
+  type        = string
+  description = "Azure Monitor Workspaces write endpoint to write prometheus metrics to via prometheus exporter"
 }
 
 variable "pip4_ip_address" {
@@ -108,6 +149,23 @@ variable "enable_dis_identity_operator" {
   default     = false
   description = "Enable the dis-identity-operator to manage User Assigned Managed Identities in the cluster."
 
+}
+
+variable "enable_dis_pgsql_operator" {
+  type        = bool
+  default     = false
+  description = "Enable the dis-pgsql-operator to manage Databases in the cluster."
+
+}
+
+variable "dis_pgsql_uami_client_id" {
+  type        = string
+  description = "The client ID of the User Assigned Managed Identity managed by dis-pgsql-operator."
+  default     = ""
+  validation {
+    condition     = var.enable_dis_pgsql_operator == false || (var.enable_dis_pgsql_operator == true && length(var.dis_pgsql_uami_client_id) > 0)
+    error_message = "You must provide a value for dis_pgsql_uami_client_id when enable_dis_pgsql_operator is true."
+  }
 }
 
 variable "azurerm_kubernetes_cluster_oidc_issuer_url" {
@@ -163,5 +221,51 @@ variable "tls_cert_manager_zone_rg_name" {
   validation {
     condition     = var.enable_cert_manager_tls_issuer == false || (var.enable_cert_manager_tls_issuer == true && length(var.tls_cert_manager_zone_rg_name) > 0)
     error_message = "You must provide a value for tls_cert_manager_zone_rg_name when enable_cert_manager_tls_issuer is true."
+  }
+}
+
+variable "lakmus_client_id" {
+  type        = string
+  description = "Client id for Lakmus"
+}
+
+variable "developer_entra_id_group" {
+  description = "EntraID group that should have access to grafana and kubernetes cluster"
+  type        = string
+}
+
+variable "aks_workpool_vnet_name" {
+  type        = string
+  description = "Name of the vnets where the workpool nodes are located"
+}
+
+variable "dis_db_vnet_name" {
+  type        = string
+  description = "The name of the VNet where the DIS PostgreSQL instance is deployed"
+}
+
+variable "dis_resource_group_name" {
+  type        = string
+  description = "Name of the resource group for DIS resources"
+}
+
+variable "aks_vnet_ipv4_cidr" {
+  type        = string
+  description = "IPv4 CIDR of the AKS VNet"
+}
+
+variable "aks_vnet_ipv6_cidr" {
+  type        = string
+  description = "IPv6 CIDR of the AKS VNet"
+}
+
+variable "dis_identity_target_tenant_id" {
+  type        = string
+  description = "Tenant ID where dis-identity ApplicationIdentity will be created"
+  sensitive   = true
+  default     = ""
+  validation {
+    condition     = var.enable_dis_identity_operator == false || (var.enable_dis_identity_operator == true && length(var.dis_identity_target_tenant_id) > 0)
+    error_message = "You must provide a value for dis_identity_target_tenant_id when enable_dis_identity_operator is true."
   }
 }

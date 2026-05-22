@@ -15,7 +15,7 @@ resource "azapi_resource" "grafana_operator" {
               GRAFANA_ADMIN_APIKEY : "${var.token_grafana_operator}"
             }
           }
-          prune                  = false
+          prune                  = true
           retryIntervalInSeconds = 300
           syncIntervalInSeconds  = 300
           timeoutInSeconds       = 300
@@ -32,7 +32,39 @@ resource "azapi_resource" "grafana_operator" {
               EXTERNAL_GRAFANA_URL : "${var.grafana_endpoint}"
             }
           }
-          prune                  = false
+          prune                  = true
+          retryIntervalInSeconds = 300
+          syncIntervalInSeconds  = 300
+          timeoutInSeconds       = 300
+          wait                   = true
+        },
+        grafana-redirect = {
+          force = false
+          path  = "./grafana-redirect/"
+          postBuild = {
+            substitute = {
+              EXTERNAL_GRAFANA_URL = "${var.grafana_endpoint}"
+              K8S_DNS_NAME         = "${var.grafana_redirect_dns}"
+            }
+          }
+          prune                  = true
+          retryIntervalInSeconds = 300
+          syncIntervalInSeconds  = 300
+          timeoutInSeconds       = 300
+          wait                   = true
+        },
+        grafana-manifests = {
+          dependsOn = [
+            "grafana-operator"
+          ]
+          force = false
+          path  = "./grafana-manifests/base/"
+          postBuild = {
+            substitute = {
+              RELEASE_BRANCH = "${var.grafana_dashboard_release_branch}"
+            }
+          }
+          prune                  = true
           retryIntervalInSeconds = 300
           syncIntervalInSeconds  = 300
           timeoutInSeconds       = 300

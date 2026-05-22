@@ -1,0 +1,155 @@
+package network
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7"
+
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
+)
+
+// TODO: probably move this to its own errors package later
+var (
+	ErrNoFreeSubnets = errors.New("no free subnets available")
+	ErrEmptyCatalog  = errors.New("subnet catalog is empty; no subnets defined in the VNet")
+)
+
+// SubnetInfo represents a single subnet with a name (e.g. Azure subnet name)
+// and a CIDR string like "10.100.0.0/28".
+type SubnetInfo struct {
+	Name string
+	CIDR string
+}
+
+// SubnetCatalog holds an in-memory list of existing subnets and supports finding
+// the first free one given a set of used CIDRs.
+//
+// The catalog itself is static (loaded at startup). Which DB uses which subnet
+// is persisted in Kubernetes objects (e.g. DatabaseServer.status.subnetCIDR).
+type SubnetCatalog struct {
+	subnets []SubnetInfo
+}
+
+// NewSubnetCatalog creates a new catalog from the given subnets.
+//
+// Subnets are kept in the order they are passed in (typically the Azure API order).
+func NewSubnetCatalog(infos []SubnetInfo) (*SubnetCatalog, error) {
+	if len(infos) == 0 {
+		return nil, ErrEmptyCatalog
+	}
+	// seen helps to check duplicates
+	seen := make(map[string]struct{}, len(infos))
+	out := make([]SubnetInfo, 0, len(infos))
+
+	for _, in := range infos {
+		if in.CIDR == "" {
+			return nil, fmt.Errorf("subnet %q has empty CIDR", in.Name)
+		}
+
+		if _, exists := seen[in.CIDR]; exists {
+			return nil, fmt.Errorf("duplicate subnet CIDR %q", in.CIDR)
+		}
+		seen[in.CIDR] = struct{}{}
+
+		out = append(out, SubnetInfo{
+			Name: in.Name,
+			CIDR: in.CIDR,
+		})
+	}
+
+	return &SubnetCatalog{subnets: out}, nil
+}
+
+// FirstFreeSubnet returns the first subnet in the catalog whose CIDR
+// is not present in used.
+//
+// `used` should contain already allocated subnet CIDR strings, these
+// come from DatabaseServer.status.subnetCIDR
+//
+// Returns an ErrNoFreeSubnets if all subnets are used.
+func (c *SubnetCatalog) FirstFreeSubnet(used []string) (SubnetInfo, error) {
+	usedSet := make(map[string]struct{}, len(used))
+	for _, u := range used {
+		if u == "" {
+			continue
+		}
+		usedSet[u] = struct{}{}
+	}
+
+	for _, s := range c.subnets {
+		if _, taken := usedSet[s.CIDR]; !taken {
+			return s, nil
+		}
+	}
+
+	return SubnetInfo{}, ErrNoFreeSubnets
+}
+
+// All returns a copy of all subnets in the catalog, in the catalog's order.
+func (c *SubnetCatalog) All() []SubnetInfo {
+	out := make([]SubnetInfo, len(c.subnets))
+	copy(out, c.subnets)
+	return out
+}
+
+// FetchSubnetCatalog connects to Azure, lists all subnets in the given VNet,
+// and returns them as a SubnetCatalog.
+func FetchSubnetCatalog(
+	ctx context.Context,
+	cfg *config.OperatorConfig,
+	cred azcore.TokenCredential,
+	armOpts *arm.ClientOptions,
+) (*SubnetCatalog, error) {
+
+	if cfg == nil {
+		return nil, fmt.Errorf("operator config is nil")
+	}
+
+	client, err := armnetwork.NewSubnetsClient(cfg.SubscriptionId, cred, armOpts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create subnets client: %w", err)
+	}
+
+	pager := client.NewListPager(cfg.ResourceGroup, cfg.DBVNetName, nil)
+
+	var infos []SubnetInfo
+
+	for pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed paging subnets: %w", err)
+		}
+
+		for _, s := range page.Value {
+			if s == nil || s.Properties == nil || s.Properties.AddressPrefix == nil {
+				continue
+			}
+
+			name := ""
+			if s.Name != nil {
+				name = *s.Name
+			}
+
+			infos = append(infos, SubnetInfo{
+				Name: name,
+				CIDR: *s.Properties.AddressPrefix,
+			})
+		}
+	}
+
+	return NewSubnetCatalog(infos)
+}
+
+// FindByCIDR returns the SubnetInfo with the given CIDR, if any.
+func (c *SubnetCatalog) FindByCIDR(cidr string) (SubnetInfo, bool) {
+	for _, s := range c.subnets {
+		if s.CIDR == cidr {
+			return s, true
+		}
+	}
+	return SubnetInfo{}, false
+}

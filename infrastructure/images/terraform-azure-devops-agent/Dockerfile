@@ -1,3 +1,4 @@
-FROM ghcr.io/altinn/altinn-platform/azure-devops-agent:v1.2.2@sha256:f2624bcd581dd9dadda61f7fca53ae0b67abd239e5bd405917a128555c334de7
+# renovate: datasource=docker packageName=ghcr.io/altinn/altinn-platform/azure-devops-agent
+FROM ghcr.io/altinn/altinn-platform/azure-devops-agent:v1.2.7@sha256:903dc06a1f174332f97d33e5297328e7b281a98bc0b4ffb7d31d9f3bdaea5c34
 COPY scripts/install.sh .
 RUN ./install.sh

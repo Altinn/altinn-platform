@@ -1,0 +1,104 @@
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: write
+
+name: release-please
+
+jobs:
+  release-please:
+    runs-on: self-hosted
+    outputs:
+      releases_created: ${{ steps.release.outputs.releases_created }}
+      release_info: ${{ steps.release.outputs.releases_created && toJSON(steps.release.outputs) || '' }}
+    strategy:
+      fail-fast: true
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+  trigger-post-release-workflows:
+    runs-on: self-hosted
+    needs:
+      - release-please
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - id: trigger-post-release-workflows
+        name: Trigger post release pipelines
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        if: ${{ needs.release-please.outputs.releases_created == 'true' }}
+        env:
+          RELEASE_INFO: ${{ needs.release-please.outputs.release_info }}
+        with:
+          script: |
+            const release_info = JSON.parse(process.env.RELEASE_INFO);
+            const paths = JSON.parse(release_info.paths_released);
+            const fs = require('fs').promises;
+
+            let postReleaseConfig;
+            try {
+              postReleaseConfig = JSON.parse(await fs.readFile('./release-please-post-config.json', 'utf8'));
+            } catch (error) {
+              console.log('No release-please-post-config.json found or invalid JSON. Skipping post-release workflows.');
+              return;
+            }
+
+            const hooks = postReleaseConfig['post-release-hooks'];
+            if (!hooks) {
+              console.log('No post-release-hooks defined.');
+              return;
+            }
+
+            for (const path of paths) {
+              console.log(`Processing release for path: ${path}`);
+              const releaseData = {
+                tag_name: release_info[`${path}--tag_name`],
+                release_url: release_info[`${path}--html_url`],
+                release_sha: release_info[`${path}--sha`],
+                path: path
+              };
+
+              for (const [pattern, config] of Object.entries(hooks)) {
+                try {
+                  if (new RegExp(pattern).test(path)) {
+                    console.log(`Path ${path} matches pattern ${pattern}`);
+                    if (config['dispatch-pipelines']) {
+                      for (const pipeline of config['dispatch-pipelines']) {
+                        const workflowId = pipeline.filename;
+                        const inputs = {};
+                        
+                        if (pipeline.inputs) {
+                          for (const [key, value] of Object.entries(pipeline.inputs)) {
+                            let resolvedValue = value;
+                            for (const [varName, varValue] of Object.entries(releaseData)) {
+                               resolvedValue = resolvedValue.replace(new RegExp(`{{${varName}}}`, 'g'), varValue);
+                            }
+                            inputs[key] = resolvedValue;
+                          }
+                        }
+                        
+                        console.log(`Dispatching workflow ${workflowId} for ${path} with inputs:`, JSON.stringify(inputs));
+                        await github.rest.actions.createWorkflowDispatch({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          workflow_id: workflowId,
+                          ref: releaseData.tag_name,
+                          inputs: inputs
+                        });
+                      }
+                    }
+                  }
+                } catch (e) {
+                  console.error(`Error processing pattern ${pattern} for path ${path}:`, e);
+                }
+              }
+            }

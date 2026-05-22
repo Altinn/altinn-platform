@@ -42,6 +42,11 @@ variable "azurerm_kubernetes_cluster_oidc_issuer_url" {
   type        = string
 }
 
+variable "azurerm_kubernetes_workpool_vnet_id" {
+  description = "The ID of the vnet where the aks workpools nodes are deployed. Needed to grant aso permissions"
+  type        = string
+}
+
 variable "aso_namespace" {
   description = "The namespace where the Azure Service Operator will be deployed."
   type        = string
@@ -57,7 +62,7 @@ variable "aso_service_account_name" {
 variable "aso_crd_pattern" {
   description = "The pattern for the Azure Service Operator Custom Resource Definitions (CRDs)."
   type        = string
-  default     = "managedidentity.azure.com/*;authorization.azure.com/*"
+  default     = "managedidentity.azure.com/*;authorization.azure.com/*;dbforpostgresql.azure.com/*;network.azure.com/*;insights.azure.com/*"
 }
 
 variable "tags" {

@@ -1,0 +1,205 @@
+name: Altinn Org GitHub Runners
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ !contains(github.ref, 'refs/heads/main')}}
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/altinn-org-gh-runners-deploy.yml
+      - actions/terraform/apply/**
+      - actions/terraform/plan/**
+      - infrastructure/gh-runners/**
+      - infrastructure/modules/gh-runners/**
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/altinn-org-gh-runners-deploy.yml
+      - actions/terraform/apply/**
+      - actions/terraform/plan/**
+      - infrastructure/gh-runners/**
+      - infrastructure/modules/gh-runners/**
+  workflow_dispatch:
+    inputs:
+      log_level:
+        required: true
+        description: Terraform Log Level
+        default: INFO
+        type: choice
+        options:
+          - TRACE
+          - DEBUG
+          - INFO
+          - WARN
+          - ERROR
+
+env:
+  ENVIRONMENT: prod
+  TF_STATE_NAME: altinn-org-gh-runners.tfstate
+  TF_PROJECT: ./infrastructure/gh-runners
+  ARM_CLIENT_ID: ${{ secrets.TF_AZURE_CLIENT_ID }}
+  ARM_SUBSCRIPTION_ID: d43d5057-8389-40d5-88c4-04db9275cbf2
+  ARM_TENANT_ID: cd0026d8-283b-4a55-9bfa-d0ef4a8ba21c
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Plan
+    environment: reader
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Get Runner IP
+        id: host_ip
+        run: echo "ip=$(curl -sf https://api.ipify.org)" >> $GITHUB_OUTPUT
+
+      - name: Login to Azure
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3
+        with:
+          client-id: ${{ env.ARM_CLIENT_ID }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
+          subscription-id: ${{ env.ARM_SUBSCRIPTION_ID }}
+
+      - name: Whitelist Runner IP in Key Vaults
+        env:
+          RUNNER_IP: ${{ steps.host_ip.outputs.ip }}
+        run: |
+          if ! [[ "$RUNNER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+            echo "Invalid IPv4 address: $RUNNER_IP"
+            exit 1
+          fi
+          echo "Whitelisting IP: $RUNNER_IP"
+          KVS=$(az keyvault list --resource-group altinn-org-gh-runners --query "[].name" -o tsv)
+          for kv in $KVS; do
+            echo "Adding IP to $kv..."
+            az keyvault network-rule add --name "$kv" --ip-address "$RUNNER_IP"
+          done
+
+      - name: Terraform Plan
+        uses: Altinn/altinn-platform/actions/terraform/plan@479eb28bbf95586297ba506d134891764145fe24 # main
+        env:
+          TF_VAR_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
+          TF_VAR_altinn_app_id: ${{ vars.GH_RUNNERS_APP_ID }}
+          TF_VAR_altinn_app_install_id: ${{ vars.GH_RUNNERS_APP_INSTALL_ID }}
+          TF_VAR_altinn_app_key: ${{ secrets.GH_RUNNERS_APP_KEY }}
+          TF_VAR_host_ip: ${{ steps.host_ip.outputs.ip }}
+        with:
+          working_directory: ${{ env.TF_PROJECT }}
+          oidc_type: environment
+          oidc_value: ${{ env.ENVIRONMENT }}
+          arm_client_id: ${{ env.ARM_CLIENT_ID }}
+          arm_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
+          tf_state_name: ${{ env.TF_STATE_NAME }}
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Remove Runner IP from Key Vault Whitelist
+        if: always()
+        continue-on-error: true
+        env:
+          RUNNER_IP: ${{ steps.host_ip.outputs.ip }}
+        run: |
+          if ! [[ "$RUNNER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+            echo "Invalid IPv4 address: $RUNNER_IP"
+            exit 1
+          fi
+          echo "Removing IP: $RUNNER_IP"
+          KVS=$(az keyvault list --resource-group altinn-org-gh-runners --query "[].name" -o tsv)
+          for kv in $KVS; do
+            echo "Removing IP from $kv..."
+            az keyvault network-rule remove --name "$kv" --ip-address "$RUNNER_IP"
+          done
+
+  deploy:
+    name: Deploy
+    environment: prod
+    if: github.ref == 'refs/heads/main'
+    needs: plan
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Get Runner IP
+        id: host_ip
+        run: echo "ip=$(curl -sf https://api.ipify.org)" >> $GITHUB_OUTPUT
+
+      - name: Login to Azure
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3
+        with:
+          client-id: ${{ env.ARM_CLIENT_ID }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
+          subscription-id: ${{ env.ARM_SUBSCRIPTION_ID }}
+
+      - name: Whitelist Runner IP in Key Vaults
+        env:
+          RUNNER_IP: ${{ steps.host_ip.outputs.ip }}
+        run: |
+          if ! [[ "$RUNNER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+            echo "Invalid IPv4 address: $RUNNER_IP"
+            exit 1
+          fi
+          echo "Whitelisting IP: $RUNNER_IP"
+          KVS=$(az keyvault list --resource-group altinn-org-gh-runners --query "[].name" -o tsv)
+          for kv in $KVS; do
+            echo "Adding IP to $kv..."
+            az keyvault network-rule add --name "$kv" --ip-address "$RUNNER_IP"
+          done
+
+      - name: Terraform Init
+        uses: Altinn/altinn-platform/actions/terraform/init@479eb28bbf95586297ba506d134891764145fe24 # main
+        with:
+          working_directory: ${{ env.TF_PROJECT }}
+          oidc_type: environment
+          oidc_value: ${{ env.ENVIRONMENT }}
+          arm_client_id: ${{ env.ARM_CLIENT_ID }}
+          arm_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
+          tf_state_name: ${{ env.TF_STATE_NAME }}
+
+      - name: Terraform Apply
+        working-directory: ${{ env.TF_PROJECT }}
+        run: terraform apply -input=false -auto-approve
+        env:
+          ARM_CLIENT_ID: ${{ env.ARM_CLIENT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ env.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ env.ARM_TENANT_ID }}
+          ARM_USE_OIDC: "true"
+          TF_VAR_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
+          TF_VAR_altinn_app_id: ${{ vars.GH_RUNNERS_APP_ID }}
+          TF_VAR_altinn_app_install_id: ${{ vars.GH_RUNNERS_APP_INSTALL_ID }}
+          TF_VAR_altinn_app_key: ${{ secrets.GH_RUNNERS_APP_KEY }}
+          TF_VAR_host_ip: ${{ steps.host_ip.outputs.ip }}
+
+      - name: Remove Runner IP from Key Vault Whitelist
+        if: always()
+        env:
+          RUNNER_IP: ${{ steps.host_ip.outputs.ip }}
+        run: |
+          if ! [[ "$RUNNER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+            echo "Invalid IPv4 address: $RUNNER_IP"
+            exit 1
+          fi
+          echo "Removing IP: $RUNNER_IP"
+          KVS=$(az keyvault list --resource-group altinn-org-gh-runners --query "[].name" -o tsv)
+          for kv in $KVS; do
+            echo "Removing IP from $kv..."
+            az keyvault network-rule remove --name "$kv" --ip-address "$RUNNER_IP"
+          done

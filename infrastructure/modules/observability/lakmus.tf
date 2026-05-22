@@ -18,7 +18,7 @@ resource "azuread_application_federated_identity_credential" "lakmus_fed_identit
 
 # Gives key vault reader to the whole subscription
 resource "azurerm_role_assignment" "kv_reader_lakmus" {
-  scope                            = "/subscriptions/${data.azurerm_client_config.current.subscription_id}"
+  scope                            = "/subscriptions/${var.subscription_id}"
   role_definition_name             = "Key Vault Reader"
   principal_id                     = azuread_service_principal.lakmus_sp.object_id
   skip_service_principal_aad_check = true

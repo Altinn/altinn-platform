@@ -23,6 +23,20 @@ resource "azapi_resource" "container_runtime_aks_config" {
           timeoutInSeconds       = 300
           wait                   = true
         }
+        aks-config-teams-rbac = {
+          force = false
+          path  = "./rbac/"
+          postBuild = {
+            substitute = {
+              AKS_READ_EVERYTHING_AND_RESTART_GROUP_ID = "${var.developer_entra_id_group}"
+            }
+          }
+          prune                  = false
+          retryIntervalInSeconds = 300
+          syncIntervalInSeconds  = 300
+          timeoutInSeconds       = 300
+          wait                   = true
+        }
       }
       namespace = "flux-system"
       ociRepository = {

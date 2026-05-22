@@ -10,10 +10,6 @@ inputs:
     required: false
     default: ""
 
-  init_stage_env_vars:
-    description: "Extra environmental variables that might be needed in the init stage. e.g.: BROWSER_VUS=3 DURATION=10s"
-    required: false
-    default: ""
 runs:
   using: "docker"
   image: "Dockerfile"

@@ -1,0 +1,17 @@
+- op: add
+  path: /spec/template/spec/containers/0/env
+  value:
+    - name: DISVAULT_AZURE_SUBSCRIPTION_ID
+      value: "${DISVAULT_AZURE_SUBSCRIPTION_ID}"
+    - name: DISVAULT_RESOURCE_GROUP
+      value: "${DISVAULT_RESOURCE_GROUP}"
+    - name: DISVAULT_AZURE_TENANT_ID
+      value: "${DISVAULT_AZURE_TENANT_ID}"
+    - name: DISVAULT_LOCATION
+      value: "${DISVAULT_LOCATION}"
+    - name: DISVAULT_ENV
+      value: "${DISVAULT_ENV}"
+    - name: DISVAULT_AKS_SUBNET_IDS
+      value: "${DISVAULT_AKS_SUBNET_IDS}"
+    - name: DISVAULT_VPN_EXIT_NODE_SUBNET_ID
+      value: "${DISVAULT_VPN_EXIT_NODE_SUBNET_ID}"

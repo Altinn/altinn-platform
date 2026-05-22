@@ -2,21 +2,31 @@
    "apiVersion": "k6.io/v1alpha1",
    "kind": "TestRun",
    "metadata": {
-      "labels": {
-         "generated-by": "k6-action-image"
+      "annotations": {
+         "k6-action-image/test_name": "get-deployments",
+         "k6-action-image/test_scope": "k8s-wrapper",
+         "k6-action-image/testfilename": "actions/generate-k6-manifests/test_service/k8s_wrapper/get_deployments.js",
+         "k6-action-image/testid": "prod-get-deployments"
       },
-      "name": "{{ .UniqueName }}",
+      "labels": {
+         "generated-by": "k6-action-image",
+         "uniq_name": "{{ .UniqName }}"
+      },
+      "name": "{{ .UniqName }}",
       "namespace": "platform"
    },
    "spec": {
-      "arguments": "--tag testid={{ .UniqueName }} --tag namespace=platform --tag deploy_env={{ .DeployEnv }} --tag test_name=get-deployments --out experimental-prometheus-rw",
-      "cleanup": "post",
+      "arguments": "--tag testid=prod-get-deployments --tag namespace=platform --tag deploy_env=prod --tag test_name=get-deployments --tag test_scope=k8s-wrapper --out experimental-prometheus-rw",
       "parallelism": 1,
       "runner": {
          "env": [
             {
                "name": "ENVIRONMENT",
-               "value": "{{ .DeployEnv }}"
+               "value": "prod"
+            },
+            {
+               "name": "GITHUB_REF",
+               "value": "refs/heads/main"
             },
             {
                "name": "GITHUB_REPOSITORY",
@@ -51,8 +61,20 @@
                "value": "platform"
             },
             {
+               "name": "RUNNING_IN_K8S",
+               "value": "true"
+            },
+            {
+               "name": "TESTFILENAME",
+               "value": "actions/generate-k6-manifests/test_service/k8s_wrapper/get_deployments.js"
+            },
+            {
                "name": "TESTID",
-               "value": "{{ .UniqueName }}"
+               "value": "prod-get-deployments"
+            },
+            {
+               "name": "TEST_SCOPE",
+               "value": "k8s-wrapper"
             }
          ],
          "envFrom": [
@@ -63,38 +85,41 @@
             },
             {
                "secretRef": {
+                  "name": "token-generator-creds"
+               }
+            },
+            {
+               "secretRef": {
                   "name": "slack-prod"
                }
             }
          ],
+         "image": "ghcr.io/altinn/altinn-platform/k6-image:latest",
          "metadata": {
+            "annotations": {
+               "k6-action-image/test_name": "get-deployments",
+               "k6-action-image/test_scope": "k8s-wrapper",
+               "k6-action-image/testfilename": "actions/generate-k6-manifests/test_service/k8s_wrapper/get_deployments.js",
+               "k6-action-image/testid": "prod-get-deployments"
+            },
             "labels": {
-               "k6-test": "{{ .UniqueName }}"
+               "generated-by": "k6-action-image",
+               "uniq_name": "{{ .UniqName }}"
             }
          },
-         "nodeSelector": {
-            "kubernetes.azure.com/scalesetpriority": "spot",
-            "spot": "true"
-         },
+         "nodeSelector": { },
          "resources": {
             "requests": {
                "cpu": "250m",
                "memory": "200Mi"
             }
          },
-         "tolerations": [
-            {
-               "effect": "NoSchedule",
-               "key": "kubernetes.azure.com/scalesetpriority",
-               "operator": "Equal",
-               "value": "spot"
-            }
-         ]
+         "tolerations": [ ]
       },
       "script": {
          "configMap": {
             "file": "archive.tar",
-            "name": "{{ .DirName }}"
+            "name": "k8s-wrapper-prod-get-deployments"
          }
       }
    }

@@ -185,6 +185,22 @@ type HttpMessageDiagnostic struct {
 
 // ApiVersionStatus defines the observed state of ApiVersion.
 type ApiVersionStatus struct {
+	// For Kubernetes API conventions, see:
+	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
+
+	// conditions represent the current state of the ApiVersion resource.
+	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
+	//
+	// Standard condition types include:
+	// - "Available": the resource is fully functional
+	// - "Progressing": the resource is being created or updated
+	// - "Degraded": the resource failed to reach or maintain its desired state
+	//
+	// The status of each condition is one of True, False, or Unknown.
+	// +listType=map
+	// +listMapKey=type
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 	// ProvisioningState - The provisioning state of the API. Possible values are: Succeeded, Failed, Updating, Deleting.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:enum:=Succeeded;Failed;Updating;Deleting
@@ -210,13 +226,19 @@ type ApiVersionStatus struct {
 
 // ApiVersion is the Schema for the apiversions API.
 type ApiVersion struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.TypeMeta `json:",inline"`
 
-	// Spec defines the desired state of ApiVersion
-	Spec ApiVersionSpec `json:"spec,omitempty"`
-	// Status defines the observed state of ApiVersion
-	Status ApiVersionStatus `json:"status,omitempty"`
+	// metadata is a standard object metadata
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitzero"`
+
+	// spec defines the desired state of ApiVersion
+	// +required
+	Spec ApiVersionSpec `json:"spec"`
+
+	// status defines the observed state of ApiVersion
+	// +optional
+	Status ApiVersionStatus `json:"status,omitzero"`
 }
 
 // +kubebuilder:object:root=true
@@ -224,7 +246,7 @@ type ApiVersion struct {
 // ApiVersionList contains a list of ApiVersion
 type ApiVersionList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
+	metav1.ListMeta `json:"metadata,omitzero"`
 	Items           []ApiVersion `json:"items"`
 }
 

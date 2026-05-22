@@ -1,0 +1,5 @@
+## Append samples of your project ##
+resources:
+- storage_v1alpha1_databaseserver.yaml
+- storage_v1alpha1_database.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples
