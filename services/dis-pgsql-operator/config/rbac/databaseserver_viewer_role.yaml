@@ -17,7 +17,7 @@ rules:
   - storage.dis.altinn.cloud
   resources:
   - databaseservers
-  - logicaldatabases
+  - databases
   verbs:
   - get
   - list
@@ -26,6 +26,6 @@ rules:
   - storage.dis.altinn.cloud
   resources:
   - databaseservers/status
-  - logicaldatabases/status
+  - databases/status
   verbs:
   - get

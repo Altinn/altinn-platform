@@ -86,6 +86,23 @@ rules:
 - apiGroups:
   - storage.dis.altinn.cloud
   resources:
+  - databases
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - storage.dis.altinn.cloud
+  resources:
+  - databases/status
+  - databaseservers/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - storage.dis.altinn.cloud
+  resources:
   - databaseservers
   verbs:
   - create
@@ -94,21 +111,4 @@ rules:
   - list
   - patch
   - update
-  - watch
-- apiGroups:
-  - storage.dis.altinn.cloud
-  resources:
-  - databaseservers/status
-  - logicaldatabases/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - storage.dis.altinn.cloud
-  resources:
-  - logicaldatabases
-  verbs:
-  - get
-  - list
   - watch

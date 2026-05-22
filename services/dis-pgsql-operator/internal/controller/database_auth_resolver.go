@@ -37,7 +37,7 @@ func (r *DatabaseServerReconciler) resolveAdminIdentity(
 	return resolveAdminIdentity(ctx, logger, r, db)
 }
 
-func (r *LogicalDatabaseReconciler) resolveAdminIdentity(
+func (r *DatabaseReconciler) resolveAdminIdentity(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,

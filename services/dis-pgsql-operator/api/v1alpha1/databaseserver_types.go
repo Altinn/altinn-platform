@@ -11,7 +11,7 @@ type DatabaseServerAuth struct {
 	Admin AdminIdentitySpec `json:"admin"`
 
 	// user is retained for compatibility with early DatabaseServer manifests.
-	// Server reconciliation ignores this field; use LogicalDatabase resources
+	// Server reconciliation ignores this field; use Database resources
 	// to provision app and owner access.
 	// +optional
 	User *UserIdentitySpec `json:"user,omitempty"`
@@ -24,7 +24,7 @@ type AdminIdentitySpec struct {
 	Identity IdentitySource `json:"identity"`
 
 	// serviceAccountName is the ServiceAccount name used for workload identity
-	// when provisioning database access for child LogicalDatabase resources.
+	// when provisioning database access for child Database resources.
 	// Optional when identityRef is set; defaults to identityRef.name.
 	// +optional
 	// +kubebuilder:validation:MinLength=1
@@ -75,7 +75,7 @@ const (
 )
 
 // +kubebuilder:validation:Enum=Dedicated;Shared
-// DatabaseServerMode defines whether a DatabaseServer owns dedicated infrastructure or hosts logical databases.
+// DatabaseServerMode defines whether a DatabaseServer owns dedicated infrastructure or hosts databases.
 type DatabaseServerMode string
 
 const (
