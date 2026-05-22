@@ -5,7 +5,7 @@ go 1.26.3
 require (
 	github.com/Altinn/altinn-platform/services/dis-identity-operator v0.0.0-20260319083500-bd4f5f84c472
 	github.com/Azure/azure-service-operator/v2 v2.19.0
-	github.com/external-secrets/external-secrets/apis v0.0.0-20260320084310-395e4e3a10c3
+	github.com/external-secrets/external-secrets/apis v0.0.0-20260518135615-eba26100c341
 	github.com/google/uuid v1.6.0
 	github.com/onsi/ginkgo/v2 v2.29.0
 	github.com/onsi/gomega v1.41.0
