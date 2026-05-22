@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.7.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.6.0...dis-pgsql-v0.7.0) (2026-05-22)
+
+
+### Features
+
+* **dis-pgsql:** introduce DatabaseServer API ([#3493](https://github.com/Altinn/altinn-platform/issues/3493)) ([2eb571c](https://github.com/Altinn/altinn-platform/commit/2eb571c3e60d6824bbc1e3999aa1188c50bda8af))
+* **dis-pgsql:** move access provisioning to LogicalDatabase ([#3481](https://github.com/Altinn/altinn-platform/issues/3481)) ([faea70d](https://github.com/Altinn/altinn-platform/commit/faea70de2220465a47382673d31abebc6ba4ff23))
+* **dis-pgsql:** rename LogicalDatabase API to Database ([#3494](https://github.com/Altinn/altinn-platform/issues/3494)) ([bb5e81b](https://github.com/Altinn/altinn-platform/commit/bb5e81b222d6b96c272ba7101b696f86fd2707ad))
+* **dis-pgsql:** use explicit database names ([#3474](https://github.com/Altinn/altinn-platform/issues/3474)) ([1761b6b](https://github.com/Altinn/altinn-platform/commit/1761b6b6fd4e7a9f9b1979641e1671f27ad1c7d5))
+
+
+### Dependency Updates
+
+* update gcr.io/distroless/static:nonroot docker digest to e3f9456 ([#3283](https://github.com/Altinn/altinn-platform/issues/3283)) ([dd7b157](https://github.com/Altinn/altinn-platform/commit/dd7b1578787e084472d1e5b5c6ed8a241afd6cdd))
+
 ## [0.6.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.5.3...dis-pgsql-v0.6.0) (2026-05-07)
 
 
