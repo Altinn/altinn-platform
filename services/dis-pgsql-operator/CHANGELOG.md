@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.7.3](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.2...dis-pgsql-v0.7.3) (2026-05-22)
+
+
+### Dependency Updates
+
+* update github.com/altinn/altinn-platform/services/dis-identity-operator digest to 5189c1d ([#3515](https://github.com/Altinn/altinn-platform/issues/3515)) ([99ceb5a](https://github.com/Altinn/altinn-platform/commit/99ceb5ab342c27f15317ba894b82701a38c329a3))
+* update module github.com/azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7 to v9 ([#3537](https://github.com/Altinn/altinn-platform/issues/3537)) ([2bceb33](https://github.com/Altinn/altinn-platform/commit/2bceb335950b6d3520b7d8931653b963c191c93e))
+* update module github.com/pashagolub/pgxmock/v4 to v5 ([#3540](https://github.com/Altinn/altinn-platform/issues/3540)) ([b949424](https://github.com/Altinn/altinn-platform/commit/b9494246ca59287eed4c5480e173a32019f1e489))
+
 ## [0.7.2](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.1...dis-pgsql-v0.7.2) (2026-05-22)
 
 
