@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.2](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.1...dis-pgsql-v0.7.2) (2026-05-22)
+
+
+### Dependency Updates
+
+* update gomod non-major dependencies ([#3024](https://github.com/Altinn/altinn-platform/issues/3024)) ([0cd0452](https://github.com/Altinn/altinn-platform/commit/0cd0452c9083e202fca6a9fd4a047d5e364cd587))
+
 ## [0.7.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.0...dis-pgsql-v0.7.1) (2026-05-22)
 
 
