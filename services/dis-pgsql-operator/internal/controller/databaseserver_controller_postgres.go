@@ -305,7 +305,7 @@ func (r *DatabaseServerReconciler) ensurePostgresServer(
 	}
 
 	desiredLabels := map[string]string{
-		"dis.altinn.cloud/database-name": db.Name,
+		"dis.altinn.cloud/database-server-name": db.Name,
 	}
 
 	// Create when missing

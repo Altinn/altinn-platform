@@ -164,7 +164,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			g.Expect(k8sClient.List(ctx, &jobs,
 				client.InNamespace(namespace),
 				client.MatchingLabels(map[string]string{
-					databaseLabelKey:                  databaseName,
+					databaseNameLabelKey:              databaseName,
 					"dis.altinn.cloud/user-provision": "true",
 				}),
 			)).To(Succeed())
@@ -334,7 +334,7 @@ var _ = Describe("DatabaseServer controller", func() {
 		g.Expect(k8sClient.List(ctx, &databases,
 			client.InNamespace(ns),
 			client.MatchingLabels(map[string]string{
-				databaseLabelKey: databaseName,
+				databaseNameLabelKey: databaseName,
 			}),
 		)).To(Succeed())
 		return databases.Items
@@ -682,8 +682,8 @@ var _ = Describe("DatabaseServer controller", func() {
 			g.Expect(k8sClient.List(ctx, &jobs,
 				client.InNamespace(db.Namespace),
 				client.MatchingLabels(map[string]string{
-					"dis.altinn.cloud/database-name":  db.Name,
-					"dis.altinn.cloud/user-provision": "true",
+					"dis.altinn.cloud/database-server-name": db.Name,
+					"dis.altinn.cloud/user-provision":       "true",
 				}),
 			)).To(Succeed())
 			return len(jobs.Items)
@@ -821,8 +821,8 @@ var _ = Describe("DatabaseServer controller", func() {
 			g.Expect(k8sClient.List(ctx, &jobs,
 				client.InNamespace(db.Namespace),
 				client.MatchingLabels(map[string]string{
-					"dis.altinn.cloud/database-name":  db.Name,
-					"dis.altinn.cloud/user-provision": "true",
+					"dis.altinn.cloud/database-server-name": db.Name,
+					"dis.altinn.cloud/user-provision":       "true",
 				}),
 			)).To(Succeed())
 			return len(jobs.Items)
@@ -992,7 +992,7 @@ var _ = Describe("DatabaseServer controller", func() {
 
 		Expect(s.Name).To(Equal(expectedServerName))
 		Expect(s.Namespace).To(Equal(db.Namespace))
-		Expect(s.Labels["dis.altinn.cloud/database-name"]).To(Equal(db.Name))
+		Expect(s.Labels["dis.altinn.cloud/database-server-name"]).To(Equal(db.Name))
 
 		// Owner should be set and should use ARMID
 		Expect(s.Spec.Owner).NotTo(BeNil())
@@ -2135,8 +2135,8 @@ var _ = Describe("DatabaseServer controller", func() {
 			g.Expect(k8sClient.List(ctx, &jobs,
 				client.InNamespace(db.Namespace),
 				client.MatchingLabels(map[string]string{
-					"dis.altinn.cloud/database-name":  db.Name,
-					"dis.altinn.cloud/user-provision": "true",
+					"dis.altinn.cloud/database-server-name": db.Name,
+					"dis.altinn.cloud/user-provision":       "true",
 				}),
 			)).To(Succeed())
 			return len(jobs.Items)
@@ -2180,7 +2180,7 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("creates a FlexibleServersDatabase and publishes Database status", func() {
-		db := newSharedDatabaseServer("shared-db-logical-valid")
+		db := newSharedDatabaseServer("shared-db-database-valid")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		database := newDatabase("router-valid", db.Name)
@@ -2201,8 +2201,8 @@ var _ = Describe("DatabaseServer controller", func() {
 			g.Expect(asoDatabase.Spec.Owner.Name).To(Equal(db.Name))
 			g.Expect(asoDatabase.Spec.Charset).To(BeNil())
 			g.Expect(asoDatabase.Spec.Collation).To(BeNil())
-			g.Expect(asoDatabase.Labels).To(HaveKeyWithValue(databaseNameLabelKey, db.Name))
-			g.Expect(asoDatabase.Labels).To(HaveKeyWithValue(databaseLabelKey, database.Name))
+			g.Expect(asoDatabase.Labels).To(HaveKeyWithValue(databaseServerNameLabelKey, db.Name))
+			g.Expect(asoDatabase.Labels).To(HaveKeyWithValue(databaseNameLabelKey, database.Name))
 			g.Expect(asoDatabase.Annotations).To(HaveKeyWithValue(
 				annotations.ReconcilePolicy,
 				string(annotations.ReconcilePolicyDetachOnDelete),
@@ -2244,8 +2244,8 @@ var _ = Describe("DatabaseServer controller", func() {
 			Should(BeEmpty())
 
 		job := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
-		Expect(job.Labels).To(HaveKeyWithValue(databaseNameLabelKey, db.Name))
-		Expect(job.Labels).To(HaveKeyWithValue(databaseLabelKey, database.Name))
+		Expect(job.Labels).To(HaveKeyWithValue(databaseServerNameLabelKey, db.Name))
+		Expect(job.Labels).To(HaveKeyWithValue(databaseNameLabelKey, database.Name))
 		Expect(job.Spec.Template.Labels["azure.workload.identity/use"]).To(Equal("true"))
 		Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(db.Spec.Auth.Admin.ServiceAccountName))
 		Expect(job.Spec.Template.Spec.Containers).To(HaveLen(1))
@@ -2314,7 +2314,7 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("creates a Database and access Job on a dedicated database server", func() {
-		db := newDedicatedDatabaseServer("dedicated-db-logical-valid", adminAuth(
+		db := newDedicatedDatabaseServer("dedicated-db-database-valid", adminAuth(
 			"admin-mi",
 			"admin-mi-id",
 			"admin-mi",
@@ -2336,8 +2336,8 @@ var _ = Describe("DatabaseServer controller", func() {
 			g.Expect(asoDatabase.Spec.AzureName).To(Equal(expectedDatabaseName))
 			g.Expect(asoDatabase.Spec.Owner).NotTo(BeNil())
 			g.Expect(asoDatabase.Spec.Owner.Name).To(Equal(db.Name))
-			g.Expect(asoDatabase.Labels).To(HaveKeyWithValue(databaseNameLabelKey, db.Name))
-			g.Expect(asoDatabase.Labels).To(HaveKeyWithValue(databaseLabelKey, database.Name))
+			g.Expect(asoDatabase.Labels).To(HaveKeyWithValue(databaseServerNameLabelKey, db.Name))
+			g.Expect(asoDatabase.Labels).To(HaveKeyWithValue(databaseNameLabelKey, database.Name))
 			return asoDatabase.Spec
 		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
 			ShouldNot(BeZero())
@@ -2345,8 +2345,8 @@ var _ = Describe("DatabaseServer controller", func() {
 		markDatabaseASOReady(ctx, database)
 
 		job := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
-		Expect(job.Labels).To(HaveKeyWithValue(databaseNameLabelKey, db.Name))
-		Expect(job.Labels).To(HaveKeyWithValue(databaseLabelKey, database.Name))
+		Expect(job.Labels).To(HaveKeyWithValue(databaseServerNameLabelKey, db.Name))
+		Expect(job.Labels).To(HaveKeyWithValue(databaseNameLabelKey, database.Name))
 		Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(db.Spec.Auth.Admin.ServiceAccountName))
 		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
 			corev1.EnvVar{Name: "DISPG_DATABASE_NAME", Value: db.Name},
@@ -2357,7 +2357,7 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("rejects Database name and server references with surrounding whitespace", func() {
-		db := newSharedDatabaseServer("shared-db-logical-whitespace")
+		db := newSharedDatabaseServer("shared-db-database-whitespace")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		database := newDatabase("router-whitespace", db.Name)
@@ -2440,8 +2440,8 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("allows the same database name on different shared database servers", func() {
-		db1 := newSharedDatabaseServer("shared-db-logical-one")
-		db2 := newSharedDatabaseServer("shared-db-logical-two")
+		db1 := newSharedDatabaseServer("shared-db-database-one")
+		db2 := newSharedDatabaseServer("shared-db-database-two")
 		Expect(k8sClient.Create(ctx, db1)).To(Succeed())
 		Expect(k8sClient.Create(ctx, db2)).To(Succeed())
 
@@ -2471,7 +2471,7 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("reports Conflict when another Database manages the same database on the same server", func() {
-		db := newSharedDatabaseServer("shared-db-logical-owner-guard")
+		db := newSharedDatabaseServer("shared-db-database-owner-guard")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		firstDatabase := newDatabase("router-owner-one", db.Name)
@@ -2527,7 +2527,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			Name:      expectedResourceName,
 			Namespace: firstDatabase.Namespace,
 		}, &existingASODatabase)).To(Succeed())
-		Expect(existingASODatabase.Labels).To(HaveKeyWithValue(databaseLabelKey, firstDatabase.Name))
+		Expect(existingASODatabase.Labels).To(HaveKeyWithValue(databaseNameLabelKey, firstDatabase.Name))
 		Expect(metav1.IsControlledBy(&existingASODatabase, &firstUpdated)).To(BeTrue())
 
 		fixedDatabaseName := "router-owner-two-fixed"
@@ -2561,11 +2561,11 @@ var _ = Describe("DatabaseServer controller", func() {
 			Namespace: secondDatabase.Namespace,
 		}, &secondASODatabase)).To(Succeed())
 		Expect(secondASODatabase.Spec.AzureName).To(Equal(fixedDatabaseName))
-		Expect(secondASODatabase.Labels).To(HaveKeyWithValue(databaseLabelKey, secondDatabase.Name))
+		Expect(secondASODatabase.Labels).To(HaveKeyWithValue(databaseNameLabelKey, secondDatabase.Name))
 	})
 
 	It("sets Database Ready after the access provisioning Job completes", func() {
-		db := newSharedDatabaseServer("shared-db-logical-access-ready")
+		db := newSharedDatabaseServer("shared-db-database-access-ready")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		database := newDatabase("router-access-ready", db.Name)
@@ -2630,7 +2630,7 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("recreates the Database access provisioning Job when the current Job is failed", func() {
-		db := newSharedDatabaseServer("shared-db-logical-access-job-failed")
+		db := newSharedDatabaseServer("shared-db-database-access-job-failed")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		database := newDatabase("router-access-job-failed", db.Name)
@@ -2688,7 +2688,7 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("fails validation instead of creating a second database when spec.name changes", func() {
-		db := newSharedDatabaseServer("shared-db-logical-name-change")
+		db := newSharedDatabaseServer("shared-db-database-name-change")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		database := newDatabase("router", db.Name)
@@ -2739,7 +2739,7 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("defaults Database deletionPolicy to Retain", func() {
-		db := newSharedDatabaseServer("shared-db-logical-default-policy")
+		db := newSharedDatabaseServer("shared-db-database-default-policy")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		database := newDatabase("router-default-policy", db.Name)

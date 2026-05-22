@@ -31,7 +31,7 @@ const (
 	azureExtensionsConfigName          = dbUtil.ServerParameterAzureExtensions
 	sharedPreloadLibrariesConfigName   = dbUtil.ServerParameterSharedPreloadLibraries
 	configSourceUserOverride           = "user-override"
-	databaseNameLabelKey               = "dis.altinn.cloud/database-name"
+	databaseServerNameLabelKey         = "dis.altinn.cloud/database-server-name"
 	configurationKindLabelKey          = "dis.altinn.cloud/configuration-kind"
 	configurationKindServerParameter   = "server-parameter"
 	serverParametersReadyConditionType = "ServerParametersReady"
@@ -145,8 +145,8 @@ func (r *DatabaseServerReconciler) clearOwnedManagedServerParameterConfiguration
 		&configurations,
 		client.InNamespace(db.Namespace),
 		client.MatchingLabels(map[string]string{
-			databaseNameLabelKey:      db.Name,
-			configurationKindLabelKey: configurationKindServerParameter,
+			databaseServerNameLabelKey: db.Name,
+			configurationKindLabelKey:  configurationKindServerParameter,
 		}),
 	); err != nil {
 		return fmt.Errorf("list FlexibleServersConfiguration resources for server parameters: %w", err)
@@ -442,7 +442,7 @@ func desiredFlexibleServerConfiguration(
 	}
 
 	desiredLabels := map[string]string{
-		databaseNameLabelKey: db.Name,
+		databaseServerNameLabelKey: db.Name,
 	}
 	maps.Copy(desiredLabels, extraLabels)
 

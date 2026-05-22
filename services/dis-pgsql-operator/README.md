@@ -1,8 +1,28 @@
 # dis-pgsql-operator
-// TODO(user): Add simple overview of use/purpose
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+
+`dis-pgsql-operator` provides self-service PostgreSQL provisioning for app teams.
+It reconciles DIS storage APIs into Azure PostgreSQL Flexible Server resources
+through Azure Service Operator (ASO), and provisions app/owner access inside
+PostgreSQL with Kubernetes Jobs.
+
+## API Model
+
+The operator exposes two storage APIs:
+
+- `DatabaseServer` provisions and configures an Azure PostgreSQL Flexible Server.
+- `Database` provisions a PostgreSQL database on a same-namespace
+  `DatabaseServer`.
+
+`Database.spec.server.name` selects the `DatabaseServer`. `Database.spec.name`
+is the PostgreSQL database name and maps directly to the ASO
+`FlexibleServersDatabase.spec.azureName` field.
+
+Dedicated and multitenant layouts use the same APIs:
+
+- Dedicated: one `Database` per `DatabaseServer`.
+- Multitenant: many `Database` resources on one shared `DatabaseServer`.
 
 ## Getting Started
 
@@ -39,13 +59,13 @@ make deploy IMG=<some-registry>/dis-pgsql-operator:tag
 privileges or be logged in as admin.
 
 **Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
+You can apply the samples from `config/samples`:
 
 ```sh
 kubectl apply -k config/samples/
 ```
 
->**NOTE**: Ensure that the samples has default values to test it out.
+The samples include both a dedicated layout and a multitenant layout.
 
 ### To Uninstall
 **Delete the instances (CRs) from the cluster:**
@@ -111,7 +131,6 @@ previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml
 is manually re-applied afterwards.
 
 ## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
 
 **NOTE:** Run `make help` for more information on all potential `make` targets
 
@@ -132,4 +151,3 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-

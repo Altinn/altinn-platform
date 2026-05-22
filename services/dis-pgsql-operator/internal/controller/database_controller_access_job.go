@@ -124,9 +124,9 @@ func databaseAccessProvisionJobName(
 
 func databaseAccessJobLabels(serverName, databaseName string) map[string]string {
 	return map[string]string{
-		databaseNameLabelKey:                        serverName,
-		databaseLabelKey:                            databaseName,
-		"dis.altinn.cloud/access-provision":         "true",
-		"dis.altinn.cloud/logical-access-provision": "true",
+		databaseServerNameLabelKey:                   serverName,
+		databaseNameLabelKey:                         databaseName,
+		"dis.altinn.cloud/access-provision":          "true",
+		"dis.altinn.cloud/database-access-provision": "true",
 	}
 }

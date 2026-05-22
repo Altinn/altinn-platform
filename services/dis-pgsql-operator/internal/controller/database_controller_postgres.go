@@ -32,8 +32,7 @@ const (
 
 	databasePort         = int32(5432)
 	databaseRequeueDelay = 15 * time.Second
-	// Retain the existing label key during the public CRD rename to avoid changing selectors.
-	databaseLabelKey = "dis.altinn.cloud/logical-database-name"
+	databaseNameLabelKey = "dis.altinn.cloud/database-name"
 )
 
 func (r *DatabaseReconciler) ensureFlexibleServersDatabase(
@@ -52,8 +51,8 @@ func (r *DatabaseReconciler) ensureFlexibleServersDatabase(
 		},
 	}
 	desiredLabels := map[string]string{
-		databaseNameLabelKey: serverName,
-		databaseLabelKey:     database.Name,
+		databaseServerNameLabelKey: serverName,
+		databaseNameLabelKey:       database.Name,
 	}
 	desiredAnnotations := map[string]string{
 		annotations.ReconcilePolicy: string(annotations.ReconcilePolicyDetachOnDelete),
