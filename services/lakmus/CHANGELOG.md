@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.3](https://github.com/Altinn/altinn-platform/compare/lakmus-v1.1.2...lakmus-v1.1.3) (2026-05-22)
+
+
+### Dependency Updates
+
+* update module github.com/azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault to v2 ([#3536](https://github.com/Altinn/altinn-platform/issues/3536)) ([99216a0](https://github.com/Altinn/altinn-platform/commit/99216a017d8b72a4ff8bd2a8c499c54b42fb2163))
+
+## [1.1.2](https://github.com/Altinn/altinn-platform/compare/lakmus-v1.1.1...lakmus-v1.1.2) (2026-05-22)
+
+
+### Dependency Updates
+
+* update gomod non-major dependencies ([#3024](https://github.com/Altinn/altinn-platform/issues/3024)) ([0cd0452](https://github.com/Altinn/altinn-platform/commit/0cd0452c9083e202fca6a9fd4a047d5e364cd587))
+
 ## [1.1.1](https://github.com/Altinn/altinn-platform/compare/lakmus-v1.1.0...lakmus-v1.1.1) (2026-05-22)
 
 

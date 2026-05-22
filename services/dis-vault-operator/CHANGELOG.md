@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.4.6](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.4.5...dis-vault-v1.4.6) (2026-05-22)
+
+
+### Dependency Updates
+
+* update github.com/altinn/altinn-platform/services/dis-identity-operator digest to 5189c1d ([#3515](https://github.com/Altinn/altinn-platform/issues/3515)) ([99ceb5a](https://github.com/Altinn/altinn-platform/commit/99ceb5ab342c27f15317ba894b82701a38c329a3))
+* update github.com/external-secrets/external-secrets/apis digest to eba2610 ([#3516](https://github.com/Altinn/altinn-platform/issues/3516)) ([34ec763](https://github.com/Altinn/altinn-platform/commit/34ec7631a2297d4cd5537dcdda8b69eb189aacb4))
+
+## [1.4.5](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.4.4...dis-vault-v1.4.5) (2026-05-22)
+
+
+### Dependency Updates
+
+* update gomod non-major dependencies ([#3024](https://github.com/Altinn/altinn-platform/issues/3024)) ([0cd0452](https://github.com/Altinn/altinn-platform/commit/0cd0452c9083e202fca6a9fd4a047d5e364cd587))
+
 ## [1.4.4](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.4.3...dis-vault-v1.4.4) (2026-05-22)
 
 

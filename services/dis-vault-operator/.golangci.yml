@@ -36,6 +36,10 @@ linters:
           - dupl
           - lll
         path: internal/*
+      - linters:
+          - staticcheck
+        path: api/v1alpha1/groupversion_info.go
+        text: SA1019
     paths:
       - third_party$
       - builtin$

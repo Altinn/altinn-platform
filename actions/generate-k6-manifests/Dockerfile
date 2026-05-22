@@ -1,4 +1,4 @@
-FROM ghcr.io/altinn/altinn-platform/k6-action-image:v0.0.36@sha256:a1adf14104f851b7a0c7996cf9ff2104cb13b3f4271ab408048aa8eae18948d0
+FROM ghcr.io/altinn/altinn-platform/k6-action-image:v0.1.0@sha256:fe8ae202b5466d429d4902829f3210648587d7cb33d1764d633e8987e8322222
 
 COPY generate.sh /generate.sh
 RUN chmod +x /generate.sh

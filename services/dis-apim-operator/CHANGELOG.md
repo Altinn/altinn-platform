@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.0.2](https://github.com/Altinn/altinn-platform/compare/dis-apim-v1.0.1...dis-apim-v1.0.2) (2026-05-22)
+
+
+### Dependency Updates
+
+* update k8s.io/utils digest to ff6756f ([#3396](https://github.com/Altinn/altinn-platform/issues/3396)) ([269c3e5](https://github.com/Altinn/altinn-platform/commit/269c3e5fab8895b12a130e49f5c3523451568f21))
+
+## [1.0.1](https://github.com/Altinn/altinn-platform/compare/dis-apim-v1.0.0...dis-apim-v1.0.1) (2026-05-22)
+
+
+### Dependency Updates
+
+* update actions/setup-go digest to 4a36011 ([#3191](https://github.com/Altinn/altinn-platform/issues/3191)) ([3c78f2b](https://github.com/Altinn/altinn-platform/commit/3c78f2b53ad80d613b3c2f7ec686ddf9212829ef))
+* update dockerfile non-major dependencies ([#3382](https://github.com/Altinn/altinn-platform/issues/3382)) ([f0e15d1](https://github.com/Altinn/altinn-platform/commit/f0e15d1823a539184149f82e0ab15493a393f4a8))
+* update gcr.io/distroless/static:nonroot docker digest to 963fa6c ([#3466](https://github.com/Altinn/altinn-platform/issues/3466)) ([a17762f](https://github.com/Altinn/altinn-platform/commit/a17762f295ad24e80eefe0f78f19696d56af0a92))
+* update gcr.io/distroless/static:nonroot docker digest to e3f9456 ([#3283](https://github.com/Altinn/altinn-platform/issues/3283)) ([dd7b157](https://github.com/Altinn/altinn-platform/commit/dd7b1578787e084472d1e5b5c6ed8a241afd6cdd))
+* update github-actions non-major dependencies ([#3018](https://github.com/Altinn/altinn-platform/issues/3018)) ([100ab8d](https://github.com/Altinn/altinn-platform/commit/100ab8d5d0b9f413983c4b6ca7b5baac6afe51ed))
+* update golangci/golangci-lint-action action to v9 ([#3378](https://github.com/Altinn/altinn-platform/issues/3378)) ([7184911](https://github.com/Altinn/altinn-platform/commit/7184911a4fb241f65d7917f3bd04383d6f9aa38f))
+* update gomod non-major dependencies ([#3024](https://github.com/Altinn/altinn-platform/issues/3024)) ([0cd0452](https://github.com/Altinn/altinn-platform/commit/0cd0452c9083e202fca6a9fd4a047d5e364cd587))
+
 ## 1.0.0 (2026-03-21)
 
 
