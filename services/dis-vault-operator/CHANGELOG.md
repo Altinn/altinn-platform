@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.5](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.4.4...dis-vault-v1.4.5) (2026-05-22)
+
+
+### Dependency Updates
+
+* update gomod non-major dependencies ([#3024](https://github.com/Altinn/altinn-platform/issues/3024)) ([0cd0452](https://github.com/Altinn/altinn-platform/commit/0cd0452c9083e202fca6a9fd4a047d5e364cd587))
+
 ## [1.4.4](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.4.3...dis-vault-v1.4.4) (2026-05-22)
 
 
