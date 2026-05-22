@@ -8,5 +8,7 @@ locals {
     env                      = "prod"
     product                  = "dis"
     org                      = ""
+    costcenter               = "altinn3"
+    solution                 = "platform"
   }
 }
