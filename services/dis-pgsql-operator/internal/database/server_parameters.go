@@ -107,6 +107,6 @@ func normalizeServerParameterValue(value intstr.IntOrString) (string, error) {
 		}
 		return trimmed, nil
 	default:
-		return "", fmt.Errorf("unsupported value type %q", value.Type)
+		return "", fmt.Errorf("unsupported value type %v", value.Type)
 	}
 }
