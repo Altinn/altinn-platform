@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/Altinn/altinn-platform/compare/dis-apim-v1.0.1...dis-apim-v1.0.2) (2026-05-22)
+
+
+### Dependency Updates
+
+* update k8s.io/utils digest to ff6756f ([#3396](https://github.com/Altinn/altinn-platform/issues/3396)) ([269c3e5](https://github.com/Altinn/altinn-platform/commit/269c3e5fab8895b12a130e49f5c3523451568f21))
+
 ## [1.0.1](https://github.com/Altinn/altinn-platform/compare/dis-apim-v1.0.0...dis-apim-v1.0.1) (2026-05-22)
 
 
