@@ -27,7 +27,7 @@ resource "azurerm_subnet" "gh_runners" {
 
 module "container_apps_gh_runners" {
   source      = "Altinn/altinn-modules/azurerm//modules/github_runner_container_app_jobs"
-  version     = "1.2.2"
+  version     = "1.2.3"
   app_id      = var.altinn_app_id
   install_id  = var.altinn_app_install_id
   app_key     = var.altinn_app_key
