@@ -51,3 +51,16 @@ CVE-2026-33810
 
 # https://avd.aquasec.com/nvd/cve-2026-29181
 CVE-2026-29181
+
+# Go stdlib CVEs fixed in 1.26.3/1.25.10 - kubectl (v1.36.1 uses Go 1.26.2), jb (v0.6.0 uses Go 1.23.0),
+# and k6 (k6-image not yet rebuilt with Go 1.26.3) still embed vulnerable versions.
+# https://avd.aquasec.com/nvd/cve-2026-33811
+CVE-2026-33811
+# https://avd.aquasec.com/nvd/cve-2026-33814
+CVE-2026-33814
+# https://avd.aquasec.com/nvd/cve-2026-39820
+CVE-2026-39820
+# https://avd.aquasec.com/nvd/cve-2026-39836
+CVE-2026-39836
+# https://avd.aquasec.com/nvd/cve-2026-42499
+CVE-2026-42499
