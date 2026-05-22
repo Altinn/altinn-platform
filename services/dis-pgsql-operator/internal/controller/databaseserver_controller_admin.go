@@ -17,10 +17,10 @@ import (
 	genruntime "github.com/Azure/azure-service-operator/v2/pkg/genruntime"
 )
 
-func (r *DatabaseReconciler) ensureFlexibleServerAdministrator(
+func (r *DatabaseServerReconciler) ensureFlexibleServerAdministrator(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 	adminIdentity resolvedAdminIdentity,
 ) error {
 	ns := db.Namespace
@@ -69,7 +69,7 @@ func (r *DatabaseReconciler) ensureFlexibleServerAdministrator(
 	}
 
 	desiredLabels := map[string]string{
-		"dis.altinn.cloud/database-name": db.Name,
+		"dis.altinn.cloud/database-server-name": db.Name,
 	}
 
 	if !found {
@@ -86,7 +86,7 @@ func (r *DatabaseReconciler) ensureFlexibleServerAdministrator(
 			return fmt.Errorf("set controller reference on FlexibleServersAdministrator: %w", err)
 		}
 
-		logger.Info("creating FlexibleServersAdministrator for database",
+		logger.Info("creating FlexibleServersAdministrator for database server",
 			"adminName", adminName,
 			"namespace", ns,
 			"principalID", principalID,
@@ -105,7 +105,7 @@ func (r *DatabaseReconciler) ensureFlexibleServerAdministrator(
 	existing.Labels, updated = k8sutil.SyncSpecAndLabels(&existing.Spec, desiredSpec, existing.Labels, desiredLabels)
 
 	if updated {
-		logger.Info("updating FlexibleServersAdministrator to match Database",
+		logger.Info("updating FlexibleServersAdministrator to match database server",
 			"adminName", adminName,
 			"namespace", ns,
 			"principalID", principalID,

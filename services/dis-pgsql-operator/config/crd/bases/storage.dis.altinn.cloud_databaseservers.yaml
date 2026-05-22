@@ -1,0 +1,374 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.0
+  name: databaseservers.storage.dis.altinn.cloud
+spec:
+  group: storage.dis.altinn.cloud
+  names:
+    kind: DatabaseServer
+    listKind: DatabaseServerList
+    plural: databaseservers
+    singular: databaseserver
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: DatabaseServer is the Schema for the databases API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of DatabaseServer.
+            properties:
+              auth:
+                description: auth defines the identities used for server administration.
+                properties:
+                  admin:
+                    description: admin defines the identity used for admin access.
+                    properties:
+                      identity:
+                        description: identity defines the Entra identity source (direct
+                          values or ApplicationIdentity reference).
+                        properties:
+                          identityRef:
+                            description: identityRef points to an ApplicationIdentity
+                              in the same namespace.
+                            properties:
+                              name:
+                                description: name is the ApplicationIdentity name
+                                  in the same namespace.
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          name:
+                            description: name is the Entra principal name (managed
+                              identity name).
+                            minLength: 1
+                            type: string
+                          principalId:
+                            description: principalId is the Entra principal object
+                              ID (GUID).
+                            minLength: 1
+                            type: string
+                        type: object
+                        x-kubernetes-validations:
+                        - message: Provide either identityRef or both name and principalId.
+                          rule: (has(self.identityRef) && !has(self.name) && !has(self.principalId))
+                            || (!has(self.identityRef) && has(self.name) && has(self.principalId))
+                      serviceAccountName:
+                        description: |-
+                          serviceAccountName is the ServiceAccount name used for workload identity
+                          when provisioning database access for child Database resources.
+                          Optional when identityRef is set; defaults to identityRef.name.
+                        minLength: 1
+                        type: string
+                    required:
+                    - identity
+                    type: object
+                    x-kubernetes-validations:
+                    - message: serviceAccountName is required when identity.identityRef
+                        is not set.
+                      rule: has(self.identity.identityRef) || has(self.serviceAccountName)
+                  user:
+                    description: |-
+                      user is retained for compatibility with early DatabaseServer manifests.
+                      Server reconciliation ignores this field; use Database resources
+                      to provision app and owner access.
+                    properties:
+                      identity:
+                        description: identity defines the Entra identity source (direct
+                          values or ApplicationIdentity reference).
+                        properties:
+                          identityRef:
+                            description: identityRef points to an ApplicationIdentity
+                              in the same namespace.
+                            properties:
+                              name:
+                                description: name is the ApplicationIdentity name
+                                  in the same namespace.
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          name:
+                            description: name is the Entra principal name (managed
+                              identity name).
+                            minLength: 1
+                            type: string
+                          principalId:
+                            description: principalId is the Entra principal object
+                              ID (GUID).
+                            minLength: 1
+                            type: string
+                        type: object
+                        x-kubernetes-validations:
+                        - message: Provide either identityRef or both name and principalId.
+                          rule: (has(self.identityRef) && !has(self.name) && !has(self.principalId))
+                            || (!has(self.identityRef) && has(self.name) && has(self.principalId))
+                    required:
+                    - identity
+                    type: object
+                required:
+                - admin
+                type: object
+              backupRetentionDays:
+                description: |-
+                  backupRetentionDays controls backup retention for the server.
+                  If omitted, it defaults to 14 for non-prod server types and 30 for prod/production.
+                maximum: 35
+                minimum: 7
+                type: integer
+              enableExtensions:
+                description: |-
+                  enableExtensions is the curated list of PostgreSQL extensions that should be enabled.
+                  Some extensions require shared_preload_libraries and are configured automatically.
+                items:
+                  description: DatabaseServerExtension is a curated PostgreSQL extension
+                    allowed by this operator.
+                  enum:
+                  - hstore
+                  - pg_cron
+                  - pg_stat_statements
+                  - pgaudit
+                  - uuid-ossp
+                  type: string
+                type: array
+                x-kubernetes-list-type: set
+              highAvailabilityEnabled:
+                description: |-
+                  highAvailabilityEnabled controls whether PostgreSQL high availability is enabled.
+                  If omitted, it defaults to true for prod/production server types and false otherwise.
+                type: boolean
+              mode:
+                default: Dedicated
+                description: |-
+                  mode controls whether this DatabaseServer provisions a dedicated server or a shared server.
+                  Defaults to Dedicated.
+                enum:
+                - Dedicated
+                - Shared
+                type: string
+                x-kubernetes-validations:
+                - message: mode is immutable
+                  rule: self == oldSelf
+              network:
+                description: |-
+                  network references existing private access resources for shared databases.
+                  It must be omitted for dedicated databases.
+                properties:
+                  delegatedSubnetResourceId:
+                    description: delegatedSubnetResourceId is the Azure ARM ID of
+                      an existing delegated subnet.
+                    minLength: 1
+                    type: string
+                  privateDnsZoneResourceId:
+                    description: privateDnsZoneResourceId is the Azure ARM ID of an
+                      existing private DNS zone.
+                    minLength: 1
+                    type: string
+                required:
+                - delegatedSubnetResourceId
+                - privateDnsZoneResourceId
+                type: object
+              serverParams:
+                description: |-
+                  serverParams configures allowed PostgreSQL server parameters.
+                  azure.extensions and shared_preload_libraries are managed via enableExtensions.
+                  pgbouncer settings and max_connections are managed by the operator.
+                items:
+                  description: DatabaseServerParameter is a PostgreSQL server parameter
+                    with a scalar value.
+                  properties:
+                    name:
+                      description: name is the PostgreSQL server parameter name.
+                      minLength: 1
+                      type: string
+                    value:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: value is the desired parameter value.
+                      x-kubernetes-int-or-string: true
+                  required:
+                  - name
+                  - value
+                  type: object
+                  x-kubernetes-validations:
+                  - message: azure.extensions/shared_preload_libraries are managed
+                      via enableExtensions, and pgbouncer/max_connections are managed
+                      by the operator.
+                    rule: self.name != 'azure.extensions' && self.name != 'shared_preload_libraries'
+                      && self.name != 'pgbouncer.enabled' && self.name != 'pgbouncer.max_prepared_statements'
+                      && self.name != 'pgbouncer.pool_mode' && self.name != 'max_connections'
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+              serverType:
+                description: serverType selects the size/profile of the database server
+                  (e.g. "dev", "prod").
+                minLength: 1
+                type: string
+              storage:
+                properties:
+                  sizeGB:
+                    description: |-
+                      sizeGB is the initial storage size in GB.
+                      If omitted, the operator will default it.
+                    format: int32
+                    type: integer
+                  tier:
+                    description: |-
+                      tier is the storage performance tier (e.g. P10).
+                      If omitted, the operator will default it.
+                    type: string
+                type: object
+              version:
+                description: version is the major version of PostgreSQL to run (e.g.
+                  17).
+                minimum: 9
+                type: integer
+            required:
+            - auth
+            - serverType
+            - version
+            type: object
+            x-kubernetes-validations:
+            - message: spec.network is required when mode is Shared and must be omitted
+                when mode is Dedicated.
+              rule: '(has(self.mode) && self.mode == ''Shared'') ? has(self.network)
+                : !has(self.network)'
+          status:
+            description: status defines the observed state of DatabaseServer.
+            properties:
+              conditions:
+                description: |-
+                  conditions represent the current state of the DatabaseServer resource.
+                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
+
+                  Standard condition types might include:
+                  - "Ready": the database and its networking are fully provisioned
+                  - "Provisioning": resources are being created
+                  - "Error": the controller failed to reconcile the resource
+
+                  The status of each condition is one of True, False, or Unknown.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              serverParameterErrors:
+                description: |-
+                  serverParameterErrors contains per-parameter reconciliation failures reported
+                  from owned FlexibleServersConfiguration resources.
+                items:
+                  description: DatabaseServerParameterError captures a failed server
+                    parameter reconciliation.
+                  properties:
+                    message:
+                      description: message is a human-readable error from ASO/Azure.
+                      type: string
+                    name:
+                      description: name is the PostgreSQL server parameter name that
+                        failed.
+                      minLength: 1
+                      type: string
+                    reason:
+                      description: reason is the ASO/Azure reason for the failure,
+                        when available.
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+              subnetCIDR:
+                description: |-
+                  subnetCIDR is the /28 network block allocated for this database's subnet.
+                  It is set by the controller once allocation succeeds.
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

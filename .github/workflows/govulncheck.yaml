@@ -29,7 +29,7 @@ on:
 jobs:
   test-build:
     name: Check for go vulnerabilities
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     continue-on-error: true
     strategy:
       matrix:

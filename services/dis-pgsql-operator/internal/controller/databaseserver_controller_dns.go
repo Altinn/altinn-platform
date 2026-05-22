@@ -16,33 +16,33 @@ import (
 	"github.com/Azure/azure-service-operator/v2/pkg/genruntime"
 )
 
-// The suffix we use for per-DB private DNS zones
+// The suffix we use for per-database-server private DNS zones.
 const postgresPrivateZoneSuffix = "private.postgres.database.azure.com"
 
-// Helper func to compute the Private DNS zone name for a DB
-func zoneNameForDatabase(db *storagev1alpha1.Database) string {
+// zoneNameForDatabaseServer computes the Private DNS zone name for a server.
+func zoneNameForDatabaseServer(db *storagev1alpha1.DatabaseServer) string {
 	return fmt.Sprintf("%s.%s", db.Name, postgresPrivateZoneSuffix)
 }
 
-func vnetLinkNameForDB(db *storagev1alpha1.Database) string {
+func dbVNetLinkNameForDatabaseServer(db *storagev1alpha1.DatabaseServer) string {
 	return fmt.Sprintf("%s-vnetlink", db.Name)
 }
 
-func vnetLinkNameForAKS(db *storagev1alpha1.Database) string {
+func aksVNetLinkNameForDatabaseServer(db *storagev1alpha1.DatabaseServer) string {
 	return fmt.Sprintf("%s-aks-vnetlink", db.Name)
 }
 
-// ensurePrivateDNSZone ensures that a Private Dns Zone exists for the given Database.
-func (r *DatabaseReconciler) ensurePrivateDNSZone(
+// ensurePrivateDNSZone ensures that a Private DNS Zone exists for the given database server.
+func (r *DatabaseServerReconciler) ensurePrivateDNSZone(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 ) error {
 	if r.Config.ResourceGroup == "" {
-		return fmt.Errorf("ResourceGroup is not configured on DatabaseReconciler")
+		return fmt.Errorf("ResourceGroup is not configured on DatabaseServerReconciler")
 	}
 	ns := db.Namespace
-	zoneName := zoneNameForDatabase(db)
+	zoneName := zoneNameForDatabaseServer(db)
 	key := types.NamespacedName{
 		Name:      zoneName,
 		Namespace: ns,
@@ -51,7 +51,7 @@ func (r *DatabaseReconciler) ensurePrivateDNSZone(
 	var existing networkv1.PrivateDnsZone
 	err := r.Get(ctx, key, &existing)
 	if err == nil {
-		logger.Info("private DNS zone already exists for database",
+		logger.Info("private DNS zone already exists for database server",
 			"zoneName", zoneName,
 			"asoNamespace", ns)
 		return nil
@@ -60,7 +60,7 @@ func (r *DatabaseReconciler) ensurePrivateDNSZone(
 		return fmt.Errorf("get PrivateDnsZone %s/%s: %w", key.Namespace, key.Name, err)
 	}
 
-	logger.Info("creating private DNS zone for database",
+	logger.Info("creating private DNS zone for database server",
 		"zoneName", zoneName,
 		"asoNamespace", ns)
 
@@ -71,7 +71,7 @@ func (r *DatabaseReconciler) ensurePrivateDNSZone(
 			Name:      zoneName,
 			Namespace: ns,
 			Labels: map[string]string{
-				"dis.altinn.cloud/database-name": db.Name,
+				"dis.altinn.cloud/database-server-name": db.Name,
 			},
 		},
 		Spec: networkv1.PrivateDnsZone_Spec{
@@ -108,11 +108,11 @@ func (r *DatabaseReconciler) ensurePrivateDNSZone(
 }
 
 // ensurePrivateDNSVNetLink ensures a Private DNS virtual network link exists
-// for the given Database.
-func (r *DatabaseReconciler) ensurePrivateDNSVNetLink(
+// for the given database server.
+func (r *DatabaseServerReconciler) ensurePrivateDNSVNetLink(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 	zoneName string,
 	linkName string,
 	targetVNetName string,
@@ -122,7 +122,7 @@ func (r *DatabaseReconciler) ensurePrivateDNSVNetLink(
 	loc := "global"
 	regFalse := false
 	desiredLabels := map[string]string{
-		"dis.altinn.cloud/database-name": db.Name,
+		"dis.altinn.cloud/database-server-name": db.Name,
 	}
 	desiredSpec := networkv1.PrivateDnsZonesVirtualNetworkLink_Spec{
 		AzureName: linkName,
@@ -206,8 +206,8 @@ func (r *DatabaseReconciler) ensurePrivateDNSVNetLink(
 	return nil
 }
 
-// privateZoneARMID builds the ARM ID for the per-DB Private DNS zone.
-func (r *DatabaseReconciler) privateZoneARMIDResourceReference(zoneName string) *genruntime.ResourceReference {
+// privateZoneARMIDResourceReference builds the resource reference for the server's Private DNS zone.
+func (r *DatabaseServerReconciler) privateZoneARMIDResourceReference(zoneName string) *genruntime.ResourceReference {
 	return &genruntime.ResourceReference{
 		Group: "network.azure.com",
 		Kind:  "PrivateDnsZone",

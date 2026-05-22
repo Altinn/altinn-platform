@@ -44,7 +44,7 @@ func DeterministicSecretStoreName(base string) string {
 	return base + "-" + secretStoreShortSuffix + "-" + hash
 }
 
-func BuildManagedSecretStore(v *vaultv1alpha1.Vault, tenantID, vaultURI string) (*externalsecretsv1.SecretStore, error) {
+func BuildManagedSecretStore(v *vaultv1alpha1.Vault, vaultURI string) (*externalsecretsv1.SecretStore, error) {
 	if v == nil {
 		return nil, fmt.Errorf("vault must not be nil")
 	}
@@ -80,10 +80,6 @@ func BuildManagedSecretStore(v *vaultv1alpha1.Vault, tenantID, vaultURI string) 
 			},
 		},
 	}
-	if tenantID := strings.TrimSpace(tenantID); tenantID != "" {
-		store.Spec.Provider.AzureKV.TenantID = &tenantID
-	}
-
 	return store, nil
 }
 

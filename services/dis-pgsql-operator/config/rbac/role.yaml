@@ -30,8 +30,6 @@ rules:
   - jobs/status
   verbs:
   - get
-  - patch
-  - update
 - apiGroups:
   - dbforpostgresql.azure.com
   resources:
@@ -90,27 +88,27 @@ rules:
   resources:
   - databases
   verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - storage.dis.altinn.cloud
+  resources:
+  - databases/status
+  - databaseservers/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - storage.dis.altinn.cloud
+  resources:
+  - databaseservers
+  verbs:
   - create
   - delete
   - get
   - list
   - patch
   - update
-  - watch
-- apiGroups:
-  - storage.dis.altinn.cloud
-  resources:
-  - databases/status
-  - logicaldatabases/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - storage.dis.altinn.cloud
-  resources:
-  - logicaldatabases
-  verbs:
-  - get
-  - list
   - watch

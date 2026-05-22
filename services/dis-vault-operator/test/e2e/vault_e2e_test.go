@@ -374,7 +374,7 @@ var _ = Describe("Vault e2e", Ordered, func() {
 		waitForJSONPath("secretstores.external-secrets.io", expectedSecretStoreName, "{.spec.provider.azurekv.authType}", "WorkloadIdentity")
 		waitForJSONPath("secretstores.external-secrets.io", expectedSecretStoreName, "{.spec.provider.azurekv.serviceAccountRef.name}", "app-identity-sample")
 		waitForJSONPath("secretstores.external-secrets.io", expectedSecretStoreName, "{.spec.provider.azurekv.vaultUrl}", vaultURI)
-		waitForJSONPath("secretstores.external-secrets.io", expectedSecretStoreName, "{.spec.provider.azurekv.tenantId}", "00000000-0000-0000-0000-000000000000")
+		waitForJSONPath("secretstores.external-secrets.io", expectedSecretStoreName, "{.spec.provider.azurekv.tenantId}", "")
 		waitForJSONPath("configmaps", expectedConfigMapName, "{.data.AkvName}", vaultpkg.DeterministicAzureVaultName(sampleNamespace, externalSecretsVaultName, "dev"))
 		waitForJSONPath("configmaps", expectedConfigMapName, "{.data.AkvUri}", vaultURI)
 

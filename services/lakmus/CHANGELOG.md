@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.1.1](https://github.com/Altinn/altinn-platform/compare/lakmus-v1.1.0...lakmus-v1.1.1) (2026-05-22)
+
+
+### Bug Fixes
+
+* **lakmus:** align go toolchain to 1.26.1 ([#3280](https://github.com/Altinn/altinn-platform/issues/3280)) ([538767b](https://github.com/Altinn/altinn-platform/commit/538767b23e00ad5e476f2da0a1a31fd055bf8e02))
+
+
+### Dependency Updates
+
+* pin gcr.io/distroless/static docker tag to 0376b51 ([#3156](https://github.com/Altinn/altinn-platform/issues/3156)) ([bcec942](https://github.com/Altinn/altinn-platform/commit/bcec942accd274699f3dd8dccf50a89f58aa1b11))
+* update dockerfile non-major dependencies ([#3382](https://github.com/Altinn/altinn-platform/issues/3382)) ([f0e15d1](https://github.com/Altinn/altinn-platform/commit/f0e15d1823a539184149f82e0ab15493a393f4a8))
+* update gcr.io/distroless/static:nonroot docker digest to 963fa6c ([#3466](https://github.com/Altinn/altinn-platform/issues/3466)) ([a17762f](https://github.com/Altinn/altinn-platform/commit/a17762f295ad24e80eefe0f78f19696d56af0a92))
+* update gcr.io/distroless/static:nonroot docker digest to e3f9456 ([#3283](https://github.com/Altinn/altinn-platform/issues/3283)) ([dd7b157](https://github.com/Altinn/altinn-platform/commit/dd7b1578787e084472d1e5b5c6ed8a241afd6cdd))
+
 ## [1.1.0](https://github.com/Altinn/altinn-platform/compare/lakmus-v1.0.0...lakmus-v1.1.0) (2026-02-26)
 
 
