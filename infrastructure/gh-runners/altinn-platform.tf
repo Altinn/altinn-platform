@@ -9,6 +9,8 @@ module "gh_runners_altinn_platform" {
   altinn_app_install_id         = var.altinn_app_install_id
   altinn_app_key                = var.altinn_app_key
   host_ip                       = var.host_ip
+  runner_cpu                    = "4.0"
+  runner_memory                 = "8Gi"
   tags = merge(local.tags, {
     finops_product = "altinn-platform"
     product        = "altinn-platform"
