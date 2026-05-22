@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.8.0](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.7.0...ghrunner-0.8.0) (2026-05-21)
+
+
+### Features
+
+* Add xz-utils to gh-runner Docker image ([#3490](https://github.com/Altinn/altinn-platform/issues/3490)) ([23e131b](https://github.com/Altinn/altinn-platform/commit/23e131b75ef7ab8ac996e3f99d03e5b27f00fac2))
+
+## [0.7.0](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.6.2...ghrunner-0.7.0) (2026-05-21)
+
+
+### Features
+
+* Add make to gh-runner Docker image ([#3487](https://github.com/Altinn/altinn-platform/issues/3487)) ([2c68e26](https://github.com/Altinn/altinn-platform/commit/2c68e264881ed83c609328729febd4280e34fb66))
+
 ## [0.6.2](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.6.1...ghrunner-0.6.2) (2026-05-13)
 
 
