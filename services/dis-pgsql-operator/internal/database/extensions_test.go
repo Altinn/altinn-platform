@@ -12,7 +12,7 @@ func TestResolveExtensionSettings(t *testing.T) {
 
 	tests := []struct {
 		name                 string
-		input                []storagev1alpha1.DatabaseExtension
+		input                []storagev1alpha1.DatabaseServerExtension
 		wantExtensionsValue  string
 		wantPreloadLibsValue string
 		wantErrContains      string
@@ -25,37 +25,37 @@ func TestResolveExtensionSettings(t *testing.T) {
 		},
 		{
 			name: "all supported extensions sorted and deduplicated",
-			input: []storagev1alpha1.DatabaseExtension{
-				storagev1alpha1.DatabaseExtensionPgAudit,
-				storagev1alpha1.DatabaseExtensionPgCron,
-				storagev1alpha1.DatabaseExtensionHstore,
-				storagev1alpha1.DatabaseExtensionPgCron,
-				storagev1alpha1.DatabaseExtensionUUIDOSSP,
-				storagev1alpha1.DatabaseExtensionPgStatStatements,
+			input: []storagev1alpha1.DatabaseServerExtension{
+				storagev1alpha1.DatabaseServerExtensionPgAudit,
+				storagev1alpha1.DatabaseServerExtensionPgCron,
+				storagev1alpha1.DatabaseServerExtensionHstore,
+				storagev1alpha1.DatabaseServerExtensionPgCron,
+				storagev1alpha1.DatabaseServerExtensionUUIDOSSP,
+				storagev1alpha1.DatabaseServerExtensionPgStatStatements,
 			},
 			wantExtensionsValue:  "hstore,pg_cron,pg_stat_statements,pgaudit,uuid-ossp",
 			wantPreloadLibsValue: "pg_cron,pg_stat_statements,pgaudit",
 		},
 		{
 			name: "extensions without preload requirements",
-			input: []storagev1alpha1.DatabaseExtension{
-				storagev1alpha1.DatabaseExtensionHstore,
-				storagev1alpha1.DatabaseExtensionUUIDOSSP,
+			input: []storagev1alpha1.DatabaseServerExtension{
+				storagev1alpha1.DatabaseServerExtensionHstore,
+				storagev1alpha1.DatabaseServerExtensionUUIDOSSP,
 			},
 			wantExtensionsValue:  "hstore,uuid-ossp",
 			wantPreloadLibsValue: "",
 		},
 		{
 			name: "unknown extension is rejected",
-			input: []storagev1alpha1.DatabaseExtension{
-				storagev1alpha1.DatabaseExtension("mycrazyextension"),
+			input: []storagev1alpha1.DatabaseServerExtension{
+				storagev1alpha1.DatabaseServerExtension("mycrazyextension"),
 			},
 			wantErrContains: "unsupported extension",
 		},
 		{
 			name: "wrong casing is rejected",
-			input: []storagev1alpha1.DatabaseExtension{
-				storagev1alpha1.DatabaseExtension("HSTORE"),
+			input: []storagev1alpha1.DatabaseServerExtension{
+				storagev1alpha1.DatabaseServerExtension("HSTORE"),
 			},
 			wantErrContains: "unsupported extension",
 		},

@@ -15,6 +15,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -60,6 +61,8 @@ var _ = BeforeSuite(func() {
 	err = storagev1alpha1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = identityv1alpha1.AddToScheme(scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = corev1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = batchv1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
@@ -117,14 +120,14 @@ var _ = BeforeSuite(func() {
 		AKSResourceGroup:   "aks-vnet-rg",
 		UserProvisionImage: "controller:latest",
 	}
-	err = (&DatabaseReconciler{
+	err = (&DatabaseServerReconciler{
 		Client:        k8sManager.GetClient(),
 		Scheme:        k8sManager.GetScheme(),
 		SubnetCatalog: testCatalog,
 		Config:        config,
 	}).SetupWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())
-	err = (&LogicalDatabaseReconciler{
+	err = (&DatabaseReconciler{
 		Client: k8sManager.GetClient(),
 		Scheme: k8sManager.GetScheme(),
 		Config: config,

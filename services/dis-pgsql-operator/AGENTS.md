@@ -24,6 +24,9 @@
 - Unit tests: `make test-cache`
 - Build manager binary: `make build-cache`
 
+For agent runs, use the `*-cache` targets for verification commands so
+checks stay sandbox-friendly and use the repository's local tooling setup.
+
 ## Required verification for code changes
 If you modify any files under:
 - `api/**`, `cmd/**`, `internal/**`, `test/**`, `config/**`
@@ -48,6 +51,8 @@ If you touch `api/**`:
 - Ensure `make manifests-cache` is run (CRDs/RBAC/webhooks updated).
 - If sample YAML exists (often under `config/samples/**`), try to update it to match the new schema.
 - Avoid breaking changes unless explicitly intended.
+- Before implementing new features, API changes, or behavior changes, consult the relevant monorepo RFCs under `../../rfcs/`.
+- For DIS PostgreSQL API behavior, start with `../../rfcs/0006-serlf-service-psql.md` and `../../rfcs/0013-multitenant-dis-databases.md`.
 
 ## Running and deploying
 - Run in Kind (local): `make test-e2e`
@@ -68,6 +73,8 @@ Before opening a PR, ensure:
 ## References
 
 ### Essential Reading
+- **Monorepo RFCs**: `../../rfcs/` (consult relevant RFCs for new features, API changes, and behavior changes)
+- **DIS PostgreSQL RFCs**: `../../rfcs/0006-serlf-service-psql.md` and `../../rfcs/0013-multitenant-dis-databases.md`
 - **Kubebuilder Book**: https://book.kubebuilder.io (comprehensive guide)
 - **controller-runtime FAQ**: https://github.com/kubernetes-sigs/controller-runtime/blob/main/FAQ.md (common patterns and questions)
 - **Good Practices**: https://book.kubebuilder.io/reference/good-practices.html (why reconciliation is idempotent, status conditions, etc.)

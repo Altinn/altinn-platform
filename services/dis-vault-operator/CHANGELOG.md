@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.4.4](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.4.3...dis-vault-v1.4.4) (2026-05-22)
+
+
+### Dependency Updates
+
+* update gcr.io/distroless/static:nonroot docker digest to 963fa6c ([#3466](https://github.com/Altinn/altinn-platform/issues/3466)) ([a17762f](https://github.com/Altinn/altinn-platform/commit/a17762f295ad24e80eefe0f78f19696d56af0a92))
+
+## [1.4.3](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.4.2...dis-vault-v1.4.3) (2026-05-18)
+
+
+### Bug Fixes
+
+* **dis-vault-operator:** omit tenant id from managed SecretStore ([#3463](https://github.com/Altinn/altinn-platform/issues/3463)) ([f0637bf](https://github.com/Altinn/altinn-platform/commit/f0637bf3ae366b49edf4ae6f22e9a4c38837117a))
+
+
+### Dependency Updates
+
+* update gcr.io/distroless/static:nonroot docker digest to e3f9456 ([#3283](https://github.com/Altinn/altinn-platform/issues/3283)) ([dd7b157](https://github.com/Altinn/altinn-platform/commit/dd7b1578787e084472d1e5b5c6ed8a241afd6cdd))
+
 ## [1.4.2](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.4.1...dis-vault-v1.4.2) (2026-04-27)
 
 

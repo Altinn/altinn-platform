@@ -43,7 +43,7 @@ func TestBuildManagedSecretStore(t *testing.T) {
 	vaultObj.Namespace = "default"
 	vaultObj.Spec.IdentityRef = &vaultv1alpha1.ApplicationIdentityRef{Name: "my-app-identity"}
 
-	store, err := BuildManagedSecretStore(vaultObj, "00000000-0000-0000-0000-000000000000", "https://my-app-vault.vault.azure.net")
+	store, err := BuildManagedSecretStore(vaultObj, "https://my-app-vault.vault.azure.net")
 	if err != nil {
 		t.Fatalf("expected SecretStore builder to succeed, got error: %v", err)
 	}
@@ -68,8 +68,8 @@ func TestBuildManagedSecretStore(t *testing.T) {
 	if store.Spec.Provider.AzureKV.VaultURL == nil || *store.Spec.Provider.AzureKV.VaultURL != "https://my-app-vault.vault.azure.net" {
 		t.Fatalf("expected vault URL to be set, got %#v", store.Spec.Provider.AzureKV.VaultURL)
 	}
-	if store.Spec.Provider.AzureKV.TenantID == nil || *store.Spec.Provider.AzureKV.TenantID != "00000000-0000-0000-0000-000000000000" {
-		t.Fatalf("expected tenant ID to be set, got %#v", store.Spec.Provider.AzureKV.TenantID)
+	if store.Spec.Provider.AzureKV.TenantID != nil {
+		t.Fatalf("expected tenant ID to be omitted, got %#v", store.Spec.Provider.AzureKV.TenantID)
 	}
 }
 
@@ -81,7 +81,7 @@ func TestBuildManagedSecretStoreWithServiceAccountRef(t *testing.T) {
 	vaultObj.Namespace = "default"
 	vaultObj.Spec.ServiceAccountRef = &vaultv1alpha1.ServiceAccountRef{Name: "my-app-service-account"}
 
-	store, err := BuildManagedSecretStore(vaultObj, "00000000-0000-0000-0000-000000000000", "https://my-app-vault.vault.azure.net")
+	store, err := BuildManagedSecretStore(vaultObj, "https://my-app-vault.vault.azure.net")
 	if err != nil {
 		t.Fatalf("expected SecretStore builder to succeed, got error: %v", err)
 	}

@@ -312,21 +312,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&controller.DatabaseReconciler{
+	if err := (&controller.DatabaseServerReconciler{
 		Client:        mgr.GetClient(),
 		Scheme:        mgr.GetScheme(),
 		SubnetCatalog: subnetCatalog,
 		Config:        *opCfg,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Database")
+		setupLog.Error(err, "unable to create controller", "controller", "DatabaseServer")
 		os.Exit(1)
 	}
-	if err := (&controller.LogicalDatabaseReconciler{
+	if err := (&controller.DatabaseReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 		Config: *opCfg,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "LogicalDatabase")
+		setupLog.Error(err, "unable to create controller", "controller", "Database")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
