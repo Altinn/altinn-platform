@@ -52,7 +52,7 @@ func (r *DatabaseServerReconciler) ensureFlexibleServerAdministrator(
 		return fmt.Errorf("TenantID is not configured")
 	}
 
-	pt := dbforpostgresqlv1.AdministratorMicrosoftEntraPropertiesForAdd_PrincipalType_ServicePrincipal
+	pt := dbforpostgresqlv1.PrincipalType_ServicePrincipal
 
 	desiredSpec := dbforpostgresqlv1.FlexibleServersAdministrator_Spec{
 		// AzureName is the principal object id

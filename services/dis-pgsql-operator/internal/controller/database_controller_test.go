@@ -1004,7 +1004,7 @@ var _ = Describe("DatabaseServer controller", func() {
 		Expect(*s.Spec.Storage.StorageSizeGB).To(Equal(32))
 
 		Expect(s.Spec.Storage.AutoGrow).NotTo(BeNil())
-		Expect(*s.Spec.Storage.AutoGrow).To(Equal(dbforpostgresqlv1.Storage_AutoGrow_Enabled))
+		Expect(*s.Spec.Storage.AutoGrow).To(Equal(dbforpostgresqlv1.StorageAutoGrow_Enabled))
 
 		Expect(s.Spec.Storage.Tier).NotTo(BeNil())
 		Expect(string(*s.Spec.Storage.Tier)).To(Equal("P10"))
@@ -1408,7 +1408,7 @@ var _ = Describe("DatabaseServer controller", func() {
 		Eventually(func(g Gomega) struct {
 			availabilityZone string
 			standbyZone      string
-			storageType      dbforpostgresqlv1.Storage_Type
+			storageType      dbforpostgresqlv1.StorageType
 			geoBackup        dbforpostgresqlv1.Backup_GeoRedundantBackup
 			maintenanceDay   int
 			maintenanceHour  int
@@ -1433,7 +1433,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			return struct {
 				availabilityZone string
 				standbyZone      string
-				storageType      dbforpostgresqlv1.Storage_Type
+				storageType      dbforpostgresqlv1.StorageType
 				geoBackup        dbforpostgresqlv1.Backup_GeoRedundantBackup
 				maintenanceDay   int
 				maintenanceHour  int
@@ -1451,7 +1451,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			Should(Equal(struct {
 				availabilityZone string
 				standbyZone      string
-				storageType      dbforpostgresqlv1.Storage_Type
+				storageType      dbforpostgresqlv1.StorageType
 				geoBackup        dbforpostgresqlv1.Backup_GeoRedundantBackup
 				maintenanceDay   int
 				maintenanceHour  int
@@ -1459,7 +1459,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			}{
 				availabilityZone: "1",
 				standbyZone:      "2",
-				storageType:      dbforpostgresqlv1.Storage_Type_Premium_LRS,
+				storageType:      dbforpostgresqlv1.StorageType_Premium_LRS,
 				geoBackup:        dbforpostgresqlv1.Backup_GeoRedundantBackup_Disabled,
 				maintenanceDay:   0,
 				maintenanceHour:  3,

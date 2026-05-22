@@ -48,8 +48,8 @@ const (
 // Reuse the defaults for now
 func desiredStorage(db *storagev1alpha1.DatabaseServer) *dbforpostgresqlv1.Storage {
 	sizeGB := defaultStorageGB
-	autoGrow := dbforpostgresqlv1.Storage_AutoGrow_Enabled
-	storageType := dbforpostgresqlv1.Storage_Type_Premium_LRS
+	autoGrow := dbforpostgresqlv1.StorageAutoGrow_Enabled
+	storageType := dbforpostgresqlv1.StorageType_Premium_LRS
 
 	var requestedTier *string
 
@@ -134,7 +134,7 @@ func (r *DatabaseServerReconciler) dedicatedPostgresNetworkConfig(
 	subnetID := r.subnetARMIDResourceReference(subnetInfo.Name)
 	zoneID := r.privateZoneARMIDResourceReference(zoneName)
 
-	publicNetworkAccess := dbforpostgresqlv1.Network_PublicNetworkAccess_Disabled
+	publicNetworkAccess := dbforpostgresqlv1.ServerPublicNetworkAccessState_Disabled
 	return postgresNetworkConfig{
 		Network: &dbforpostgresqlv1.Network{
 			DelegatedSubnetResourceReference:   subnetID,
@@ -167,7 +167,7 @@ func (r *DatabaseServerReconciler) sharedPostgresNetworkConfig(db *storagev1alph
 		return postgresNetworkConfig{}, err
 	}
 
-	publicNetworkAccess := dbforpostgresqlv1.Network_PublicNetworkAccess_Disabled
+	publicNetworkAccess := dbforpostgresqlv1.ServerPublicNetworkAccessState_Disabled
 	return postgresNetworkConfig{
 		Network: &dbforpostgresqlv1.Network{
 			DelegatedSubnetResourceReference: &genruntime.ResourceReference{
@@ -260,14 +260,14 @@ func (r *DatabaseServerReconciler) ensurePostgresServer(
 	maintenanceWindow := desiredMaintenanceWindow()
 
 	versionStr := fmt.Sprintf("%d", db.Spec.Version)
-	version := dbforpostgresqlv1.ServerVersion(versionStr)
+	version := dbforpostgresqlv1.PostgresMajorVersion(versionStr)
 
 	if networkConfig.Network == nil {
 		return fmt.Errorf("postgres network config must be set")
 	}
 
 	// AD auth settings
-	adEnabled := dbforpostgresqlv1.AuthConfig_ActiveDirectoryAuth_Enabled
+	adEnabled := dbforpostgresqlv1.MicrosoftEntraAuth_Enabled
 	pwDisabled := dbforpostgresqlv1.AuthConfig_PasswordAuth_Disabled
 
 	authConfig := &dbforpostgresqlv1.AuthConfig{
