@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.2](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.9.1...tf-azdev-agent-0.9.2) (2026-05-22)
+
+
+### Dependency Updates
+
+* update dependency kubectl to v1.36.1 ([#3520](https://github.com/Altinn/altinn-platform/issues/3520)) ([83da30c](https://github.com/Altinn/altinn-platform/commit/83da30ce313ebd1f26f2c5b4e7e3ff2a9770d9b0))
+
 ## [0.9.1](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.9.0...tf-azdev-agent-0.9.1) (2026-04-29)
 
 
