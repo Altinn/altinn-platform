@@ -3,7 +3,7 @@ module github.com/Altinn/altinn-platform/services/dis-pgsql-operator
 go 1.26.0
 
 require (
-	github.com/Altinn/altinn-platform/services/dis-identity-operator v0.0.0-20260319083500-bd4f5f84c472
+	github.com/Altinn/altinn-platform/services/dis-identity-operator v0.0.0-20260522135147-5189c1dd13ab
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.21.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.1
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7 v7.2.0
