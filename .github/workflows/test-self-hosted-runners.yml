@@ -7,10 +7,32 @@ jobs:
   test-altinn-platform:
     name: Test altinn-platform runner
     runs-on: self-hosted
+
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
       - name: Print runner info
         run: |
-          echo "Hostname: $(hostname)"
-          echo "Runner OS: $RUNNER_OS"
-          echo "Runner arch: $RUNNER_ARCH"
+          echo "hostname: $(hostname)"
+          echo "user: $(whoami)"
+          echo "os: $(uname -a)"
 
+      - name: Install cowsay
+        run: |
+          mkdir -p /tmp/apt-lists/partial $HOME/bin $HOME/.local
+          apt-get -o Dir::State::lists=/tmp/apt-lists update
+          apt-get -o Dir::State::lists=/tmp/apt-lists download cowsay libtext-charwidth-perl
+          dpkg-deb -x cowsay_*.deb $HOME/.local
+          dpkg-deb -x libtext-charwidth-perl_*.deb $HOME/.local
+          cp $HOME/.local/usr/games/cowsay $HOME/bin/cowsay
+          echo "$HOME/bin" >> $GITHUB_PATH
+          echo "PERL5LIB=$HOME/.local/usr/lib/x86_64-linux-gnu/perl5/5.38" >> $GITHUB_ENV
+          echo "COWPATH=$HOME/.local/usr/share/cowsay/cows" >> $GITHUB_ENV
+
+      - name: Run cowsay
+        run: |
+          cowsay "Hello from self-hosted runner!" | tee /tmp/cowsay.out
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/cowsay.out >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

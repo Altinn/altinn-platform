@@ -4,356 +4,277 @@ import (
 	"context"
 	"fmt"
 	"strings"
-
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	"github.com/go-logr/logr"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"time"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
-	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
 	k8sutil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/k8s"
-	to "github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/naming"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
-	genruntime "github.com/Azure/azure-service-operator/v2/pkg/genruntime"
+	"github.com/Azure/azure-service-operator/v2/pkg/common/annotations"
+	"github.com/Azure/azure-service-operator/v2/pkg/genruntime"
+	"github.com/go-logr/logr"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
-
-// TODO: at the moment location is hardcoded here, but maybe
-// in the future we want to derive it from the database server spec?
-// The defaults for storage size and tier are also hardcoded
-// until we release the beta version.
-const (
-	defaultStorageGB               int32 = 32
-	loc                                  = "norwayeast"
-	defaultAvailabilityZone              = "1"
-	defaultHAStandbyZone                 = "2"
-	defaultMaintenanceDayOfWeek          = 0
-	defaultMaintenanceStartHour          = 3
-	defaultMaintenanceStartMinute        = 0
-	maintenanceCustomWindowEnabled       = "Enabled"
-)
-
-type postgresNetworkConfig struct {
-	Network *dbforpostgresqlv1.Network
-}
 
 const (
-	azureSubnetResourceType         = "Microsoft.Network/virtualNetworks/subnets"
-	azurePrivateDNSZoneResourceType = "Microsoft.Network/privateDnsZones"
+	databaseConditionReady         = "Ready"
+	databaseConditionDatabaseReady = "DatabaseReady"
+	databaseConditionAccessReady   = "AccessReady"
+
+	databaseReasonValidationFailed = "ValidationFailed"
+	databaseReasonProvisioning     = "Provisioning"
+	databaseReasonReady            = "Ready"
+	databaseReasonDatabaseReady    = "Ready"
+
+	databasePort         = int32(5432)
+	databaseRequeueDelay = 15 * time.Second
+	databaseNameLabelKey = "dis.altinn.cloud/database-name"
 )
 
-// Reuse the defaults for now
-func desiredStorage(db *storagev1alpha1.Database) *dbforpostgresqlv1.Storage {
-	sizeGB := defaultStorageGB
-	autoGrow := dbforpostgresqlv1.Storage_AutoGrow_Enabled
-	storageType := dbforpostgresqlv1.Storage_Type_Premium_LRS
-
-	var requestedTier *string
-
-	if db.Spec.Storage != nil {
-		if db.Spec.Storage.SizeGB != nil && *db.Spec.Storage.SizeGB > 0 {
-			sizeGB = *db.Spec.Storage.SizeGB
-		}
-		if db.Spec.Storage.Tier != nil && *db.Spec.Storage.Tier != "" {
-			requestedTier = db.Spec.Storage.Tier
-		}
-	}
-
-	asoTier := dbUtil.ResolveStorageTier(sizeGB, requestedTier)
-
-	return &dbforpostgresqlv1.Storage{
-		AutoGrow:      &autoGrow,
-		StorageSizeGB: to.Ptr(int(sizeGB)),
-		Tier:          &asoTier,
-		Type:          &storageType,
-	}
-}
-
-func desiredBackup(db *storagev1alpha1.Database) *dbforpostgresqlv1.Backup {
-	geoRedundantBackup := dbforpostgresqlv1.Backup_GeoRedundantBackup_Disabled
-	return &dbforpostgresqlv1.Backup{
-		BackupRetentionDays: to.Ptr(dbUtil.ResolveBackupRetentionDays(db.Spec.ServerType, db.Spec.BackupRetentionDays)),
-		GeoRedundantBackup:  &geoRedundantBackup,
-	}
-}
-
-func desiredHighAvailability(db *storagev1alpha1.Database) *dbforpostgresqlv1.HighAvailability {
-	mode := dbUtil.ResolveHighAvailabilityMode(db.Spec.ServerType, db.Spec.HighAvailabilityEnabled)
-	highAvailability := &dbforpostgresqlv1.HighAvailability{
-		Mode: &mode,
-	}
-
-	if mode != dbforpostgresqlv1.HighAvailability_Mode_Disabled {
-		highAvailability.StandbyAvailabilityZone = to.Ptr(defaultHAStandbyZone)
-	}
-
-	return highAvailability
-}
-
-func desiredMaintenanceWindow() *dbforpostgresqlv1.MaintenanceWindow {
-	return &dbforpostgresqlv1.MaintenanceWindow{
-		CustomWindow: to.Ptr(maintenanceCustomWindowEnabled),
-		DayOfWeek:    to.Ptr(defaultMaintenanceDayOfWeek),
-		StartHour:    to.Ptr(defaultMaintenanceStartHour),
-		StartMinute:  to.Ptr(defaultMaintenanceStartMinute),
-	}
-}
-
-// subnetARMID builds the ARM ID for a subnet in the DB VNet.
-func (r *DatabaseServerReconciler) subnetARMIDResourceReference(subnetName string) *genruntime.ResourceReference {
-
-	return &genruntime.ResourceReference{
-		ARMID: fmt.Sprintf(
-			"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/virtualNetworks/%s/subnets/%s",
-			r.Config.SubscriptionId,
-			r.Config.ResourceGroup,
-			r.Config.DBVNetName,
-			subnetName,
-		),
-	}
-}
-
-func (r *DatabaseServerReconciler) dedicatedPostgresNetworkConfig(
-	db *storagev1alpha1.Database,
-	zoneName string,
-) (postgresNetworkConfig, error) {
-	// Use the subnet allocated to this database server from the status.
-	if db.Status.SubnetCIDR == "" {
-		return postgresNetworkConfig{}, fmt.Errorf("database server status has no SubnetCIDR; cannot build network for server")
-	}
-
-	// Make sure the subnet exists in our catalog, and therefore in the vnet.
-	subnetInfo, ok := r.SubnetCatalog.FindByCIDR(db.Status.SubnetCIDR)
-	if !ok {
-		return postgresNetworkConfig{}, fmt.Errorf("no subnet in catalog matching CIDR %q", db.Status.SubnetCIDR)
-	}
-
-	subnetID := r.subnetARMIDResourceReference(subnetInfo.Name)
-	zoneID := r.privateZoneARMIDResourceReference(zoneName)
-
-	publicNetworkAccess := dbforpostgresqlv1.Network_PublicNetworkAccess_Disabled
-	return postgresNetworkConfig{
-		Network: &dbforpostgresqlv1.Network{
-			DelegatedSubnetResourceReference:   subnetID,
-			PrivateDnsZoneArmResourceReference: zoneID,
-			PublicNetworkAccess:                to.Ptr(publicNetworkAccess),
-		},
-	}, nil
-}
-
-func (r *DatabaseServerReconciler) sharedPostgresNetworkConfig(db *storagev1alpha1.Database) (postgresNetworkConfig, error) {
-	if db.Spec.Network == nil {
-		return postgresNetworkConfig{}, fmt.Errorf("spec.network must be set when mode is Shared")
-	}
-
-	subnetResourceID, err := r.validateSharedNetworkResourceID(
-		"spec.network.delegatedSubnetResourceId",
-		db.Spec.Network.DelegatedSubnetResourceID,
-		azureSubnetResourceType,
-	)
-	if err != nil {
-		return postgresNetworkConfig{}, err
-	}
-
-	zoneResourceID, err := r.validateSharedNetworkResourceID(
-		"spec.network.privateDnsZoneResourceId",
-		db.Spec.Network.PrivateDNSZoneResourceID,
-		azurePrivateDNSZoneResourceType,
-	)
-	if err != nil {
-		return postgresNetworkConfig{}, err
-	}
-
-	publicNetworkAccess := dbforpostgresqlv1.Network_PublicNetworkAccess_Disabled
-	return postgresNetworkConfig{
-		Network: &dbforpostgresqlv1.Network{
-			DelegatedSubnetResourceReference: &genruntime.ResourceReference{
-				ARMID: subnetResourceID,
-			},
-			PrivateDnsZoneArmResourceReference: &genruntime.ResourceReference{
-				ARMID: zoneResourceID,
-			},
-			PublicNetworkAccess: to.Ptr(publicNetworkAccess),
-		},
-	}, nil
-}
-
-func (r *DatabaseServerReconciler) validateSharedNetworkResourceID(fieldPath, resourceID, expectedResourceType string) (string, error) {
-	resourceID = strings.TrimSpace(resourceID)
-	if resourceID == "" {
-		return "", fmt.Errorf("%s must be set when mode is Shared", fieldPath)
-	}
-
-	parsed, err := arm.ParseResourceID(resourceID)
-	if err != nil {
-		return "", fmt.Errorf("%s must be a valid ARM resource ID: %w", fieldPath, err)
-	}
-
-	subscriptionID := strings.TrimSpace(r.Config.SubscriptionId)
-	if subscriptionID == "" {
-		return "", fmt.Errorf("operator subscription id is not configured; cannot validate %s", fieldPath)
-	}
-	if !strings.EqualFold(parsed.SubscriptionID, subscriptionID) {
-		return "", fmt.Errorf("%s must be in subscription %q", fieldPath, subscriptionID)
-	}
-
-	actualResourceType := parsed.ResourceType.String()
-	if !strings.EqualFold(actualResourceType, expectedResourceType) {
-		return "", fmt.Errorf("%s must reference %s, got %s", fieldPath, expectedResourceType, actualResourceType)
-	}
-
-	return resourceID, nil
-}
-
-func resourceReferenceLogValue(ref *genruntime.ResourceReference) string {
-	if ref == nil {
-		return ""
-	}
-	if ref.ARMID != "" {
-		return ref.ARMID
-	}
-	if ref.Group != "" || ref.Kind != "" {
-		return fmt.Sprintf("%s/%s/%s", ref.Group, ref.Kind, ref.Name)
-	}
-	return ref.Name
-}
-
-// ensurePostgresServer ensures a PostgreSQL Flexible Server ASO resource exists
-// for the given database server.
-func (r *DatabaseServerReconciler) ensurePostgresServer(
+func (r *DatabaseReconciler) ensureFlexibleServersDatabase(
 	ctx context.Context,
-	logger logr.Logger,
-	db *storagev1alpha1.Database,
-	networkConfig postgresNetworkConfig,
+	database *storagev1alpha1.Database,
+	databaseName string,
 ) error {
-	ns := db.Namespace
+	ns := database.Namespace
+	serverName := strings.TrimSpace(database.Spec.Server.Name)
+	resourceName := databaseASOResourceName(serverName, databaseName)
 
-	// The current Database CR represents a PostgreSQL server, so the FlexibleServer
-	// uses the CR name.
-	serverName := db.Name
-
-	key := types.NamespacedName{
-		Name:      serverName,
-		Namespace: ns,
-	}
-
-	var existing dbforpostgresqlv1.FlexibleServer
-	found := true
-	if err := r.Get(ctx, key, &existing); err != nil {
-		if apierrors.IsNotFound(err) {
-			found = false
-		} else {
-			return fmt.Errorf("get FlexibleServer %s/%s: %w", ns, serverName, err)
-		}
-	}
-
-	// define if dev/prod profile
-	profile := dbUtil.GetProfile(db.Spec.ServerType)
-
-	// define storage size and tier
-	storage := desiredStorage(db)
-	backup := desiredBackup(db)
-	highAvailability := desiredHighAvailability(db)
-	maintenanceWindow := desiredMaintenanceWindow()
-
-	versionStr := fmt.Sprintf("%d", db.Spec.Version)
-	version := dbforpostgresqlv1.ServerVersion(versionStr)
-
-	if networkConfig.Network == nil {
-		return fmt.Errorf("postgres network config must be set")
-	}
-
-	// AD auth settings
-	adEnabled := dbforpostgresqlv1.AuthConfig_ActiveDirectoryAuth_Enabled
-	pwDisabled := dbforpostgresqlv1.AuthConfig_PasswordAuth_Disabled
-
-	authConfig := &dbforpostgresqlv1.AuthConfig{
-		ActiveDirectoryAuth: &adEnabled,
-		PasswordAuth:        &pwDisabled,
-		TenantId:            to.Ptr(r.Config.TenantId),
-	}
-
-	// 5) Build server
-	desiredSpec := dbforpostgresqlv1.FlexibleServer_Spec{
-		AzureName: serverName,
-		Location:  to.Ptr(loc),
-
+	desiredSpec := dbforpostgresqlv1.FlexibleServersDatabase_Spec{
+		AzureName: databaseName,
 		Owner: &genruntime.KnownResourceReference{
-			ARMID: fmt.Sprintf("/subscriptions/%s/resourceGroups/%s", r.Config.SubscriptionId, r.Config.ResourceGroup),
+			Name: serverName,
 		},
-
-		Version:           &version,
-		Network:           networkConfig.Network,
-		Storage:           storage,
-		Backup:            backup,
-		HighAvailability:  highAvailability,
-		AvailabilityZone:  to.Ptr(defaultAvailabilityZone),
-		MaintenanceWindow: maintenanceWindow,
-		Sku: &dbforpostgresqlv1.Sku{
-			Name: to.Ptr(profile.SkuName),
-			Tier: to.Ptr(profile.SkuTier),
-		},
-
-		Tags: map[string]string{
-			"dis-database": db.Name,
-		},
-
-		AuthConfig: authConfig,
 	}
-
 	desiredLabels := map[string]string{
-		"dis.altinn.cloud/database-name": db.Name,
+		databaseServerNameLabelKey: serverName,
+		databaseNameLabelKey:       database.Name,
+	}
+	desiredAnnotations := map[string]string{
+		annotations.ReconcilePolicy: string(annotations.ReconcilePolicyDetachOnDelete),
 	}
 
-	// Create when missing
-	if !found {
-		server := &dbforpostgresqlv1.FlexibleServer{
+	var existing dbforpostgresqlv1.FlexibleServersDatabase
+	if err := r.Get(ctx, types.NamespacedName{Name: resourceName, Namespace: ns}, &existing); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("get FlexibleServersDatabase %s/%s: %w", ns, resourceName, err)
+		}
+		flexibleServersDatabase := &dbforpostgresqlv1.FlexibleServersDatabase{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      serverName,
-				Namespace: ns,
-				Labels:    desiredLabels,
+				Name:        resourceName,
+				Namespace:   ns,
+				Labels:      desiredLabels,
+				Annotations: desiredAnnotations,
 			},
 			Spec: desiredSpec,
 		}
-
-		if err := controllerutil.SetControllerReference(db, server, r.Scheme); err != nil {
-			return fmt.Errorf("set controller reference on FlexibleServer: %w", err)
+		if err := controllerutil.SetControllerReference(database, flexibleServersDatabase, r.Scheme); err != nil {
+			return fmt.Errorf("set controller reference on FlexibleServersDatabase: %w", err)
 		}
-
-		logger.Info("creating PostgreSQL FlexibleServer for database server",
-			"serverName", serverName,
-			"namespace", ns,
-			"location", loc,
-			"version", versionStr,
-			"subnetID", resourceReferenceLogValue(networkConfig.Network.DelegatedSubnetResourceReference),
-			"zoneID", resourceReferenceLogValue(networkConfig.Network.PrivateDnsZoneArmResourceReference),
-			"skuName", profile.SkuName,
-			"storageGB", storage.StorageSizeGB,
-		)
-
-		if err := r.Create(ctx, server); err != nil {
+		if err := r.Create(ctx, flexibleServersDatabase); err != nil {
 			if apierrors.IsAlreadyExists(err) {
-				return nil
+				if err := r.Get(ctx, types.NamespacedName{Name: resourceName, Namespace: ns}, &existing); err != nil {
+					return fmt.Errorf("get FlexibleServersDatabase %s/%s after create conflict: %w", ns, resourceName, err)
+				}
+				return ensureDatabaseASOResourceOwnedBy(database, &existing)
 			}
-			return fmt.Errorf("create FlexibleServer %s/%s: %w", ns, serverName, err)
+			return fmt.Errorf("create FlexibleServersDatabase %s/%s: %w", ns, resourceName, err)
 		}
 		return nil
 	}
 
-	var updated bool
+	if err := ensureDatabaseASOResourceOwnedBy(database, &existing); err != nil {
+		return err
+	}
+
+	updated := false
 	existing.Labels, updated = k8sutil.SyncSpecAndLabels(&existing.Spec, desiredSpec, existing.Labels, desiredLabels)
-	if updated {
-		logger.Info("updating PostgreSQL FlexibleServer to match database server",
-			"serverName", serverName,
-			"namespace", ns,
-		)
-		if err := r.Update(ctx, &existing); err != nil {
-			return fmt.Errorf("update FlexibleServer %s/%s: %w", ns, serverName, err)
+
+	if existing.Annotations == nil {
+		existing.Annotations = map[string]string{}
+	}
+	for key, value := range desiredAnnotations {
+		if existing.Annotations[key] != value {
+			existing.Annotations[key] = value
+			updated = true
 		}
 	}
 
+	if !updated {
+		return nil
+	}
+
+	if err := r.Update(ctx, &existing); err != nil {
+		return fmt.Errorf("update FlexibleServersDatabase %s/%s: %w", ns, resourceName, err)
+	}
+
 	return nil
+}
+
+func (r *DatabaseReconciler) databaseReady(
+	ctx context.Context,
+	logger logr.Logger,
+	database *storagev1alpha1.Database,
+) (bool, string, error) {
+	ns := database.Namespace
+	serverName := strings.TrimSpace(database.Spec.Server.Name)
+	resourceName := databaseASOResourceName(serverName, database.Status.DatabaseName)
+
+	var flexibleServersDatabase dbforpostgresqlv1.FlexibleServersDatabase
+	if err := r.Get(ctx, types.NamespacedName{Name: resourceName, Namespace: ns}, &flexibleServersDatabase); err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Info("FlexibleServersDatabase not found yet", "database", resourceName)
+			return false, "", nil
+		}
+		return false, "", fmt.Errorf("get FlexibleServersDatabase %s/%s: %w", ns, resourceName, err)
+	}
+
+	if err := ensureDatabaseASOResourceOwnedBy(database, &flexibleServersDatabase); err != nil {
+		return false, "", err
+	}
+
+	databaseStatus, databaseReason, databaseMessage, databaseReady := readyConditionInfo(flexibleServersDatabase.Status.Conditions)
+	if !databaseReady || databaseStatus != metav1.ConditionTrue {
+		logger.Info("FlexibleServersDatabase not ready yet",
+			"database", resourceName,
+			"status", databaseStatus,
+			"reason", databaseReason,
+			"message", databaseMessage,
+		)
+		return false, "", nil
+	}
+
+	var server dbforpostgresqlv1.FlexibleServer
+	if err := r.Get(ctx, types.NamespacedName{Name: serverName, Namespace: ns}, &server); err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Info("FlexibleServer not found yet", "server", serverName)
+			return false, "", nil
+		}
+		return false, "", fmt.Errorf("get FlexibleServer %s/%s: %w", ns, serverName, err)
+	}
+
+	if server.Status.FullyQualifiedDomainName == nil || strings.TrimSpace(*server.Status.FullyQualifiedDomainName) == "" {
+		logger.Info("FlexibleServer host not available yet", "server", serverName)
+		return false, "", nil
+	}
+
+	return true, strings.TrimSpace(*server.Status.FullyQualifiedDomainName), nil
+}
+
+func ensureDatabaseASOResourceOwnedBy(
+	database *storagev1alpha1.Database,
+	asoDatabase *dbforpostgresqlv1.FlexibleServersDatabase,
+) error {
+	if metav1.IsControlledBy(asoDatabase, database) {
+		return nil
+	}
+
+	resource := fmt.Sprintf("%s/%s", asoDatabase.Namespace, asoDatabase.Name)
+	controllerRef := metav1.GetControllerOf(asoDatabase)
+	if controllerRef == nil {
+		return &databaseASOResourceConflictError{
+			resource:          resource,
+			databaseNamespace: database.Namespace,
+			databaseName:      database.Name,
+		}
+	}
+
+	return &databaseASOResourceConflictError{
+		resource:          resource,
+		controllerKind:    controllerRef.Kind,
+		controllerName:    controllerRef.Name,
+		databaseNamespace: database.Namespace,
+		databaseName:      database.Name,
+	}
+}
+
+type databaseASOResourceConflictError struct {
+	resource          string
+	controllerKind    string
+	controllerName    string
+	databaseNamespace string
+	databaseName      string
+}
+
+func (err *databaseASOResourceConflictError) Error() string {
+	if err.controllerKind == "" {
+		return fmt.Sprintf(
+			"FlexibleServersDatabase %s exists but is not controlled by Database %s/%s",
+			err.resource,
+			err.databaseNamespace,
+			err.databaseName,
+		)
+	}
+
+	return fmt.Sprintf(
+		"FlexibleServersDatabase %s is controlled by %s %s, not Database %s/%s",
+		err.resource,
+		err.controllerKind,
+		err.controllerName,
+		err.databaseNamespace,
+		err.databaseName,
+	)
+}
+
+func (err *databaseASOResourceConflictError) ownerDescription() string {
+	if err.controllerKind == "" {
+		return "an existing Kubernetes resource"
+	}
+	return fmt.Sprintf("%s %s", err.controllerKind, err.controllerName)
+}
+
+func databaseASOResourceName(serverName, databaseName string) string {
+	const maxResourceNameLen = 253
+
+	source := naming.SanitizeLowerHyphen(serverName + "-" + databaseName)
+	if source == "" {
+		source = "database"
+	}
+	if len(source) <= maxResourceNameLen {
+		return source
+	}
+
+	hash := naming.StableSHA256Hex(source)[:8]
+	return naming.WithHashSuffixOnOverflow(source, maxResourceNameLen, hash, "database")
+}
+
+func setDatabaseCondition(
+	database *storagev1alpha1.Database,
+	conditionType string,
+	status metav1.ConditionStatus,
+	reason,
+	message string,
+) {
+	meta.SetStatusCondition(&database.Status.Conditions, metav1.Condition{
+		Type:               conditionType,
+		Status:             status,
+		Reason:             reason,
+		Message:            message,
+		ObservedGeneration: database.Generation,
+	})
+}
+
+func setDatabaseConditions(
+	database *storagev1alpha1.Database,
+	status metav1.ConditionStatus,
+	reason,
+	message string,
+) {
+	for _, conditionType := range []string{
+		databaseConditionReady,
+		databaseConditionDatabaseReady,
+		databaseConditionAccessReady,
+	} {
+		setDatabaseCondition(
+			database,
+			conditionType,
+			status,
+			reason,
+			message,
+		)
+	}
 }

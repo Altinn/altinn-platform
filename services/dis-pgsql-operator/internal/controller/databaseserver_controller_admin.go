@@ -20,7 +20,7 @@ import (
 func (r *DatabaseServerReconciler) ensureFlexibleServerAdministrator(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 	adminIdentity resolvedAdminIdentity,
 ) error {
 	ns := db.Namespace
@@ -69,7 +69,7 @@ func (r *DatabaseServerReconciler) ensureFlexibleServerAdministrator(
 	}
 
 	desiredLabels := map[string]string{
-		"dis.altinn.cloud/database-name": db.Name,
+		"dis.altinn.cloud/database-server-name": db.Name,
 	}
 
 	if !found {

@@ -1,0 +1,123 @@
+apiVersion: storage.dis.altinn.cloud/v1alpha1
+kind: DatabaseServer
+metadata:
+  name: shared-db
+  namespace: default
+spec:
+  mode: Shared
+  version: 17
+  serverType: prod
+  network:
+    delegatedSubnetResourceId: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-dis-admin-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-admin-dbs/subnets/snet-postgres-shared
+    privateDnsZoneResourceId: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-dis-admin-network/providers/Microsoft.Network/privateDnsZones/shared.private.postgres.database.azure.com
+  auth:
+    admin:
+      identity:
+        identityRef:
+          name: adminidentity
+---
+apiVersion: storage.dis.altinn.cloud/v1alpha1
+kind: DatabaseServer
+metadata:
+  name: db1
+  namespace: default
+spec:
+  version: 16
+  serverType: prod
+  highAvailabilityEnabled: true
+  backupRetentionDays: 30
+  storage:
+    sizeGB: 128
+    tier: P10
+  auth:
+    admin:
+      identity:
+        identityRef:
+          name: adminidentity
+---
+apiVersion: storage.dis.altinn.cloud/v1alpha1
+kind: DatabaseServer
+metadata:
+  name: db2
+  namespace: default
+spec:
+  version: 17
+  serverType: dev
+  highAvailabilityEnabled: false
+  enableExtensions:
+    - hstore
+    - pg_cron
+  serverParams:
+    # azure.extensions and shared_preload_libraries are managed by enableExtensions.
+    - name: autovacuum_naptime
+      value: 15
+  storage:
+    sizeGB: 32
+    tier: P10
+  auth:
+    admin:
+      identity:
+        identityRef:
+          name: adminidentity
+---
+apiVersion: storage.dis.altinn.cloud/v1alpha1
+kind: DatabaseServer
+metadata:
+  name: db4
+  namespace: default
+spec:
+  version: 17
+  serverType: dev
+  storage:
+    sizeGB: 32
+    tier: P80
+  auth:
+    admin:
+      identity:
+        identityRef:
+          name: adminidentity
+---
+apiVersion: storage.dis.altinn.cloud/v1alpha1
+kind: DatabaseServer
+metadata:
+  name: db5
+  namespace: default
+spec:
+  version: 17
+  serverType: dev
+  storage:
+    sizeGB: 64
+    tier: P6
+  auth:
+    admin:
+      identity:
+        identityRef:
+          name: adminidentity
+# ---
+# apiVersion: storage.dis.altinn.cloud/v1alpha1
+# kind: DatabaseServer
+# metadata:
+#   name: db6
+#   namespace: test
+# spec:
+#   version: 17
+#   serverType: dev
+#   auth:
+#     admin:
+#       identity:
+#         identityRef:
+#           name: adminidentity
+# ---
+# apiVersion: storage.dis.altinn.cloud/v1alpha1
+# kind: DatabaseServer
+# metadata:
+#   name: db9
+#   namespace: test
+# spec:
+#   version: 17
+#   serverType: dev
+#   auth:
+#     admin:
+#       identity:
+#         identityRef:
+#           name: adminidentity

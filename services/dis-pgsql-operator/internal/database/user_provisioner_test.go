@@ -200,12 +200,12 @@ func TestEnsureUserSkipsCreateWhenExists(t *testing.T) {
 	}
 }
 
-func TestEnsureAccessCreatesLogicalAppAndOwnerAccess(t *testing.T) {
+func TestEnsureAccessCreatesDatabaseAppAndOwnerAccess(t *testing.T) {
 	conn := &recordingConn{}
 
 	if err := ensureAccess(context.Background(), conn, accessOptions{
-		DatabaseName:             "logical-db",
-		SchemaName:               "logical-db",
+		DatabaseName:             "app-db",
+		SchemaName:               "app-db",
 		AppName:                  "app-user",
 		AppPrincipalID:           "app-principal-id",
 		OwnerName:                "owner-group",
@@ -220,19 +220,19 @@ func TestEnsureAccessCreatesLogicalAppAndOwnerAccess(t *testing.T) {
 	if len(conn.execs) == 0 {
 		t.Fatal("expected execs")
 	}
-	if got, want := conn.execs[0].sql, revokePublicConnectSQL("logical-db"); got != want {
+	if got, want := conn.execs[0].sql, revokePublicConnectSQL("app-db"); got != want {
 		t.Fatalf("first exec got %q, want %q", got, want)
 	}
 
 	requireExec(t, conn, createAADPrincipalSQL(), "app-user", "app-principal-id", "service")
 	requireExec(t, conn, createAADPrincipalSQL(), "owner-group", "owner-principal-id", "group")
-	requireExec(t, conn, grantConnectSQL("logical-db", "app-user"))
-	requireExec(t, conn, grantConnectSQL("logical-db", "owner-group"))
-	requireExec(t, conn, alterSchemaOwnerSQL("logical-db", "app-user"))
-	requireExec(t, conn, grantSchemaAccessSQL("logical-db", "owner-group"))
-	requireExec(t, conn, alterDefaultTablePrivilegesSQL("app-user", "logical-db", "owner-group"))
-	requireExec(t, conn, setSearchPathSQL("app-user", "logical-db", "logical-db", true))
-	requireExec(t, conn, setSearchPathSQL("owner-group", "logical-db", "logical-db", true))
+	requireExec(t, conn, grantConnectSQL("app-db", "app-user"))
+	requireExec(t, conn, grantConnectSQL("app-db", "owner-group"))
+	requireExec(t, conn, alterSchemaOwnerSQL("app-db", "app-user"))
+	requireExec(t, conn, grantSchemaAccessSQL("app-db", "owner-group"))
+	requireExec(t, conn, alterDefaultTablePrivilegesSQL("app-user", "app-db", "owner-group"))
+	requireExec(t, conn, setSearchPathSQL("app-user", "app-db", "app-db", true))
+	requireExec(t, conn, setSearchPathSQL("owner-group", "app-db", "app-db", true))
 }
 
 type recordingConn struct {

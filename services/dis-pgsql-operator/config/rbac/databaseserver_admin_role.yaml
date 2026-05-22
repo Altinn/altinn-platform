@@ -11,19 +11,19 @@ metadata:
   labels:
     app.kubernetes.io/name: dis-pgsql-operator
     app.kubernetes.io/managed-by: kustomize
-  name: database-admin-role
+  name: databaseserver-admin-role
 rules:
 - apiGroups:
   - storage.dis.altinn.cloud
   resources:
+  - databaseservers
   - databases
-  - logicaldatabases
   verbs:
   - '*'
 - apiGroups:
   - storage.dis.altinn.cloud
   resources:
+  - databaseservers/status
   - databases/status
-  - logicaldatabases/status
   verbs:
   - get

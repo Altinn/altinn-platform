@@ -4,19 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
+	"strings"
 
-	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
-	asoconditions "github.com/Azure/azure-service-operator/v2/pkg/genruntime/conditions"
-	"github.com/go-logr/logr"
+	batchv1 "k8s.io/api/batch/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-
-	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
-	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -25,362 +20,340 @@ import (
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
-	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/network"
+	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 )
 
-// DatabaseServerReconciler reconciles the current Database CRD as a PostgreSQL server.
-type DatabaseServerReconciler struct {
+const (
+	databaseValidationReasonRequired      = "Required"
+	databaseValidationReasonNotFound      = "NotFound"
+	databaseValidationReasonUnsupported   = "Unsupported"
+	databaseValidationReasonInvalid       = "Invalid"
+	databaseValidationReasonConflict      = "Conflict"
+	databaseValidationReasonImmutable     = "Immutable"
+	databaseValidationFieldMetadataName   = "metadata.name"
+	databaseValidationFieldSpecName       = "spec.name"
+	databaseValidationFieldServerName     = "spec.server.name"
+	databaseValidationFieldDeletionPolicy = "spec.deletionPolicy"
+	databaseValidationFieldDatabaseName   = "status.databaseName"
+	databaseMaxNameLength                 = 63
+)
+
+// DatabaseReconciler reconciles a Database object.
+type DatabaseReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
-
-	// SubnetCatalog is the static list of available subnets for this environment.
-	// It is loaded once at startup (from Azure via FetchSubnetCatalog) and injected
-	// into the reconciler.
-	SubnetCatalog *network.SubnetCatalog
 
 	Config config.OperatorConfig
 }
 
-// +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=databases,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=databases,verbs=get;list;watch
 // +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=databases/status,verbs=get;update;patch
-
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// It compares the Database server object against the actual cluster state, and then
-// performs operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.23.1/pkg/reconcile
-// ASO: PostgreSQL Flexible Server
-// +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleservers,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleservers/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversconfigurations,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversconfigurations/status,verbs=get;update;patch
-
-// ASO: Flexible Server AAD administrator
-// +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversadministrators,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversadministrators/status,verbs=get;update;patch
-
-// ASO: Private DNS zone + vnet links
-// +kubebuilder:rbac:groups=network.azure.com,resources=privatednszones,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=network.azure.com,resources=privatednszones/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=network.azure.com,resources=privatednszonesvirtualnetworklinks,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=network.azure.com,resources=privatednszonesvirtualnetworklinks/status,verbs=get;update;patch
-
-// ApplicationIdentity (dis-application)
+// +kubebuilder:rbac:groups=storage.dis.altinn.cloud,resources=databaseservers,verbs=get;list;watch
 // +kubebuilder:rbac:groups=application.dis.altinn.cloud,resources=applicationidentities,verbs=get;list;watch
+// +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleservers,verbs=get;list;watch
+// +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversdatabases,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversdatabases/status,verbs=get
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=batch,resources=jobs/status,verbs=get
 
-func (r *DatabaseServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx).WithValues("databaseServer", req.NamespacedName)
+func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	logger := log.FromContext(ctx).WithValues("database", req.NamespacedName)
 
-	var db storagev1alpha1.Database
-	if err := r.Get(ctx, req.NamespacedName, &db); err != nil {
+	var database storagev1alpha1.Database
+	if err := r.Get(ctx, req.NamespacedName, &database); err != nil {
 		if apierrors.IsNotFound(err) {
-			// Deleted
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
 	}
 
-	if !db.DeletionTimestamp.IsZero() {
+	if !database.DeletionTimestamp.IsZero() {
 		return ctrl.Result{}, nil
 	}
 
-	if databaseServerMode(&db) == storagev1alpha1.DatabaseModeShared {
-		return r.reconcileSharedDatabaseServer(ctx, logger, &db)
+	original := database.DeepCopy()
+	validationErrors, databaseName, err := r.validateDatabase(ctx, &database)
+	if err != nil {
+		logger.Error(err, "failed to validate Database")
+		return ctrl.Result{}, err
 	}
-	return r.reconcileDedicatedDatabaseServer(ctx, logger, &db)
-}
+	database.Status.ObservedGeneration = database.Generation
+	database.Status.ValidationErrors = validationErrors
 
-func databaseServerMode(db *storagev1alpha1.Database) storagev1alpha1.DatabaseMode {
-	if db.Spec.Mode == storagev1alpha1.DatabaseModeShared {
-		return storagev1alpha1.DatabaseModeShared
-	}
-	return storagev1alpha1.DatabaseModeDedicated
-}
-
-func (r *DatabaseServerReconciler) reconcileDedicatedDatabaseServer(
-	ctx context.Context,
-	logger logr.Logger,
-	db *storagev1alpha1.Database,
-) (ctrl.Result, error) {
-	if r.SubnetCatalog == nil {
-		return ctrl.Result{}, fmt.Errorf("SubnetCatalog is not configured on DatabaseServerReconciler")
-	}
-
-	// Only allocate if the server doesn't already have one.
-	if db.Status.SubnetCIDR == "" {
-		logger.Info("allocating subnet for database server")
-		if err := r.allocateSubnetForDatabaseServer(ctx, logger, db); err != nil {
-			if errors.Is(err, network.ErrNoFreeSubnets) {
-				logger.Info("no free subnets available, will retry later", "error", err.Error())
-
-				meta.SetStatusCondition(&db.Status.Conditions, metav1.Condition{
-					Type:    "Ready",
-					Status:  metav1.ConditionFalse,
-					Reason:  "NoFreeSubnets",
-					Message: "No free subnet CIDRs available in the configured catalog",
-				})
-
-				if err := r.Status().Update(ctx, db); err != nil {
-					logger.Error(err, "failed to update database server status after no free subnets")
-					return ctrl.Result{}, err
-				}
-
-				// Requeue after some delay so we can pick up newly freed subnets.
-				// e.g. if another database server is deleted and frees a CIDR.
-				// TODO: define later if 5 minutes is a good interval here.
-				return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+	result := ctrl.Result{}
+	if len(validationErrors) > 0 {
+		setDatabaseConditions(
+			&database,
+			metav1.ConditionFalse,
+			databaseReasonValidationFailed,
+			"Database validation failed",
+		)
+	} else {
+		if err := r.ensureFlexibleServersDatabase(ctx, &database, databaseName); err != nil {
+			var conflictErr *databaseASOResourceConflictError
+			if !errors.As(err, &conflictErr) {
+				logger.Error(err, "failed to ensure FlexibleServersDatabase for Database")
+				return ctrl.Result{}, err
 			}
 
-			// All other errors are real failures; let controller-runtime backoff
-			logger.Error(err, "failed to allocate subnet")
-			return ctrl.Result{}, err
+			database.Status.ValidationErrors = appendDatabaseValidationError(
+				database.Status.ValidationErrors,
+				databaseValidationFieldSpecName,
+				databaseValidationReasonConflict,
+				fmt.Sprintf("database %q on server %q is already managed by %s; choose another spec.name", databaseName, database.Spec.Server.Name, conflictErr.ownerDescription()),
+			)
+			setDatabaseConditions(
+				&database,
+				metav1.ConditionFalse,
+				databaseReasonValidationFailed,
+				"Database validation failed",
+			)
+		} else {
+			database.Status.DatabaseName = databaseName
+
+			ready, host, err := r.databaseReady(ctx, logger, &database)
+			if err != nil {
+				logger.Error(err, "failed to check Database readiness")
+				return ctrl.Result{}, err
+			}
+			if ready {
+				database.Status.Host = host
+				database.Status.Port = databasePort
+				setDatabaseCondition(
+					&database,
+					databaseConditionDatabaseReady,
+					metav1.ConditionTrue,
+					databaseReasonDatabaseReady,
+					"Database is ready",
+				)
+
+				accessReady, accessReason, accessMessage, err := r.ensureDatabaseAccess(ctx, logger, &database)
+				if err != nil {
+					logger.Error(err, "failed to ensure Database access")
+					return ctrl.Result{}, err
+				}
+				if accessReady {
+					setDatabaseCondition(
+						&database,
+						databaseConditionAccessReady,
+						metav1.ConditionTrue,
+						accessReason,
+						accessMessage,
+					)
+					setDatabaseCondition(
+						&database,
+						databaseConditionReady,
+						metav1.ConditionTrue,
+						databaseReasonReady,
+						"Database and access are ready",
+					)
+				} else {
+					setDatabaseCondition(
+						&database,
+						databaseConditionAccessReady,
+						metav1.ConditionFalse,
+						accessReason,
+						accessMessage,
+					)
+					setDatabaseCondition(
+						&database,
+						databaseConditionReady,
+						metav1.ConditionFalse,
+						databaseReasonProvisioning,
+						"Database access is provisioning",
+					)
+					result = ctrl.Result{RequeueAfter: databaseRequeueDelay}
+				}
+			} else {
+				setDatabaseCondition(
+					&database,
+					databaseConditionDatabaseReady,
+					metav1.ConditionFalse,
+					databaseReasonProvisioning,
+					"Database is provisioning",
+				)
+				setDatabaseCondition(
+					&database,
+					databaseConditionAccessReady,
+					metav1.ConditionFalse,
+					databaseReasonProvisioning,
+					"Database access is waiting for the database",
+				)
+				setDatabaseCondition(
+					&database,
+					databaseConditionReady,
+					metav1.ConditionFalse,
+					databaseReasonProvisioning,
+					"Database is provisioning",
+				)
+				result = ctrl.Result{RequeueAfter: databaseRequeueDelay}
+			}
 		}
-		// We don't need to requeue here, as the status update by allocating the subnet
-		// will trigger another reconciliation.
-		return ctrl.Result{}, nil
-	} else {
-		logger.Info("database server already has subnetCIDR", "subnetCIDR", db.Status.SubnetCIDR)
 	}
 
-	// Private Dns zone
-	if err := r.ensurePrivateDNSZone(ctx, logger, db); err != nil {
-		logger.Error(err, "failed to ensure private DNS zone")
+	if apiequality.Semantic.DeepEqual(original.Status, database.Status) {
+		return result, nil
+	}
+
+	if err := r.Status().Update(ctx, &database); err != nil {
+		if apierrors.IsConflict(err) {
+			logger.Info("Database status update conflict; requeueing")
+			return ctrl.Result{Requeue: true}, nil
+		}
+		logger.Error(err, "failed to update Database status")
 		return ctrl.Result{}, err
 	}
 
-	// create ARM IDs for vnet links
-	dbVnetID := fmt.Sprintf(
-		"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/virtualNetworks/%s",
-		r.Config.SubscriptionId,
-		r.Config.ResourceGroup,
-		r.Config.DBVNetName,
-	)
-
-	aksVnetID := fmt.Sprintf(
-		"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/virtualNetworks/%s",
-		r.Config.SubscriptionId,
-		r.Config.AKSResourceGroup,
-		r.Config.AKSVNetName,
-	)
-
-	// DB VNet link
-	if err := r.ensurePrivateDNSVNetLink(
-		ctx, logger, db,
-		zoneNameForDatabaseServer(db),
-		dbVNetLinkNameForDatabaseServer(db),
-		r.Config.DBVNetName,
-		dbVnetID,
-	); err != nil {
-		logger.Error(err, "failed to ensure private DNS vnet link for DB VNet")
-		return ctrl.Result{}, err
-	}
-
-	// AKS VNet link
-	if err := r.ensurePrivateDNSVNetLink(
-		ctx, logger, db,
-		zoneNameForDatabaseServer(db),
-		aksVNetLinkNameForDatabaseServer(db),
-		r.Config.AKSVNetName,
-		aksVnetID,
-	); err != nil {
-		logger.Error(err, "failed to ensure private DNS vnet link for AKS VNet")
-		return ctrl.Result{}, err
-	}
-
-	networkConfig, err := r.dedicatedPostgresNetworkConfig(db, zoneNameForDatabaseServer(db))
-	if err != nil {
-		logger.Error(err, "failed to build dedicated PostgreSQL network config")
-		return ctrl.Result{}, err
-	}
-
-	if err := r.ensurePostgresServer(ctx, logger, db, networkConfig); err != nil {
-		logger.Error(err, "failed to ensure PostgreSQLFlexibleServer for database server")
-		return ctrl.Result{}, err
-	}
-
-	return r.reconcileCommonDatabaseServerResources(ctx, logger, db)
+	return result, nil
 }
 
-func (r *DatabaseServerReconciler) reconcileSharedDatabaseServer(
-	ctx context.Context,
-	logger logr.Logger,
-	db *storagev1alpha1.Database,
-) (ctrl.Result, error) {
-	networkConfig, err := r.sharedPostgresNetworkConfig(db)
-	if err != nil {
-		logger.Error(err, "failed to build shared PostgreSQL network config")
-		return ctrl.Result{}, err
+func appendDatabaseValidationError(
+	validationErrors []storagev1alpha1.DatabaseValidationError,
+	field, reason, message string,
+) []storagev1alpha1.DatabaseValidationError {
+	for i := range validationErrors {
+		if validationErrors[i].Field == field {
+			return validationErrors
+		}
 	}
 
-	if err := r.ensurePostgresServer(ctx, logger, db, networkConfig); err != nil {
-		logger.Error(err, "failed to ensure PostgreSQLFlexibleServer for shared database server")
-		return ctrl.Result{}, err
-	}
-
-	return r.reconcileCommonDatabaseServerResources(ctx, logger, db)
+	return append(validationErrors, storagev1alpha1.DatabaseValidationError{
+		Field:   field,
+		Reason:  reason,
+		Message: message,
+	})
 }
 
-func (r *DatabaseServerReconciler) reconcileCommonDatabaseServerResources(
+func (r *DatabaseReconciler) validateDatabase(
 	ctx context.Context,
-	logger logr.Logger,
-	db *storagev1alpha1.Database,
-) (ctrl.Result, error) {
-	if err := r.ensurePostgresExtensionSettings(ctx, logger, db); err != nil {
-		logger.Error(err, "failed to ensure PostgreSQL extension settings for database server")
-		return ctrl.Result{}, err
-	}
+	database *storagev1alpha1.Database,
+) ([]storagev1alpha1.DatabaseValidationError, string, error) {
+	var validationErrors []storagev1alpha1.DatabaseValidationError
+	databaseName := database.Spec.Name
+	serverName := strings.TrimSpace(database.Spec.Server.Name)
 
-	if err := r.ensurePostgresServerParameters(ctx, logger, db); err != nil {
-		logger.Error(err, "failed to ensure PostgreSQL server parameters for database server")
-		return ctrl.Result{}, err
-	}
-
-	adminIdentity, requeue, err := r.resolveAdminIdentity(ctx, logger, db)
-	if err != nil {
-		logger.Error(err, "failed to resolve admin identity")
-		return ctrl.Result{}, err
-	}
-	if requeue {
-		logger.Info("waiting for admin ApplicationIdentity to be ready")
-		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
-	}
-
-	// Flexible Server admin
-	if err := r.ensureFlexibleServerAdministrator(ctx, logger, db, adminIdentity); err != nil {
-		logger.Error(err, "failed to ensure FlexibleServerAdministrator for database server")
-		return ctrl.Result{}, err
-	}
-
-	if !r.Config.UseAzFakes {
-		ready, err := r.asoResourcesReady(ctx, logger, db)
-		if err != nil {
-			logger.Error(err, "failed to check ASO readiness for database server")
-			return ctrl.Result{}, err
+	addRequiredStringError := func(field, value string) {
+		if strings.TrimSpace(value) != "" {
+			return
 		}
-		if !ready {
-			logger.Info("waiting for ASO resources to be ready")
-			return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
-		}
-	}
-
-	return ctrl.Result{}, nil
-}
-
-func (r *DatabaseServerReconciler) allocateSubnetForDatabaseServer(
-	ctx context.Context,
-	logger logr.Logger,
-	db *storagev1alpha1.Database,
-) error {
-	// Collect used subnets from all Database resources that currently represent servers.
-	var dbList storagev1alpha1.DatabaseList
-	if err := r.List(ctx, &dbList); err != nil {
-		return fmt.Errorf("list database servers: %w", err)
-	}
-
-	var used []string
-	for _, other := range dbList.Items {
-		if other.Status.SubnetCIDR != "" {
-			used = append(used, other.Status.SubnetCIDR)
-		}
-	}
-
-	logger.Info("collected used subnets", "used", used)
-
-	free, err := r.SubnetCatalog.FirstFreeSubnet(used)
-	if err != nil {
-		return fmt.Errorf("find first free subnet: %w", err)
-	}
-
-	logger.Info("allocated subnet", "cidr", free.CIDR)
-
-	// Write to status and persist it
-	db.Status.SubnetCIDR = free.CIDR
-	if err := r.Status().Update(ctx, db); err != nil {
-		return fmt.Errorf("update database server status with SubnetCIDR: %w", err)
-	}
-
-	return nil
-}
-
-func (r *DatabaseServerReconciler) asoResourcesReady(
-	ctx context.Context,
-	logger logr.Logger,
-	db *storagev1alpha1.Database,
-) (bool, error) {
-	ns := db.Namespace
-
-	serverName := db.Name
-	adminName := fmt.Sprintf("%s-admin", db.Name)
-
-	var server dbforpostgresqlv1.FlexibleServer
-	if err := r.Get(ctx, types.NamespacedName{Name: serverName, Namespace: ns}, &server); err != nil {
-		if apierrors.IsNotFound(err) {
-			logger.Info("FlexibleServer not found yet", "server", serverName)
-			return false, nil
-		}
-		return false, fmt.Errorf("get FlexibleServer %s/%s: %w", ns, serverName, err)
-	}
-
-	serverStatus, serverReason, serverMessage, serverReady := readyConditionInfo(server.Status.Conditions)
-	if !serverReady || serverStatus != metav1.ConditionTrue {
-		logger.Info("FlexibleServer not ready yet",
-			"server", serverName,
-			"status", serverStatus,
-			"reason", serverReason,
-			"message", serverMessage,
+		validationErrors = appendDatabaseValidationError(
+			validationErrors,
+			field,
+			databaseValidationReasonRequired,
+			fmt.Sprintf("%s must be set", field),
 		)
-		return false, nil
 	}
 
-	var admin dbforpostgresqlv1.FlexibleServersAdministrator
-	if err := r.Get(ctx, types.NamespacedName{Name: adminName, Namespace: ns}, &admin); err != nil {
-		if apierrors.IsNotFound(err) {
-			logger.Info("FlexibleServersAdministrator not found yet", "admin", adminName)
-			return false, nil
-		}
-		return false, fmt.Errorf("get FlexibleServersAdministrator %s/%s: %w", ns, adminName, err)
-	}
+	addRequiredStringError(databaseValidationFieldServerName, database.Spec.Server.Name)
+	addRequiredStringError(databaseValidationFieldMetadataName, database.Name)
+	addRequiredStringError(databaseValidationFieldSpecName, database.Spec.Name)
+	addRequiredStringError("spec.access.app.name", database.Spec.Access.App.Name)
+	addRequiredStringError("spec.access.app.principalId", database.Spec.Access.App.PrincipalId)
+	addRequiredStringError("spec.access.owner.name", database.Spec.Access.Owner.Name)
+	addRequiredStringError("spec.access.owner.principalId", database.Spec.Access.Owner.PrincipalId)
 
-	adminStatus, adminReason, adminMessage, adminReady := readyConditionInfo(admin.Status.Conditions)
-	if !adminReady || adminStatus != metav1.ConditionTrue {
-		logger.Info("FlexibleServersAdministrator not ready yet",
-			"admin", adminName,
-			"status", adminStatus,
-			"reason", adminReason,
-			"message", adminMessage,
+	if database.Spec.Name != "" && strings.TrimSpace(database.Spec.Name) != database.Spec.Name {
+		validationErrors = appendDatabaseValidationError(
+			validationErrors,
+			databaseValidationFieldSpecName,
+			databaseValidationReasonInvalid,
+			"spec.name must not have leading or trailing whitespace",
 		)
-		return false, nil
 	}
 
-	return true, nil
-}
+	if len(databaseName) > databaseMaxNameLength {
+		validationErrors = appendDatabaseValidationError(
+			validationErrors,
+			databaseValidationFieldSpecName,
+			databaseValidationReasonInvalid,
+			fmt.Sprintf("spec.name must be at most %d characters", databaseMaxNameLength),
+		)
+	}
 
-func readyConditionInfo(
-	conds []asoconditions.Condition,
-) (status metav1.ConditionStatus, reason, message string, ok bool) {
-	for i := range conds {
-		cond := conds[i]
-		if cond.Type == asoconditions.ConditionTypeReady {
-			return cond.Status, cond.Reason, cond.Message, true
+	if database.Spec.Server.Name != "" && serverName != database.Spec.Server.Name {
+		validationErrors = appendDatabaseValidationError(
+			validationErrors,
+			databaseValidationFieldServerName,
+			databaseValidationReasonInvalid,
+			"spec.server.name must not have leading or trailing whitespace",
+		)
+	}
+
+	if database.Status.DatabaseName != "" && databaseName != "" && database.Status.DatabaseName != databaseName {
+		validationErrors = appendDatabaseValidationError(
+			validationErrors,
+			databaseValidationFieldDatabaseName,
+			databaseValidationReasonImmutable,
+			fmt.Sprintf("database name changed from %q to %q; recreate Database to use a new name", database.Status.DatabaseName, databaseName),
+		)
+	}
+
+	if database.Spec.DeletionPolicy != "" &&
+		database.Spec.DeletionPolicy != storagev1alpha1.DatabaseDeletionPolicyRetain {
+		validationErrors = appendDatabaseValidationError(
+			validationErrors,
+			databaseValidationFieldDeletionPolicy,
+			databaseValidationReasonUnsupported,
+			"spec.deletionPolicy only supports Retain",
+		)
+	}
+
+	if serverName == "" {
+		return validationErrors, databaseName, nil
+	}
+
+	var db storagev1alpha1.DatabaseServer
+	if err := r.Get(ctx, types.NamespacedName{
+		Name:      serverName,
+		Namespace: database.Namespace,
+	}, &db); err != nil {
+		if apierrors.IsNotFound(err) {
+			validationErrors = appendDatabaseValidationError(
+				validationErrors,
+				databaseValidationFieldServerName,
+				databaseValidationReasonNotFound,
+				fmt.Sprintf("DatabaseServer %q was not found in namespace %q", serverName, database.Namespace),
+			)
+			return validationErrors, databaseName, nil
 		}
+		return nil, databaseName, fmt.Errorf("get DatabaseServer %s/%s: %w", database.Namespace, serverName, err)
 	}
-	return "", "", "", false
+
+	return validationErrors, databaseName, nil
 }
 
-func (r *DatabaseServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *DatabaseReconciler) mapDatabaseServerToDatabases(
+	ctx context.Context,
+	obj client.Object,
+) []ctrl.Request {
+	var list storagev1alpha1.DatabaseList
+	if err := r.List(ctx, &list, client.InNamespace(obj.GetNamespace())); err != nil {
+		return nil
+	}
+
+	requests := make([]ctrl.Request, 0)
+	for i := range list.Items {
+		database := list.Items[i]
+		if strings.TrimSpace(database.Spec.Server.Name) != obj.GetName() {
+			continue
+		}
+		requests = append(requests, ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      database.Name,
+				Namespace: database.Namespace,
+			},
+		})
+	}
+	return requests
+}
+
+func (r *DatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&storagev1alpha1.Database{}).
-		Owns(&networkv1.PrivateDnsZone{}).
-		Owns(&networkv1.PrivateDnsZonesVirtualNetworkLink{}).
-		Owns(&dbforpostgresqlv1.FlexibleServer{}).
-		Owns(&dbforpostgresqlv1.FlexibleServersConfiguration{}).
-		Owns(&dbforpostgresqlv1.FlexibleServersAdministrator{}).
-		Watches(&identityv1alpha1.ApplicationIdentity{}, handler.EnqueueRequestsFromMapFunc(r.mapApplicationIdentityToDatabaseServers)).
+		Owns(&dbforpostgresqlv1.FlexibleServersDatabase{}).
+		Owns(&batchv1.Job{}).
+		Watches(&storagev1alpha1.DatabaseServer{}, handler.EnqueueRequestsFromMapFunc(r.mapDatabaseServerToDatabases)).
 		WithOptions(controller.Options{
-			// Force single-threaded reconciliation
 			MaxConcurrentReconciles: 1,
 		}).
 		Complete(r)

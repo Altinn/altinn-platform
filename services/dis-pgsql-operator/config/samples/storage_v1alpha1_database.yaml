@@ -1,123 +1,55 @@
+# Single-tenant layout: one Database on its own DatabaseServer.
 apiVersion: storage.dis.altinn.cloud/v1alpha1
 kind: Database
 metadata:
-  name: shared-db
+  name: router
   namespace: default
 spec:
-  mode: Shared
-  version: 17
-  serverType: prod
-  network:
-    delegatedSubnetResourceId: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-dis-admin-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-admin-dbs/subnets/snet-postgres-shared
-    privateDnsZoneResourceId: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-dis-admin-network/providers/Microsoft.Network/privateDnsZones/shared.private.postgres.database.azure.com
-  auth:
-    admin:
-      identity:
-        identityRef:
-          name: adminidentity
+  name: router
+  server:
+    name: db1
+  access:
+    app:
+      name: myproduct-router-dev
+      principalId: "00000000-0000-0000-0000-000000000000"
+    owner:
+      name: my-team-db-owners
+      principalId: "11111111-1111-1111-1111-111111111111"
+  deletionPolicy: Retain
+---
+# Multitenant layout: multiple Database resources on one shared DatabaseServer.
+apiVersion: storage.dis.altinn.cloud/v1alpha1
+kind: Database
+metadata:
+  name: orders
+  namespace: default
+spec:
+  name: orders
+  server:
+    name: shared-db
+  access:
+    app:
+      name: myproduct-orders-dev
+      principalId: "22222222-2222-2222-2222-222222222222"
+    owner:
+      name: my-team-db-owners
+      principalId: "11111111-1111-1111-1111-111111111111"
+  deletionPolicy: Retain
 ---
 apiVersion: storage.dis.altinn.cloud/v1alpha1
 kind: Database
 metadata:
-  name: db1
+  name: billing
   namespace: default
 spec:
-  version: 16
-  serverType: prod
-  highAvailabilityEnabled: true
-  backupRetentionDays: 30
-  storage:
-    sizeGB: 128
-    tier: P10
-  auth:
-    admin:
-      identity:
-        identityRef:
-          name: adminidentity
----
-apiVersion: storage.dis.altinn.cloud/v1alpha1
-kind: Database
-metadata:
-  name: db2
-  namespace: default
-spec:
-  version: 17
-  serverType: dev
-  highAvailabilityEnabled: false
-  enableExtensions:
-    - hstore
-    - pg_cron
-  serverParams:
-    # azure.extensions and shared_preload_libraries are managed by enableExtensions.
-    - name: autovacuum_naptime
-      value: 15
-  storage:
-    sizeGB: 32
-    tier: P10
-  auth:
-    admin:
-      identity:
-        identityRef:
-          name: adminidentity
----
-apiVersion: storage.dis.altinn.cloud/v1alpha1
-kind: Database
-metadata:
-  name: db4
-  namespace: default
-spec:
-  version: 17
-  serverType: dev
-  storage:
-    sizeGB: 32
-    tier: P80
-  auth:
-    admin:
-      identity:
-        identityRef:
-          name: adminidentity
----
-apiVersion: storage.dis.altinn.cloud/v1alpha1
-kind: Database
-metadata:
-  name: db5
-  namespace: default
-spec:
-  version: 17
-  serverType: dev
-  storage:
-    sizeGB: 64
-    tier: P6
-  auth:
-    admin:
-      identity:
-        identityRef:
-          name: adminidentity
-# ---
-# apiVersion: storage.dis.altinn.cloud/v1alpha1
-# kind: Database
-# metadata:
-#   name: db6
-#   namespace: test
-# spec:
-#   version: 17
-#   serverType: dev
-#   auth:
-#     admin:
-#       identity:
-#         identityRef:
-#           name: adminidentity
-# ---
-# apiVersion: storage.dis.altinn.cloud/v1alpha1
-# kind: Database
-# metadata:
-#   name: db9
-#   namespace: test
-# spec:
-#   version: 17
-#   serverType: dev
-#   auth:
-#     admin:
-#       identity:
-#         identityRef:
-#           name: adminidentity
+  name: billing
+  server:
+    name: shared-db
+  access:
+    app:
+      name: myproduct-billing-dev
+      principalId: "33333333-3333-3333-3333-333333333333"
+    owner:
+      name: my-team-db-owners
+      principalId: "11111111-1111-1111-1111-111111111111"
+  deletionPolicy: Retain

@@ -31,7 +31,7 @@ const (
 	azureExtensionsConfigName          = dbUtil.ServerParameterAzureExtensions
 	sharedPreloadLibrariesConfigName   = dbUtil.ServerParameterSharedPreloadLibraries
 	configSourceUserOverride           = "user-override"
-	databaseNameLabelKey               = "dis.altinn.cloud/database-name"
+	databaseServerNameLabelKey         = "dis.altinn.cloud/database-server-name"
 	configurationKindLabelKey          = "dis.altinn.cloud/configuration-kind"
 	configurationKindServerParameter   = "server-parameter"
 	serverParametersReadyConditionType = "ServerParametersReady"
@@ -55,7 +55,7 @@ func serverParameterConfigResourceName(dbName, parameterName string) string {
 func (r *DatabaseServerReconciler) ensurePostgresExtensionSettings(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 ) error {
 	if db.Spec.EnableExtensions == nil {
 		return r.clearOwnedManagedExtensionConfigurations(ctx, logger, db)
@@ -96,7 +96,7 @@ func (r *DatabaseServerReconciler) ensurePostgresExtensionSettings(
 func (r *DatabaseServerReconciler) ensurePostgresServerParameters(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 ) error {
 	serverParameters, err := dbUtil.ResolveServerParameters(db.Spec.ServerType, db.Spec.ServerParams)
 	if err != nil {
@@ -136,7 +136,7 @@ func (r *DatabaseServerReconciler) ensurePostgresServerParameters(
 func (r *DatabaseServerReconciler) clearOwnedManagedServerParameterConfigurations(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 	desiredResources map[string]string,
 ) error {
 	var configurations dbforpostgresqlv1.FlexibleServersConfigurationList
@@ -145,8 +145,8 @@ func (r *DatabaseServerReconciler) clearOwnedManagedServerParameterConfiguration
 		&configurations,
 		client.InNamespace(db.Namespace),
 		client.MatchingLabels(map[string]string{
-			databaseNameLabelKey:      db.Name,
-			configurationKindLabelKey: configurationKindServerParameter,
+			databaseServerNameLabelKey: db.Name,
+			configurationKindLabelKey:  configurationKindServerParameter,
 		}),
 	); err != nil {
 		return fmt.Errorf("list FlexibleServersConfiguration resources for server parameters: %w", err)
@@ -182,7 +182,7 @@ func (r *DatabaseServerReconciler) clearOwnedManagedServerParameterConfiguration
 
 func (r *DatabaseServerReconciler) updateServerParameterStatusFromASO(
 	ctx context.Context,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 	desiredResources map[string]string,
 ) error {
 	previousStatus := db.Status.DeepCopy()
@@ -290,7 +290,7 @@ func summarizeServerParameterErrors(errors []storagev1alpha1.DatabaseServerParam
 func (r *DatabaseServerReconciler) clearOwnedManagedExtensionConfigurations(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 ) error {
 	// Reconcile only the two extension configs this controller owns, identified by
 	// deterministic names derived from the database server name. We intentionally do not
@@ -351,7 +351,7 @@ func (r *DatabaseServerReconciler) clearOwnedManagedExtensionConfigurations(
 func (r *DatabaseServerReconciler) ensureFlexibleServerConfiguration(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 	resourceName string,
 	parameterName string,
 	value string,
@@ -373,7 +373,7 @@ func (r *DatabaseServerReconciler) ensureFlexibleServerConfiguration(
 func (r *DatabaseServerReconciler) ensureFlexibleServerConfigurationWithLabels(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 	resourceName string,
 	parameterName string,
 	value string,
@@ -427,7 +427,7 @@ func (r *DatabaseServerReconciler) ensureFlexibleServerConfigurationWithLabels(
 }
 
 func desiredFlexibleServerConfiguration(
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 	parameterName string,
 	value string,
 	extraLabels map[string]string,
@@ -442,7 +442,7 @@ func desiredFlexibleServerConfiguration(
 	}
 
 	desiredLabels := map[string]string{
-		databaseNameLabelKey: db.Name,
+		databaseServerNameLabelKey: db.Name,
 	}
 	maps.Copy(desiredLabels, extraLabels)
 
@@ -452,7 +452,7 @@ func desiredFlexibleServerConfiguration(
 func (r *DatabaseServerReconciler) updateFlexibleServerConfiguration(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 	configuration *dbforpostgresqlv1.FlexibleServersConfiguration,
 	parameterName string,
 	value string,
@@ -471,7 +471,7 @@ func (r *DatabaseServerReconciler) updateFlexibleServerConfiguration(
 func (r *DatabaseServerReconciler) updateFlexibleServerConfigurationWithLabels(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 	configuration *dbforpostgresqlv1.FlexibleServersConfiguration,
 	parameterName string,
 	value string,
