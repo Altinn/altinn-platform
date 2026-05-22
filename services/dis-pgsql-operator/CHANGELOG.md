@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.0...dis-pgsql-v0.7.1) (2026-05-22)
+
+
+### Dependency Updates
+
+* update gcr.io/distroless/static:nonroot docker digest to 963fa6c ([#3466](https://github.com/Altinn/altinn-platform/issues/3466)) ([a17762f](https://github.com/Altinn/altinn-platform/commit/a17762f295ad24e80eefe0f78f19696d56af0a92))
+
 ## [0.7.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.6.0...dis-pgsql-v0.7.0) (2026-05-22)
 
 
