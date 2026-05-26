@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.6](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.5...dis-pgsql-v0.7.6) (2026-05-26)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** remove unused armnetwork/v9 direct dependency ([#3580](https://github.com/Altinn/altinn-platform/issues/3580)) ([ecde3ee](https://github.com/Altinn/altinn-platform/commit/ecde3ee6437f969e871b19f57ccf64c4f1126e88))
+
 ## [0.7.5](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.4...dis-pgsql-v0.7.5) (2026-05-26)
 
 
