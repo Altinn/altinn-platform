@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.5](https://github.com/Altinn/altinn-platform/compare/dis-apim-v1.0.4...dis-apim-v1.0.5) (2026-05-26)
+
+
+### Dependency Updates
+
+* update github-actions non-major dependencies ([#3528](https://github.com/Altinn/altinn-platform/issues/3528)) ([a48285f](https://github.com/Altinn/altinn-platform/commit/a48285ff1a562e67cc4ddc4ff1b958d4f01ea426))
+
 ## [1.0.4](https://github.com/Altinn/altinn-platform/compare/dis-apim-v1.0.3...dis-apim-v1.0.4) (2026-05-26)
 
 
