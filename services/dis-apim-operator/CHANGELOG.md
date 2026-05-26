@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/Altinn/altinn-platform/compare/dis-apim-v1.0.3...dis-apim-v1.0.4) (2026-05-26)
+
+
+### Bug Fixes
+
+* update golang.org/x/net to v0.55.0 to fix GO-2026-5026 ([#3552](https://github.com/Altinn/altinn-platform/issues/3552)) ([ee5738e](https://github.com/Altinn/altinn-platform/commit/ee5738ea01a69944efa8ba578e8ff6707e758a96))
+
 ## [1.0.3](https://github.com/Altinn/altinn-platform/compare/dis-apim-v1.0.2...dis-apim-v1.0.3) (2026-05-26)
 
 
