@@ -6,7 +6,7 @@ toolchain go1.26.3
 
 require (
 	github.com/charmbracelet/bubbles v0.21.1
-	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/charmbracelet/lipgloss/v2 v2.0.3
 	github.com/google/go-cmp v0.7.0
 	github.com/spf13/cobra v1.10.2
 )
