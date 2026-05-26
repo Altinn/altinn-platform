@@ -138,6 +138,8 @@ More information can be found via the [Kubebuilder Documentation](https://book.k
 
 ## License
 
+<<<<<<< HEAD
+=======
 Copyright 2024 altinn.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -152,3 +154,4 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
+>>>>>>> tmp-original-26-05-26-00-39

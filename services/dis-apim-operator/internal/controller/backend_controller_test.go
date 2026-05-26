@@ -1,3 +1,5 @@
+<<<<<<< HEAD
+=======
 /*
 Copyright 2024 altinn.
 
@@ -14,12 +16,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+>>>>>>> tmp-original-26-05-26-00-39
 package controller
 
 import (
-	"context"
-
 	. "github.com/onsi/ginkgo/v2"
+<<<<<<< HEAD
+=======
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,10 +30,16 @@ import (
 	"k8s.io/utils/ptr"
 
 	apimv1alpha1 "github.com/Altinn/altinn-platform/services/dis-apim-operator/api/v1alpha1"
+>>>>>>> tmp-original-26-05-26-00-39
 )
 
 var _ = Describe("Backend Controller", func() {
 	Context("When reconciling a resource", func() {
+<<<<<<< HEAD
+
+		It("should successfully reconcile the resource", func() {
+
+=======
 		const resourceName = "test-resource"
 		const defaultNamespace = "default-test"
 
@@ -64,6 +73,7 @@ var _ = Describe("Backend Controller", func() {
 				g.Expect(updatedBackend.Status.ProvisioningState).To(Equal(apimv1alpha1.BackendProvisioningStateSucceeded))
 				g.Expect(fakeApim.Backends).To(HaveLen(1))
 			}, timeout, interval).Should(Succeed())
+>>>>>>> tmp-original-26-05-26-00-39
 			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
 			By("Updating the apim Backend if it does not match the desired state")
 			Eventually(func(g Gomega) {

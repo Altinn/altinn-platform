@@ -1,3 +1,9 @@
+<<<<<<< HEAD
+package controller
+
+import (
+	. "github.com/onsi/ginkgo/v2"
+=======
 /*
 Copyright 2024 altinn.
 
@@ -34,11 +40,19 @@ import (
 const (
 	timeout  = time.Second * 60
 	interval = time.Millisecond * 250
+>>>>>>> tmp-original-26-05-26-00-39
 )
 
 var _ = Describe("Api Controller", func() {
 
 	Context("When reconciling a resource", func() {
+<<<<<<< HEAD
+
+		It("should successfully reconcile the resource", func() {
+
+			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
+			// Example: If you expect a certain status condition after reconciliation, verify it here.
+=======
 		const resourceName = "test-resource"
 		const resourceNamespace = "default-test"
 
@@ -133,6 +147,7 @@ var _ = Describe("Api Controller", func() {
 				err = k8sClient.Get(ctx, typeNamespacedName, &updatedApi)
 				g.Expect(errors.IsNotFound(err)).To(BeTrue())
 			}, timeout, interval).Should(Succeed(), "api should eventually be deleted")
+>>>>>>> tmp-original-26-05-26-00-39
 		})
 	})
 })
