@@ -76,6 +76,7 @@ jobs:
             exit 1
           fi
           export PATH="$HOME/.local/bin:$PATH"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
           if ! az aks get-credentials --resource-group k6tests-rg --name k6tests-cluster; then
             echo "Failed to populate kubeconfig"
@@ -128,6 +129,7 @@ jobs:
             exit 1
           fi
           export PATH="$HOME/.local/bin:$PATH"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
           if ! az aks get-credentials --resource-group k6tests-rg --name k6tests-cluster; then
             echo "Failed to populate kubeconfig"
