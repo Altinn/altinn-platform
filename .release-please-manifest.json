@@ -1,7 +1,7 @@
 {
-  "services/dis-pgsql-operator": "0.7.4",
-  "services/dis-identity-operator": "0.2.4",
-  "services/dis-apim-operator": "1.0.4",
+  "services/dis-pgsql-operator": "0.7.5",
+  "services/dis-identity-operator": "0.2.5",
+  "services/dis-apim-operator": "1.0.5",
   "services/dis-vault-operator": "1.4.6",
   "services/lakmus": "1.1.5",
   "infrastructure/images/azure-devops-agent": "1.2.7",
