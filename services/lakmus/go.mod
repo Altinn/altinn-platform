@@ -8,8 +8,8 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault v1.5.0
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets v1.4.0
 	github.com/aws/constructs-go/constructs/v10 v10.6.0
-	github.com/aws/jsii-runtime-go v1.131.0
-	github.com/cdk8s-team/cdk8s-core-go/cdk8s/v2 v2.70.64
+	github.com/aws/jsii-runtime-go v1.132.0
+	github.com/cdk8s-team/cdk8s-core-go/cdk8s/v2 v2.70.66
 	github.com/prometheus/client_golang v1.23.2
 )
 
