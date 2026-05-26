@@ -117,4 +117,4 @@ require (
 
 // go-openapi/testify/v2 v2.4.2+ removed the assert/yaml package which
 // go-openapi/swag/loading@v0.25.4 transitively depends on. Pin to v2.0.2.
-replace github.com/go-openapi/testify/v2 => github.com/go-openapi/testify/v2 v2.0.2
+replace github.com/go-openapi/testify/v2 => github.com/go-openapi/testify/v2 v2.5.1
