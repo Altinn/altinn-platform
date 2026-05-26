@@ -99,10 +99,11 @@ jobs:
           CLUSTER_NAME: ${{ steps.get_outputs_from_terraform.outputs.CLUSTER_NAME }}
           RESOURCE_GROUP_NAME: ${{ steps.get_outputs_from_terraform.outputs.RESOURCE_GROUP_NAME }}
         run: |
-          if ! az aks install-cli; then
+          if ! az aks install-cli --install-location "$HOME/.local/bin/kubectl" --kubelogin-install-location "$HOME/.local/bin/kubelogin"; then
             echo "Failed to install kubectl CLI"
             exit 1
           fi
+          export PATH="$HOME/.local/bin:$PATH"
 
           if ! az aks get-credentials --resource-group $RESOURCE_GROUP_NAME --name $CLUSTER_NAME --context k6tests-cluster --overwrite-existing; then
             echo "Failed to populate kubeconfig"
@@ -203,10 +204,11 @@ jobs:
           CLUSTER_NAME: ${{ steps.get_outputs_from_terraform.outputs.CLUSTER_NAME }}
           RESOURCE_GROUP_NAME: ${{ steps.get_outputs_from_terraform.outputs.RESOURCE_GROUP_NAME }}
         run: |
-          if ! az aks install-cli; then
+          if ! az aks install-cli --install-location "$HOME/.local/bin/kubectl" --kubelogin-install-location "$HOME/.local/bin/kubelogin"; then
             echo "Failed to install kubectl CLI"
             exit 1
           fi
+          export PATH="$HOME/.local/bin:$PATH"
 
           if ! az aks get-credentials --resource-group $RESOURCE_GROUP_NAME --name $CLUSTER_NAME --context k6tests-cluster --overwrite-existing; then
             echo "Failed to populate kubeconfig"

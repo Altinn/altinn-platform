@@ -71,10 +71,11 @@ jobs:
         id: populate_kubeconfig_with_k6_context
         shell: bash
         run: |
-          if ! az aks install-cli; then
+          if ! az aks install-cli --install-location "$HOME/.local/bin/kubectl" --kubelogin-install-location "$HOME/.local/bin/kubelogin"; then
             echo "Failed to install kubectl CLI"
             exit 1
           fi
+          export PATH="$HOME/.local/bin:$PATH"
 
           if ! az aks get-credentials --resource-group k6tests-rg --name k6tests-cluster; then
             echo "Failed to populate kubeconfig"
@@ -122,10 +123,11 @@ jobs:
         id: populate_kubeconfig_with_k6_context
         shell: bash
         run: |
-          if ! az aks install-cli; then
+          if ! az aks install-cli --install-location "$HOME/.local/bin/kubectl" --kubelogin-install-location "$HOME/.local/bin/kubelogin"; then
             echo "Failed to install kubectl CLI"
             exit 1
           fi
+          export PATH="$HOME/.local/bin:$PATH"
 
           if ! az aks get-credentials --resource-group k6tests-rg --name k6tests-cluster; then
             echo "Failed to populate kubeconfig"
