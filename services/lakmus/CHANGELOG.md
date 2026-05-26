@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.6](https://github.com/Altinn/altinn-platform/compare/lakmus-v1.1.5...lakmus-v1.1.6) (2026-05-26)
+
+
+### Bug Fixes
+
+* **lakmus:** remove unused armkeyvault/v2 direct dependency ([#3579](https://github.com/Altinn/altinn-platform/issues/3579)) ([7304975](https://github.com/Altinn/altinn-platform/commit/7304975daba6b4c849fded4321829cf9578b4b09))
+
 ## [1.1.5](https://github.com/Altinn/altinn-platform/compare/lakmus-v1.1.4...lakmus-v1.1.5) (2026-05-26)
 
 
