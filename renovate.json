@@ -62,6 +62,18 @@
     },
     {
       "matchManagers": [
+        "gomod"
+      ],
+      "matchFileNames": [
+        "services/dis-pgsql-operator/go.mod"
+      ],
+      "matchPackageNames": [
+        "github.com/pashagolub/pgxmock/v5"
+      ],
+      "enabled": false
+    },
+    {
+      "matchManagers": [
         "custom.regex"
       ],
       "matchDatasources": [
