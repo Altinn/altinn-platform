@@ -4,10 +4,12 @@
     "version": "0.0.1",
     "description": "Library with functionality reusable across tests",
     "devDependencies": {
+        "@eslint/js": "10.0.1",
         "esbuild": "0.28.0",
-        "eslint": "8.57.1",
+        "eslint": "10.4.0",
         "eslint-config-prettier": "10.1.8",
         "eslint-plugin-prettier": "5.5.5",
+        "globals": "16.5.0",
         "prettier": "3.8.3"
     },
     "engines": {},
@@ -18,6 +20,7 @@
         "test": "echo \"Error: no test specified\" && exit 1"
     },
     "keywords": [],
+    "type": "module",
     "author": "altinn/team-platform",
     "dependencies": {}
 }

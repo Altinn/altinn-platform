@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.4](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.9.3...tf-azdev-agent-0.9.4) (2026-05-26)
+
+
+### Dependency Updates
+
+* update dependency helm to v4 ([#3532](https://github.com/Altinn/altinn-platform/issues/3532)) ([2dbdbf5](https://github.com/Altinn/altinn-platform/commit/2dbdbf50a810f32f36876f316149ee568b98f138))
+
+## [0.9.3](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.9.2...tf-azdev-agent-0.9.3) (2026-05-26)
+
+
+### Dependency Updates
+
+* update dependency helm to v3.21.0 ([#3524](https://github.com/Altinn/altinn-platform/issues/3524)) ([3867152](https://github.com/Altinn/altinn-platform/commit/3867152ac0f7669f4fa0ceb6c8829d334d8d9c2b))
+
 ## [0.9.2](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.9.1...tf-azdev-agent-0.9.2) (2026-05-22)
 
 
