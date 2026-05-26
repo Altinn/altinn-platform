@@ -83,7 +83,9 @@ class MaskinportenAccessTokenGenerator {
       const response_body = JSON.parse(res.body);
       return response_body.access_token;
     } catch (e) {
-      throw new Error(`Unable to parse Maskinporten token: ${e.message}`);
+      throw new Error(`Unable to parse Maskinporten token: ${e.message}`, {
+        cause: e,
+      });
     }
   }
 
@@ -155,6 +157,7 @@ class MaskinportenAccessTokenGenerator {
         } catch (e) {
           throw new Error(
             `Failed to decode JWT payload for expiration: ${e.message}`,
+            { cause: e },
           );
         }
 
