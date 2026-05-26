@@ -83,7 +83,9 @@ class MaskinportenAccessTokenGenerator {
       const response_body = JSON.parse(res.body);
       return response_body.access_token;
     } catch (e) {
-      throw new Error(`Unable to parse Maskinporten token: ${e.message}`, { cause: e });
+      throw new Error(`Unable to parse Maskinporten token: ${e.message}`, {
+        cause: e,
+      });
     }
   }
 
