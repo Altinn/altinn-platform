@@ -58,12 +58,18 @@ type DatabaseServerReconciler struct {
 // the user.
 //
 // For more details, check Reconcile and its Result here:
+<<<<<<< HEAD
+// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.23.3/pkg/reconcile
+func (r *DatabaseServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	_ = logf.FromContext(ctx)
+=======
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.23.1/pkg/reconcile
 // ASO: PostgreSQL Flexible Server
 // +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleservers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleservers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversconfigurations,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversconfigurations/status,verbs=get;update;patch
+>>>>>>> tmp-original-26-05-26-00-39
 
 // ASO: Flexible Server AAD administrator
 // +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversadministrators,verbs=get;list;watch;create;update;patch;delete

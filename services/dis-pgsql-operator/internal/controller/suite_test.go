@@ -83,9 +83,14 @@ var _ = BeforeSuite(func() {
 		crdPaths = append(crdPaths, identityCRDPath)
 	}
 	testEnv = &envtest.Environment{
+<<<<<<< HEAD
+		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
+		ErrorIfCRDPathMissing: false,
+=======
 		CRDDirectoryPaths:     crdPaths,
 		Scheme:                scheme,
 		ErrorIfCRDPathMissing: true,
+>>>>>>> tmp-original-26-05-26-00-39
 	}
 	Expect(ensureApplicationIdentityCRD(testEnv.CRDDirectoryPaths)).To(Succeed())
 
