@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.3](https://github.com/Altinn/altinn-platform/compare/dis-apim-v1.0.2...dis-apim-v1.0.3) (2026-05-26)
+
+
+### Dependency Updates
+
+* update golangci/golangci-lint-action digest to 82606bf ([#3518](https://github.com/Altinn/altinn-platform/issues/3518)) ([7827eb9](https://github.com/Altinn/altinn-platform/commit/7827eb989caeed6b9dc47cc3988ac67c97ee81a9))
+
 ## [1.0.2](https://github.com/Altinn/altinn-platform/compare/dis-apim-v1.0.1...dis-apim-v1.0.2) (2026-05-22)
 
 
