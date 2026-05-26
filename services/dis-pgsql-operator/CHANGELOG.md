@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.4](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.3...dis-pgsql-v0.7.4) (2026-05-26)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** remove unused pgxmock/v5 dependency ([#3557](https://github.com/Altinn/altinn-platform/issues/3557)) ([2262a91](https://github.com/Altinn/altinn-platform/commit/2262a918270e39c9146b30f48ac6b42d1aea0fa7))
+
 ## [0.7.3](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.2...dis-pgsql-v0.7.3) (2026-05-22)
 
 
