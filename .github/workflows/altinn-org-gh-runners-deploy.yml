@@ -52,7 +52,7 @@ jobs:
   plan:
     name: Plan
     environment: reader
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
@@ -128,7 +128,7 @@ jobs:
     environment: prod
     if: github.ref == 'refs/heads/main'
     needs: plan
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
