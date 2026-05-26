@@ -1,3 +1,5 @@
+<<<<<<< HEAD
+=======
 /*
 Copyright 2025 Altinn.
 
@@ -14,12 +16,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+>>>>>>> tmp-original-26-05-26-00-39
 package controller
 
 import (
-	"context"
-
 	. "github.com/onsi/ginkgo/v2"
+<<<<<<< HEAD
+=======
 	. "github.com/onsi/gomega"
 
 	managedidentity "github.com/Azure/azure-service-operator/v2/api/managedidentity/v1api20230131"
@@ -31,12 +34,16 @@ import (
 
 	applicationv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-identity-operator/internal/utils"
+>>>>>>> tmp-original-26-05-26-00-39
 )
 
 var _ = Describe("ApplicationIdentity Controller", func() {
 	Context("When reconciling a resource", func() {
-		const resourceName = "test-resource"
 
+<<<<<<< HEAD
+		It("should successfully reconcile the resource", func() {
+
+=======
 		ctx := context.Background()
 
 		typeNamespacedName := types.NamespacedName{
@@ -78,6 +85,7 @@ var _ = Describe("ApplicationIdentity Controller", func() {
 			}, timeout, interval).ShouldNot(Succeed())
 		})
 		It("should successfully reconcile the resource", func() {
+>>>>>>> tmp-original-26-05-26-00-39
 			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
 			appIdentity := &applicationv1alpha1.ApplicationIdentity{}
 			Eventually(func(g Gomega) {

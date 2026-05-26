@@ -1,3 +1,5 @@
+<<<<<<< HEAD
+=======
 /*
 Copyright 2025 Altinn.
 
@@ -14,6 +16,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+>>>>>>> tmp-original-26-05-26-00-39
 package controller
 
 import (
@@ -80,12 +83,17 @@ var _ = BeforeSuite(func() {
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
+<<<<<<< HEAD
+		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
+		ErrorIfCRDPathMissing: false,
+=======
 		CRDDirectoryPaths: []string{
 			filepath.Join("..", "..", "config", "crd", "bases"),
 			filepath.Join("..", "..", "bin", "aso-crds"),
 		},
 		Scheme:                scheme,
 		ErrorIfCRDPathMissing: true,
+>>>>>>> tmp-original-26-05-26-00-39
 	}
 
 	// Retrieve the first found binary directory to allow running tests from IDEs
