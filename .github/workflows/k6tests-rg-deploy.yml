@@ -5,19 +5,19 @@ concurrency:
   cancel-in-progress: ${{ !contains(github.ref, 'refs/heads/main')}}
 
 on:
-  pull_request:
-    types:
-      - opened
-      - closed
-      - synchronize
-      - reopened
-    branches:
-      - main
-    paths:
-      - .github/workflows/k6tests-rg-deploy.yml
-      - actions/terraform/apply/**
-      - actions/terraform/plan/**
-      - infrastructure/adminservices-test/k6tests-rg/**
+  # pull_request:
+  #   types:
+  #     - opened
+  #     - closed
+  #     - synchronize
+  #     - reopened
+  #   branches:
+  #     - main
+  #   paths:
+  #     - .github/workflows/k6tests-rg-deploy.yml
+  #     - actions/terraform/apply/**
+  #     - actions/terraform/plan/**
+  #     - infrastructure/adminservices-test/k6tests-rg/**
   workflow_dispatch:
     inputs:
       log_level:
