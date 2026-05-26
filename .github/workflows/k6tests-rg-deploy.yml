@@ -5,19 +5,19 @@ concurrency:
   cancel-in-progress: ${{ !contains(github.ref, 'refs/heads/main')}}
 
 on:
-  pull_request:
-    types:
-      - opened
-      - closed
-      - synchronize
-      - reopened
-    branches:
-      - main
-    paths:
-      - .github/workflows/k6tests-rg-deploy.yml
-      - actions/terraform/apply/**
-      - actions/terraform/plan/**
-      - infrastructure/adminservices-test/k6tests-rg/**
+  # pull_request:
+  #   types:
+  #     - opened
+  #     - closed
+  #     - synchronize
+  #     - reopened
+  #   branches:
+  #     - main
+  #   paths:
+  #     - .github/workflows/k6tests-rg-deploy.yml
+  #     - actions/terraform/apply/**
+  #     - actions/terraform/plan/**
+  #     - infrastructure/adminservices-test/k6tests-rg/**
   workflow_dispatch:
     inputs:
       log_level:
@@ -50,7 +50,7 @@ jobs:
   plan:
     name: Plan
     environment: reader
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout Repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -99,10 +99,12 @@ jobs:
           CLUSTER_NAME: ${{ steps.get_outputs_from_terraform.outputs.CLUSTER_NAME }}
           RESOURCE_GROUP_NAME: ${{ steps.get_outputs_from_terraform.outputs.RESOURCE_GROUP_NAME }}
         run: |
-          if ! az aks install-cli; then
+          if ! az aks install-cli --install-location "$HOME/.local/bin/kubectl" --kubelogin-install-location "$HOME/.local/bin/kubelogin"; then
             echo "Failed to install kubectl CLI"
             exit 1
           fi
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
           if ! az aks get-credentials --resource-group $RESOURCE_GROUP_NAME --name $CLUSTER_NAME --context k6tests-cluster --overwrite-existing; then
             echo "Failed to populate kubeconfig"
@@ -155,7 +157,7 @@ jobs:
     environment: test
     if: github.ref == 'refs/heads/main' && github.event.pull_request.merged == true
     needs: plan
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout Repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -203,10 +205,12 @@ jobs:
           CLUSTER_NAME: ${{ steps.get_outputs_from_terraform.outputs.CLUSTER_NAME }}
           RESOURCE_GROUP_NAME: ${{ steps.get_outputs_from_terraform.outputs.RESOURCE_GROUP_NAME }}
         run: |
-          if ! az aks install-cli; then
+          if ! az aks install-cli --install-location "$HOME/.local/bin/kubectl" --kubelogin-install-location "$HOME/.local/bin/kubelogin"; then
             echo "Failed to install kubectl CLI"
             exit 1
           fi
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
           if ! az aks get-credentials --resource-group $RESOURCE_GROUP_NAME --name $CLUSTER_NAME --context k6tests-cluster --overwrite-existing; then
             echo "Failed to populate kubeconfig"

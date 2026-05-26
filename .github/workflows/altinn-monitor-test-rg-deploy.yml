@@ -51,7 +51,7 @@ jobs:
   plan:
     name: Plan
     environment: reader
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       TF_VAR_subs_to_monitor: '{platform-test:"${{secrets.AZR_PLATFORM_TEST_SUB_ID}}",platform-staging:"${{secrets.AZR_PLATFORM_STAGING_SUB_ID}}",platform-prod:"${{secrets.AZR_PLATFORM_PROD_SUB_ID}}"}'
     steps:
@@ -71,10 +71,12 @@ jobs:
         id: populate_kubeconfig_with_k6_context
         shell: bash
         run: |
-          if ! az aks install-cli; then
+          if ! az aks install-cli --install-location "$HOME/.local/bin/kubectl" --kubelogin-install-location "$HOME/.local/bin/kubelogin"; then
             echo "Failed to install kubectl CLI"
             exit 1
           fi
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
           if ! az aks get-credentials --resource-group k6tests-rg --name k6tests-cluster; then
             echo "Failed to populate kubeconfig"
@@ -102,7 +104,7 @@ jobs:
     environment: test
     if: github.ref == 'refs/heads/main'
     needs: plan
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       TF_VAR_subs_to_monitor: '{platform-test:"${{secrets.AZR_PLATFORM_TEST_SUB_ID}}",platform-staging:"${{secrets.AZR_PLATFORM_STAGING_SUB_ID}}",platform-prod:"${{secrets.AZR_PLATFORM_PROD_SUB_ID}}"}'
     steps:
@@ -122,10 +124,12 @@ jobs:
         id: populate_kubeconfig_with_k6_context
         shell: bash
         run: |
-          if ! az aks install-cli; then
+          if ! az aks install-cli --install-location "$HOME/.local/bin/kubectl" --kubelogin-install-location "$HOME/.local/bin/kubelogin"; then
             echo "Failed to install kubectl CLI"
             exit 1
           fi
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
           if ! az aks get-credentials --resource-group k6tests-rg --name k6tests-cluster; then
             echo "Failed to populate kubeconfig"
