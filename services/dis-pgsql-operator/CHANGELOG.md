@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.7.5](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.4...dis-pgsql-v0.7.5) (2026-05-26)
+
+
+### Dependency Updates
+
+* update github-actions non-major dependencies ([#3528](https://github.com/Altinn/altinn-platform/issues/3528)) ([a48285f](https://github.com/Altinn/altinn-platform/commit/a48285ff1a562e67cc4ddc4ff1b958d4f01ea426))
+* update module github.com/azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7 to v9 ([#3566](https://github.com/Altinn/altinn-platform/issues/3566)) ([b3a8263](https://github.com/Altinn/altinn-platform/commit/b3a82638b651eeaa9978018554a62170aea682b5))
+* update module github.com/pashagolub/pgxmock/v4 to v5 ([#3568](https://github.com/Altinn/altinn-platform/issues/3568)) ([87cd561](https://github.com/Altinn/altinn-platform/commit/87cd5618efaaf00ddfc24de74d2ecf363e841eaf))
+
 ## [0.7.4](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.3...dis-pgsql-v0.7.4) (2026-05-26)
 
 
