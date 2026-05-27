@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.9.0](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.8.0...ghrunner-0.9.0) (2026-05-27)
+
+
+### Features
+
+* Enable corepack in gh-runner image (yarn) ([#3583](https://github.com/Altinn/altinn-platform/issues/3583)) ([63c5126](https://github.com/Altinn/altinn-platform/commit/63c51269595603ce10f09ce49c2b6409b2f79132))
+
+
+### Bug Fixes
+
+* **gh-runner:** add CVE-2026-46680 to trivyignore ([#3588](https://github.com/Altinn/altinn-platform/issues/3588)) ([069dc83](https://github.com/Altinn/altinn-platform/commit/069dc838aa1c9ea8d76ecc289d7c91620f8bbff2))
+
 ## [0.8.0](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.7.0...ghrunner-0.8.0) (2026-05-21)
 
 
