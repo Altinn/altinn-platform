@@ -120,12 +120,14 @@ spec:
   server:
     name: myproduct-dev
   access:
-    app:
-      name: myproduct-router-dev
-      principalId: "<app-entra-object-id>"
-    owner:
-      name: my-team-db-owners
-      principalId: "<owner-group-object-id>"
+    principals:
+      - role: Writer
+        identityRef:
+          name: myproduct-router-dev
+      - role: Owner
+        group:
+          name: my-team-db-owners
+          principalId: "<owner-group-object-id>"
   deletionPolicy: Retain
 ```
 
@@ -139,10 +141,11 @@ When `dis-pgsql` reconciles it, it:
 
 1. reads `spec.server.name`
 2. validates that it points to a shared `DatabaseServer` in the same namespace
-3. validates `spec.name` and identity values
+3. validates `spec.name` and the role-based access declarations
 4. creates the PostgreSQL database
-5. creates or maps the app Entra principal and owner Entra group, and grants access
-6. writes status
+5. resolves `identityRef` values and maps existing Entra groups
+6. grants access through operator-managed PostgreSQL roles
+7. writes status
 
 # Reference-level explanation
 [reference-level-explanation]: #reference-level-explanation
@@ -162,8 +165,10 @@ Important spec fields:
 
 - `name`: PostgreSQL database name inside the selected shared server. It must be unique per shared server.
 - `server.name`: same-namespace shared `DatabaseServer`.
-- `access.app`: runtime app Entra principal name and object id (`principalId`).
-- `access.owner`: owner/team Entra group name and object id (`principalId`).
+- `access.principals[]`: at least one role grant with `role: Reader|Writer|Owner`
+  and exactly one source:
+  - `identityRef.name`: same-namespace DIS `ApplicationIdentity`.
+  - `group.name` and `group.principalId`: existing Entra group display name and object ID.
 - `deletionPolicy`: defaults to `Retain`.
 
 Status should include:
@@ -185,25 +190,39 @@ server settings, tags, Entra admin, parameters, and status.
 
 It does not create tenant VNet peering or private DNS links in v1.
 
-For a `Database`, the request describes the database name, app identity access,
+For a `Database`, the request describes the database name, role-based access,
 and selected shared server. The operator resolves the same-namespace `server`,
 validates that it points to a shared `DatabaseServer`, and uses `spec.name` as
-the database name.
+the database name. `identityRef` entries are resolved from
+`ApplicationIdentity.status.managedIdentityName` and `status.principalId`.
+Missing or not-ready `ApplicationIdentity` references make `AccessReady=False`
+with a waiting reason; they are not hard API validation failures.
 
 The operator creates or updates:
 
 - ASO `FlexibleServersDatabase` resource for the `Database`, with `spec.azureName` set to `Database.spec.name`
-- a user provisioning job for Entra app and owner-group grants
+- a user provisioning job with an operator-owned serialized access payload for Entra principal grants
 
 The existing direct database provisioning pattern should be reused and extended.
 
-The app principal is the runtime identity. It gets `CONNECT` on the PostgreSQL
-database, owns the database schema, and receives database-scoped
-`search_path` settings. The owner principal is an Entra group for the team that
-owns the database. It gets `CONNECT`, schema usage/create privileges,
-and read/write privileges on app-schema objects. The owner group is not made
-database owner in v1; the operator/admin identity keeps database ownership so
-privileges can be tightened or expanded declaratively later.
+The public API remains YAML. Any JSON payload is internal controller-to-Job
+plumbing, such as `DISPG_ACCESS_PRINCIPALS`, and is not a public API.
+
+The provisioner creates stable no-login PostgreSQL roles per database/schema:
+reader, writer, and owner. It grants access by role membership:
+
+- `Reader`: `CONNECT`, schema `USAGE`, and read access on current/future tables
+  and sequences.
+- `Writer`: Reader plus `INSERT`, `UPDATE`, `DELETE`, and sequence write access.
+  It does not get DDL.
+- `Owner`: Writer plus schema ownership/DDL capability for migrations and
+  maintainers.
+
+`identityRef` entries are provisioned as PostgreSQL AAD `service` principals.
+`group` entries are provisioned as PostgreSQL AAD `group` principals.
+The operator reconciles membership in its managed reader/writer/owner roles,
+including removing principals when removed from `spec.access.principals`. It
+does not drop Entra principals or revoke unrelated/manual grants.
 
 ## Networking
 

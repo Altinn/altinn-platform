@@ -36,6 +36,11 @@ var _ = Describe("DatabaseServer controller", func() {
 	const ns = "default"
 	const sharedDelegatedSubnetResourceID = "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-dev-001/subnets/shared-postgres"
 	const sharedPrivateDNSZoneResourceID = "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/privateDnsZones/shared.private.postgres.database.azure.com"
+	const databaseAppIdentityRef = "myproduct-router-dev"
+	const databaseAppManagedIdentity = "myproduct-router-dev-mi"
+	const databaseAppPrincipalID = "00000000-0000-0000-0000-000000000001"
+	const databaseOwnerGroup = "my-team-db-owners"
+	const databaseOwnerPrincipalID = "11111111-1111-1111-1111-111111111111"
 
 	adminAuth := func(adminName, adminPrincipalID, adminServiceAccount string) storagev1alpha1.DatabaseServerAuth {
 		return storagev1alpha1.DatabaseServerAuth{
@@ -127,13 +132,20 @@ var _ = Describe("DatabaseServer controller", func() {
 					Name: serverName,
 				},
 				Access: storagev1alpha1.DatabaseAccessSpec{
-					App: storagev1alpha1.DatabasePrincipalSpec{
-						Name:        "myproduct-router-dev",
-						PrincipalId: "myproduct-router-dev-principal-id",
-					},
-					Owner: storagev1alpha1.DatabasePrincipalSpec{
-						Name:        "my-team-db-owners",
-						PrincipalId: "my-team-db-owners-principal-id",
+					Principals: []storagev1alpha1.DatabaseAccessPrincipalSpec{
+						{
+							Role: storagev1alpha1.DatabaseAccessRoleWriter,
+							IdentityRef: &storagev1alpha1.ApplicationIdentityRef{
+								Name: databaseAppIdentityRef,
+							},
+						},
+						{
+							Role: storagev1alpha1.DatabaseAccessRoleOwner,
+							Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+								Name:        databaseOwnerGroup,
+								PrincipalId: databaseOwnerPrincipalID,
+							},
+						},
 					},
 				},
 			},
@@ -178,11 +190,11 @@ var _ = Describe("DatabaseServer controller", func() {
 		return job
 	}
 
-	createApplicationIdentity := func(ctx context.Context, name, namespace, managedName, principalID string) {
+	createApplicationIdentity := func(ctx context.Context, name, managedName, principalID string) {
 		appIdentity := &identityv1alpha1.ApplicationIdentity{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
-				Namespace: namespace,
+				Namespace: ns,
 			},
 			Spec: identityv1alpha1.ApplicationIdentitySpec{},
 		}
@@ -2170,7 +2182,7 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("resolves ApplicationIdentity references for server admin", func() {
-		createApplicationIdentity(ctx, "adminidentity", ns, "admin-mi", "admin-mi-id")
+		createApplicationIdentity(ctx, "adminidentity", "admin-mi", "admin-mi-id")
 
 		db := newDedicatedDatabaseServer("my-app-db-appid-ref", adminIdentityRefAuth("adminidentity"))
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
@@ -2207,6 +2219,7 @@ var _ = Describe("DatabaseServer controller", func() {
 	It("creates a FlexibleServersDatabase and publishes Database status", func() {
 		db := newSharedDatabaseServer("shared-db-database-valid")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
 
 		database := newDatabase("router-valid", db.Name)
 		Expect(k8sClient.Create(ctx, database)).To(Succeed())
@@ -2286,17 +2299,29 @@ var _ = Describe("DatabaseServer controller", func() {
 		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
 			corev1.EnvVar{Name: "DISPG_DB_SCHEMA", Value: expectedDatabaseName},
 		))
-		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_APP_IDENTITY_NAME", Value: database.Spec.Access.App.Name},
-		))
-		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_APP_IDENTITY_ID", Value: database.Spec.Access.App.PrincipalId},
-		))
-		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_OWNER_IDENTITY_NAME", Value: database.Spec.Access.Owner.Name},
-		))
-		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_OWNER_IDENTITY_ID", Value: database.Spec.Access.Owner.PrincipalId},
+		Expect(job.Spec.Template.Spec.Containers[0].Env).NotTo(ContainElement(HaveField("Name", "DISPG_APP_IDENTITY_NAME")))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).NotTo(ContainElement(HaveField("Name", "DISPG_OWNER_IDENTITY_NAME")))
+		var accessPayload string
+		for _, env := range job.Spec.Template.Spec.Containers[0].Env {
+			if env.Name == dbUtil.AccessPrincipalsEnv {
+				accessPayload = env.Value
+			}
+		}
+		accessPrincipals, err := dbUtil.ParseAccessPrincipalsPayload(accessPayload)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(accessPrincipals).To(ConsistOf(
+			dbUtil.AccessPrincipal{
+				Role:          dbUtil.AccessRoleWriter,
+				Name:          databaseAppManagedIdentity,
+				PrincipalID:   databaseAppPrincipalID,
+				PrincipalType: dbUtil.PrincipalTypeService,
+			},
+			dbUtil.AccessPrincipal{
+				Role:          dbUtil.AccessRoleOwner,
+				Name:          databaseOwnerGroup,
+				PrincipalID:   databaseOwnerPrincipalID,
+				PrincipalType: dbUtil.PrincipalTypeGroup,
+			},
 		))
 		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
 			corev1.EnvVar{Name: "DISPG_REVOKE_PUBLIC_CONNECT", Value: "1"},
@@ -2345,6 +2370,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			"admin-mi",
 		))
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
 
 		database := newDatabase("router-dedicated-server", db.Name)
 		Expect(k8sClient.Create(ctx, database)).To(Succeed())
@@ -2426,6 +2452,80 @@ var _ = Describe("DatabaseServer controller", func() {
 			Should(BeEmpty())
 	})
 
+	It("reports Database access validation errors for duplicate and malformed principals", func() {
+		db := newSharedDatabaseServer("shared-db-access-validation")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		database := newDatabase("router-access-validation", db.Name)
+		database.Spec.Access.Principals = []storagev1alpha1.DatabaseAccessPrincipalSpec{
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleReader,
+				IdentityRef: &storagev1alpha1.ApplicationIdentityRef{
+					Name: " app-ref ",
+				},
+			},
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleWriter,
+				IdentityRef: &storagev1alpha1.ApplicationIdentityRef{
+					Name: "same-ref",
+				},
+			},
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleOwner,
+				IdentityRef: &storagev1alpha1.ApplicationIdentityRef{
+					Name: "same-ref",
+				},
+			},
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleReader,
+				Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+					Name:        "group-one",
+					PrincipalId: "not-a-guid",
+				},
+			},
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleOwner,
+				Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+					Name:        "group-two",
+					PrincipalId: databaseOwnerPrincipalID,
+				},
+			},
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleWriter,
+				Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+					Name:        "group-three",
+					PrincipalId: databaseOwnerPrincipalID,
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) map[string]string {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      database.Name,
+				Namespace: database.Namespace,
+			}, &updated)).To(Succeed())
+
+			reasons := make(map[string]string, len(updated.Status.ValidationErrors))
+			for _, validationError := range updated.Status.ValidationErrors {
+				reasons[validationError.Field] = validationError.Reason
+			}
+			return reasons
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(SatisfyAll(
+				HaveKeyWithValue("spec.access.principals[0].identityRef.name", databaseValidationReasonInvalid),
+				HaveKeyWithValue("spec.access.principals[2]", databaseValidationReasonConflict),
+				HaveKeyWithValue("spec.access.principals[3].group.principalId", databaseValidationReasonInvalid),
+				HaveKeyWithValue("spec.access.principals[5]", databaseValidationReasonConflict),
+			))
+
+		Consistently(func(g Gomega) []dbforpostgresqlv1.FlexibleServersDatabase {
+			return listDatabaseASOChildren(g, database.Name)
+		}).WithTimeout(2 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+	})
+
 	It("reports at most one Database validation error per field", func() {
 		database := newDatabase("router-duplicate-validation", "missing-shared-db")
 		database.Spec.Name = "   "
@@ -2454,6 +2554,54 @@ var _ = Describe("DatabaseServer controller", func() {
 			return specNameErrorCount
 		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
 			Should(Equal(1))
+	})
+
+	It("waits for referenced ApplicationIdentity before creating the access Job", func() {
+		db := newSharedDatabaseServer("shared-db-database-access-identity-wait")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		database := newDatabase("router-access-identity-wait", db.Name)
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			return len(listDatabaseASOChildren(g, database.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+
+		markDatabaseASOReady(ctx, database)
+
+		Eventually(func(g Gomega) []storagev1alpha1.DatabaseValidationError {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      database.Name,
+				Namespace: database.Namespace,
+			}, &updated)).To(Succeed())
+
+			accessReady := meta.FindStatusCondition(updated.Status.Conditions, databaseConditionAccessReady)
+			g.Expect(accessReady).NotTo(BeNil())
+			g.Expect(accessReady.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(accessReady.Reason).To(Equal(databaseReasonProvisioning))
+			g.Expect(accessReady.Message).To(ContainSubstring("Waiting for ApplicationIdentity"))
+			return updated.Status.ValidationErrors
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+
+		Consistently(func(g Gomega) int {
+			var jobs batchv1.JobList
+			g.Expect(k8sClient.List(ctx, &jobs,
+				client.InNamespace(database.Namespace),
+				client.MatchingLabels(map[string]string{
+					databaseNameLabelKey:              database.Name,
+					"dis.altinn.cloud/user-provision": "true",
+				}),
+			)).To(Succeed())
+			return len(jobs.Items)
+		}).WithTimeout(2 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(0))
+
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
+		job := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
+		Expect(job.Name).NotTo(BeEmpty())
 	})
 
 	It("revalidates Database when the referenced DatabaseServer is created later", func() {
@@ -2622,6 +2770,7 @@ var _ = Describe("DatabaseServer controller", func() {
 	It("sets Database Ready after the access provisioning Job completes", func() {
 		db := newSharedDatabaseServer("shared-db-database-access-ready")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
 
 		database := newDatabase("router-access-ready", db.Name)
 		Expect(k8sClient.Create(ctx, database)).To(Succeed())
@@ -2687,6 +2836,7 @@ var _ = Describe("DatabaseServer controller", func() {
 	It("recreates the Database access provisioning Job when the current Job is failed", func() {
 		db := newSharedDatabaseServer("shared-db-database-access-job-failed")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
 
 		database := newDatabase("router-access-job-failed", db.Name)
 		Expect(k8sClient.Create(ctx, database)).To(Succeed())
@@ -2740,6 +2890,77 @@ var _ = Describe("DatabaseServer controller", func() {
 			return recreatedJob.UID
 		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
 			ShouldNot(Equal(oldUID))
+	})
+
+	It("recreates the Database access provisioning Job when ApplicationIdentity status changes", func() {
+		db := newSharedDatabaseServer("shared-db-database-access-identity-change")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
+
+		database := newDatabase("router-access-identity-change", db.Name)
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			return len(listDatabaseASOChildren(g, database.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+
+		markDatabaseASOReady(ctx, database)
+
+		oldJob := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
+		oldJobName := oldJob.Name
+
+		const updatedManagedIdentity = "myproduct-router-dev-mi-v2"
+		const updatedPrincipalID = "00000000-0000-0000-0000-000000000002"
+		Eventually(func() error {
+			var appIdentity identityv1alpha1.ApplicationIdentity
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      databaseAppIdentityRef,
+				Namespace: ns,
+			}, &appIdentity); err != nil {
+				return err
+			}
+			managed := updatedManagedIdentity
+			principal := updatedPrincipalID
+			appIdentity.Status.ManagedIdentityName = &managed
+			appIdentity.Status.PrincipalID = &principal
+			return k8sClient.Status().Update(ctx, &appIdentity)
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func(g Gomega) string {
+			var jobs batchv1.JobList
+			g.Expect(k8sClient.List(ctx, &jobs,
+				client.InNamespace(database.Namespace),
+				client.MatchingLabels(map[string]string{
+					databaseNameLabelKey:              database.Name,
+					"dis.altinn.cloud/user-provision": "true",
+				}),
+			)).To(Succeed())
+			if len(jobs.Items) != 1 {
+				return ""
+			}
+
+			job := jobs.Items[0]
+			if job.Name == oldJobName {
+				return ""
+			}
+			for _, env := range job.Spec.Template.Spec.Containers[0].Env {
+				if env.Name == dbUtil.AccessPrincipalsEnv {
+					accessPrincipals, err := dbUtil.ParseAccessPrincipalsPayload(env.Value)
+					g.Expect(err).NotTo(HaveOccurred())
+					g.Expect(accessPrincipals).To(ContainElement(dbUtil.AccessPrincipal{
+						Role:          dbUtil.AccessRoleWriter,
+						Name:          updatedManagedIdentity,
+						PrincipalID:   updatedPrincipalID,
+						PrincipalType: dbUtil.PrincipalTypeService,
+					}))
+					return job.Name
+				}
+			}
+			return ""
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			ShouldNot(BeEmpty())
 	})
 
 	It("fails validation instead of creating a second database when spec.name changes", func() {
