@@ -276,7 +276,9 @@ func buildUserProvisionJob(
 func userProvisionJobEnv(spec userProvisionJobSpec) []corev1.EnvVar {
 	accessPrincipals, err := dbUtil.MarshalAccessPrincipals(spec.AccessPrincipals)
 	if err != nil {
-		accessPrincipals = err.Error()
+		// Unreachable: validateUserProvisionJobSpec already runs MarshalAccessPrincipals
+		// and rejects specs that fail to marshal before we reach this point.
+		panic(fmt.Sprintf("userProvisionJobEnv: MarshalAccessPrincipals failed after validation: %v", err))
 	}
 
 	env := []corev1.EnvVar{

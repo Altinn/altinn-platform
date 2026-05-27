@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -315,9 +316,12 @@ func (c *recordingConn) Exec(_ context.Context, sql string, args ...any) (pgconn
 }
 
 func (c *recordingConn) Query(_ context.Context, _ string, args ...any) (pgx.Rows, error) {
-	var roleName string
-	if len(args) > 0 {
-		roleName, _ = args[0].(string)
+	if len(args) != 1 {
+		return nil, fmt.Errorf("recordingConn.Query: expected 1 arg, got %d", len(args))
+	}
+	roleName, ok := args[0].(string)
+	if !ok {
+		return nil, fmt.Errorf("recordingConn.Query: expected string arg, got %T", args[0])
 	}
 	return &recordingRows{values: append([]string(nil), c.members[roleName]...)}, nil
 }

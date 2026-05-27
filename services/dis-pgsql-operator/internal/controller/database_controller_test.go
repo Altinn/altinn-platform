@@ -2301,6 +2301,8 @@ var _ = Describe("DatabaseServer controller", func() {
 		))
 		Expect(job.Spec.Template.Spec.Containers[0].Env).NotTo(ContainElement(HaveField("Name", "DISPG_APP_IDENTITY_NAME")))
 		Expect(job.Spec.Template.Spec.Containers[0].Env).NotTo(ContainElement(HaveField("Name", "DISPG_OWNER_IDENTITY_NAME")))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).NotTo(ContainElement(HaveField("Name", "DISPG_APP_IDENTITY_ID")))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).NotTo(ContainElement(HaveField("Name", "DISPG_OWNER_IDENTITY_ID")))
 		var accessPayload string
 		for _, env := range job.Spec.Template.Spec.Containers[0].Env {
 			if env.Name == dbUtil.AccessPrincipalsEnv {
