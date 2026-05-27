@@ -124,3 +124,6 @@ CVE-2026-39836
 
 # stdlib: DoS via pathological inputs in consumePhrase
 CVE-2026-42499
+
+# containerd: user ID handling bypass allows runAsNonRoot evasion
+CVE-2026-46680
