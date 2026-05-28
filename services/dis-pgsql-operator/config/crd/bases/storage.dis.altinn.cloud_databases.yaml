@@ -40,43 +40,66 @@ spec:
             description: spec defines the desired state of Database.
             properties:
               access:
-                description: access defines the identity that should get access to
-                  this database.
+                description: access defines the principals that should get access
+                  to this database.
                 properties:
-                  app:
-                    description: app is the runtime application principal.
-                    properties:
-                      name:
-                        description: name is the Entra principal name.
-                        minLength: 1
-                        type: string
-                      principalId:
-                        description: principalId is the Entra principal object ID.
-                        minLength: 1
-                        type: string
-                    required:
-                    - name
-                    - principalId
-                    type: object
-                  owner:
-                    description: owner is the Entra group for the team that owns the
-                      database.
-                    properties:
-                      name:
-                        description: name is the Entra principal name.
-                        minLength: 1
-                        type: string
-                      principalId:
-                        description: principalId is the Entra principal object ID.
-                        minLength: 1
-                        type: string
-                    required:
-                    - name
-                    - principalId
-                    type: object
+                  principals:
+                    description: principals is the list of Entra principals that should
+                      get database access.
+                    items:
+                      description: DatabaseAccessPrincipalSpec describes one principal
+                        and the role it should get.
+                      properties:
+                        group:
+                          description: group identifies an existing Entra group.
+                          properties:
+                            name:
+                              description: name is the Entra group display name used
+                                as the PostgreSQL principal name.
+                              minLength: 1
+                              type: string
+                            principalId:
+                              description: principalId is the Entra group object ID.
+                              minLength: 1
+                              type: string
+                          required:
+                          - name
+                          - principalId
+                          type: object
+                        identityRef:
+                          description: |-
+                            identityRef points to an ApplicationIdentity in the same namespace.
+                            The operator resolves the managed identity name and principalId from status.
+                          properties:
+                            name:
+                              description: name is the ApplicationIdentity name in
+                                the same namespace.
+                              minLength: 1
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        role:
+                          description: role is the managed database access role granted
+                            to the principal.
+                          enum:
+                          - Reader
+                          - Writer
+                          - Owner
+                          type: string
+                      required:
+                      - role
+                      type: object
+                      x-kubernetes-validations:
+                      - message: 'Provide exactly one principal source: identityRef
+                          or group.'
+                        rule: (has(self.identityRef) && !has(self.group)) || (!has(self.identityRef)
+                          && has(self.group))
+                    minItems: 1
+                    type: array
+                    x-kubernetes-list-type: atomic
                 required:
-                - app
-                - owner
+                - principals
                 type: object
               deletionPolicy:
                 default: Retain

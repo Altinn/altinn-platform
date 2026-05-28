@@ -19,26 +19,55 @@ type DatabaseServerReference struct {
 	Name string `json:"name"`
 }
 
-// DatabasePrincipalSpec contains an Entra principal that should get
+// +kubebuilder:validation:Enum=Reader;Writer;Owner
+// DatabaseAccessRole is the database role granted to an access principal.
+type DatabaseAccessRole string
+
+const (
+	// DatabaseAccessRoleReader grants read-only database access.
+	DatabaseAccessRoleReader DatabaseAccessRole = "Reader"
+
+	// DatabaseAccessRoleWriter grants read/write DML access without DDL.
+	DatabaseAccessRoleWriter DatabaseAccessRole = "Writer"
+
+	// DatabaseAccessRoleOwner grants read/write access plus schema ownership for DDL.
+	DatabaseAccessRoleOwner DatabaseAccessRole = "Owner"
+)
+
+// DatabaseGroupPrincipalSpec contains an existing Entra group that should get
 // access to the database.
-type DatabasePrincipalSpec struct {
-	// name is the Entra principal name.
+type DatabaseGroupPrincipalSpec struct {
+	// name is the Entra group display name used as the PostgreSQL principal name.
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
-	// principalId is the Entra principal object ID.
+	// principalId is the Entra group object ID.
 	// +kubebuilder:validation:MinLength=1
 	PrincipalId string `json:"principalId"`
 }
 
-// DatabaseAccessSpec describes access requirements for the
-// database.
-type DatabaseAccessSpec struct {
-	// app is the runtime application principal.
-	App DatabasePrincipalSpec `json:"app"`
+// +kubebuilder:validation:XValidation:rule="(has(self.identityRef) && !has(self.group)) || (!has(self.identityRef) && has(self.group))",message="Provide exactly one principal source: identityRef or group."
+// DatabaseAccessPrincipalSpec describes one principal and the role it should get.
+type DatabaseAccessPrincipalSpec struct {
+	// role is the managed database access role granted to the principal.
+	Role DatabaseAccessRole `json:"role"`
 
-	// owner is the Entra group for the team that owns the database.
-	Owner DatabasePrincipalSpec `json:"owner"`
+	// identityRef points to an ApplicationIdentity in the same namespace.
+	// The operator resolves the managed identity name and principalId from status.
+	// +optional
+	IdentityRef *ApplicationIdentityRef `json:"identityRef,omitempty"`
+
+	// group identifies an existing Entra group.
+	// +optional
+	Group *DatabaseGroupPrincipalSpec `json:"group,omitempty"`
+}
+
+// DatabaseAccessSpec describes role-based access requirements for the database.
+type DatabaseAccessSpec struct {
+	// principals is the list of Entra principals that should get database access.
+	// +listType=atomic
+	// +kubebuilder:validation:MinItems=1
+	Principals []DatabaseAccessPrincipalSpec `json:"principals"`
 }
 
 // DatabaseSpec defines the desired state of Database.
@@ -54,7 +83,7 @@ type DatabaseSpec struct {
 	// server identifies the same-namespace DatabaseServer.
 	Server DatabaseServerReference `json:"server"`
 
-	// access defines the identity that should get access to this database.
+	// access defines the principals that should get access to this database.
 	Access DatabaseAccessSpec `json:"access"`
 
 	// deletionPolicy controls database cleanup when this resource is deleted.

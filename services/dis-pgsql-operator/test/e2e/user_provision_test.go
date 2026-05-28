@@ -53,7 +53,7 @@ var _ = Describe("User provisioning", Ordered, func() {
 		userIdentity               = "user1"
 		userPrincipalId            = "user1-principal-id"
 		userOwnerIdentity          = "e2e-user-owner"
-		userOwnerPrincipalID       = "e2e-user-owner-principal-id"
+		userOwnerPrincipalID       = "11111111-1111-1111-1111-111111111111"
 		explicitBackupRetentionDay = 21
 		explicitCustomServerParam  = "autovacuum_naptime"
 		explicitCustomServerValue  = "15"
@@ -62,7 +62,7 @@ var _ = Describe("User provisioning", Ordered, func() {
 		databaseAppIdentity        = "e2e-database-app"
 		databaseAppPrincipalID     = "e2e-database-app-principal-id"
 		databaseOwnerIdentity      = "e2e-database-owner"
-		databaseOwnerPrincipalID   = "e2e-database-owner-principal-id"
+		databaseOwnerPrincipalID   = "22222222-2222-2222-2222-222222222222"
 	)
 
 	var manifestPath string
@@ -128,6 +128,7 @@ var _ = Describe("User provisioning", Ordered, func() {
 		cmd := exec.Command("kubectl", "apply", "-f", databaseManifestPath)
 		_, err := utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to apply Database manifest")
+		patchApplicationIdentityStatus(userIdentity, namespace, userIdentity, userPrincipalId)
 
 		By("waiting for the ASO database child")
 		asoDatabaseName := waitForDatabaseASOResource(dbName, namespace)
@@ -210,6 +211,7 @@ var _ = Describe("User provisioning", Ordered, func() {
 		_, err := utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to apply Database manifest")
 		patchApplicationIdentityStatus(adminIdentityRef, namespace, adminIdentity, adminPrincipal)
+		patchApplicationIdentityStatus(databaseAppIdentity, namespace, databaseAppIdentity, databaseAppPrincipalID)
 
 		By("waiting for the ASO database child")
 		asoDatabaseName := waitForDatabaseASOResource(databaseResourceName, namespace)
@@ -261,12 +263,22 @@ var _ = Describe("User provisioning", Ordered, func() {
 		output = runPostgresQuery("SELECT 1 FROM pg_roles WHERE rolname = '" + databaseOwnerIdentity + "';")
 		Expect(strings.TrimSpace(output)).To(Equal("1"))
 
-		By("verifying the app can create tables in the database schema")
+		By("verifying the Writer app cannot create tables")
 		_, err = runPostgresQueryAsUserInDatabase(databaseAppIdentity, expectedDatabaseName,
-			"CREATE TABLE e2e_app_table (id int PRIMARY KEY, value text); INSERT INTO e2e_app_table VALUES (1, 'app');")
+			"CREATE TABLE e2e_app_table (id int PRIMARY KEY, value text);")
+		Expect(err).To(HaveOccurred())
+
+		By("verifying the Owner group can create objects in the schema")
+		_, err = runPostgresQueryAsUserInDatabase(databaseOwnerIdentity, expectedDatabaseName,
+			"CREATE TABLE e2e_app_table (id int PRIMARY KEY, value text);")
 		Expect(err).NotTo(HaveOccurred())
 
-		By("verifying the owner can use app-created objects and create objects in the schema")
+		By("verifying the Writer app can use owner-created objects")
+		_, err = runPostgresQueryAsUserInDatabase(databaseAppIdentity, expectedDatabaseName,
+			"INSERT INTO e2e_app_table VALUES (1, 'app');")
+		Expect(err).NotTo(HaveOccurred())
+
+		By("verifying the Owner group can use app-written objects")
 		_, err = runPostgresQueryAsUserInDatabase(databaseOwnerIdentity, expectedDatabaseName,
 			"INSERT INTO e2e_app_table VALUES (2, 'owner'); CREATE TABLE e2e_owner_table (id int); DROP TABLE e2e_owner_table;")
 		Expect(err).NotTo(HaveOccurred())
@@ -685,6 +697,18 @@ func writeDatabaseOnlyTestManifest(
 	ownerIdentity,
 	ownerPrincipalID string,
 ) string {
+	appIdentityResource := &identityv1alpha1.ApplicationIdentity{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "application.dis.altinn.cloud/v1alpha1",
+			Kind:       "ApplicationIdentity",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      appIdentity,
+			Namespace: namespace,
+		},
+		Spec: identityv1alpha1.ApplicationIdentitySpec{},
+	}
+
 	database := &storagev1alpha1.Database{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "storage.dis.altinn.cloud/v1alpha1",
@@ -700,28 +724,41 @@ func writeDatabaseOnlyTestManifest(
 				Name: serverName,
 			},
 			Access: storagev1alpha1.DatabaseAccessSpec{
-				App: storagev1alpha1.DatabasePrincipalSpec{
-					Name:        appIdentity,
-					PrincipalId: appPrincipalID,
-				},
-				Owner: storagev1alpha1.DatabasePrincipalSpec{
-					Name:        ownerIdentity,
-					PrincipalId: ownerPrincipalID,
+				Principals: []storagev1alpha1.DatabaseAccessPrincipalSpec{
+					{
+						Role: storagev1alpha1.DatabaseAccessRoleOwner,
+						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{
+							Name: appIdentity,
+						},
+					},
+					{
+						Role: storagev1alpha1.DatabaseAccessRoleOwner,
+						Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+							Name:        ownerIdentity,
+							PrincipalId: ownerPrincipalID,
+						},
+					},
 				},
 			},
 		},
 	}
 
-	contentBytes, err := yaml.Marshal(database)
-	Expect(err).NotTo(HaveOccurred(), "Failed to marshal Database test manifest")
-	content := string(contentBytes)
+	resources := []interface{}{appIdentityResource, database}
+	docs := make([]string, 0, len(resources))
+	for i := range resources {
+		content, err := yaml.Marshal(resources[i])
+		Expect(err).NotTo(HaveOccurred(), "Failed to marshal Database test manifest resource")
+		docs = append(docs, string(content))
+	}
+
+	content := strings.Join(docs, "---\n")
 	if !strings.HasSuffix(content, "\n") {
 		content += "\n"
 	}
 
 	dir := os.TempDir()
 	path := filepath.Join(dir, fmt.Sprintf("database-%s.yaml", databaseResourceName))
-	err = os.WriteFile(path, []byte(content), 0o600)
+	err := os.WriteFile(path, []byte(content), 0o600)
 	Expect(err).NotTo(HaveOccurred(), "Failed to write temp manifest")
 	return path
 }
@@ -743,6 +780,17 @@ func writeDatabaseTestManifest(
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      adminIdentityRef,
+			Namespace: namespace,
+		},
+		Spec: identityv1alpha1.ApplicationIdentitySpec{},
+	}
+	appIdentityResource := &identityv1alpha1.ApplicationIdentity{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "application.dis.altinn.cloud/v1alpha1",
+			Kind:       "ApplicationIdentity",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      appIdentity,
 			Namespace: namespace,
 		},
 		Spec: identityv1alpha1.ApplicationIdentitySpec{},
@@ -790,19 +838,26 @@ func writeDatabaseTestManifest(
 				Name: sharedDBName,
 			},
 			Access: storagev1alpha1.DatabaseAccessSpec{
-				App: storagev1alpha1.DatabasePrincipalSpec{
-					Name:        appIdentity,
-					PrincipalId: appPrincipalID,
-				},
-				Owner: storagev1alpha1.DatabasePrincipalSpec{
-					Name:        ownerIdentity,
-					PrincipalId: ownerPrincipalID,
+				Principals: []storagev1alpha1.DatabaseAccessPrincipalSpec{
+					{
+						Role: storagev1alpha1.DatabaseAccessRoleWriter,
+						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{
+							Name: appIdentity,
+						},
+					},
+					{
+						Role: storagev1alpha1.DatabaseAccessRoleOwner,
+						Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+							Name:        ownerIdentity,
+							PrincipalId: ownerPrincipalID,
+						},
+					},
 				},
 			},
 		},
 	}
 
-	resources := []interface{}{adminIdentity, sharedDatabase, database}
+	resources := []interface{}{adminIdentity, appIdentityResource, sharedDatabase, database}
 	docs := make([]string, 0, len(resources))
 	for i := range resources {
 		content, err := yaml.Marshal(resources[i])

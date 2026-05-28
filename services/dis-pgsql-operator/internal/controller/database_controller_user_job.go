@@ -6,6 +6,7 @@ import (
 	"maps"
 	"strings"
 
+	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,11 +40,7 @@ type userProvisionJobSpec struct {
 	DatabaseName string
 	SchemaName   string
 
-	AppIdentityName string
-	AppPrincipalID  string
-
-	OwnerIdentityName string
-	OwnerPrincipalID  string
+	AccessPrincipals []dbUtil.AccessPrincipal
 
 	RevokePublicConnect bool
 	SearchPathScope     string
@@ -142,7 +139,7 @@ func ensureUserProvisionJobForReconciler(
 		job.Spec.Template.Spec.Containers[0].Env = append(
 			job.Spec.Template.Spec.Containers[0].Env,
 			corev1.EnvVar{
-				Name:  "DISPG_DISABLE_AAD",
+				Name:  dbUtil.DisableAADEnv,
 				Value: "1",
 			},
 		)
@@ -168,7 +165,7 @@ func ensureUserProvisionJobForReconciler(
 		"jobName", jobName,
 		"namespace", ns,
 		"serviceAccount", spec.ServiceAccountName,
-		"userIdentity", spec.AppIdentityName,
+		"accessPrincipalCount", len(spec.AccessPrincipals),
 	)
 
 	if err := r.Create(ctx, job); err != nil {
@@ -191,17 +188,32 @@ func validateUserProvisionJobSpec(spec userProvisionJobSpec, useAzFakes bool) er
 	if spec.ServerName == "" {
 		return fmt.Errorf("server name must be set for user provisioning")
 	}
-	if spec.AppIdentityName == "" {
-		return fmt.Errorf("app identity name must be set for user provisioning")
-	}
-	if spec.AppPrincipalID == "" && !useAzFakes {
-		return fmt.Errorf("app principal ID must be set for user provisioning")
-	}
 	if spec.SchemaName == "" {
 		return fmt.Errorf("schema name must be set for user provisioning")
 	}
-	if spec.OwnerIdentityName != "" && spec.OwnerPrincipalID == "" && !useAzFakes {
-		return fmt.Errorf("owner principal ID must be set for user provisioning")
+	if len(spec.AccessPrincipals) == 0 {
+		return fmt.Errorf("at least one access principal must be set for user provisioning")
+	}
+	for i, principal := range spec.AccessPrincipals {
+		if principal.Name == "" {
+			return fmt.Errorf("access principal %d name must be set for user provisioning", i)
+		}
+		if principal.PrincipalID == "" && !useAzFakes {
+			return fmt.Errorf("access principal %d principal ID must be set for user provisioning", i)
+		}
+		switch principal.PrincipalType {
+		case dbUtil.PrincipalTypeService, dbUtil.PrincipalTypeGroup:
+		default:
+			return fmt.Errorf("access principal %d principal type must be service or group", i)
+		}
+		switch principal.Role {
+		case dbUtil.AccessRoleReader, dbUtil.AccessRoleWriter, dbUtil.AccessRoleOwner:
+		default:
+			return fmt.Errorf("access principal %d role must be Reader, Writer, or Owner", i)
+		}
+	}
+	if _, err := dbUtil.MarshalAccessPrincipals(spec.AccessPrincipals); err != nil {
+		return err
 	}
 	return nil
 }
@@ -211,7 +223,7 @@ func userProvisionJobLabels(specLabels map[string]string) map[string]string {
 	if labels == nil {
 		labels = map[string]string{}
 	}
-	labels["dis.altinn.cloud/user-provision"] = "true"
+	labels[userProvisionLabelKey] = labelValueTrue
 	return labels
 }
 
@@ -226,7 +238,7 @@ func buildUserProvisionJob(
 	ttlSeconds int32,
 ) *batchv1.Job {
 	podLabels := map[string]string{
-		"azure.workload.identity/use": "true",
+		"azure.workload.identity/use": labelValueTrue,
 	}
 	maps.Copy(podLabels, labels)
 
@@ -262,36 +274,30 @@ func buildUserProvisionJob(
 }
 
 func userProvisionJobEnv(spec userProvisionJobSpec) []corev1.EnvVar {
+	accessPrincipals, err := dbUtil.MarshalAccessPrincipals(spec.AccessPrincipals)
+	if err != nil {
+		// Unreachable: validateUserProvisionJobSpec already runs MarshalAccessPrincipals
+		// and rejects specs that fail to marshal before we reach this point.
+		panic(fmt.Sprintf("userProvisionJobEnv: MarshalAccessPrincipals failed after validation: %v", err))
+	}
+
 	env := []corev1.EnvVar{
-		{Name: "DISPG_USER_APP_IDENTITY", Value: spec.AppIdentityName},
-		{Name: "DISPG_USER_APP_PRINCIPAL_ID", Value: spec.AppPrincipalID},
-		{Name: "DISPG_ADMIN_APP_IDENTITY", Value: spec.AdminIdentityName},
-		{Name: "DISPG_DATABASE_NAME", Value: spec.ServerName},
-		{Name: "DISPG_DB_SCHEMA", Value: spec.SchemaName},
+		{Name: dbUtil.AdminAppIdentityEnv, Value: spec.AdminIdentityName},
+		{Name: dbUtil.DatabaseServerNameEnv, Value: spec.ServerName},
+		{Name: dbUtil.DBSchemaEnv, Value: spec.SchemaName},
+		{Name: dbUtil.AccessPrincipalsEnv, Value: accessPrincipals},
 	}
 	if spec.DatabaseHost != "" {
-		env = append(env, corev1.EnvVar{Name: "DISPG_DB_HOST", Value: spec.DatabaseHost})
+		env = append(env, corev1.EnvVar{Name: dbUtil.DBHostEnv, Value: spec.DatabaseHost})
 	}
 	if spec.DatabaseName != "" {
-		env = append(env, corev1.EnvVar{Name: "DISPG_DB_NAME", Value: spec.DatabaseName})
-	}
-	if spec.AppIdentityName != "" {
-		env = append(env,
-			corev1.EnvVar{Name: "DISPG_APP_IDENTITY_NAME", Value: spec.AppIdentityName},
-			corev1.EnvVar{Name: "DISPG_APP_IDENTITY_ID", Value: spec.AppPrincipalID},
-		)
-	}
-	if spec.OwnerIdentityName != "" {
-		env = append(env,
-			corev1.EnvVar{Name: "DISPG_OWNER_IDENTITY_NAME", Value: spec.OwnerIdentityName},
-			corev1.EnvVar{Name: "DISPG_OWNER_IDENTITY_ID", Value: spec.OwnerPrincipalID},
-		)
+		env = append(env, corev1.EnvVar{Name: dbUtil.DBNameEnv, Value: spec.DatabaseName})
 	}
 	if spec.RevokePublicConnect {
-		env = append(env, corev1.EnvVar{Name: "DISPG_REVOKE_PUBLIC_CONNECT", Value: "1"})
+		env = append(env, corev1.EnvVar{Name: dbUtil.RevokePublicConnectEnv, Value: "1"})
 	}
 	if spec.SearchPathScope != "" {
-		env = append(env, corev1.EnvVar{Name: "DISPG_DB_SEARCH_PATH_SCOPE", Value: spec.SearchPathScope})
+		env = append(env, corev1.EnvVar{Name: dbUtil.DBSearchPathScopeEnv, Value: spec.SearchPathScope})
 	}
 	return env
 }

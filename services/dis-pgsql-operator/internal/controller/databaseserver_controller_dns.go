@@ -71,7 +71,7 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSZone(
 			Name:      zoneName,
 			Namespace: ns,
 			Labels: map[string]string{
-				"dis.altinn.cloud/database-server-name": db.Name,
+				databaseServerNameLabelKey: db.Name,
 			},
 		},
 		Spec: networkv1.PrivateDnsZone_Spec{
@@ -85,7 +85,7 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSZone(
 				),
 			},
 			Tags: map[string]string{
-				"dis-database": db.Name,
+				disDatabaseNamePrefix: db.Name,
 			},
 		},
 	}
@@ -122,7 +122,7 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSVNetLink(
 	loc := "global"
 	regFalse := false
 	desiredLabels := map[string]string{
-		"dis.altinn.cloud/database-server-name": db.Name,
+		databaseServerNameLabelKey: db.Name,
 	}
 	desiredSpec := networkv1.PrivateDnsZonesVirtualNetworkLink_Spec{
 		AzureName: linkName,
@@ -142,7 +142,7 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSVNetLink(
 		},
 
 		Tags: map[string]string{
-			"dis-database": db.Name,
+			disDatabaseNamePrefix: db.Name,
 		},
 	}
 

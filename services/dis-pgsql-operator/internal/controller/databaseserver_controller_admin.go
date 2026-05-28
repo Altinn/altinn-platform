@@ -69,7 +69,7 @@ func (r *DatabaseServerReconciler) ensureFlexibleServerAdministrator(
 	}
 
 	desiredLabels := map[string]string{
-		"dis.altinn.cloud/database-server-name": db.Name,
+		databaseServerNameLabelKey: db.Name,
 	}
 
 	if !found {
