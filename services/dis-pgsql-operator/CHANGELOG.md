@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.6...dis-pgsql-v0.8.0) (2026-05-28)
+
+
+### Features
+
+* **dis-pgsql:** role-based Database access via principals list ([#3591](https://github.com/Altinn/altinn-platform/issues/3591)) ([cc3725e](https://github.com/Altinn/altinn-platform/commit/cc3725e2a83aeb476d5a1c2f1774b14f286aaf11))
+
 ## [0.7.6](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.5...dis-pgsql-v0.7.6) (2026-05-26)
 
 
