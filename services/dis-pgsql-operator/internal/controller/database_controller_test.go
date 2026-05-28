@@ -41,6 +41,14 @@ var _ = Describe("DatabaseServer controller", func() {
 	const databaseAppPrincipalID = "00000000-0000-0000-0000-000000000001"
 	const databaseOwnerGroup = "my-team-db-owners"
 	const databaseOwnerPrincipalID = "11111111-1111-1111-1111-111111111111"
+	const (
+		serverTypeDev          = "dev"
+		serverTypeProd         = "prod"
+		adminManagedIdentity   = "admin-mi"
+		adminManagedIdentityID = "admin-mi-id"
+		skuP15                 = "P15"
+		paramAutovacuumNaptime = "autovacuum_naptime"
+	)
 
 	adminAuth := func(adminName, adminPrincipalID, adminServiceAccount string) storagev1alpha1.DatabaseServerAuth {
 		return storagev1alpha1.DatabaseServerAuth{
@@ -83,7 +91,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth:       auth,
 			},
 		}
@@ -105,15 +113,15 @@ var _ = Describe("DatabaseServer controller", func() {
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Mode:       storagev1alpha1.DatabaseServerModeShared,
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Network:    sharedNetwork(),
 				Auth: storagev1alpha1.DatabaseServerAuth{
 					Admin: storagev1alpha1.AdminIdentitySpec{
 						Identity: storagev1alpha1.IdentitySource{
-							Name:        "admin-mi",
-							PrincipalId: "admin-mi-id",
+							Name:        adminManagedIdentity,
+							PrincipalId: adminManagedIdentityID,
 						},
-						ServiceAccountName: "admin-mi",
+						ServiceAccountName: adminManagedIdentity,
 					},
 				},
 			},
@@ -176,8 +184,8 @@ var _ = Describe("DatabaseServer controller", func() {
 			g.Expect(k8sClient.List(ctx, &jobs,
 				client.InNamespace(namespace),
 				client.MatchingLabels(map[string]string{
-					databaseNameLabelKey:              databaseName,
-					"dis.altinn.cloud/user-provision": "true",
+					databaseNameLabelKey:  databaseName,
+					userProvisionLabelKey: labelValueTrue,
 				}),
 			)).To(Succeed())
 			if len(jobs.Items) != 1 {
@@ -222,7 +230,7 @@ var _ = Describe("DatabaseServer controller", func() {
 				{
 					Type:               asoconditions.ConditionTypeReady,
 					Status:             metav1.ConditionTrue,
-					Reason:             "Ready",
+					Reason:             databaseConditionReady,
 					LastTransitionTime: metav1.Now(),
 					ObservedGeneration: server.Generation,
 				},
@@ -245,7 +253,7 @@ var _ = Describe("DatabaseServer controller", func() {
 				{
 					Type:               asoconditions.ConditionTypeReady,
 					Status:             metav1.ConditionTrue,
-					Reason:             "Ready",
+					Reason:             databaseConditionReady,
 					LastTransitionTime: metav1.Now(),
 					ObservedGeneration: admin.Generation,
 				},
@@ -270,7 +278,7 @@ var _ = Describe("DatabaseServer controller", func() {
 				{
 					Type:               asoconditions.ConditionTypeReady,
 					Status:             metav1.ConditionTrue,
-					Reason:             "Ready",
+					Reason:             databaseConditionReady,
 					LastTransitionTime: metav1.Now(),
 					ObservedGeneration: server.Generation,
 				},
@@ -293,7 +301,7 @@ var _ = Describe("DatabaseServer controller", func() {
 				{
 					Type:               asoconditions.ConditionTypeReady,
 					Status:             metav1.ConditionTrue,
-					Reason:             "Ready",
+					Reason:             databaseConditionReady,
 					LastTransitionTime: metav1.Now(),
 					ObservedGeneration: asoDatabase.Generation,
 				},
@@ -372,7 +380,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
 					"my-admin-app-identity",
 					"my-admin-app-identity-id",
@@ -408,7 +416,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
 					"adminidentity",
 					"adminidentity-id",
@@ -451,7 +459,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
 					"adminidentity",
 					"adminidentity-id",
@@ -490,11 +498,11 @@ var _ = Describe("DatabaseServer controller", func() {
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -533,15 +541,15 @@ var _ = Describe("DatabaseServer controller", func() {
 		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -602,11 +610,11 @@ var _ = Describe("DatabaseServer controller", func() {
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -664,14 +672,14 @@ var _ = Describe("DatabaseServer controller", func() {
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: storagev1alpha1.DatabaseServerAuth{
 					Admin: storagev1alpha1.AdminIdentitySpec{
 						Identity: storagev1alpha1.IdentitySource{
-							Name:        "admin-mi",
-							PrincipalId: "admin-mi-id",
+							Name:        adminManagedIdentity,
+							PrincipalId: adminManagedIdentityID,
 						},
-						ServiceAccountName: "admin-mi",
+						ServiceAccountName: adminManagedIdentity,
 					},
 				},
 			},
@@ -694,8 +702,8 @@ var _ = Describe("DatabaseServer controller", func() {
 			g.Expect(k8sClient.List(ctx, &jobs,
 				client.InNamespace(db.Namespace),
 				client.MatchingLabels(map[string]string{
-					"dis.altinn.cloud/database-server-name": db.Name,
-					"dis.altinn.cloud/user-provision":       "true",
+					databaseServerNameLabelKey: db.Name,
+					userProvisionLabelKey:      labelValueTrue,
 				}),
 			)).To(Succeed())
 			return len(jobs.Items)
@@ -705,9 +713,9 @@ var _ = Describe("DatabaseServer controller", func() {
 
 	It("rejects dedicated database servers with shared network config", func() {
 		db := newDedicatedDatabaseServer("my-app-db-dedicated-network", directAuth(
-			"admin-mi",
-			"admin-mi-id",
-			"admin-mi",
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
 			"user-mi",
 			"user-mi-id",
 		))
@@ -833,8 +841,8 @@ var _ = Describe("DatabaseServer controller", func() {
 			g.Expect(k8sClient.List(ctx, &jobs,
 				client.InNamespace(db.Namespace),
 				client.MatchingLabels(map[string]string{
-					"dis.altinn.cloud/database-server-name": db.Name,
-					"dis.altinn.cloud/user-provision":       "true",
+					databaseServerNameLabelKey: db.Name,
+					userProvisionLabelKey:      labelValueTrue,
 				}),
 			)).To(Succeed())
 			return len(jobs.Items)
@@ -844,7 +852,7 @@ var _ = Describe("DatabaseServer controller", func() {
 
 	It("reconciles shared server settings and parameters", func() {
 		sizeGB := int32(64)
-		tier := "P15"
+		tier := skuP15
 		retentionDays := 21
 		highAvailabilityEnabled := true
 		db := newSharedDatabaseServer("my-app-db-shared-settings")
@@ -860,7 +868,7 @@ var _ = Describe("DatabaseServer controller", func() {
 		}
 		db.Spec.ServerParams = []storagev1alpha1.DatabaseServerParameter{
 			{
-				Name:  "autovacuum_naptime",
+				Name:  paramAutovacuumNaptime,
 				Value: intstr.FromInt(15),
 			},
 		}
@@ -904,16 +912,16 @@ var _ = Describe("DatabaseServer controller", func() {
 				haMode        dbforpostgresqlv1.HighAvailability_Mode
 			}{
 				sizeGB:        64,
-				tier:          "P15",
+				tier:          skuP15,
 				retentionDays: 21,
 				haMode:        dbforpostgresqlv1.HighAvailability_Mode_ZoneRedundant,
 			}))
 
 		expectedConfigurations := map[string]string{
-			extensionsConfigResourceName(db.Name):                             "hstore,pg_cron",
-			serverParameterConfigResourceName(db.Name, "autovacuum_naptime"):  "15",
-			serverParameterConfigResourceName(db.Name, "pgbouncer.enabled"):   "true",
-			serverParameterConfigResourceName(db.Name, "pgbouncer.pool_mode"): "transaction",
+			extensionsConfigResourceName(db.Name):                              "hstore,pg_cron",
+			serverParameterConfigResourceName(db.Name, paramAutovacuumNaptime): "15",
+			serverParameterConfigResourceName(db.Name, "pgbouncer.enabled"):    "true",
+			serverParameterConfigResourceName(db.Name, "pgbouncer.pool_mode"):  "transaction",
 		}
 
 		for resourceName, expectedValue := range expectedConfigurations {
@@ -969,15 +977,15 @@ var _ = Describe("DatabaseServer controller", func() {
 		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -1004,7 +1012,7 @@ var _ = Describe("DatabaseServer controller", func() {
 
 		Expect(s.Name).To(Equal(expectedServerName))
 		Expect(s.Namespace).To(Equal(db.Namespace))
-		Expect(s.Labels["dis.altinn.cloud/database-server-name"]).To(Equal(db.Name))
+		Expect(s.Labels[databaseServerNameLabelKey]).To(Equal(db.Name))
 
 		// Owner should be set and should use ARMID
 		Expect(s.Spec.Owner).NotTo(BeNil())
@@ -1037,15 +1045,15 @@ var _ = Describe("DatabaseServer controller", func() {
 		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-ha-prod-default",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "prod",
+				ServerType: serverTypeProd,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -1089,16 +1097,16 @@ var _ = Describe("DatabaseServer controller", func() {
 		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-ha-explicit-false",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:                 17,
-				ServerType:              "prod",
+				ServerType:              serverTypeProd,
 				HighAvailabilityEnabled: &highAvailabilityEnabled,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -1145,16 +1153,16 @@ var _ = Describe("DatabaseServer controller", func() {
 		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-ha-update",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:                 17,
-				ServerType:              "dev",
+				ServerType:              serverTypeDev,
 				HighAvailabilityEnabled: &highAvailabilityEnabled,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -1234,16 +1242,16 @@ var _ = Describe("DatabaseServer controller", func() {
 		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-backup-retention",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:             17,
-				ServerType:          "dev",
+				ServerType:          serverTypeDev,
 				BackupRetentionDays: &requestedRetentionDays,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -1270,15 +1278,15 @@ var _ = Describe("DatabaseServer controller", func() {
 		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-backup-retention-prod-default",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "prod",
+				ServerType: serverTypeProd,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -1305,15 +1313,15 @@ var _ = Describe("DatabaseServer controller", func() {
 		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-backup-geo",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -1400,15 +1408,15 @@ var _ = Describe("DatabaseServer controller", func() {
 		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-server-defaults",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "prod",
+				ServerType: serverTypeProd,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -1483,21 +1491,21 @@ var _ = Describe("DatabaseServer controller", func() {
 		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-server-params",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
 				ServerParams: []storagev1alpha1.DatabaseServerParameter{
 					{
-						Name:  "autovacuum_naptime",
+						Name:  paramAutovacuumNaptime,
 						Value: intstr.FromInt(15),
 					},
 				},
@@ -1505,7 +1513,7 @@ var _ = Describe("DatabaseServer controller", func() {
 		}
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
-		maxConnections, err := dbUtil.ResolveMaxConnections(dbUtil.GetProfile("dev"))
+		maxConnections, err := dbUtil.ResolveMaxConnections(dbUtil.GetProfile(serverTypeDev))
 		Expect(err).NotTo(HaveOccurred())
 
 		expectedValues := map[string]string{
@@ -1513,7 +1521,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			dbUtil.ServerParameterPgBouncerMaxPrepared: "5000",
 			dbUtil.ServerParameterPgBouncerPoolMode:    "transaction",
 			dbUtil.ServerParameterMaxConnections:       fmt.Sprintf("%d", maxConnections),
-			"autovacuum_naptime":                       "15",
+			paramAutovacuumNaptime:                     "15",
 		}
 
 		for parameterName, expectedValue := range expectedValues {
@@ -1551,7 +1559,7 @@ var _ = Describe("DatabaseServer controller", func() {
 		updated.Spec.ServerParams = nil
 		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
 
-		customParamName := serverParameterConfigResourceName(db.Name, "autovacuum_naptime")
+		customParamName := serverParameterConfigResourceName(db.Name, paramAutovacuumNaptime)
 		Eventually(func() bool {
 			var configuration dbforpostgresqlv1.FlexibleServersConfiguration
 			err := k8sClient.Get(ctx, types.NamespacedName{
@@ -1567,21 +1575,21 @@ var _ = Describe("DatabaseServer controller", func() {
 		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-server-params-status",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
 				ServerParams: []storagev1alpha1.DatabaseServerParameter{
 					{
-						Name:  "autovacuum_naptime",
+						Name:  paramAutovacuumNaptime,
 						Value: intstr.FromInt(15),
 					},
 				},
@@ -1589,7 +1597,7 @@ var _ = Describe("DatabaseServer controller", func() {
 		}
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
-		parameterName := "autovacuum_naptime"
+		parameterName := paramAutovacuumNaptime
 		resourceName := serverParameterConfigResourceName(db.Name, parameterName)
 
 		Eventually(func(g Gomega) {
@@ -1666,15 +1674,15 @@ var _ = Describe("DatabaseServer controller", func() {
 		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-no-extensions",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -1710,15 +1718,15 @@ var _ = Describe("DatabaseServer controller", func() {
 		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-extensions",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -1793,15 +1801,15 @@ var _ = Describe("DatabaseServer controller", func() {
 		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-extensions-update",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -1898,20 +1906,20 @@ var _ = Describe("DatabaseServer controller", func() {
 		initialSize := int32(32)
 		initialTier := "P10"
 		updatedSize := int32(64)
-		updatedTier := "P15"
+		updatedTier := skuP15
 
 		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-update",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -1981,15 +1989,15 @@ var _ = Describe("DatabaseServer controller", func() {
 		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-tier-clamp",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -2019,11 +2027,11 @@ var _ = Describe("DatabaseServer controller", func() {
 		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-admin",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
 					"admin",
 					"admin-id",
@@ -2068,11 +2076,11 @@ var _ = Describe("DatabaseServer controller", func() {
 		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-admin-update",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
 					"admin-old",
 					"admin-old-id",
@@ -2132,9 +2140,9 @@ var _ = Describe("DatabaseServer controller", func() {
 
 	It("does not create a database server-owned user provisioning Job from legacy user auth", func() {
 		db := newDedicatedDatabaseServer("my-app-db-user-job-ignored", directAuth(
-			"admin-mi",
-			"admin-mi-id",
-			"admin-mi",
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
 			"user-mi",
 			"user-mi-id",
 		))
@@ -2147,8 +2155,8 @@ var _ = Describe("DatabaseServer controller", func() {
 			g.Expect(k8sClient.List(ctx, &jobs,
 				client.InNamespace(db.Namespace),
 				client.MatchingLabels(map[string]string{
-					"dis.altinn.cloud/database-server-name": db.Name,
-					"dis.altinn.cloud/user-provision":       "true",
+					databaseServerNameLabelKey: db.Name,
+					userProvisionLabelKey:      labelValueTrue,
 				}),
 			)).To(Succeed())
 			return len(jobs.Items)
@@ -2158,9 +2166,9 @@ var _ = Describe("DatabaseServer controller", func() {
 
 	It("sets DatabaseServer Ready after ASO resources are ready", func() {
 		db := newDedicatedDatabaseServer("my-app-db-ready", adminAuth(
-			"admin-mi",
-			"admin-mi-id",
-			"admin-mi",
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
 		))
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
@@ -2182,7 +2190,7 @@ var _ = Describe("DatabaseServer controller", func() {
 	})
 
 	It("resolves ApplicationIdentity references for server admin", func() {
-		createApplicationIdentity(ctx, "adminidentity", "admin-mi", "admin-mi-id")
+		createApplicationIdentity(ctx, "adminidentity", adminManagedIdentity, adminManagedIdentityID)
 
 		db := newDedicatedDatabaseServer("my-app-db-appid-ref", adminIdentityRefAuth("adminidentity"))
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
@@ -2211,8 +2219,8 @@ var _ = Describe("DatabaseServer controller", func() {
 				azureName     string
 				principalName string
 			}{
-				azureName:     "admin-mi-id",
-				principalName: "admin-mi",
+				azureName:     adminManagedIdentityID,
+				principalName: adminManagedIdentity,
 			}))
 	})
 
@@ -2288,13 +2296,13 @@ var _ = Describe("DatabaseServer controller", func() {
 		Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(db.Spec.Auth.Admin.ServiceAccountName))
 		Expect(job.Spec.Template.Spec.Containers).To(HaveLen(1))
 		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_DATABASE_NAME", Value: db.Name},
+			corev1.EnvVar{Name: envDispgDatabaseName, Value: db.Name},
 		))
 		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
 			corev1.EnvVar{Name: "DISPG_DB_HOST", Value: fmt.Sprintf("%s.postgres.database.azure.com", db.Name)},
 		))
 		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_DB_NAME", Value: expectedDatabaseName},
+			corev1.EnvVar{Name: envDispgDbName, Value: expectedDatabaseName},
 		))
 		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
 			corev1.EnvVar{Name: "DISPG_DB_SCHEMA", Value: expectedDatabaseName},
@@ -2329,7 +2337,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			corev1.EnvVar{Name: "DISPG_REVOKE_PUBLIC_CONNECT", Value: "1"},
 		))
 		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_DB_SEARCH_PATH_SCOPE", Value: "database"},
+			corev1.EnvVar{Name: "DISPG_DB_SEARCH_PATH_SCOPE", Value: searchPathScopeDatabase},
 		))
 	})
 
@@ -2367,9 +2375,9 @@ var _ = Describe("DatabaseServer controller", func() {
 
 	It("creates a Database and access Job on a dedicated database server", func() {
 		db := newDedicatedDatabaseServer("dedicated-db-database-valid", adminAuth(
-			"admin-mi",
-			"admin-mi-id",
-			"admin-mi",
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
 		))
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
@@ -2402,10 +2410,10 @@ var _ = Describe("DatabaseServer controller", func() {
 		Expect(job.Labels).To(HaveKeyWithValue(databaseNameLabelKey, database.Name))
 		Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(db.Spec.Auth.Admin.ServiceAccountName))
 		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_DATABASE_NAME", Value: db.Name},
+			corev1.EnvVar{Name: envDispgDatabaseName, Value: db.Name},
 		))
 		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_DB_NAME", Value: expectedDatabaseName},
+			corev1.EnvVar{Name: envDispgDbName, Value: expectedDatabaseName},
 		))
 	})
 
@@ -2593,8 +2601,8 @@ var _ = Describe("DatabaseServer controller", func() {
 			g.Expect(k8sClient.List(ctx, &jobs,
 				client.InNamespace(database.Namespace),
 				client.MatchingLabels(map[string]string{
-					databaseNameLabelKey:              database.Name,
-					"dis.altinn.cloud/user-provision": "true",
+					databaseNameLabelKey:  database.Name,
+					userProvisionLabelKey: labelValueTrue,
 				}),
 			)).To(Succeed())
 			return len(jobs.Items)
@@ -2935,8 +2943,8 @@ var _ = Describe("DatabaseServer controller", func() {
 			g.Expect(k8sClient.List(ctx, &jobs,
 				client.InNamespace(database.Namespace),
 				client.MatchingLabels(map[string]string{
-					databaseNameLabelKey:              database.Name,
-					"dis.altinn.cloud/user-provision": "true",
+					databaseNameLabelKey:  database.Name,
+					userProvisionLabelKey: labelValueTrue,
 				}),
 			)).To(Succeed())
 			if len(jobs.Items) != 1 {

@@ -241,7 +241,7 @@ func (r *DatabaseServerReconciler) updateServerParameterStatusFromASO(
 		meta.SetStatusCondition(&db.Status.Conditions, metav1.Condition{
 			Type:    serverParametersReadyConditionType,
 			Status:  metav1.ConditionTrue,
-			Reason:  "Ready",
+			Reason:  databaseConditionReady,
 			Message: "All server parameter configurations are ready.",
 		})
 	}

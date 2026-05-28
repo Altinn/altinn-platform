@@ -223,7 +223,7 @@ func userProvisionJobLabels(specLabels map[string]string) map[string]string {
 	if labels == nil {
 		labels = map[string]string{}
 	}
-	labels["dis.altinn.cloud/user-provision"] = "true"
+	labels[userProvisionLabelKey] = labelValueTrue
 	return labels
 }
 
@@ -238,7 +238,7 @@ func buildUserProvisionJob(
 	ttlSeconds int32,
 ) *batchv1.Job {
 	podLabels := map[string]string{
-		"azure.workload.identity/use": "true",
+		"azure.workload.identity/use": labelValueTrue,
 	}
 	maps.Copy(podLabels, labels)
 
@@ -283,7 +283,7 @@ func userProvisionJobEnv(spec userProvisionJobSpec) []corev1.EnvVar {
 
 	env := []corev1.EnvVar{
 		{Name: "DISPG_ADMIN_APP_IDENTITY", Value: spec.AdminIdentityName},
-		{Name: "DISPG_DATABASE_NAME", Value: spec.ServerName},
+		{Name: envDispgDatabaseName, Value: spec.ServerName},
 		{Name: "DISPG_DB_SCHEMA", Value: spec.SchemaName},
 		{Name: dbUtil.AccessPrincipalsEnv, Value: accessPrincipals},
 	}
@@ -291,7 +291,7 @@ func userProvisionJobEnv(spec userProvisionJobSpec) []corev1.EnvVar {
 		env = append(env, corev1.EnvVar{Name: "DISPG_DB_HOST", Value: spec.DatabaseHost})
 	}
 	if spec.DatabaseName != "" {
-		env = append(env, corev1.EnvVar{Name: "DISPG_DB_NAME", Value: spec.DatabaseName})
+		env = append(env, corev1.EnvVar{Name: envDispgDbName, Value: spec.DatabaseName})
 	}
 	if spec.RevokePublicConnect {
 		env = append(env, corev1.EnvVar{Name: "DISPG_REVOKE_PUBLIC_CONNECT", Value: "1"})

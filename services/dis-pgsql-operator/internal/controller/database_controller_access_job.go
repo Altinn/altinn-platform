@@ -61,7 +61,7 @@ func (r *DatabaseReconciler) ensureDatabaseAccess(
 		SchemaName:          database.Status.DatabaseName,
 		AccessPrincipals:    accessPrincipals,
 		RevokePublicConnect: true,
-		SearchPathScope:     "database",
+		SearchPathScope:     searchPathScopeDatabase,
 	}); err != nil {
 		return false, "", "", err
 	}
@@ -218,7 +218,7 @@ func databaseAccessJobLabels(serverName, databaseName string) map[string]string 
 	return map[string]string{
 		databaseServerNameLabelKey:                   serverName,
 		databaseNameLabelKey:                         databaseName,
-		"dis.altinn.cloud/access-provision":          "true",
-		"dis.altinn.cloud/database-access-provision": "true",
+		databaseAccessProvisionLabelKey:              labelValueTrue,
+		"dis.altinn.cloud/database-access-provision": labelValueTrue,
 	}
 }

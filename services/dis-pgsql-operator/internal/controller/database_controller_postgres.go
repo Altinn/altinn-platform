@@ -33,6 +33,16 @@ const (
 	databasePort         = int32(5432)
 	databaseRequeueDelay = 15 * time.Second
 	databaseNameLabelKey = "dis.altinn.cloud/database-name"
+
+	// String literals used as configuration values or fallback identifiers.
+	searchPathScopeDatabase         = "database"
+	databaseFallbackName            = "database"
+	disDatabaseNamePrefix           = "dis-database"
+	labelValueTrue                  = "true"
+	databaseAccessProvisionLabelKey = "dis.altinn.cloud/access-provision"
+	userProvisionLabelKey           = "dis.altinn.cloud/user-provision"
+	envDispgDatabaseName            = "DISPG_DATABASE_NAME"
+	envDispgDbName                  = "DISPG_DB_NAME"
 )
 
 func (r *DatabaseReconciler) ensureFlexibleServersDatabase(
@@ -232,14 +242,14 @@ func databaseASOResourceName(serverName, databaseName string) string {
 
 	source := naming.SanitizeLowerHyphen(serverName + "-" + databaseName)
 	if source == "" {
-		source = "database"
+		source = databaseFallbackName
 	}
 	if len(source) <= maxResourceNameLen {
 		return source
 	}
 
 	hash := naming.StableSHA256Hex(source)[:8]
-	return naming.WithHashSuffixOnOverflow(source, maxResourceNameLen, hash, "database")
+	return naming.WithHashSuffixOnOverflow(source, maxResourceNameLen, hash, databaseFallbackName)
 }
 
 func setDatabaseCondition(

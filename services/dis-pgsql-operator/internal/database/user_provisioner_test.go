@@ -10,10 +10,15 @@ import (
 	pgxmock "github.com/pashagolub/pgxmock/v4"
 )
 
+const (
+	appDBName   = "app-db"
+	existsValue = "exists"
+)
+
 func TestUserProvisionSQL(t *testing.T) {
 	user := "app-user"
-	dbName := "app-db"
-	schema := "app-db"
+	dbName := appDBName
+	schema := appDBName
 
 	cases := []struct {
 		name string
@@ -152,7 +157,7 @@ func TestEnsurePrincipalCreatesRoleWhenMissing(t *testing.T) {
 
 	mock.ExpectQuery("SELECT EXISTS \\(SELECT 1 FROM pg_roles WHERE rolname = \\$1\\)").
 		WithArgs("app-user").
-		WillReturnRows(pgxmock.NewRows([]string{"exists"}).AddRow(false))
+		WillReturnRows(pgxmock.NewRows([]string{existsValue}).AddRow(false))
 
 	mock.ExpectExec(`CREATE ROLE "app-user" LOGIN;`).
 		WillReturnResult(pgxmock.NewResult("CREATE", 1))
@@ -176,7 +181,7 @@ func TestEnsurePrincipalCreatesAADRoleWhenMissing(t *testing.T) {
 
 	mock.ExpectQuery("SELECT EXISTS \\(SELECT 1 FROM pg_roles WHERE rolname = \\$1\\)").
 		WithArgs("app-user").
-		WillReturnRows(pgxmock.NewRows([]string{"exists"}).AddRow(false))
+		WillReturnRows(pgxmock.NewRows([]string{existsValue}).AddRow(false))
 
 	mock.ExpectExec("SELECT \\* FROM pgaadauth_create_principal_with_oid\\(\\$1, \\$2, \\$3, false, false\\)").
 		WithArgs("app-user", "principal-id", "service").
@@ -201,7 +206,7 @@ func TestEnsurePrincipalSkipsCreateWhenExists(t *testing.T) {
 
 	mock.ExpectQuery("SELECT EXISTS \\(SELECT 1 FROM pg_roles WHERE rolname = \\$1\\)").
 		WithArgs("app-user").
-		WillReturnRows(pgxmock.NewRows([]string{"exists"}).AddRow(true))
+		WillReturnRows(pgxmock.NewRows([]string{existsValue}).AddRow(true))
 
 	if err := ensurePrincipal(context.Background(), mock, "app-user", "", "service", false); err != nil {
 		t.Fatalf("ensurePrincipal: %v", err)
@@ -215,8 +220,8 @@ func TestEnsureAccessCreatesManagedRolesAndPrincipalMemberships(t *testing.T) {
 	conn := &recordingConn{}
 
 	if err := ensureAccess(context.Background(), conn, accessOptions{
-		DatabaseName: "app-db",
-		SchemaName:   "app-db",
+		DatabaseName: appDBName,
+		SchemaName:   appDBName,
 		Principals: []AccessPrincipal{
 			{
 				Role:          AccessRoleWriter,
@@ -241,33 +246,33 @@ func TestEnsureAccessCreatesManagedRolesAndPrincipalMemberships(t *testing.T) {
 	if len(conn.execs) == 0 {
 		t.Fatal("expected execs")
 	}
-	if got, want := conn.execs[0].sql, revokePublicConnectSQL("app-db"); got != want {
+	if got, want := conn.execs[0].sql, revokePublicConnectSQL(appDBName); got != want {
 		t.Fatalf("first exec got %q, want %q", got, want)
 	}
 
-	roles := managedAccessRolesFor("app-db", "app-db")
+	roles := managedAccessRolesFor(appDBName, appDBName)
 	requireExec(t, conn, createNoLoginRoleSQL(roles.Reader))
 	requireExec(t, conn, createNoLoginRoleSQL(roles.Writer))
 	requireExec(t, conn, createNoLoginRoleSQL(roles.Owner))
 	requireExec(t, conn, createAADPrincipalSQL(), "app-user", "app-principal-id", "service")
 	requireExec(t, conn, createAADPrincipalSQL(), "owner-group", "owner-principal-id", "group")
-	requireExec(t, conn, grantConnectSQL("app-db", roles.Reader))
-	requireExec(t, conn, alterSchemaOwnerSQL("app-db", roles.Owner))
-	requireExec(t, conn, grantSchemaUsageSQL("app-db", roles.Reader))
-	requireExec(t, conn, grantAllTablesReadSQL("app-db", roles.Reader))
-	requireExec(t, conn, grantAllTablesWriteSQL("app-db", roles.Writer))
+	requireExec(t, conn, grantConnectSQL(appDBName, roles.Reader))
+	requireExec(t, conn, alterSchemaOwnerSQL(appDBName, roles.Owner))
+	requireExec(t, conn, grantSchemaUsageSQL(appDBName, roles.Reader))
+	requireExec(t, conn, grantAllTablesReadSQL(appDBName, roles.Reader))
+	requireExec(t, conn, grantAllTablesWriteSQL(appDBName, roles.Writer))
 	requireExec(t, conn, grantRoleSQL(roles.Reader, roles.Writer))
 	requireExec(t, conn, grantRoleSQL(roles.Writer, roles.Owner))
 	requireExec(t, conn, grantRoleSQL(roles.Writer, "app-user"))
 	requireExec(t, conn, grantRoleSQL(roles.Owner, "owner-group"))
-	requireExec(t, conn, alterDefaultTableReadPrivilegesSQL("owner-group", "app-db", roles.Reader))
-	requireExec(t, conn, alterDefaultTableWritePrivilegesSQL("owner-group", "app-db", roles.Writer))
-	requireExec(t, conn, setSearchPathSQL("app-user", "app-db", "app-db", true))
-	requireExec(t, conn, setSearchPathSQL("owner-group", "app-db", "app-db", true))
+	requireExec(t, conn, alterDefaultTableReadPrivilegesSQL("owner-group", appDBName, roles.Reader))
+	requireExec(t, conn, alterDefaultTableWritePrivilegesSQL("owner-group", appDBName, roles.Writer))
+	requireExec(t, conn, setSearchPathSQL("app-user", appDBName, appDBName, true))
+	requireExec(t, conn, setSearchPathSQL("owner-group", appDBName, appDBName, true))
 }
 
 func TestEnsureAccessRevokesRemovedManagedRoleMembers(t *testing.T) {
-	roles := managedAccessRolesFor("app-db", "app-db")
+	roles := managedAccessRolesFor(appDBName, appDBName)
 	conn := &recordingConn{
 		members: map[string][]string{
 			roles.Reader: {"old-reader", roles.Writer},
@@ -277,8 +282,8 @@ func TestEnsureAccessRevokesRemovedManagedRoleMembers(t *testing.T) {
 	}
 
 	if err := ensureAccess(context.Background(), conn, accessOptions{
-		DatabaseName: "app-db",
-		SchemaName:   "app-db",
+		DatabaseName: appDBName,
+		SchemaName:   appDBName,
 		Principals: []AccessPrincipal{
 			{
 				Role:          AccessRoleReader,
