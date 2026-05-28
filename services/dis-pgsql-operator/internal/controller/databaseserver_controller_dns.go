@@ -142,7 +142,7 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSVNetLink(
 		},
 
 		Tags: map[string]string{
-			"dis-database": db.Name,
+			disDatabaseNamePrefix: db.Name,
 		},
 	}
 
