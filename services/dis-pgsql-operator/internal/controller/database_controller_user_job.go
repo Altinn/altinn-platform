@@ -165,7 +165,7 @@ func ensureUserProvisionJobForReconciler(
 		"jobName", jobName,
 		"namespace", ns,
 		"serviceAccount", spec.ServiceAccountName,
-		"accessPrincipals", len(spec.AccessPrincipals),
+		"accessPrincipalCount", len(spec.AccessPrincipals),
 	)
 
 	if err := r.Create(ctx, job); err != nil {
