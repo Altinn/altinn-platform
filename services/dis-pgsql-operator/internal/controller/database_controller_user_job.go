@@ -139,7 +139,7 @@ func ensureUserProvisionJobForReconciler(
 		job.Spec.Template.Spec.Containers[0].Env = append(
 			job.Spec.Template.Spec.Containers[0].Env,
 			corev1.EnvVar{
-				Name:  "DISPG_DISABLE_AAD",
+				Name:  dbUtil.DisableAADEnv,
 				Value: "1",
 			},
 		)
@@ -282,22 +282,22 @@ func userProvisionJobEnv(spec userProvisionJobSpec) []corev1.EnvVar {
 	}
 
 	env := []corev1.EnvVar{
-		{Name: "DISPG_ADMIN_APP_IDENTITY", Value: spec.AdminIdentityName},
-		{Name: envDispgDatabaseName, Value: spec.ServerName},
-		{Name: "DISPG_DB_SCHEMA", Value: spec.SchemaName},
+		{Name: dbUtil.AdminAppIdentityEnv, Value: spec.AdminIdentityName},
+		{Name: dbUtil.DatabaseServerNameEnv, Value: spec.ServerName},
+		{Name: dbUtil.DBSchemaEnv, Value: spec.SchemaName},
 		{Name: dbUtil.AccessPrincipalsEnv, Value: accessPrincipals},
 	}
 	if spec.DatabaseHost != "" {
-		env = append(env, corev1.EnvVar{Name: "DISPG_DB_HOST", Value: spec.DatabaseHost})
+		env = append(env, corev1.EnvVar{Name: dbUtil.DBHostEnv, Value: spec.DatabaseHost})
 	}
 	if spec.DatabaseName != "" {
-		env = append(env, corev1.EnvVar{Name: envDispgDbName, Value: spec.DatabaseName})
+		env = append(env, corev1.EnvVar{Name: dbUtil.DBNameEnv, Value: spec.DatabaseName})
 	}
 	if spec.RevokePublicConnect {
-		env = append(env, corev1.EnvVar{Name: "DISPG_REVOKE_PUBLIC_CONNECT", Value: "1"})
+		env = append(env, corev1.EnvVar{Name: dbUtil.RevokePublicConnectEnv, Value: "1"})
 	}
 	if spec.SearchPathScope != "" {
-		env = append(env, corev1.EnvVar{Name: "DISPG_DB_SEARCH_PATH_SCOPE", Value: spec.SearchPathScope})
+		env = append(env, corev1.EnvVar{Name: dbUtil.DBSearchPathScopeEnv, Value: spec.SearchPathScope})
 	}
 	return env
 }

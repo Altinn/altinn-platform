@@ -41,8 +41,6 @@ const (
 	labelValueTrue                  = "true"
 	databaseAccessProvisionLabelKey = "dis.altinn.cloud/access-provision"
 	userProvisionLabelKey           = "dis.altinn.cloud/user-provision"
-	envDispgDatabaseName            = "DISPG_DATABASE_NAME"
-	envDispgDbName                  = "DISPG_DB_NAME"
 )
 
 func (r *DatabaseReconciler) ensureFlexibleServersDatabase(

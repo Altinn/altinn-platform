@@ -20,19 +20,19 @@ const (
 // RunUserProvisioner connects to the database using workload identity and
 // ensures the normal user exists with appropriate permissions.
 func RunUserProvisioner(ctx context.Context) error {
-	serverName := strings.TrimSpace(os.Getenv("DISPG_DATABASE_NAME"))
-	adminAppIdentity := strings.TrimSpace(os.Getenv("DISPG_ADMIN_APP_IDENTITY"))
-	schemaName := strings.TrimSpace(os.Getenv("DISPG_DB_SCHEMA"))
-	disableAAD := parseBoolEnv(os.Getenv("DISPG_DISABLE_AAD"))
-	revokePublicConnect := parseBoolEnv(os.Getenv("DISPG_REVOKE_PUBLIC_CONNECT"))
-	databaseScopedSearchPath := strings.EqualFold(strings.TrimSpace(os.Getenv("DISPG_DB_SEARCH_PATH_SCOPE")), "database")
+	serverName := strings.TrimSpace(os.Getenv(DatabaseServerNameEnv))
+	adminAppIdentity := strings.TrimSpace(os.Getenv(AdminAppIdentityEnv))
+	schemaName := strings.TrimSpace(os.Getenv(DBSchemaEnv))
+	disableAAD := parseBoolEnv(os.Getenv(DisableAADEnv))
+	revokePublicConnect := parseBoolEnv(os.Getenv(RevokePublicConnectEnv))
+	databaseScopedSearchPath := strings.EqualFold(strings.TrimSpace(os.Getenv(DBSearchPathScopeEnv)), "database")
 	sslMode := strings.TrimSpace(os.Getenv("DISPG_DB_SSLMODE"))
 
 	if serverName == "" {
-		return fmt.Errorf("DISPG_DATABASE_NAME must be set")
+		return fmt.Errorf("%s must be set", DatabaseServerNameEnv)
 	}
 	if adminAppIdentity == "" && !disableAAD {
-		return fmt.Errorf("DISPG_ADMIN_APP_IDENTITY must be set")
+		return fmt.Errorf("%s must be set", AdminAppIdentityEnv)
 	}
 	if schemaName == "" {
 		schemaName = serverName
@@ -43,7 +43,7 @@ func RunUserProvisioner(ctx context.Context) error {
 		return err
 	}
 
-	host := strings.TrimSpace(os.Getenv("DISPG_DB_HOST"))
+	host := strings.TrimSpace(os.Getenv(DBHostEnv))
 	if host == "" {
 		if disableAAD {
 			host = "postgres.default.svc"
@@ -51,7 +51,7 @@ func RunUserProvisioner(ctx context.Context) error {
 			host = fmt.Sprintf("%s.postgres.database.azure.com", serverName)
 		}
 	}
-	dbName := strings.TrimSpace(os.Getenv("DISPG_DB_NAME"))
+	dbName := strings.TrimSpace(os.Getenv(DBNameEnv))
 	if dbName == "" {
 		dbName = "postgres"
 	}

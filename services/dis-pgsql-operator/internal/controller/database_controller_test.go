@@ -2296,16 +2296,16 @@ var _ = Describe("DatabaseServer controller", func() {
 		Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(db.Spec.Auth.Admin.ServiceAccountName))
 		Expect(job.Spec.Template.Spec.Containers).To(HaveLen(1))
 		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: envDispgDatabaseName, Value: db.Name},
+			corev1.EnvVar{Name: dbUtil.DatabaseServerNameEnv, Value: db.Name},
 		))
 		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_DB_HOST", Value: fmt.Sprintf("%s.postgres.database.azure.com", db.Name)},
+			corev1.EnvVar{Name: dbUtil.DBHostEnv, Value: fmt.Sprintf("%s.postgres.database.azure.com", db.Name)},
 		))
 		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: envDispgDbName, Value: expectedDatabaseName},
+			corev1.EnvVar{Name: dbUtil.DBNameEnv, Value: expectedDatabaseName},
 		))
 		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_DB_SCHEMA", Value: expectedDatabaseName},
+			corev1.EnvVar{Name: dbUtil.DBSchemaEnv, Value: expectedDatabaseName},
 		))
 		Expect(job.Spec.Template.Spec.Containers[0].Env).NotTo(ContainElement(HaveField("Name", "DISPG_APP_IDENTITY_NAME")))
 		Expect(job.Spec.Template.Spec.Containers[0].Env).NotTo(ContainElement(HaveField("Name", "DISPG_OWNER_IDENTITY_NAME")))
@@ -2410,10 +2410,10 @@ var _ = Describe("DatabaseServer controller", func() {
 		Expect(job.Labels).To(HaveKeyWithValue(databaseNameLabelKey, database.Name))
 		Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(db.Spec.Auth.Admin.ServiceAccountName))
 		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: envDispgDatabaseName, Value: db.Name},
+			corev1.EnvVar{Name: dbUtil.DatabaseServerNameEnv, Value: db.Name},
 		))
 		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: envDispgDbName, Value: expectedDatabaseName},
+			corev1.EnvVar{Name: dbUtil.DBNameEnv, Value: expectedDatabaseName},
 		))
 	})
 

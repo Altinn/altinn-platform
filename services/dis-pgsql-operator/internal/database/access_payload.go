@@ -15,6 +15,21 @@ const (
 	AccessPayloadVersion = 1
 )
 
+// Environment variable names that form the contract between the operator
+// (producer, in internal/controller) and the user-provisioning Job entrypoint
+// (consumer, in this package). Keep both sides referring to these constants
+// so a rename can't silently drift the two halves out of sync.
+const (
+	DatabaseServerNameEnv  = "DISPG_DATABASE_NAME"
+	AdminAppIdentityEnv    = "DISPG_ADMIN_APP_IDENTITY"
+	DBSchemaEnv            = "DISPG_DB_SCHEMA"
+	DBHostEnv              = "DISPG_DB_HOST"
+	DBNameEnv              = "DISPG_DB_NAME"
+	DisableAADEnv          = "DISPG_DISABLE_AAD"
+	RevokePublicConnectEnv = "DISPG_REVOKE_PUBLIC_CONNECT"
+	DBSearchPathScopeEnv   = "DISPG_DB_SEARCH_PATH_SCOPE"
+)
+
 type AccessRole string
 
 const (
