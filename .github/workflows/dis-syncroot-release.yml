@@ -1,28 +1,33 @@
 name: Publish DIS Syncroot Artifact
+run-name: Publish DIS syncroot to ${{ inputs.environment }}
 
 env:
   SYNCROOT_ARTIFACT_NAME: dis/syncroot
-  SYNCROOT_ENVIRONMENT: at22
 
 on:
-  workflow_dispatch: {}
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/dis-syncroot-release.yml
-      - syncroot/**
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        type: choice
+        required: true
+        options:
+          - at22
+          - at23
 
 permissions:
   contents: read
   id-token: write
+
+concurrency:
+  group: dis-syncroot-${{ inputs.environment }}
+  cancel-in-progress: false
 
 jobs:
   publish-syncroot:
     name: Publish syncroot artifact
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: at22
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -32,11 +37,11 @@ jobs:
         with:
           workdir: ./syncroot
 
-      - name: Build and push at22 syncroot artifact
+      - name: Build and push syncroot artifact
         uses: Altinn/altinn-platform/actions/flux/build-push-image@069dc838aa1c9ea8d76ecc289d7c91620f8bbff2 # main
         with:
           image_name: ${{ env.SYNCROOT_ARTIFACT_NAME }}
-          tag: ${{ env.SYNCROOT_ENVIRONMENT }}
+          tag: ${{ inputs.environment }}
           workdir: ./syncroot
           azure_subscription_id: ${{ secrets.DIS_SYNCROOT_AZURE_SUBSCRIPTION_ID }}
           azure_app_id: ${{ secrets.DIS_SYNCROOT_AZURE_CLIENT_ID }}
