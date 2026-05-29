@@ -15,6 +15,11 @@ import (
 
 const (
 	userProvisionScope = "https://ossrdbms-aad.database.windows.net/.default"
+
+	// maintenanceDatabase holds the cluster-global pgaadauth_* helper functions on
+	// Azure Flexible Server; they do not exist in freshly created databases, so
+	// principal creation must run here even though the resulting role is global.
+	maintenanceDatabase = "postgres"
 )
 
 // RunUserProvisioner connects to the database using workload identity and
@@ -105,7 +110,19 @@ func RunUserProvisioner(ctx context.Context) error {
 		}
 	}()
 
-	if err := ensureAccess(ctx, conn, accessOptions{
+	maintenanceCfg := cfg.Copy()
+	maintenanceCfg.Database = maintenanceDatabase
+	principalConn, err := pgx.ConnectConfig(ctx, maintenanceCfg)
+	if err != nil {
+		return fmt.Errorf("connect maintenance database %q: %w", maintenanceDatabase, err)
+	}
+	defer func() {
+		if err := principalConn.Close(ctx); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "close maintenance connection: %v\n", err)
+		}
+	}()
+
+	if err := ensureAccess(ctx, conn, principalConn, accessOptions{
 		DatabaseName:             dbName,
 		SchemaName:               schemaName,
 		Principals:               accessPrincipals,
@@ -134,7 +151,7 @@ type accessOptions struct {
 	DatabaseScopedSearchPath bool
 }
 
-func ensureAccess(ctx context.Context, conn pgxConn, opts accessOptions) error {
+func ensureAccess(ctx context.Context, conn pgxConn, principalConn pgxConn, opts accessOptions) error {
 	if opts.RevokePublicConnect {
 		if _, err := conn.Exec(ctx, revokePublicConnectSQL(opts.DatabaseName)); err != nil {
 			return fmt.Errorf("revoke public connect: %w", err)
@@ -166,7 +183,7 @@ func ensureAccess(ctx context.Context, conn pgxConn, opts accessOptions) error {
 		if err := validateAccessPrincipal(principal, opts.UseAAD); err != nil {
 			return err
 		}
-		if err := ensurePrincipal(ctx, conn, principal.Name, principal.PrincipalID, string(principal.PrincipalType), opts.UseAAD); err != nil {
+		if err := ensurePrincipal(ctx, principalConn, principal.Name, principal.PrincipalID, string(principal.PrincipalType), opts.UseAAD); err != nil {
 			return err
 		}
 		roleName, err := accessRoles.roleFor(principal.Role)
