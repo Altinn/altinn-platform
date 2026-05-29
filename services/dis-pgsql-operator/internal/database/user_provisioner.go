@@ -110,17 +110,21 @@ func RunUserProvisioner(ctx context.Context) error {
 		}
 	}()
 
-	maintenanceCfg := cfg.Copy()
-	maintenanceCfg.Database = maintenanceDatabase
-	principalConn, err := pgx.ConnectConfig(ctx, maintenanceCfg)
-	if err != nil {
-		return fmt.Errorf("connect maintenance database %q: %w", maintenanceDatabase, err)
-	}
-	defer func() {
-		if err := principalConn.Close(ctx); err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "close maintenance connection: %v\n", err)
+	principalConn := conn
+	if !disableAAD && !strings.EqualFold(dbName, maintenanceDatabase) {
+		maintenanceCfg := cfg.Copy()
+		maintenanceCfg.Database = maintenanceDatabase
+		maintenanceConn, connErr := pgx.ConnectConfig(ctx, maintenanceCfg)
+		if connErr != nil {
+			return fmt.Errorf("connect maintenance database %q: %w", maintenanceDatabase, connErr)
 		}
-	}()
+		defer func() {
+			if err := maintenanceConn.Close(ctx); err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "close maintenance connection: %v\n", err)
+			}
+		}()
+		principalConn = maintenanceConn
+	}
 
 	if err := ensureAccess(ctx, conn, principalConn, accessOptions{
 		DatabaseName:             dbName,
