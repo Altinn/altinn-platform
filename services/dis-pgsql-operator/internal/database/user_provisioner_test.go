@@ -218,8 +218,9 @@ func TestEnsurePrincipalSkipsCreateWhenExists(t *testing.T) {
 
 func TestEnsureAccessCreatesManagedRolesAndPrincipalMemberships(t *testing.T) {
 	conn := &recordingConn{}
+	principalConn := &recordingConn{}
 
-	if err := ensureAccess(context.Background(), conn, accessOptions{
+	if err := ensureAccess(context.Background(), conn, principalConn, accessOptions{
 		DatabaseName: appDBName,
 		SchemaName:   appDBName,
 		Principals: []AccessPrincipal{
@@ -254,8 +255,9 @@ func TestEnsureAccessCreatesManagedRolesAndPrincipalMemberships(t *testing.T) {
 	requireExec(t, conn, createNoLoginRoleSQL(roles.Reader))
 	requireExec(t, conn, createNoLoginRoleSQL(roles.Writer))
 	requireExec(t, conn, createNoLoginRoleSQL(roles.Owner))
-	requireExec(t, conn, createAADPrincipalSQL(), "app-user", "app-principal-id", "service")
-	requireExec(t, conn, createAADPrincipalSQL(), "owner-group", "owner-principal-id", "group")
+	requireExec(t, principalConn, createAADPrincipalSQL(), "app-user", "app-principal-id", "service")
+	requireExec(t, principalConn, createAADPrincipalSQL(), "owner-group", "owner-principal-id", "group")
+	requireNoExec(t, conn, createAADPrincipalSQL())
 	requireExec(t, conn, grantConnectSQL(appDBName, roles.Reader))
 	requireExec(t, conn, alterSchemaOwnerSQL(appDBName, roles.Owner))
 	requireExec(t, conn, grantSchemaUsageSQL(appDBName, roles.Reader))
@@ -281,7 +283,7 @@ func TestEnsureAccessRevokesRemovedManagedRoleMembers(t *testing.T) {
 		},
 	}
 
-	if err := ensureAccess(context.Background(), conn, accessOptions{
+	if err := ensureAccess(context.Background(), conn, &recordingConn{}, accessOptions{
 		DatabaseName: appDBName,
 		SchemaName:   appDBName,
 		Principals: []AccessPrincipal{
@@ -398,6 +400,16 @@ func requireExec(t *testing.T, conn *recordingConn, sql string, args ...any) {
 	}
 
 	t.Fatalf("missing exec %q with args %#v; got %#v", sql, args, conn.execs)
+}
+
+func requireNoExec(t *testing.T, conn *recordingConn, sql string) {
+	t.Helper()
+
+	for _, exec := range conn.execs {
+		if exec.sql == sql {
+			t.Fatalf("unexpected exec %q on connection; got %#v", sql, conn.execs)
+		}
+	}
 }
 
 func equalArgs(got, want []any) bool {
