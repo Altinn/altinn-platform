@@ -53,10 +53,15 @@ func ResolveServerParameters(
 	}
 
 	resolved := map[string]string{
-		ServerParameterPgBouncerEnabled:     defaultPgBouncerEnabled,
-		ServerParameterPgBouncerMaxPrepared: defaultPgBouncerMaxPrepared,
-		ServerParameterPgBouncerPoolMode:    defaultPgBouncerPoolMode,
-		ServerParameterMaxConnections:       strconv.Itoa(maxConnections),
+		ServerParameterMaxConnections: strconv.Itoa(maxConnections),
+	}
+
+	// PgBouncer is only available on tiers that support it (Azure rejects it on
+	// the Burstable tier), so only seed its parameters when the profile allows it.
+	if profile.SupportsPgBouncer() {
+		resolved[ServerParameterPgBouncerEnabled] = defaultPgBouncerEnabled
+		resolved[ServerParameterPgBouncerMaxPrepared] = defaultPgBouncerMaxPrepared
+		resolved[ServerParameterPgBouncerPoolMode] = defaultPgBouncerPoolMode
 	}
 
 	for i := range requested {

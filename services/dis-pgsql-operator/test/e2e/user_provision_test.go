@@ -496,12 +496,12 @@ var _ = Describe("User provisioning", Ordered, func() {
 		)
 
 		By("verifying fixed and explicit server parameter configurations are created")
+		// The dev server runs on the Burstable tier, which does not support the
+		// built-in PgBouncer, so only max_connections and the user-defined
+		// parameter are expected (no pgbouncer.* parameters).
 		expected := map[string]string{
-			"pgbouncer.enabled":                 "true",
-			"pgbouncer.max_prepared_statements": "5000",
-			"pgbouncer.pool_mode":               "transaction",
-			"max_connections":                   "50",
-			explicitCustomServerParam:           explicitCustomServerValue,
+			"max_connections":         "50",
+			explicitCustomServerParam: explicitCustomServerValue,
 		}
 
 		Eventually(func(g Gomega) {
