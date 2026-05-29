@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.8.0...dis-pgsql-v0.8.1) (2026-05-29)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** skip PgBouncer params on Burstable tier ([#3606](https://github.com/Altinn/altinn-platform/issues/3606)) ([522d5ae](https://github.com/Altinn/altinn-platform/commit/522d5ae31a975f076eefdbe0a3ababe05840eca8))
+
 ## [0.8.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.6...dis-pgsql-v0.8.0) (2026-05-28)
 
 
