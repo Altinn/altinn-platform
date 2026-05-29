@@ -56,10 +56,31 @@ func TestResolveServerParameters(t *testing.T) {
 		return out
 	}
 
-	t.Run("includes non-overridable defaults for dev profile", func(t *testing.T) {
+	t.Run("omits pgbouncer parameters for dev profile on Burstable tier", func(t *testing.T) {
 		got, err := ResolveServerParameters("dev", nil)
 		if err != nil {
 			t.Fatalf("ResolveServerParameters(dev, nil) returned error: %v", err)
+		}
+
+		values := toMap(got)
+		for _, name := range []string{
+			ServerParameterPgBouncerEnabled,
+			ServerParameterPgBouncerMaxPrepared,
+			ServerParameterPgBouncerPoolMode,
+		} {
+			if _, ok := values[name]; ok {
+				t.Fatalf("expected %q to be omitted on Burstable tier, got %q", name, values[name])
+			}
+		}
+		if values[ServerParameterMaxConnections] != "50" {
+			t.Fatalf("max_connections = %q, want %q", values[ServerParameterMaxConnections], "50")
+		}
+	})
+
+	t.Run("includes pgbouncer defaults and max_connections for prod profile", func(t *testing.T) {
+		got, err := ResolveServerParameters("prod", nil)
+		if err != nil {
+			t.Fatalf("ResolveServerParameters(prod, nil) returned error: %v", err)
 		}
 
 		values := toMap(got)
@@ -72,18 +93,6 @@ func TestResolveServerParameters(t *testing.T) {
 		if values[ServerParameterPgBouncerPoolMode] != "transaction" {
 			t.Fatalf("pgbouncer.pool_mode = %q, want %q", values[ServerParameterPgBouncerPoolMode], "transaction")
 		}
-		if values[ServerParameterMaxConnections] != "50" {
-			t.Fatalf("max_connections = %q, want %q", values[ServerParameterMaxConnections], "50")
-		}
-	})
-
-	t.Run("includes profile-specific max_connections for prod profile", func(t *testing.T) {
-		got, err := ResolveServerParameters("prod", nil)
-		if err != nil {
-			t.Fatalf("ResolveServerParameters(prod, nil) returned error: %v", err)
-		}
-
-		values := toMap(got)
 		if values[ServerParameterMaxConnections] != "1718" {
 			t.Fatalf("max_connections = %q, want %q", values[ServerParameterMaxConnections], "1718")
 		}

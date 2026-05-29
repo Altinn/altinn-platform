@@ -43,6 +43,12 @@ func GetProfile(serverType string) Profile {
 	return devProfile
 }
 
+// SupportsPgBouncer reports whether the profile's compute tier can run the
+// built-in PgBouncer. Azure rejects PgBouncer on the Burstable tier.
+func (p Profile) SupportsPgBouncer() bool {
+	return p.SkuTier != dbforpostgresqlv1.SkuTier_Burstable
+}
+
 func ResolveBackupRetentionDays(serverType string, requested *int) int {
 	if requested != nil {
 		return *requested
