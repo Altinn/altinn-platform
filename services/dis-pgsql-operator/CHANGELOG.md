@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.8.1...dis-pgsql-v0.8.2) (2026-05-29)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** create Entra principals on postgres maintenance db ([#3610](https://github.com/Altinn/altinn-platform/issues/3610)) ([7f946d5](https://github.com/Altinn/altinn-platform/commit/7f946d50b209fefb74a249f86bfec738cda6ecea))
+
 ## [0.8.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.8.0...dis-pgsql-v0.8.1) (2026-05-29)
 
 
