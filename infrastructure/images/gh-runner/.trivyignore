@@ -127,3 +127,12 @@ CVE-2026-42499
 
 # containerd: user ID handling bypass allows runAsNonRoot evasion
 CVE-2026-46680
+
+# stdlib: URL handling vulnerability (CVE-2026-27142 follow-up)
+CVE-2026-39823
+
+# stdlib: ReverseProxy forwards queries with unintended parameters
+CVE-2026-39825
+
+# stdlib: html/template script tag injection by trusted template author
+CVE-2026-39826
