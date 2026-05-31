@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.3](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.8.2...dis-pgsql-v0.8.3) (2026-05-31)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** never revoke the connecting admin from managed roles ([#3612](https://github.com/Altinn/altinn-platform/issues/3612)) ([7b47c35](https://github.com/Altinn/altinn-platform/commit/7b47c35537af9ab2682ceb48b6258742c325ed83))
+
 ## [0.8.2](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.8.1...dis-pgsql-v0.8.2) (2026-05-29)
 
 
