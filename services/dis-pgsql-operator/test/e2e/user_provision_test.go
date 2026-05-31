@@ -40,6 +40,13 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+// provisionAdminUser is the non-superuser Postgres role the operator's
+// provisioning Job connects as in Kind (useAzFakes). It must match
+// kindProvisionAdminUser in internal/controller and the role bootstrapped by
+// config/kind/postgres.yaml. App databases are owned by this role so the
+// non-superuser admin can provision them, mirroring Azure's Entra admin.
+const provisionAdminUser = "dispg_admin"
+
 var _ = Describe("User provisioning", Ordered, func() {
 	const (
 		dbName                     = "e2e-user-provision"
@@ -135,8 +142,9 @@ var _ = Describe("User provisioning", Ordered, func() {
 
 		By("creating the real app database in local Postgres")
 		runPostgresQuery(fmt.Sprintf(
-			"CREATE DATABASE %s;",
+			"CREATE DATABASE %s OWNER %s;",
 			quoteIdentifier(expectedDatabaseName),
+			quoteIdentifier(provisionAdminUser),
 		))
 
 		By("marking ASO resources ready for the local Postgres stand-in")
@@ -218,8 +226,9 @@ var _ = Describe("User provisioning", Ordered, func() {
 
 		By("creating the real database in local Postgres")
 		runPostgresQuery(fmt.Sprintf(
-			"CREATE DATABASE %s;",
+			"CREATE DATABASE %s OWNER %s;",
 			quoteIdentifier(expectedDatabaseName),
+			quoteIdentifier(provisionAdminUser),
 		))
 
 		By("marking ASO resources ready for the local Postgres stand-in")
@@ -291,6 +300,101 @@ var _ = Describe("User provisioning", Ordered, func() {
 		runPostgresQuery(`DROP ROLE IF EXISTS "e2e-database-intruder"; CREATE ROLE "e2e-database-intruder" LOGIN;`)
 		_, err = runPostgresQueryAsUserInDatabase("e2e-database-intruder", expectedDatabaseName, "SELECT 1;")
 		Expect(err).To(HaveOccurred())
+	})
+
+	It("re-provisions without revoking the connecting admin (regression for SQLSTATE 2BP01)", func() {
+		const (
+			reproServerName      = "e2e-reprovision-server"
+			reproDatabaseName    = "e2e-reprovision"
+			reproOwnerA          = "e2e-reprovision-owner-a"
+			reproOwnerAPrincipal = "33333333-3333-3333-3333-333333333333"
+			reproOwnerB          = "e2e-reprovision-owner-b"
+			reproOwnerBPrincipal = "44444444-4444-4444-4444-444444444444"
+		)
+
+		manifestOwnerA := writeReprovisionManifest(
+			reproServerName, reproDatabaseName, namespace, adminIdentityRef, reproOwnerA, reproOwnerAPrincipal)
+		manifestOwnerB := writeReprovisionManifest(
+			reproServerName, reproDatabaseName, namespace, adminIdentityRef, reproOwnerB, reproOwnerBPrincipal)
+
+		defer func() {
+			deleteDatabaseAndProvisionJobs(reproDatabaseName, namespace)
+			deleteDatabaseServerAndProvisionJobs(reproServerName, namespace)
+			_ = os.Remove(manifestOwnerA)
+			_ = os.Remove(manifestOwnerB)
+			cleanupDatabasePostgresResources(reproDatabaseName, reproOwnerA, reproOwnerB)
+		}()
+
+		By("cleaning up stale re-provision resources from previous runs")
+		deleteDatabaseAndProvisionJobs(reproDatabaseName, namespace)
+		deleteDatabaseServerAndProvisionJobs(reproServerName, namespace)
+		cleanupDatabasePostgresResources(reproDatabaseName, reproOwnerA, reproOwnerB)
+
+		waitForAccessJobComplete := func(failure string) {
+			labelSelector := fmt.Sprintf(
+				"dis.altinn.cloud/database-name=%s,dis.altinn.cloud/user-provision=true", reproDatabaseName)
+			Eventually(func() error {
+				cmd := exec.Command(
+					"kubectl", "wait",
+					"--for=condition=complete",
+					"job",
+					"-l", labelSelector,
+					"-n", namespace,
+					"--timeout=20s",
+				)
+				_, err := utils.Run(cmd)
+				return err
+			}).WithTimeout(5*time.Minute).WithPolling(2*time.Second).
+				Should(Succeed(), failure)
+		}
+
+		By("provisioning the database with owner A")
+		cmd := exec.Command("kubectl", "apply", "-f", manifestOwnerA)
+		_, err := utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed to apply re-provision manifest (owner A)")
+		patchApplicationIdentityStatus(adminIdentityRef, namespace, adminIdentity, adminPrincipal)
+
+		By("waiting for the ASO database child")
+		asoDatabaseName := waitForDatabaseASOResource(reproDatabaseName, namespace)
+
+		By("creating the app database owned by the provisioning admin")
+		runPostgresQuery(fmt.Sprintf(
+			"CREATE DATABASE %s OWNER %s;",
+			quoteIdentifier(reproDatabaseName),
+			quoteIdentifier(provisionAdminUser),
+		))
+
+		By("marking ASO resources ready for the local Postgres stand-in")
+		patchFlexibleServerReady(reproServerName, namespace, "postgres.default.svc")
+		patchFlexibleServersDatabaseReady(asoDatabaseName, namespace)
+
+		By("waiting for the first provisioning job to complete")
+		waitForAccessJobComplete("First access provisioning job did not complete")
+
+		By("re-provisioning with owner B so the reconcile must revoke the removed owner A member")
+		cmd = exec.Command("kubectl", "apply", "-f", manifestOwnerB)
+		_, err = utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed to apply re-provision manifest (owner B)")
+
+		// The connecting admin is a non-superuser that PostgreSQL auto-grants into
+		// every managed role it created. Before the fix, the reconcile treated that
+		// membership as revocable; the revoke failed with "dependent privileges
+		// exist" (SQLSTATE 2BP01) and the second Job never completed. Owner B's role
+		// is only created once the second Job gets past schema/role setup, so its
+		// presence plus Job completion proves the admin was not revoked.
+		By("waiting until owner B is provisioned by the second job")
+		Eventually(func(g Gomega) string {
+			out, err := runPostgresQueryAsUser("postgres",
+				"SELECT 1 FROM pg_roles WHERE rolname = '"+reproOwnerB+"';")
+			g.Expect(err).NotTo(HaveOccurred())
+			return strings.TrimSpace(out)
+		}).WithTimeout(5*time.Minute).WithPolling(2*time.Second).
+			Should(Equal("1"),
+				"owner B role was not created: the second provisioning job likely failed before reaching it (regression for SQLSTATE 2BP01)")
+
+		By("waiting for the second provisioning job to complete")
+		waitForAccessJobComplete(
+			"Second access provisioning job did not complete: the reconcile likely tried to revoke the connecting admin (SQLSTATE 2BP01)")
 	})
 
 	It("applies storage settings to the FlexibleServer", func() {
@@ -872,6 +976,101 @@ func writeDatabaseTestManifest(
 
 	dir := os.TempDir()
 	path := filepath.Join(dir, fmt.Sprintf("database-%s.yaml", databaseResourceName))
+	err := os.WriteFile(path, []byte(content), 0o600)
+	Expect(err).NotTo(HaveOccurred(), "Failed to write temp manifest")
+	return path
+}
+
+func writeReprovisionManifest(
+	serverName,
+	databaseResourceName,
+	namespace,
+	adminIdentityRef,
+	ownerName,
+	ownerPrincipalID string,
+) string {
+	adminIdentity := &identityv1alpha1.ApplicationIdentity{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "application.dis.altinn.cloud/v1alpha1",
+			Kind:       "ApplicationIdentity",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      adminIdentityRef,
+			Namespace: namespace,
+		},
+		Spec: identityv1alpha1.ApplicationIdentitySpec{},
+	}
+
+	sharedDatabase := &storagev1alpha1.DatabaseServer{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "storage.dis.altinn.cloud/v1alpha1",
+			Kind:       "DatabaseServer",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serverName,
+			Namespace: namespace,
+		},
+		Spec: storagev1alpha1.DatabaseServerSpec{
+			Mode:       storagev1alpha1.DatabaseServerModeShared,
+			Version:    17,
+			ServerType: "dev",
+			Network: &storagev1alpha1.DatabaseServerNetworkSpec{
+				DelegatedSubnetResourceID: "/subscriptions/fake-subscription/resourceGroups/rg-dis-admin-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-admin-dbs/subnets/snet-postgres-shared",
+				PrivateDNSZoneResourceID:  "/subscriptions/fake-subscription/resourceGroups/rg-dis-admin-network/providers/Microsoft.Network/privateDnsZones/shared.private.postgres.database.azure.com",
+			},
+			Auth: storagev1alpha1.DatabaseServerAuth{
+				Admin: storagev1alpha1.AdminIdentitySpec{
+					Identity: storagev1alpha1.IdentitySource{
+						IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: adminIdentityRef},
+					},
+				},
+			},
+		},
+	}
+
+	database := &storagev1alpha1.Database{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "storage.dis.altinn.cloud/v1alpha1",
+			Kind:       "Database",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      databaseResourceName,
+			Namespace: namespace,
+		},
+		Spec: storagev1alpha1.DatabaseSpec{
+			Name: databaseResourceName,
+			Server: storagev1alpha1.DatabaseServerReference{
+				Name: serverName,
+			},
+			Access: storagev1alpha1.DatabaseAccessSpec{
+				Principals: []storagev1alpha1.DatabaseAccessPrincipalSpec{
+					{
+						Role: storagev1alpha1.DatabaseAccessRoleOwner,
+						Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+							Name:        ownerName,
+							PrincipalId: ownerPrincipalID,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	resources := []interface{}{adminIdentity, sharedDatabase, database}
+	docs := make([]string, 0, len(resources))
+	for i := range resources {
+		content, err := yaml.Marshal(resources[i])
+		Expect(err).NotTo(HaveOccurred(), "Failed to marshal re-provision manifest resource")
+		docs = append(docs, string(content))
+	}
+
+	content := strings.Join(docs, "---\n")
+	if !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
+
+	dir := os.TempDir()
+	path := filepath.Join(dir, fmt.Sprintf("reprovision-%s-%s.yaml", databaseResourceName, ownerName))
 	err := os.WriteFile(path, []byte(content), 0o600)
 	Expect(err).NotTo(HaveOccurred(), "Failed to write temp manifest")
 	return path

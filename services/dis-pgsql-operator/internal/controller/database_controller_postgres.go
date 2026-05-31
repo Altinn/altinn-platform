@@ -41,6 +41,13 @@ const (
 	labelValueTrue                  = "true"
 	databaseAccessProvisionLabelKey = "dis.altinn.cloud/access-provision"
 	userProvisionLabelKey           = "dis.altinn.cloud/user-provision"
+
+	// kindProvisionAdminUser is the non-superuser Postgres role the provisioning
+	// Job connects as when running against Kind (useAzFakes). It mirrors Azure's
+	// non-superuser Entra admin; see the useAzFakes branch in
+	// database_controller_user_job.go. The role is bootstrapped by
+	// config/kind/postgres.yaml.
+	kindProvisionAdminUser = "dispg_admin"
 )
 
 func (r *DatabaseReconciler) ensureFlexibleServersDatabase(

@@ -134,13 +134,21 @@ func ensureUserProvisionJobForReconciler(
 	job := buildUserProvisionJob(ns, jobName, image, labels, spec, parallelism, completions, ttlSeconds)
 
 	// If we're using AzFakes, we need to disable AAD authentication in the provisioner
-	// since we're running on Kind
+	// since we're running on Kind. We also connect as a dedicated NON-superuser admin
+	// instead of the bootstrap "postgres" superuser. Azure PostgreSQL's Entra admin is
+	// a non-superuser CREATEROLE role, which (unlike a superuser) is auto-granted
+	// membership in every role it creates. Connecting as a superuser hides that, so the
+	// Kind environment must mirror the non-superuser admin to exercise that code path.
 	if useAzFakes {
 		job.Spec.Template.Spec.Containers[0].Env = append(
 			job.Spec.Template.Spec.Containers[0].Env,
 			corev1.EnvVar{
 				Name:  dbUtil.DisableAADEnv,
 				Value: "1",
+			},
+			corev1.EnvVar{
+				Name:  dbUtil.DBAdminUserEnv,
+				Value: kindProvisionAdminUser,
 			},
 		)
 		job.Spec.Template.Spec.InitContainers = append(
