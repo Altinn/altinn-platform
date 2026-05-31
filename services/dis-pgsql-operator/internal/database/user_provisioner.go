@@ -79,7 +79,7 @@ func RunUserProvisioner(ctx context.Context) error {
 		return fmt.Errorf("parse pgx config: %w", err)
 	}
 	if disableAAD {
-		adminUser := strings.TrimSpace(os.Getenv("DISPG_DB_ADMIN_USER"))
+		adminUser := strings.TrimSpace(os.Getenv(DBAdminUserEnv))
 		if adminUser == "" {
 			adminUser = "postgres"
 		}
@@ -500,11 +500,17 @@ func createAADPrincipalSQL() string {
 }
 
 func roleMembersSQL() string {
+	// CURRENT_USER is excluded: PostgreSQL auto-grants the creating role membership
+	// WITH ADMIN OPTION on CREATE ROLE, so the connecting admin shows up as a member
+	// of every managed role it created. Reconciling that membership away fails with
+	// "dependent privileges exist" (2BP01) because the admin used it to grant the
+	// role onward, so it must never be treated as a revocable member.
 	return `SELECT member_role.rolname
 FROM pg_auth_members membership
 JOIN pg_roles role_role ON role_role.oid = membership.roleid
 JOIN pg_roles member_role ON member_role.oid = membership.member
-WHERE role_role.rolname = $1`
+WHERE role_role.rolname = $1
+  AND member_role.rolname <> CURRENT_USER`
 }
 
 func grantRoleSQL(role, member string) string {

@@ -1,3 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: default
+data:
+  10-dispg-admin.sql: |
+    CREATE ROLE dispg_admin LOGIN CREATEROLE CREATEDB;
+    ALTER ROLE dispg_admin SET createrole_self_grant = 'set, inherit';
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,6 +31,13 @@ spec:
               value: "trust"
           ports:
             - containerPort: 5432
+          volumeMounts:
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: init
+          configMap:
+            name: postgres-init
 ---
 apiVersion: v1
 kind: Service
