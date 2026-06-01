@@ -7,6 +7,7 @@ import (
 
 	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/connection"
 	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/naming"
 	"github.com/go-logr/logr"
@@ -40,7 +41,7 @@ func (r *DatabaseReconciler) ensureDatabaseAccess(
 		return false, databaseReasonProvisioning, "Waiting for DatabaseServer admin identity", nil
 	}
 
-	accessPrincipals, requeue, message, err := r.resolveDatabaseAccessPrincipals(ctx, logger, database)
+	accessPrincipals, serviceConnections, requeue, message, err := r.resolveDatabaseAccessPrincipals(ctx, logger, database)
 	if err != nil {
 		return false, "", "", err
 	}
@@ -71,18 +72,40 @@ func (r *DatabaseReconciler) ensureDatabaseAccess(
 		return false, "", "", err
 	}
 	if complete {
+		coords := make([]connection.Coordinates, 0, len(serviceConnections))
+		for _, sc := range serviceConnections {
+			coords = append(coords, connection.Coordinates{
+				Host:        database.Status.Host,
+				Port:        database.Status.Port,
+				DBName:      database.Status.DatabaseName,
+				User:        sc.ManagedIdentityName,
+				IdentityRef: sc.IdentityRef,
+			})
+		}
+		if err := r.reconcileConnectionConfigMaps(ctx, database, coords); err != nil {
+			return false, "", "", err
+		}
 		return true, databaseReasonReady, "Database access is ready", nil
 	}
 
 	return false, databaseReasonProvisioning, "Database access provisioning job is running", nil
 }
 
+// resolvedServiceConnection pairs a service principal's spec identityRef.name
+// (known at authoring time; drives the connection ConfigMap name and principal
+// label) with the resolved managed-identity name the app authenticates as.
+type resolvedServiceConnection struct {
+	IdentityRef         string
+	ManagedIdentityName string
+}
+
 func (r *DatabaseReconciler) resolveDatabaseAccessPrincipals(
 	ctx context.Context,
 	logger logr.Logger,
 	database *storagev1alpha1.Database,
-) ([]dbUtil.AccessPrincipal, bool, string, error) {
+) ([]dbUtil.AccessPrincipal, []resolvedServiceConnection, bool, string, error) {
 	accessPrincipals := make([]dbUtil.AccessPrincipal, 0, len(database.Spec.Access.Principals))
+	serviceConnections := make([]resolvedServiceConnection, 0, len(database.Spec.Access.Principals))
 	seen := map[string]struct{}{}
 
 	for _, principal := range database.Spec.Access.Principals {
@@ -112,15 +135,15 @@ func (r *DatabaseReconciler) resolveDatabaseAccessPrincipals(
 		if err := r.Get(ctx, types.NamespacedName{Name: refName, Namespace: database.Namespace}, &appIdentity); err != nil {
 			if apierrors.IsNotFound(err) {
 				logger.Info("ApplicationIdentity for Database access not found yet", "name", refName)
-				return nil, true, fmt.Sprintf("Waiting for ApplicationIdentity %q", refName), nil
+				return nil, nil, true, fmt.Sprintf("Waiting for ApplicationIdentity %q", refName), nil
 			}
-			return nil, false, "", fmt.Errorf("get ApplicationIdentity %s/%s: %w", database.Namespace, refName, err)
+			return nil, nil, false, "", fmt.Errorf("get ApplicationIdentity %s/%s: %w", database.Namespace, refName, err)
 		}
 
 		ready, readyFound := applicationIdentityReady(&appIdentity)
 		if readyFound && !ready {
 			logger.Info("ApplicationIdentity for Database access not ready yet", "name", refName)
-			return nil, true, fmt.Sprintf("Waiting for ApplicationIdentity %q to be ready", refName), nil
+			return nil, nil, true, fmt.Sprintf("Waiting for ApplicationIdentity %q to be ready", refName), nil
 		}
 
 		var managedIdentityName string
@@ -133,7 +156,7 @@ func (r *DatabaseReconciler) resolveDatabaseAccessPrincipals(
 		}
 		if managedIdentityName == "" || principalID == "" {
 			logger.Info("ApplicationIdentity for Database access status not populated yet", "name", refName)
-			return nil, true, fmt.Sprintf("Waiting for ApplicationIdentity %q status", refName), nil
+			return nil, nil, true, fmt.Sprintf("Waiting for ApplicationIdentity %q status", refName), nil
 		}
 
 		accessPrincipal := dbUtil.AccessPrincipal{
@@ -148,12 +171,16 @@ func (r *DatabaseReconciler) resolveDatabaseAccessPrincipals(
 		}
 		seen[key] = struct{}{}
 		accessPrincipals = append(accessPrincipals, accessPrincipal)
+		serviceConnections = append(serviceConnections, resolvedServiceConnection{
+			IdentityRef:         refName,
+			ManagedIdentityName: managedIdentityName,
+		})
 	}
 
 	if len(accessPrincipals) == 0 {
-		return nil, false, "", fmt.Errorf("database access principal resolution produced no principals")
+		return nil, nil, false, "", fmt.Errorf("database access principal resolution produced no principals")
 	}
-	return accessPrincipals, false, "", nil
+	return accessPrincipals, serviceConnections, false, "", nil
 }
 
 func databaseAccessPayloadRole(role storagev1alpha1.DatabaseAccessRole) dbUtil.AccessRole {

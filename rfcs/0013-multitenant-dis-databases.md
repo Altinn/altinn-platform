@@ -145,7 +145,9 @@ When `dis-pgsql` reconciles it, it:
 4. creates the PostgreSQL database
 5. resolves `identityRef` values and maps existing Entra groups
 6. grants access through operator-managed PostgreSQL roles
-7. writes status
+7. publishes a connection ConfigMap per service-identity principal once the
+   database and access are ready (see [Connection details](#connection-details))
+8. writes status
 
 # Reference-level explanation
 [reference-level-explanation]: #reference-level-explanation
@@ -179,6 +181,10 @@ Status should include:
 - conditions: `Ready`, `DatabaseReady`, `AccessReady`
 - `observedGeneration`
 - validation errors
+
+The connection ConfigMaps (see [Connection details](#connection-details)) add no
+new status condition: they are published on the same path that sets `Ready`, and
+a failure to publish keeps `Ready=False`.
 
 ## Reconciliation
 
@@ -223,6 +229,37 @@ reader, writer, and owner. It grants access by role membership:
 The operator reconciles membership in its managed reader/writer/owner roles,
 including removing principals when removed from `spec.access.principals`. It
 does not drop Entra principals or revoke unrelated/manual grants.
+
+## Connection details
+
+The connection coordinates an app needs (host, port, database name, the Postgres
+user it authenticates as) are only known after the Azure resources exist and the
+operator reports the `Database` ready. The runtime connection step above relies
+on the app discovering those coordinates; `dis-pgsql` publishes them as
+non-secret ConfigMaps rather than requiring app teams to scrape `status`. This
+mirrors the pattern `dis-vault` already uses for Key Vault coordinates.
+
+The operator publishes one ConfigMap per `identityRef` (service-identity) access
+principal once the `Database` is ready. `group` principals get none (no single
+app consumer). Each ConfigMap:
+
+- is named `<database.metadata.name>-<identityRef.name>-dis-pgsql`, sanitized to
+  a valid DNS-1123 name and hash-suffixed if it would exceed 63 characters. The
+  name is a pure function of values known at authoring time, so a consumer can
+  derive it before the database is deployed.
+- carries CloudNativePG-style keys: `host`, `port`, `dbname`, `user` (the
+  resolved managed identity / Postgres role), `sslmode` (`require`), and a
+  passwordless `uri`. It holds **no password / pgpass** — authentication is Entra
+  token based, so the ConfigMap is non-secret.
+- carries labels `pgsql.dis.altinn.cloud/database`,
+  `pgsql.dis.altinn.cloud/principal`, and
+  `pgsql.dis.altinn.cloud/component=connection`. These labels are the stable
+  binding contract: a consumer (or a future `DisApp` kro resource graph, which
+  should consume DB connectivity with no knowledge of platform internals) can
+  select the ConfigMap by label even when the name is hash-suffixed.
+
+The ConfigMap is owned by the `Database`, so it is garbage-collected on delete
+and pruned when its principal is removed from `spec.access.principals`.
 
 ## Networking
 

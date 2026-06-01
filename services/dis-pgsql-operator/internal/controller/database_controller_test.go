@@ -8,10 +8,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/connection"
 	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
@@ -198,6 +200,38 @@ var _ = Describe("DatabaseServer controller", func() {
 		return job
 	}
 
+	completeDatabaseAccessJob := func(ctx context.Context, job batchv1.Job) {
+		Eventually(func() error {
+			var accessJob batchv1.Job
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      job.Name,
+				Namespace: job.Namespace,
+			}, &accessJob); err != nil {
+				return err
+			}
+			now := metav1.Now()
+			accessJob.Status.StartTime = &now
+			accessJob.Status.CompletionTime = &now
+			accessJob.Status.Succeeded = 1
+			accessJob.Status.Conditions = []batchv1.JobCondition{
+				{
+					Type:               batchv1.JobSuccessCriteriaMet,
+					Status:             corev1.ConditionTrue,
+					Reason:             "Completed",
+					LastTransitionTime: now,
+				},
+				{
+					Type:               batchv1.JobComplete,
+					Status:             corev1.ConditionTrue,
+					Reason:             "Completed",
+					LastTransitionTime: now,
+				},
+			}
+			return k8sClient.Status().Update(ctx, &accessJob)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+	}
+
 	createApplicationIdentity := func(ctx context.Context, name, managedName, principalID string) {
 		appIdentity := &identityv1alpha1.ApplicationIdentity{
 			ObjectMeta: metav1.ObjectMeta{
@@ -324,6 +358,14 @@ var _ = Describe("DatabaseServer controller", func() {
 		// this cleanup is draining the namespace.
 		deleteAll(&storagev1alpha1.Database{})
 		deleteAll(&storagev1alpha1.DatabaseServer{})
+
+		// envtest has no garbage collector, so owner-referenced connection
+		// ConfigMaps are not reclaimed when their Database is deleted. Remove
+		// them by label so they do not leak across specs.
+		Expect(k8sClient.DeleteAllOf(ctx, &corev1.ConfigMap{},
+			client.InNamespace(namespace),
+			client.MatchingLabels{connection.LabelComponent: connection.ComponentValue},
+		)).To(Succeed())
 
 		deleteAll(&batchv1.Job{})
 		deleteAll(&dbforpostgresqlv1.FlexibleServersDatabase{})
@@ -2794,35 +2836,7 @@ var _ = Describe("DatabaseServer controller", func() {
 
 		job := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
 
-		Eventually(func() error {
-			var accessJob batchv1.Job
-			if err := k8sClient.Get(ctx, types.NamespacedName{
-				Name:      job.Name,
-				Namespace: job.Namespace,
-			}, &accessJob); err != nil {
-				return err
-			}
-			now := metav1.Now()
-			accessJob.Status.StartTime = &now
-			accessJob.Status.CompletionTime = &now
-			accessJob.Status.Succeeded = 1
-			accessJob.Status.Conditions = []batchv1.JobCondition{
-				{
-					Type:               batchv1.JobSuccessCriteriaMet,
-					Status:             corev1.ConditionTrue,
-					Reason:             "Completed",
-					LastTransitionTime: now,
-				},
-				{
-					Type:               batchv1.JobComplete,
-					Status:             corev1.ConditionTrue,
-					Reason:             "Completed",
-					LastTransitionTime: now,
-				},
-			}
-			return k8sClient.Status().Update(ctx, &accessJob)
-		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
-			Should(Succeed())
+		completeDatabaseAccessJob(ctx, job)
 
 		Eventually(func(g Gomega) metav1.ConditionStatus {
 			var updated storagev1alpha1.Database
@@ -2841,6 +2855,122 @@ var _ = Describe("DatabaseServer controller", func() {
 			return ready.Status
 		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
 			Should(Equal(metav1.ConditionTrue))
+	})
+
+	It("publishes a connection ConfigMap for each service principal when the Database is ready", func() {
+		db := newSharedDatabaseServer("shared-db-conn-configmap")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
+
+		database := newDatabase("router-conn-configmap", db.Name)
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			return len(listDatabaseASOChildren(g, database.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+
+		markDatabaseASOReady(ctx, database)
+
+		job := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
+
+		cmName := connection.DeterministicConfigMapName(database.Name, databaseAppIdentityRef)
+
+		// The ConfigMap is published only when the Database is fully ready, so
+		// it must not exist while the access Job is still running.
+		Consistently(func() error {
+			var cm corev1.ConfigMap
+			return k8sClient.Get(ctx, types.NamespacedName{Name: cmName, Namespace: database.Namespace}, &cm)
+		}).WithTimeout(2 * time.Second).WithPolling(250 * time.Millisecond).
+			ShouldNot(Succeed())
+
+		completeDatabaseAccessJob(ctx, job)
+
+		var cm corev1.ConfigMap
+		Eventually(func() error {
+			return k8sClient.Get(ctx, types.NamespacedName{Name: cmName, Namespace: database.Namespace}, &cm)
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		expectedHost := fmt.Sprintf("%s.postgres.database.azure.com", db.Name)
+		Expect(cm.Data[connection.DataKeyHost]).To(Equal(expectedHost))
+		Expect(cm.Data[connection.DataKeyPort]).To(Equal("5432"))
+		Expect(cm.Data[connection.DataKeyDBName]).To(Equal(database.Spec.Name))
+		// data.user is the resolved managed-identity name, not the identityRef name.
+		Expect(cm.Data[connection.DataKeyUser]).To(Equal(databaseAppManagedIdentity))
+		Expect(cm.Data[connection.DataKeySSLMode]).To(Equal(connection.SSLModeRequire))
+		Expect(cm.Data[connection.DataKeyURI]).To(Equal(fmt.Sprintf(
+			"postgresql://%s@%s:5432/%s?sslmode=require",
+			databaseAppManagedIdentity, expectedHost, database.Spec.Name,
+		)))
+
+		Expect(cm.Labels[connection.LabelDatabase]).To(Equal(database.Name))
+		Expect(cm.Labels[connection.LabelPrincipal]).To(Equal(databaseAppIdentityRef))
+		Expect(cm.Labels[connection.LabelComponent]).To(Equal(connection.ComponentValue))
+
+		Expect(metav1.IsControlledBy(&cm, database)).To(BeTrue())
+
+		// The group principal does not get a ConfigMap: exactly one is published
+		// for this Database.
+		var cms corev1.ConfigMapList
+		Expect(k8sClient.List(ctx, &cms,
+			client.InNamespace(database.Namespace),
+			client.MatchingLabels{
+				connection.LabelComponent: connection.ComponentValue,
+				connection.LabelDatabase:  database.Name,
+			},
+		)).To(Succeed())
+		Expect(cms.Items).To(HaveLen(1))
+	})
+
+	It("removes stale connection ConfigMaps it owns on the ready reconcile", func() {
+		db := newSharedDatabaseServer("shared-db-conn-stale")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
+
+		database := newDatabase("router-conn-stale", db.Name)
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			return len(listDatabaseASOChildren(g, database.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+
+		markDatabaseASOReady(ctx, database)
+
+		var owned storagev1alpha1.Database
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: database.Name, Namespace: database.Namespace}, &owned)).To(Succeed())
+
+		// Seed an operator-owned connection ConfigMap for a principal that is no
+		// longer desired; the ready reconcile must prune it.
+		staleName := connection.DeterministicConfigMapName(database.Name, "removed-principal")
+		stale := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      staleName,
+				Namespace: database.Namespace,
+				Labels: map[string]string{
+					connection.LabelDatabase:  database.Name,
+					connection.LabelPrincipal: "removed-principal",
+					connection.LabelComponent: connection.ComponentValue,
+				},
+			},
+			Data: map[string]string{connection.DataKeyHost: "stale"},
+		}
+		Expect(controllerutil.SetControllerReference(&owned, stale, k8sClient.Scheme())).To(Succeed())
+		Expect(k8sClient.Create(ctx, stale)).To(Succeed())
+
+		job := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
+		completeDatabaseAccessJob(ctx, job)
+
+		wantName := connection.DeterministicConfigMapName(database.Name, databaseAppIdentityRef)
+		Eventually(func(g Gomega) {
+			var want corev1.ConfigMap
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: wantName, Namespace: database.Namespace}, &want)).To(Succeed())
+
+			err := k8sClient.Get(ctx, types.NamespacedName{Name: staleName, Namespace: database.Namespace}, &corev1.ConfigMap{})
+			g.Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		}).WithTimeout(15 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
 	})
 
 	It("recreates the Database access provisioning Job when the current Job is failed", func() {
