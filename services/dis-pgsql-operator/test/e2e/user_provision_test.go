@@ -266,6 +266,43 @@ var _ = Describe("User provisioning", Ordered, func() {
 		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).
 			Should(Equal("True"))
 
+		By("verifying the connection ConfigMap is published for the app (service) principal")
+		connConfigMapName := fmt.Sprintf("%s-%s-dis-pgsql", databaseResourceName, databaseAppIdentity)
+		expectedURI := fmt.Sprintf(
+			"postgresql://%s@postgres.default.svc:5432/%s?sslmode=require",
+			databaseAppIdentity, expectedDatabaseName,
+		)
+		Eventually(func(g Gomega) {
+			get := func(jsonpath string) string {
+				cmd := exec.Command("kubectl", "get", "configmap", connConfigMapName, "-n", namespace, "-o", jsonpath)
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				return strings.TrimSpace(output)
+			}
+			g.Expect(get("jsonpath={.data.host}")).To(Equal("postgres.default.svc"))
+			g.Expect(get("jsonpath={.data.port}")).To(Equal("5432"))
+			g.Expect(get("jsonpath={.data.dbname}")).To(Equal(expectedDatabaseName))
+			g.Expect(get("jsonpath={.data.user}")).To(Equal(databaseAppIdentity))
+			g.Expect(get("jsonpath={.data.sslmode}")).To(Equal("require"))
+			g.Expect(get("jsonpath={.data.uri}")).To(Equal(expectedURI))
+			g.Expect(get("jsonpath={.metadata.labels.pgsql\\.dis\\.altinn\\.cloud/principal}")).To(Equal(databaseAppIdentity))
+		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).
+			Should(Succeed())
+
+		By("verifying the Owner group principal did not get a ConfigMap")
+		Eventually(func(g Gomega) string {
+			cmd := exec.Command(
+				"kubectl", "get", "configmaps",
+				"-n", namespace,
+				"-l", "pgsql.dis.altinn.cloud/component=connection,pgsql.dis.altinn.cloud/database="+databaseResourceName,
+				"-o", "jsonpath={range .items[*]}{.metadata.name}{\"\\n\"}{end}",
+			)
+			output, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			return strings.TrimSpace(output)
+		}).WithTimeout(30 * time.Second).WithPolling(2 * time.Second).
+			Should(Equal(connConfigMapName))
+
 		By("verifying app and owner roles exist in Postgres")
 		output := runPostgresQuery("SELECT 1 FROM pg_roles WHERE rolname = '" + databaseAppIdentity + "';")
 		Expect(strings.TrimSpace(output)).To(Equal("1"))
@@ -300,6 +337,19 @@ var _ = Describe("User provisioning", Ordered, func() {
 		runPostgresQuery(`DROP ROLE IF EXISTS "e2e-database-intruder"; CREATE ROLE "e2e-database-intruder" LOGIN;`)
 		_, err = runPostgresQueryAsUserInDatabase("e2e-database-intruder", expectedDatabaseName, "SELECT 1;")
 		Expect(err).To(HaveOccurred())
+
+		By("verifying the connection ConfigMap is garbage-collected when the Database is deleted")
+		deleteDatabaseAndProvisionJobs(databaseResourceName, namespace)
+		Eventually(func(g Gomega) string {
+			cmd := exec.Command(
+				"kubectl", "get", "configmap", connConfigMapName,
+				"-n", namespace, "--ignore-not-found", "-o", "name",
+			)
+			output, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			return strings.TrimSpace(output)
+		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).
+			Should(BeEmpty())
 	})
 
 	It("re-provisions without revoking the connecting admin (regression for SQLSTATE 2BP01)", func() {

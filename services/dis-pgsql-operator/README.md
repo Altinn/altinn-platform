@@ -24,6 +24,58 @@ Dedicated and multitenant layouts use the same APIs:
 - Dedicated: one `Database` per `DatabaseServer`.
 - Multitenant: many `Database` resources on one shared `DatabaseServer`.
 
+## Connection ConfigMaps
+
+Once a `Database` is fully ready (its Azure resources exist and access has been
+provisioned), the operator publishes one **non-secret** ConfigMap per
+service-identity access principal so consuming apps can read the connection
+coordinates declaratively. Access principals declared as Entra `group`s do not
+get a ConfigMap (there is no single app consumer).
+
+The ConfigMap name is derivable before the database is deployed, from values
+known at authoring time:
+
+```
+<database.metadata.name>-<identityRef.name>-dis-pgsql
+```
+
+The name is lowercased/sanitized to a valid DNS-1123 name. If it would exceed 63
+characters it is truncated and given a deterministic hash suffix — in that case,
+select the ConfigMap by labels rather than recomputing the name.
+
+Data keys (CloudNativePG-style):
+
+| key       | value                                                              |
+|-----------|--------------------------------------------------------------------|
+| `host`    | PostgreSQL server FQDN                                              |
+| `port`    | `5432`                                                             |
+| `dbname`  | database name                                                      |
+| `user`    | the resolved managed-identity / Postgres role the app connects as  |
+| `sslmode` | `require`                                                          |
+| `uri`     | `postgresql://<user>@<host>:<port>/<dbname>?sslmode=require`        |
+
+There is **no password / pgpass** key: authentication is Entra (Azure AD) token
+based, so the ConfigMap holds no secrets.
+
+Labels (the binding contract; a consumer or a kro resource graph can select on
+these even when the name is hash-suffixed):
+
+- `pgsql.dis.altinn.cloud/database`: the `Database` name
+- `pgsql.dis.altinn.cloud/principal`: the `identityRef.name`
+- `pgsql.dis.altinn.cloud/component`: `connection`
+
+The ConfigMap is owned by the `Database`, so it is garbage-collected when the
+`Database` is deleted, and removed when its principal is dropped from
+`spec.access.principals`.
+
+Apps can consume it directly with `envFrom`:
+
+```yaml
+envFrom:
+  - configMapRef:
+      name: <database>-<identityRef>-dis-pgsql
+```
+
 ## Getting Started
 
 ### Prerequisites
