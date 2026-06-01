@@ -48,6 +48,8 @@ var _ = Describe("Vault controller", func() {
 		cancel  context.CancelFunc
 	)
 
+	const ns = "default"
+
 	cleanupNamespacedTestResources := func(ctx context.Context, namespace string) {
 		deleteAll := func(obj client.Object) {
 			Expect(k8sClient.DeleteAllOf(ctx, obj, client.InNamespace(namespace))).To(Succeed())
@@ -440,8 +442,8 @@ var _ = Describe("Vault controller", func() {
 		v := newVault("my-app-vault-propagation", "my-app-identity-propagation")
 		v.Spec.SKU = vaultv1alpha1.VaultSKUStandard
 		v.Spec.Tags = map[string]string{
-			labelTeam: "apps",
-			"remove":  "old-value",
+			"team":   "apps",
+			"remove": "old-value",
 		}
 		v.Spec.SoftDeleteRetentionDays = 7
 		v.Spec.PurgeProtectionEnabled = &initialPurgeProtection
@@ -465,8 +467,8 @@ var _ = Describe("Vault controller", func() {
 			g.Expect(keyVault.Spec.Properties.EnablePurgeProtection).NotTo(BeNil())
 			g.Expect(*keyVault.Spec.Properties.EnablePurgeProtection).To(BeFalse())
 			g.Expect(keyVault.Spec.Tags).To(Equal(map[string]string{
-				labelTeam: "apps",
-				"remove":  "old-value",
+				"team":   "apps",
+				"remove": "old-value",
 			}))
 		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
 
@@ -477,8 +479,8 @@ var _ = Describe("Vault controller", func() {
 			updatedPurgeProtection := true
 			current.Spec.SKU = vaultv1alpha1.VaultSKUPremium
 			current.Spec.Tags = map[string]string{
-				labelTeam: teamPlatform,
-				"env":     "prod",
+				"team": "platform",
+				"env":  "prod",
 			}
 			current.Spec.SoftDeleteRetentionDays = 30
 			current.Spec.PurgeProtectionEnabled = &updatedPurgeProtection
@@ -508,8 +510,8 @@ var _ = Describe("Vault controller", func() {
 			g.Expect(keyVault.Spec.Properties.EnablePurgeProtection).NotTo(BeNil())
 			g.Expect(*keyVault.Spec.Properties.EnablePurgeProtection).To(BeTrue())
 			g.Expect(keyVault.Spec.Tags).To(Equal(map[string]string{
-				labelTeam: teamPlatform,
-				"env":     "prod",
+				"team": "platform",
+				"env":  "prod",
 			}))
 			g.Expect(keyVault.Spec.Tags).NotTo(HaveKey("remove"))
 		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
@@ -1100,7 +1102,7 @@ var _ = Describe("Vault controller", func() {
 		vaultObj := newVault(vaultName, identityName)
 		vaultObj.Spec.SKU = vaultv1alpha1.VaultSKUPremium
 		vaultObj.Spec.Tags = map[string]string{
-			labelTeam: teamPlatform,
+			"team": "platform",
 		}
 		vaultObj.Spec.SoftDeleteRetentionDays = 14
 		vaultObj.Spec.PurgeProtectionEnabled = &purgeProtectionEnabled
@@ -1130,7 +1132,7 @@ var _ = Describe("Vault controller", func() {
 				if ref.APIVersion != vaultv1alpha1.GroupVersion.String() {
 					continue
 				}
-				if ref.Kind != vaultKind || ref.Name != owner.Name || ref.UID != owner.UID {
+				if ref.Kind != "Vault" || ref.Name != owner.Name || ref.UID != owner.UID {
 					continue
 				}
 				if ref.Controller != nil && *ref.Controller {
@@ -1515,7 +1517,7 @@ func TestReconcileManagedSecretStoreReturnsCRDNotInstalledWhenSecretStoreCRDIsMi
 	vaultObj := &vaultv1alpha1.Vault{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       testVaultName,
-			Namespace:  ns,
+			Namespace:  "default",
 			Generation: 7,
 		},
 		Spec: vaultv1alpha1.VaultSpec{
@@ -1546,11 +1548,11 @@ func TestReconcileManagedConfigMapDeletesStaleOwnedConfigMaps(t *testing.T) {
 	vaultObj := &vaultv1alpha1.Vault{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: vaultv1alpha1.GroupVersion.String(),
-			Kind:       vaultKind,
+			Kind:       "Vault",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       testVaultName,
-			Namespace:  ns,
+			Namespace:  "default",
 			Generation: 9,
 			UID:        types.UID("vault-uid"),
 		},
@@ -1568,7 +1570,7 @@ func TestReconcileManagedConfigMapDeletesStaleOwnedConfigMaps(t *testing.T) {
 				vaultpkg.ManagedResourceComponentLabel: vaultpkg.ManagedConfigMapComponentValue,
 			},
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(vaultObj, vaultv1alpha1.GroupVersion.WithKind(vaultKind)),
+				*metav1.NewControllerRef(vaultObj, vaultv1alpha1.GroupVersion.WithKind("Vault")),
 			},
 		},
 		Data: map[string]string{
@@ -1622,7 +1624,7 @@ func TestReconcileManagedConfigMapReturnsNameConflictForNonOwnedConfigMap(t *tes
 	vaultObj := &vaultv1alpha1.Vault{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       testVaultName,
-			Namespace:  ns,
+			Namespace:  "default",
 			Generation: 11,
 		},
 		Spec: vaultv1alpha1.VaultSpec{
@@ -1681,11 +1683,11 @@ func TestReconcileManagedConfigMapPreservesExistingVaultURIWhenStatusIsUnavailab
 	vaultObj := &vaultv1alpha1.Vault{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: vaultv1alpha1.GroupVersion.String(),
-			Kind:       vaultKind,
+			Kind:       "Vault",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       testVaultName,
-			Namespace:  ns,
+			Namespace:  "default",
 			Generation: 12,
 			UID:        types.UID("vault-uid"),
 		},
@@ -1703,7 +1705,7 @@ func TestReconcileManagedConfigMapPreservesExistingVaultURIWhenStatusIsUnavailab
 				vaultpkg.ManagedResourceComponentLabel: vaultpkg.ManagedConfigMapComponentValue,
 			},
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(vaultObj, vaultv1alpha1.GroupVersion.WithKind(vaultKind)),
+				*metav1.NewControllerRef(vaultObj, vaultv1alpha1.GroupVersion.WithKind("Vault")),
 			},
 		},
 		Data: map[string]string{
@@ -1754,7 +1756,7 @@ func TestBuildNetworkPolicyCondition(t *testing.T) {
 	}
 
 	vaultObj := &vaultv1alpha1.Vault{
-		ObjectMeta: metav1.ObjectMeta{Name: testVaultName, Namespace: ns},
+		ObjectMeta: metav1.ObjectMeta{Name: testVaultName, Namespace: "default"},
 		Spec: vaultv1alpha1.VaultSpec{
 			IdentityRef: &vaultv1alpha1.ApplicationIdentityRef{Name: "app-identity-sample"},
 		},

@@ -37,6 +37,9 @@ linters:
           - lll
         path: internal/*
       - linters:
+          - goconst
+        path: _test\.go$
+      - linters:
           - staticcheck
         path: api/v1alpha1/groupversion_info.go
         text: SA1019
