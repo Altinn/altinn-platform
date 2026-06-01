@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/Altinn/altinn-platform/compare/k6-action-image-0.1.0...k6-action-image-0.1.1) (2026-05-31)
+
+
+### Bug Fixes
+
+* **k6-action:** add Go stdlib CVEs to trivyignore ([#3600](https://github.com/Altinn/altinn-platform/issues/3600)) ([a5e03e4](https://github.com/Altinn/altinn-platform/commit/a5e03e482c54e65bf2ced6fba6f39fbfd9eff53a))
+
 ## [0.1.0](https://github.com/Altinn/altinn-platform/compare/k6-action-image-0.0.23...k6-action-image-0.1.0) (2026-05-22)
 
 

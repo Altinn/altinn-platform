@@ -6,7 +6,7 @@
   "services/lakmus": "1.1.6",
   "infrastructure/images/azure-devops-agent": "1.2.8",
   "infrastructure/images/gh-runner": "0.9.1",
-  "infrastructure/images/k6-action": "0.1.0",
+  "infrastructure/images/k6-action": "0.1.1",
   "infrastructure/images/k6-image": "1.5.2",
   "infrastructure/images/terraform-azure-devops-agent": "0.9.4"
 }
