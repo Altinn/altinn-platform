@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.8](https://github.com/Altinn/altinn-platform/compare/azdevops-agent-1.2.7...azdevops-agent-1.2.8) (2026-05-31)
+
+
+### Bug Fixes
+
+* **azure-devops-agent:** add CVE-2026-44431 and CVE-2026-44432 to trivyignore ([#3598](https://github.com/Altinn/altinn-platform/issues/3598)) ([690da55](https://github.com/Altinn/altinn-platform/commit/690da555a0d1c2a0c88ba0fe1e14d67d5aeb1c4a))
+
 ## [1.2.7](https://github.com/Altinn/altinn-platform/compare/azdevops-agent-1.2.6...azdevops-agent-1.2.7) (2026-04-29)
 
 
