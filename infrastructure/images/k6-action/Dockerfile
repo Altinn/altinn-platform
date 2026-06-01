@@ -38,9 +38,9 @@ RUN curl -L "https://github.com/google/jsonnet/archive/refs/tags/v${JSONNET_VERS
     chmod +x jsonnet && mv jsonnet /usr/local/bin &&\
     chmod +x jsonnetfmt && mv jsonnetfmt /usr/local/bin
 
-# Install jb
-RUN curl -OL "https://github.com/jsonnet-bundler/jsonnet-bundler/releases/download/v${JB_VERSION}/jb-linux-amd64" &&\
-    chmod +x jb-linux-amd64 && mv jb-linux-amd64 /usr/local/bin/jb
+# Install jb (built from source so it uses the builder's Go version rather than the pre-built binary's Go 1.23)
+RUN go install github.com/jsonnet-bundler/jsonnet-bundler/cmd/jb@v${JB_VERSION} && \
+    mv /go/bin/jb /usr/local/bin/jb
 
 WORKDIR /jsonnet/vendor
 
