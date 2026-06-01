@@ -72,13 +72,13 @@ func TestBuildManagedConfigMapWithServiceAccountRef(t *testing.T) {
 	vaultObj := &vaultv1alpha1.Vault{}
 	vaultObj.Name = testVaultName
 	vaultObj.Namespace = testNamespace
-	vaultObj.Spec.ServiceAccountRef = &vaultv1alpha1.ServiceAccountRef{Name: "my-app-service-account"}
+	vaultObj.Spec.ServiceAccountRef = &vaultv1alpha1.ServiceAccountRef{Name: testServiceAccountName}
 
 	configMap, err := BuildManagedConfigMap(vaultObj, "my-akv-name", "https://my-akv.vault.azure.net")
 	if err != nil {
 		t.Fatalf("expected ConfigMap builder to succeed, got error: %v", err)
 	}
-	if configMap.Name != DeterministicConfigMapName("my-app-service-account") {
+	if configMap.Name != DeterministicConfigMapName(testServiceAccountName) {
 		t.Fatalf("expected service-account based ConfigMap name, got %q", configMap.Name)
 	}
 }

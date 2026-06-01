@@ -48,8 +48,6 @@ var _ = Describe("Vault controller", func() {
 		cancel  context.CancelFunc
 	)
 
-	const ns = "default"
-
 	cleanupNamespacedTestResources := func(ctx context.Context, namespace string) {
 		deleteAll := func(obj client.Object) {
 			Expect(k8sClient.DeleteAllOf(ctx, obj, client.InNamespace(namespace))).To(Succeed())
@@ -442,8 +440,8 @@ var _ = Describe("Vault controller", func() {
 		v := newVault("my-app-vault-propagation", "my-app-identity-propagation")
 		v.Spec.SKU = vaultv1alpha1.VaultSKUStandard
 		v.Spec.Tags = map[string]string{
-			"team":   "apps",
-			"remove": "old-value",
+			labelTeam: "apps",
+			"remove":  "old-value",
 		}
 		v.Spec.SoftDeleteRetentionDays = 7
 		v.Spec.PurgeProtectionEnabled = &initialPurgeProtection
@@ -467,8 +465,8 @@ var _ = Describe("Vault controller", func() {
 			g.Expect(keyVault.Spec.Properties.EnablePurgeProtection).NotTo(BeNil())
 			g.Expect(*keyVault.Spec.Properties.EnablePurgeProtection).To(BeFalse())
 			g.Expect(keyVault.Spec.Tags).To(Equal(map[string]string{
-				"team":   "apps",
-				"remove": "old-value",
+				labelTeam: "apps",
+				"remove":  "old-value",
 			}))
 		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
 
@@ -479,8 +477,8 @@ var _ = Describe("Vault controller", func() {
 			updatedPurgeProtection := true
 			current.Spec.SKU = vaultv1alpha1.VaultSKUPremium
 			current.Spec.Tags = map[string]string{
-				"team": "platform",
-				"env":  "prod",
+				labelTeam: teamPlatform,
+				"env":     "prod",
 			}
 			current.Spec.SoftDeleteRetentionDays = 30
 			current.Spec.PurgeProtectionEnabled = &updatedPurgeProtection
@@ -510,8 +508,8 @@ var _ = Describe("Vault controller", func() {
 			g.Expect(keyVault.Spec.Properties.EnablePurgeProtection).NotTo(BeNil())
 			g.Expect(*keyVault.Spec.Properties.EnablePurgeProtection).To(BeTrue())
 			g.Expect(keyVault.Spec.Tags).To(Equal(map[string]string{
-				"team": "platform",
-				"env":  "prod",
+				labelTeam: teamPlatform,
+				"env":     "prod",
 			}))
 			g.Expect(keyVault.Spec.Tags).NotTo(HaveKey("remove"))
 		}).WithTimeout(20 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
@@ -1102,7 +1100,7 @@ var _ = Describe("Vault controller", func() {
 		vaultObj := newVault(vaultName, identityName)
 		vaultObj.Spec.SKU = vaultv1alpha1.VaultSKUPremium
 		vaultObj.Spec.Tags = map[string]string{
-			"team": "platform",
+			labelTeam: teamPlatform,
 		}
 		vaultObj.Spec.SoftDeleteRetentionDays = 14
 		vaultObj.Spec.PurgeProtectionEnabled = &purgeProtectionEnabled
@@ -1132,7 +1130,7 @@ var _ = Describe("Vault controller", func() {
 				if ref.APIVersion != vaultv1alpha1.GroupVersion.String() {
 					continue
 				}
-				if ref.Kind != "Vault" || ref.Name != owner.Name || ref.UID != owner.UID {
+				if ref.Kind != vaultKind || ref.Name != owner.Name || ref.UID != owner.UID {
 					continue
 				}
 				if ref.Controller != nil && *ref.Controller {
@@ -1153,17 +1151,17 @@ var _ = Describe("Vault controller", func() {
 			g.Expect(recreatedKeyVault.UID).NotTo(Equal(initialKeyVault.UID))
 			g.Expect(hasVaultControllerOwnerRef(recreatedKeyVault.OwnerReferences, &currentVault)).To(BeTrue())
 
-			expectedAzureName := vaultpkg.DeterministicAzureVaultName(currentVault.Namespace, currentVault.Name, "dev")
+			expectedAzureName := vaultpkg.DeterministicAzureVaultName(currentVault.Namespace, currentVault.Name, testEnvironment)
 			expectedKeyVault, err := vaultpkg.BuildASOKeyVaultResource(
 				&currentVault,
 				config.OperatorConfig{
-					SubscriptionID: "sub-123",
-					ResourceGroup:  "rg-dis-dev",
-					TenantID:       "00000000-0000-0000-0000-000000000000",
-					Location:       "westeurope",
-					Environment:    "dev",
+					SubscriptionID: testSubscriptionID,
+					ResourceGroup:  testResourceGroup,
+					TenantID:       testTenantID,
+					Location:       testLocation,
+					Environment:    testEnvironment,
 					AKSSubnetIDs: []string{
-						"/subscriptions/sub-123/resourceGroups/rg-net/providers/Microsoft.Network/virtualNetworks/vnet/subnets/aks-1",
+						testAKSSubnetID,
 					},
 				},
 				expectedAzureName,
@@ -1236,7 +1234,7 @@ var _ = Describe("Vault controller", func() {
 		Expect(k8sClient.Create(testCtx, vaultObj)).To(Succeed())
 
 		expectedConfigMapName := vaultpkg.DeterministicConfigMapName(identityName)
-		expectedAKVName := vaultpkg.DeterministicAzureVaultName(ns, vaultName, "dev")
+		expectedAKVName := vaultpkg.DeterministicAzureVaultName(ns, vaultName, testEnvironment)
 		Eventually(func(g Gomega) {
 			var configMap corev1.ConfigMap
 			g.Expect(k8sClient.Get(testCtx, types.NamespacedName{Name: expectedConfigMapName, Namespace: ns}, &configMap)).To(Succeed())
@@ -1511,13 +1509,13 @@ func TestReconcileManagedSecretStoreReturnsCRDNotInstalledWhenSecretStoreCRDIsMi
 	reconciler := &VaultReconciler{
 		Client: noMatchSecretStoreClient{Client: baseClient},
 		Scheme: scheme,
-		Config: config.OperatorConfig{TenantID: "00000000-0000-0000-0000-000000000000"},
+		Config: config.OperatorConfig{TenantID: testTenantID},
 	}
 
 	vaultObj := &vaultv1alpha1.Vault{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       "vault-sample",
-			Namespace:  "default",
+			Name:       testVaultName,
+			Namespace:  ns,
 			Generation: 7,
 		},
 		Spec: vaultv1alpha1.VaultSpec{
@@ -1548,11 +1546,11 @@ func TestReconcileManagedConfigMapDeletesStaleOwnedConfigMaps(t *testing.T) {
 	vaultObj := &vaultv1alpha1.Vault{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: vaultv1alpha1.GroupVersion.String(),
-			Kind:       "Vault",
+			Kind:       vaultKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       "vault-sample",
-			Namespace:  "default",
+			Name:       testVaultName,
+			Namespace:  ns,
 			Generation: 9,
 			UID:        types.UID("vault-uid"),
 		},
@@ -1570,7 +1568,7 @@ func TestReconcileManagedConfigMapDeletesStaleOwnedConfigMaps(t *testing.T) {
 				vaultpkg.ManagedResourceComponentLabel: vaultpkg.ManagedConfigMapComponentValue,
 			},
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(vaultObj, vaultv1alpha1.GroupVersion.WithKind("Vault")),
+				*metav1.NewControllerRef(vaultObj, vaultv1alpha1.GroupVersion.WithKind(vaultKind)),
 			},
 		},
 		Data: map[string]string{
@@ -1623,8 +1621,8 @@ func TestReconcileManagedConfigMapReturnsNameConflictForNonOwnedConfigMap(t *tes
 	scheme := newControllerUnitTestScheme(t)
 	vaultObj := &vaultv1alpha1.Vault{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       "vault-sample",
-			Namespace:  "default",
+			Name:       testVaultName,
+			Namespace:  ns,
 			Generation: 11,
 		},
 		Spec: vaultv1alpha1.VaultSpec{
@@ -1639,7 +1637,7 @@ func TestReconcileManagedConfigMapReturnsNameConflictForNonOwnedConfigMap(t *tes
 		},
 		Data: map[string]string{
 			vaultpkg.ConfigMapKeyAKVName: "existing-akv",
-			vaultpkg.ConfigMapKeyAKVURI:  "https://existing.vault.azure.net",
+			vaultpkg.ConfigMapKeyAKVURI:  testExistingVaultURI,
 		},
 	}
 
@@ -1671,7 +1669,7 @@ func TestReconcileManagedConfigMapReturnsNameConflictForNonOwnedConfigMap(t *tes
 	if err := reconciler.Get(context.Background(), types.NamespacedName{Name: conflict.Name, Namespace: conflict.Namespace}, &current); err != nil {
 		t.Fatalf("expected conflicting ConfigMap to remain, got error: %v", err)
 	}
-	if current.Data[vaultpkg.ConfigMapKeyAKVURI] != "https://existing.vault.azure.net" {
+	if current.Data[vaultpkg.ConfigMapKeyAKVURI] != testExistingVaultURI {
 		t.Fatalf("expected conflicting ConfigMap data to remain unchanged, got %#v", current.Data)
 	}
 }
@@ -1683,11 +1681,11 @@ func TestReconcileManagedConfigMapPreservesExistingVaultURIWhenStatusIsUnavailab
 	vaultObj := &vaultv1alpha1.Vault{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: vaultv1alpha1.GroupVersion.String(),
-			Kind:       "Vault",
+			Kind:       vaultKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       "vault-sample",
-			Namespace:  "default",
+			Name:       testVaultName,
+			Namespace:  ns,
 			Generation: 12,
 			UID:        types.UID("vault-uid"),
 		},
@@ -1705,12 +1703,12 @@ func TestReconcileManagedConfigMapPreservesExistingVaultURIWhenStatusIsUnavailab
 				vaultpkg.ManagedResourceComponentLabel: vaultpkg.ManagedConfigMapComponentValue,
 			},
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(vaultObj, vaultv1alpha1.GroupVersion.WithKind("Vault")),
+				*metav1.NewControllerRef(vaultObj, vaultv1alpha1.GroupVersion.WithKind(vaultKind)),
 			},
 		},
 		Data: map[string]string{
 			vaultpkg.ConfigMapKeyAKVName: "old-akv",
-			vaultpkg.ConfigMapKeyAKVURI:  "https://existing.vault.azure.net",
+			vaultpkg.ConfigMapKeyAKVURI:  testExistingVaultURI,
 		},
 	}
 
@@ -1737,7 +1735,7 @@ func TestReconcileManagedConfigMapPreservesExistingVaultURIWhenStatusIsUnavailab
 	if updated.Data[vaultpkg.ConfigMapKeyAKVName] != "new-akv" {
 		t.Fatalf("expected AkvName to be refreshed during reconcile, got %#v", updated.Data)
 	}
-	if updated.Data[vaultpkg.ConfigMapKeyAKVURI] != "https://existing.vault.azure.net" {
+	if updated.Data[vaultpkg.ConfigMapKeyAKVURI] != testExistingVaultURI {
 		t.Fatalf("expected existing AkvUri to be preserved until a newer Vault URI is known, got %#v", updated.Data)
 	}
 }
@@ -1746,17 +1744,17 @@ func TestBuildNetworkPolicyCondition(t *testing.T) {
 	t.Parallel()
 
 	cfg := config.OperatorConfig{
-		SubscriptionID: "sub-123",
-		ResourceGroup:  "rg-dis-dev",
-		Location:       "westeurope",
-		Environment:    "dev",
+		SubscriptionID: testSubscriptionID,
+		ResourceGroup:  testResourceGroup,
+		Location:       testLocation,
+		Environment:    testEnvironment,
 		AKSSubnetIDs: []string{
-			"/subscriptions/sub-123/resourceGroups/rg-net/providers/Microsoft.Network/virtualNetworks/vnet/subnets/aks-1",
+			testAKSSubnetID,
 		},
 	}
 
 	vaultObj := &vaultv1alpha1.Vault{
-		ObjectMeta: metav1.ObjectMeta{Name: "vault-sample", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: testVaultName, Namespace: ns},
 		Spec: vaultv1alpha1.VaultSpec{
 			IdentityRef: &vaultv1alpha1.ApplicationIdentityRef{Name: "app-identity-sample"},
 		},
@@ -1774,7 +1772,7 @@ func TestBuildNetworkPolicyCondition(t *testing.T) {
 
 	mismatched := buildNetworkPolicyCondition(3, desired, config.OperatorConfig{
 		AKSSubnetIDs: []string{
-			"/subscriptions/sub-123/resourceGroups/rg-net/providers/Microsoft.Network/virtualNetworks/vnet/subnets/aks-1",
+			testAKSSubnetID,
 			"/subscriptions/sub-123/resourceGroups/rg-net/providers/Microsoft.Network/virtualNetworks/vnet/subnets/aks-2",
 		},
 	})

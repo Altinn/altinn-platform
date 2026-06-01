@@ -66,9 +66,9 @@ var _ = BeforeSuite(func() {
 
 	By("bootstrapping test environment")
 	crds := []*apiextensionsv1.CustomResourceDefinition{
-		mustLoadCRD(filepath.Join("..", "..", "config", "crd", "bases"), "vault.dis.altinn.cloud", "Vault"),
+		mustLoadCRD(filepath.Join("..", "..", "config", "crd", "bases"), "vault.dis.altinn.cloud", vaultKind),
 		mustLoadCRD(disIdentityCRDPath(), "application.dis.altinn.cloud", "ApplicationIdentity"),
-		mustLoadCRD(asoCRDPath(), "keyvault.azure.com", "Vault"),
+		mustLoadCRD(asoCRDPath(), "keyvault.azure.com", vaultKind),
 		mustLoadCRD(asoCRDPath(), "authorization.azure.com", "RoleAssignment"),
 		mustLoadCRD(externalSecretsCRDPath(), "external-secrets.io", "SecretStore"),
 	}
@@ -104,13 +104,13 @@ var _ = BeforeSuite(func() {
 		Client: k8sManager.GetClient(),
 		Scheme: k8sManager.GetScheme(),
 		Config: config.OperatorConfig{
-			SubscriptionID: "sub-123",
-			ResourceGroup:  "rg-dis-dev",
-			TenantID:       "00000000-0000-0000-0000-000000000000",
-			Location:       "westeurope",
-			Environment:    "dev",
+			SubscriptionID: testSubscriptionID,
+			ResourceGroup:  testResourceGroup,
+			TenantID:       testTenantID,
+			Location:       testLocation,
+			Environment:    testEnvironment,
 			AKSSubnetIDs: []string{
-				"/subscriptions/sub-123/resourceGroups/rg-net/providers/Microsoft.Network/virtualNetworks/vnet/subnets/aks-1",
+				testAKSSubnetID,
 			},
 		},
 	}

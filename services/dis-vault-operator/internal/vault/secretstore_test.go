@@ -40,7 +40,7 @@ func TestBuildManagedSecretStore(t *testing.T) {
 
 	vaultObj := &vaultv1alpha1.Vault{}
 	vaultObj.Name = "my-app-vault"
-	vaultObj.Namespace = "default"
+	vaultObj.Namespace = testNamespace
 	vaultObj.Spec.IdentityRef = &vaultv1alpha1.ApplicationIdentityRef{Name: "my-app-identity"}
 
 	store, err := BuildManagedSecretStore(vaultObj, "https://my-app-vault.vault.azure.net")
@@ -78,14 +78,14 @@ func TestBuildManagedSecretStoreWithServiceAccountRef(t *testing.T) {
 
 	vaultObj := &vaultv1alpha1.Vault{}
 	vaultObj.Name = "my-app-vault"
-	vaultObj.Namespace = "default"
-	vaultObj.Spec.ServiceAccountRef = &vaultv1alpha1.ServiceAccountRef{Name: "my-app-service-account"}
+	vaultObj.Namespace = testNamespace
+	vaultObj.Spec.ServiceAccountRef = &vaultv1alpha1.ServiceAccountRef{Name: testServiceAccountName}
 
 	store, err := BuildManagedSecretStore(vaultObj, "https://my-app-vault.vault.azure.net")
 	if err != nil {
 		t.Fatalf("expected SecretStore builder to succeed, got error: %v", err)
 	}
-	if store.Spec.Provider.AzureKV.ServiceAccountRef == nil || store.Spec.Provider.AzureKV.ServiceAccountRef.Name != "my-app-service-account" {
-		t.Fatalf("expected service account ref %q, got %#v", "my-app-service-account", store.Spec.Provider.AzureKV.ServiceAccountRef)
+	if store.Spec.Provider.AzureKV.ServiceAccountRef == nil || store.Spec.Provider.AzureKV.ServiceAccountRef.Name != testServiceAccountName {
+		t.Fatalf("expected service account ref %q, got %#v", testServiceAccountName, store.Spec.Provider.AzureKV.ServiceAccountRef)
 	}
 }
