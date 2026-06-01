@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.9.0...ghrunner-0.9.1) (2026-05-31)
+
+
+### Bug Fixes
+
+* **gh-runner:** add CVE-2026-39823, CVE-2026-39825, CVE-2026-39826 to trivyignore ([#3599](https://github.com/Altinn/altinn-platform/issues/3599)) ([6a421d7](https://github.com/Altinn/altinn-platform/commit/6a421d7ce84d0e8c1b1a94eb6f2d3ec337a12fa6))
+
 ## [0.9.0](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.8.0...ghrunner-0.9.0) (2026-05-27)
 
 
