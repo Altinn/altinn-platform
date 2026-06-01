@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.8.3...dis-pgsql-v0.9.0) (2026-06-01)
+
+
+### Features
+
+* **dis-pgsql-operator:** publish connection ConfigMap per access principal ([#3621](https://github.com/Altinn/altinn-platform/issues/3621)) ([80379a0](https://github.com/Altinn/altinn-platform/commit/80379a043f1e9931f0a605930dbaf4062d55d149))
+
 ## [0.8.3](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.8.2...dis-pgsql-v0.8.3) (2026-05-31)
 
 
