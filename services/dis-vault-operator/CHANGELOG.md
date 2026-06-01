@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.7](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.4.6...dis-vault-v1.4.7) (2026-06-01)
+
+
+### Dependency Updates
+
+* update github.com/external-secrets/external-secrets/apis digest to cedf209 ([#3615](https://github.com/Altinn/altinn-platform/issues/3615)) ([f056bc0](https://github.com/Altinn/altinn-platform/commit/f056bc08a3b1f5b9f9721abe52f7f11926f6a39f))
+
 ## [1.4.6](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.4.5...dis-vault-v1.4.6) (2026-05-22)
 
 

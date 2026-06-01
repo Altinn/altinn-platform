@@ -2,7 +2,7 @@
   "services/dis-pgsql-operator": "0.8.3",
   "services/dis-identity-operator": "0.2.5",
   "services/dis-apim-operator": "1.0.5",
-  "services/dis-vault-operator": "1.4.6",
+  "services/dis-vault-operator": "1.4.7",
   "services/lakmus": "1.1.6",
   "infrastructure/images/azure-devops-agent": "1.2.8",
   "infrastructure/images/gh-runner": "0.9.1",
