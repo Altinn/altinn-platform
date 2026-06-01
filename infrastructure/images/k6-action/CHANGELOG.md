@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/Altinn/altinn-platform/compare/k6-action-image-0.1.1...k6-action-image-0.1.2) (2026-06-01)
+
+
+### Bug Fixes
+
+* **k6-action:** build jb from source to eliminate Go 1.23 CVEs ([#3601](https://github.com/Altinn/altinn-platform/issues/3601)) ([99a6353](https://github.com/Altinn/altinn-platform/commit/99a63533be6f2db05daf489974c56115ab812b3e))
+
 ## [0.1.1](https://github.com/Altinn/altinn-platform/compare/k6-action-image-0.1.0...k6-action-image-0.1.1) (2026-05-31)
 
 
