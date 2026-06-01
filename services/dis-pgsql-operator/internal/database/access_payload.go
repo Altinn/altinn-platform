@@ -25,6 +25,7 @@ const (
 	DBSchemaEnv            = "DISPG_DB_SCHEMA"
 	DBHostEnv              = "DISPG_DB_HOST"
 	DBNameEnv              = "DISPG_DB_NAME"
+	DBAdminUserEnv         = "DISPG_DB_ADMIN_USER"
 	DisableAADEnv          = "DISPG_DISABLE_AAD"
 	RevokePublicConnectEnv = "DISPG_REVOKE_PUBLIC_CONNECT"
 	DBSearchPathScopeEnv   = "DISPG_DB_SEARCH_PATH_SCOPE"

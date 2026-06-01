@@ -920,8 +920,6 @@ var _ = Describe("DatabaseServer controller", func() {
 		expectedConfigurations := map[string]string{
 			extensionsConfigResourceName(db.Name):                              "hstore,pg_cron",
 			serverParameterConfigResourceName(db.Name, paramAutovacuumNaptime): "15",
-			serverParameterConfigResourceName(db.Name, "pgbouncer.enabled"):    "true",
-			serverParameterConfigResourceName(db.Name, "pgbouncer.pool_mode"):  "transaction",
 		}
 
 		for resourceName, expectedValue := range expectedConfigurations {
@@ -1494,8 +1492,10 @@ var _ = Describe("DatabaseServer controller", func() {
 				Namespace: ns,
 			},
 			Spec: storagev1alpha1.DatabaseServerSpec{
-				Version:    17,
-				ServerType: serverTypeDev,
+				Version: 17,
+				// PgBouncer parameters are only emitted on tiers that support it,
+				// so use a prod (General Purpose) server to exercise them here.
+				ServerType: serverTypeProd,
 				Auth: directAuth(
 					adminManagedIdentity,
 					adminManagedIdentityID,
@@ -1513,7 +1513,7 @@ var _ = Describe("DatabaseServer controller", func() {
 		}
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
-		maxConnections, err := dbUtil.ResolveMaxConnections(dbUtil.GetProfile(serverTypeDev))
+		maxConnections, err := dbUtil.ResolveMaxConnections(dbUtil.GetProfile(serverTypeProd))
 		Expect(err).NotTo(HaveOccurred())
 
 		expectedValues := map[string]string{

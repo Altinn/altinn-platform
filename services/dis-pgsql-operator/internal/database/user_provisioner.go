@@ -15,6 +15,11 @@ import (
 
 const (
 	userProvisionScope = "https://ossrdbms-aad.database.windows.net/.default"
+
+	// maintenanceDatabase holds the cluster-global pgaadauth_* helper functions on
+	// Azure Flexible Server; they do not exist in freshly created databases, so
+	// principal creation must run here even though the resulting role is global.
+	maintenanceDatabase = "postgres"
 )
 
 // RunUserProvisioner connects to the database using workload identity and
@@ -74,7 +79,7 @@ func RunUserProvisioner(ctx context.Context) error {
 		return fmt.Errorf("parse pgx config: %w", err)
 	}
 	if disableAAD {
-		adminUser := strings.TrimSpace(os.Getenv("DISPG_DB_ADMIN_USER"))
+		adminUser := strings.TrimSpace(os.Getenv(DBAdminUserEnv))
 		if adminUser == "" {
 			adminUser = "postgres"
 		}
@@ -105,7 +110,23 @@ func RunUserProvisioner(ctx context.Context) error {
 		}
 	}()
 
-	if err := ensureAccess(ctx, conn, accessOptions{
+	principalConn := conn
+	if !disableAAD && !strings.EqualFold(dbName, maintenanceDatabase) {
+		maintenanceCfg := cfg.Copy()
+		maintenanceCfg.Database = maintenanceDatabase
+		maintenanceConn, connErr := pgx.ConnectConfig(ctx, maintenanceCfg)
+		if connErr != nil {
+			return fmt.Errorf("connect maintenance database %q: %w", maintenanceDatabase, connErr)
+		}
+		defer func() {
+			if err := maintenanceConn.Close(ctx); err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "close maintenance connection: %v\n", err)
+			}
+		}()
+		principalConn = maintenanceConn
+	}
+
+	if err := ensureAccess(ctx, conn, principalConn, accessOptions{
 		DatabaseName:             dbName,
 		SchemaName:               schemaName,
 		Principals:               accessPrincipals,
@@ -134,7 +155,7 @@ type accessOptions struct {
 	DatabaseScopedSearchPath bool
 }
 
-func ensureAccess(ctx context.Context, conn pgxConn, opts accessOptions) error {
+func ensureAccess(ctx context.Context, conn pgxConn, principalConn pgxConn, opts accessOptions) error {
 	if opts.RevokePublicConnect {
 		if _, err := conn.Exec(ctx, revokePublicConnectSQL(opts.DatabaseName)); err != nil {
 			return fmt.Errorf("revoke public connect: %w", err)
@@ -166,7 +187,7 @@ func ensureAccess(ctx context.Context, conn pgxConn, opts accessOptions) error {
 		if err := validateAccessPrincipal(principal, opts.UseAAD); err != nil {
 			return err
 		}
-		if err := ensurePrincipal(ctx, conn, principal.Name, principal.PrincipalID, string(principal.PrincipalType), opts.UseAAD); err != nil {
+		if err := ensurePrincipal(ctx, principalConn, principal.Name, principal.PrincipalID, string(principal.PrincipalType), opts.UseAAD); err != nil {
 			return err
 		}
 		roleName, err := accessRoles.roleFor(principal.Role)
@@ -479,11 +500,17 @@ func createAADPrincipalSQL() string {
 }
 
 func roleMembersSQL() string {
+	// CURRENT_USER is excluded: PostgreSQL auto-grants the creating role membership
+	// WITH ADMIN OPTION on CREATE ROLE, so the connecting admin shows up as a member
+	// of every managed role it created. Reconciling that membership away fails with
+	// "dependent privileges exist" (2BP01) because the admin used it to grant the
+	// role onward, so it must never be treated as a revocable member.
 	return `SELECT member_role.rolname
 FROM pg_auth_members membership
 JOIN pg_roles role_role ON role_role.oid = membership.roleid
 JOIN pg_roles member_role ON member_role.oid = membership.member
-WHERE role_role.rolname = $1`
+WHERE role_role.rolname = $1
+  AND member_role.rolname <> CURRENT_USER`
 }
 
 func grantRoleSQL(role, member string) string {

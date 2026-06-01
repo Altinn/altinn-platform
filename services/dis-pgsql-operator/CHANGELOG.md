@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.8.3](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.8.2...dis-pgsql-v0.8.3) (2026-05-31)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** never revoke the connecting admin from managed roles ([#3612](https://github.com/Altinn/altinn-platform/issues/3612)) ([7b47c35](https://github.com/Altinn/altinn-platform/commit/7b47c35537af9ab2682ceb48b6258742c325ed83))
+
+## [0.8.2](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.8.1...dis-pgsql-v0.8.2) (2026-05-29)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** create Entra principals on postgres maintenance db ([#3610](https://github.com/Altinn/altinn-platform/issues/3610)) ([7f946d5](https://github.com/Altinn/altinn-platform/commit/7f946d50b209fefb74a249f86bfec738cda6ecea))
+
+## [0.8.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.8.0...dis-pgsql-v0.8.1) (2026-05-29)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** skip PgBouncer params on Burstable tier ([#3606](https://github.com/Altinn/altinn-platform/issues/3606)) ([522d5ae](https://github.com/Altinn/altinn-platform/commit/522d5ae31a975f076eefdbe0a3ababe05840eca8))
+
 ## [0.8.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.6...dis-pgsql-v0.8.0) (2026-05-28)
 
 
