@@ -15,7 +15,11 @@ fi
 cd "${root}" 2>/dev/null || { log "cannot cd to '${root}', skipping"; exit 0; }
 
 # Single-flight guard so parallel sessions don't double-bootstrap.
-lock="${root}/.git/.setup-local-env.lock"
+# Resolve the real git dir: in a linked worktree, "${root}/.git" is a
+# `gitdir:` pointer *file*, so a lock dir can't be created under it. Using the
+# resolved git dir also scopes the lock per worktree (each has its own bin/).
+gitdir="$(git rev-parse --git-dir 2>/dev/null || echo "${root}/.git")"
+lock="${gitdir}/.setup-local-env.lock"
 if ! mkdir "${lock}" 2>/dev/null; then log "bootstrap already running, skipping"; exit 0; fi
 trap 'rmdir "${lock}" 2>/dev/null || true' EXIT
 
