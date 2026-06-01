@@ -7,10 +7,6 @@ const (
 	testLocation         = "westeurope"
 	testEnvironment      = "dev"
 	testAKSSubnetID      = "/subscriptions/sub-123/resourceGroups/rg-net/providers/Microsoft.Network/virtualNetworks/vnet/subnets/aks-1"
-	labelTeam            = "team"
-	teamPlatform         = "platform"
-	vaultKind            = "Vault"
-	ns                   = "default"
 	testVaultName        = "vault-sample"
 	testExistingVaultURI = "https://existing.vault.azure.net"
 )

@@ -66,9 +66,9 @@ var _ = BeforeSuite(func() {
 
 	By("bootstrapping test environment")
 	crds := []*apiextensionsv1.CustomResourceDefinition{
-		mustLoadCRD(filepath.Join("..", "..", "config", "crd", "bases"), "vault.dis.altinn.cloud", vaultKind),
+		mustLoadCRD(filepath.Join("..", "..", "config", "crd", "bases"), "vault.dis.altinn.cloud", "Vault"),
 		mustLoadCRD(disIdentityCRDPath(), "application.dis.altinn.cloud", "ApplicationIdentity"),
-		mustLoadCRD(asoCRDPath(), "keyvault.azure.com", vaultKind),
+		mustLoadCRD(asoCRDPath(), "keyvault.azure.com", "Vault"),
 		mustLoadCRD(asoCRDPath(), "authorization.azure.com", "RoleAssignment"),
 		mustLoadCRD(externalSecretsCRDPath(), "external-secrets.io", "SecretStore"),
 	}
