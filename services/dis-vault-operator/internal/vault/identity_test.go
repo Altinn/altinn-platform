@@ -16,11 +16,11 @@ func TestResolveOwnerIdentityForReadyApplicationIdentity(t *testing.T) {
 	t.Parallel()
 
 	scheme := newIdentityTestScheme(t)
-	readyPrincipalID := "principal-123"
+	readyPrincipalID := testPrincipalID
 	readyName := "managed-identity-name"
 
 	readyIdentity := &identityv1alpha1.ApplicationIdentity{
-		ObjectMeta: metav1.ObjectMeta{Name: "app-ready", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: testReadyIdentityName, Namespace: testNamespace},
 		Status: identityv1alpha1.ApplicationIdentityStatus{
 			ManagedIdentityName: &readyName,
 			PrincipalID:         &readyPrincipalID,
@@ -32,9 +32,9 @@ func TestResolveOwnerIdentityForReadyApplicationIdentity(t *testing.T) {
 		},
 	}
 	vaultObj := &vaultv1alpha1.Vault{
-		ObjectMeta: metav1.ObjectMeta{Name: "vault-sample", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: testVaultSampleName, Namespace: testNamespace},
 		Spec: vaultv1alpha1.VaultSpec{
-			IdentityRef: &vaultv1alpha1.ApplicationIdentityRef{Name: "app-ready"},
+			IdentityRef: &vaultv1alpha1.ApplicationIdentityRef{Name: testReadyIdentityName},
 		},
 	}
 
@@ -53,7 +53,7 @@ func TestResolveOwnerIdentityForReadyApplicationIdentity(t *testing.T) {
 	if resolved.SourceKind != IdentitySourceApplicationIdentity {
 		t.Fatalf("expected source kind %q, got %q", IdentitySourceApplicationIdentity, resolved.SourceKind)
 	}
-	if resolved.AuthReferenceName != "app-ready" || resolved.ServiceAccountName != "app-ready" {
+	if resolved.AuthReferenceName != testReadyIdentityName || resolved.ServiceAccountName != testReadyIdentityName {
 		t.Fatalf("expected auth reference and service account names to match app-ready, got %#v", resolved)
 	}
 }
@@ -63,10 +63,10 @@ func TestResolveOwnerIdentityForUnreadyApplicationIdentity(t *testing.T) {
 
 	scheme := newIdentityTestScheme(t)
 	identity := &identityv1alpha1.ApplicationIdentity{
-		ObjectMeta: metav1.ObjectMeta{Name: "app-pending", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: "app-pending", Namespace: testNamespace},
 	}
 	vaultObj := &vaultv1alpha1.Vault{
-		ObjectMeta: metav1.ObjectMeta{Name: "vault-sample", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: testVaultSampleName, Namespace: testNamespace},
 		Spec: vaultv1alpha1.VaultSpec{
 			IdentityRef: &vaultv1alpha1.ApplicationIdentityRef{Name: "app-pending"},
 		},
@@ -92,18 +92,18 @@ func TestResolveOwnerIdentityForServiceAccount(t *testing.T) {
 	scheme := newIdentityTestScheme(t)
 	serviceAccount := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "vault-owner-sa",
-			Namespace: "default",
+			Name:      testVaultOwnerSA,
+			Namespace: testNamespace,
 			Annotations: map[string]string{
 				ServiceAccountClientIDAnnotation:    "client-123",
-				ServiceAccountPrincipalIDAnnotation: "principal-123",
+				ServiceAccountPrincipalIDAnnotation: testPrincipalID,
 			},
 		},
 	}
 	vaultObj := &vaultv1alpha1.Vault{
-		ObjectMeta: metav1.ObjectMeta{Name: "vault-sample", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: testVaultSampleName, Namespace: testNamespace},
 		Spec: vaultv1alpha1.VaultSpec{
-			ServiceAccountRef: &vaultv1alpha1.ServiceAccountRef{Name: "vault-owner-sa"},
+			ServiceAccountRef: &vaultv1alpha1.ServiceAccountRef{Name: testVaultOwnerSA},
 		},
 	}
 
@@ -116,13 +116,13 @@ func TestResolveOwnerIdentityForServiceAccount(t *testing.T) {
 	if requeue {
 		t.Fatalf("expected requeue=false for annotated service account")
 	}
-	if resolved.PrincipalID != "principal-123" {
-		t.Fatalf("expected principalId %q, got %q", "principal-123", resolved.PrincipalID)
+	if resolved.PrincipalID != testPrincipalID {
+		t.Fatalf("expected principalId %q, got %q", testPrincipalID, resolved.PrincipalID)
 	}
 	if resolved.SourceKind != IdentitySourceServiceAccount {
 		t.Fatalf("expected source kind %q, got %q", IdentitySourceServiceAccount, resolved.SourceKind)
 	}
-	if resolved.ServiceAccountName != "vault-owner-sa" || resolved.AuthReferenceName != "vault-owner-sa" {
+	if resolved.ServiceAccountName != testVaultOwnerSA || resolved.AuthReferenceName != testVaultOwnerSA {
 		t.Fatalf("expected auth reference and service account names to match vault-owner-sa, got %#v", resolved)
 	}
 }
@@ -137,7 +137,7 @@ func TestResolveOwnerIdentityForServiceAccountMissingAnnotations(t *testing.T) {
 	}{
 		{
 			name:        "missing client id",
-			annotations: map[string]string{ServiceAccountPrincipalIDAnnotation: "principal-123"},
+			annotations: map[string]string{ServiceAccountPrincipalIDAnnotation: testPrincipalID},
 			wantMessage: `ServiceAccount "vault-owner-sa" is missing annotation "azure.workload.identity/client-id"`,
 		},
 		{
@@ -154,15 +154,15 @@ func TestResolveOwnerIdentityForServiceAccountMissingAnnotations(t *testing.T) {
 			scheme := newIdentityTestScheme(t)
 			serviceAccount := &corev1.ServiceAccount{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:        "vault-owner-sa",
-					Namespace:   "default",
+					Name:        testVaultOwnerSA,
+					Namespace:   testNamespace,
 					Annotations: tt.annotations,
 				},
 			}
 			vaultObj := &vaultv1alpha1.Vault{
-				ObjectMeta: metav1.ObjectMeta{Name: "vault-sample", Namespace: "default"},
+				ObjectMeta: metav1.ObjectMeta{Name: testVaultSampleName, Namespace: testNamespace},
 				Spec: vaultv1alpha1.VaultSpec{
-					ServiceAccountRef: &vaultv1alpha1.ServiceAccountRef{Name: "vault-owner-sa"},
+					ServiceAccountRef: &vaultv1alpha1.ServiceAccountRef{Name: testVaultOwnerSA},
 				},
 			}
 
@@ -187,9 +187,9 @@ func TestResolveOwnerIdentityForMissingServiceAccount(t *testing.T) {
 
 	scheme := newIdentityTestScheme(t)
 	vaultObj := &vaultv1alpha1.Vault{
-		ObjectMeta: metav1.ObjectMeta{Name: "vault-sample", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: testVaultSampleName, Namespace: testNamespace},
 		Spec: vaultv1alpha1.VaultSpec{
-			ServiceAccountRef: &vaultv1alpha1.ServiceAccountRef{Name: "vault-owner-sa"},
+			ServiceAccountRef: &vaultv1alpha1.ServiceAccountRef{Name: testVaultOwnerSA},
 		},
 	}
 

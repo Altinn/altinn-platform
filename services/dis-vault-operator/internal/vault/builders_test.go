@@ -116,7 +116,7 @@ func TestBuildOwnerRoleAssignmentResource(t *testing.T) {
 	v.Namespace = testNamespace
 	keyVault := testKeyVaultWithAzureName("sample-vault-a-11111111")
 
-	roleAssignment, err := BuildOwnerRoleAssignmentResource(v, keyVault, "principal-123")
+	roleAssignment, err := BuildOwnerRoleAssignmentResource(v, keyVault, testPrincipalID)
 	if err != nil {
 		t.Fatalf("expected role assignment builder to succeed, got error: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestBuildOwnerRoleAssignmentResource(t *testing.T) {
 		t.Fatalf("expected AzureName to be a GUID, got %q: %v", roleAssignment.Spec.AzureName, err)
 	}
 
-	roleAssignment2, err := BuildOwnerRoleAssignmentResource(v, keyVault, "principal-123")
+	roleAssignment2, err := BuildOwnerRoleAssignmentResource(v, keyVault, testPrincipalID)
 	if err != nil {
 		t.Fatalf("expected second build to succeed, got error: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestBuildOwnerRoleAssignmentResourceRejectsNilKeyVault(t *testing.T) {
 	v.Name = testVaultName
 	v.Namespace = testNamespace
 
-	if _, err := BuildOwnerRoleAssignmentResource(v, nil, "principal-123"); err == nil {
+	if _, err := BuildOwnerRoleAssignmentResource(v, nil, testPrincipalID); err == nil {
 		t.Fatalf("expected error when Key Vault is nil")
 	}
 }
@@ -167,11 +167,11 @@ func TestBuildOwnerRoleAssignmentResourceUsesAzureKeyVaultNameForAzureNameSeed(t
 	firstKeyVault := testKeyVaultWithAzureName("sample-vault-a-11111111")
 	secondKeyVault := testKeyVaultWithAzureName("sample-vault-b-22222222")
 
-	first, err := BuildOwnerRoleAssignmentResource(v, firstKeyVault, "principal-123")
+	first, err := BuildOwnerRoleAssignmentResource(v, firstKeyVault, testPrincipalID)
 	if err != nil {
 		t.Fatalf("expected first role assignment build to succeed, got error: %v", err)
 	}
-	second, err := BuildOwnerRoleAssignmentResource(v, secondKeyVault, "principal-123")
+	second, err := BuildOwnerRoleAssignmentResource(v, secondKeyVault, testPrincipalID)
 	if err != nil {
 		t.Fatalf("expected second role assignment build to succeed, got error: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestBuildOwnerRoleAssignmentResourceRejectsKeyVaultWithoutAzureName(t *test
 	v.Namespace = testNamespace
 
 	keyVault := testKeyVaultWithAzureName(" ")
-	if _, err := BuildOwnerRoleAssignmentResource(v, keyVault, "principal-123"); err == nil {
+	if _, err := BuildOwnerRoleAssignmentResource(v, keyVault, testPrincipalID); err == nil {
 		t.Fatalf("expected error when Key Vault AzureName is empty")
 	}
 }

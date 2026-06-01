@@ -48,8 +48,6 @@ var _ = Describe("Vault controller", func() {
 		cancel  context.CancelFunc
 	)
 
-	const ns = "default"
-
 	cleanupNamespacedTestResources := func(ctx context.Context, namespace string) {
 		deleteAll := func(obj client.Object) {
 			Expect(k8sClient.DeleteAllOf(ctx, obj, client.InNamespace(namespace))).To(Succeed())
@@ -479,8 +477,8 @@ var _ = Describe("Vault controller", func() {
 			updatedPurgeProtection := true
 			current.Spec.SKU = vaultv1alpha1.VaultSKUPremium
 			current.Spec.Tags = map[string]string{
-				labelTeam:  teamPlatform,
-				"env":      "prod",
+				labelTeam: teamPlatform,
+				"env":     "prod",
 			}
 			current.Spec.SoftDeleteRetentionDays = 30
 			current.Spec.PurgeProtectionEnabled = &updatedPurgeProtection
@@ -1516,8 +1514,8 @@ func TestReconcileManagedSecretStoreReturnsCRDNotInstalledWhenSecretStoreCRDIsMi
 
 	vaultObj := &vaultv1alpha1.Vault{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       "vault-sample",
-			Namespace:  "default",
+			Name:       testVaultName,
+			Namespace:  ns,
 			Generation: 7,
 		},
 		Spec: vaultv1alpha1.VaultSpec{
@@ -1551,8 +1549,8 @@ func TestReconcileManagedConfigMapDeletesStaleOwnedConfigMaps(t *testing.T) {
 			Kind:       vaultKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       "vault-sample",
-			Namespace:  "default",
+			Name:       testVaultName,
+			Namespace:  ns,
 			Generation: 9,
 			UID:        types.UID("vault-uid"),
 		},
@@ -1623,8 +1621,8 @@ func TestReconcileManagedConfigMapReturnsNameConflictForNonOwnedConfigMap(t *tes
 	scheme := newControllerUnitTestScheme(t)
 	vaultObj := &vaultv1alpha1.Vault{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       "vault-sample",
-			Namespace:  "default",
+			Name:       testVaultName,
+			Namespace:  ns,
 			Generation: 11,
 		},
 		Spec: vaultv1alpha1.VaultSpec{
@@ -1639,7 +1637,7 @@ func TestReconcileManagedConfigMapReturnsNameConflictForNonOwnedConfigMap(t *tes
 		},
 		Data: map[string]string{
 			vaultpkg.ConfigMapKeyAKVName: "existing-akv",
-			vaultpkg.ConfigMapKeyAKVURI:  "https://existing.vault.azure.net",
+			vaultpkg.ConfigMapKeyAKVURI:  testExistingVaultURI,
 		},
 	}
 
@@ -1671,7 +1669,7 @@ func TestReconcileManagedConfigMapReturnsNameConflictForNonOwnedConfigMap(t *tes
 	if err := reconciler.Get(context.Background(), types.NamespacedName{Name: conflict.Name, Namespace: conflict.Namespace}, &current); err != nil {
 		t.Fatalf("expected conflicting ConfigMap to remain, got error: %v", err)
 	}
-	if current.Data[vaultpkg.ConfigMapKeyAKVURI] != "https://existing.vault.azure.net" {
+	if current.Data[vaultpkg.ConfigMapKeyAKVURI] != testExistingVaultURI {
 		t.Fatalf("expected conflicting ConfigMap data to remain unchanged, got %#v", current.Data)
 	}
 }
@@ -1686,8 +1684,8 @@ func TestReconcileManagedConfigMapPreservesExistingVaultURIWhenStatusIsUnavailab
 			Kind:       vaultKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       "vault-sample",
-			Namespace:  "default",
+			Name:       testVaultName,
+			Namespace:  ns,
 			Generation: 12,
 			UID:        types.UID("vault-uid"),
 		},
@@ -1710,7 +1708,7 @@ func TestReconcileManagedConfigMapPreservesExistingVaultURIWhenStatusIsUnavailab
 		},
 		Data: map[string]string{
 			vaultpkg.ConfigMapKeyAKVName: "old-akv",
-			vaultpkg.ConfigMapKeyAKVURI:  "https://existing.vault.azure.net",
+			vaultpkg.ConfigMapKeyAKVURI:  testExistingVaultURI,
 		},
 	}
 
@@ -1737,7 +1735,7 @@ func TestReconcileManagedConfigMapPreservesExistingVaultURIWhenStatusIsUnavailab
 	if updated.Data[vaultpkg.ConfigMapKeyAKVName] != "new-akv" {
 		t.Fatalf("expected AkvName to be refreshed during reconcile, got %#v", updated.Data)
 	}
-	if updated.Data[vaultpkg.ConfigMapKeyAKVURI] != "https://existing.vault.azure.net" {
+	if updated.Data[vaultpkg.ConfigMapKeyAKVURI] != testExistingVaultURI {
 		t.Fatalf("expected existing AkvUri to be preserved until a newer Vault URI is known, got %#v", updated.Data)
 	}
 }
@@ -1756,7 +1754,7 @@ func TestBuildNetworkPolicyCondition(t *testing.T) {
 	}
 
 	vaultObj := &vaultv1alpha1.Vault{
-		ObjectMeta: metav1.ObjectMeta{Name: "vault-sample", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: testVaultName, Namespace: ns},
 		Spec: vaultv1alpha1.VaultSpec{
 			IdentityRef: &vaultv1alpha1.ApplicationIdentityRef{Name: "app-identity-sample"},
 		},
