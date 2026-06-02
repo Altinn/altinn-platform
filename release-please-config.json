@@ -20,6 +20,10 @@
       "release-type": "simple",
       "component": "lakmus"
     },
+    "services/dis-console": {
+      "release-type": "simple",
+      "component": "dis-console"
+    },
     "infrastructure/images/azure-devops-agent": {
       "release-type": "simple",
       "component": "azdevops-agent",
