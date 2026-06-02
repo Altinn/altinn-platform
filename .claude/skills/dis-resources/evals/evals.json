@@ -1,0 +1,51 @@
+{
+  "skill_name": "dis-resources",
+  "evals": [
+    {
+      "id": 0,
+      "name": "database-on-existing-shared-server",
+      "prompt": "We've already got a shared postgres server called `shared-db` in our `myteam-dev` namespace. Can you give me a Database manifest for a db named `orders`? Our app identity is `myproduct-orders-dev` and it needs read/write access, and the `my-team-db-owners` group (object id 11111111-1111-1111-1111-111111111111) should be the owner.",
+      "expected_output": "A single Database manifest (storage.dis.altinn.cloud/v1alpha1) named orders on server shared-db in namespace myteam-dev, with a Writer principal using identityRef myproduct-orders-dev and an Owner principal using the group. Pure YAML, no comments.",
+      "files": [],
+      "assertions": [
+        "Output contains a manifest with apiVersion 'storage.dis.altinn.cloud/v1alpha1' and kind 'Database'",
+        "spec.name is 'orders' and spec.server.name is 'shared-db'",
+        "An access principal has role 'Writer' and identityRef.name 'myproduct-orders-dev'",
+        "An access principal has role 'Owner' with group.name 'my-team-db-owners' and group.principalId '11111111-1111-1111-1111-111111111111'",
+        "Every access principal sets exactly one of identityRef or group, never both",
+        "metadata.namespace is 'myteam-dev'",
+        "The manifest is valid YAML with no inline comments"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "dedicated-server-plus-database",
+      "prompt": "I need a dedicated PostgreSQL 16 server for production with HA turned on, in namespace `myteam-dev`. Put a database called `router` on it for my router service — the service identity is `myproduct-router-dev` and it should be the owner. The server admin identity is `db-admin`.",
+      "expected_output": "A DatabaseServer (Dedicated, version 16, serverType prod, HA enabled, no network block, admin identityRef db-admin) plus a Database named router referencing that server with an Owner principal for myproduct-router-dev. All in namespace myteam-dev with consistent names. Optionally also the ApplicationIdentity resources. Pure YAML, no comments.",
+      "files": [],
+      "assertions": [
+        "Output contains a manifest with kind 'DatabaseServer' (storage.dis.altinn.cloud/v1alpha1) with spec.version 16, spec.serverType 'prod', and spec.highAvailabilityEnabled true",
+        "The DatabaseServer omits spec.network (it is Dedicated mode)",
+        "DatabaseServer spec.auth.admin.identity.identityRef.name is 'db-admin'",
+        "Output contains a manifest with kind 'Database' named 'router' whose spec.server.name matches the DatabaseServer's metadata.name",
+        "The Database has an access principal with role 'Owner' referencing identityRef.name 'myproduct-router-dev'",
+        "All resources are in namespace 'myteam-dev' and cross-resource references are name-consistent",
+        "All manifests are valid YAML with no inline comments"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "identity-backed-vault-with-external-secrets",
+      "prompt": "Set up an Azure Key Vault for my orders app in the `myteam-dev` namespace. It should be owned by the app's identity `myproduct-orders-dev`, and I want ExternalSecrets enabled so we can sync secrets into the namespace.",
+      "expected_output": "A Vault manifest (vault.dis.altinn.cloud/v1alpha1) in namespace myteam-dev with identityRef myproduct-orders-dev, externalSecrets true, and no serviceAccountRef. Pure YAML, no comments.",
+      "files": [],
+      "assertions": [
+        "Output contains a manifest with apiVersion 'vault.dis.altinn.cloud/v1alpha1' and kind 'Vault'",
+        "spec.identityRef.name is 'myproduct-orders-dev' and spec.serviceAccountRef is absent (exactly one owner)",
+        "spec.externalSecrets is true",
+        "metadata.namespace is 'myteam-dev'",
+        "The manifest is valid YAML with no inline comments"
+      ]
+    }
+  ]
+}
