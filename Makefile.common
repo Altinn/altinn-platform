@@ -1,19 +1,43 @@
-# Shared Makefile for the dis-* kubebuilder operators.
+# Shared Makefile for Go projects in this monorepo — both the dis-* kubebuilder
+# operators and plain net/http services.
 #
-# Each operator's Makefile sets a few variables and then includes this file:
+# Each project's Makefile sets a few variables and then includes this file:
 #
+#   APP_NAME ?= dis-apim-operator      # optional; defaults to the directory name
 #   IMG ?= controller:latest
 #   CONTAINER_TOOL ?= podman
-#   OPERATOR_NAME := dis-apim-operator
 #   include ../../Makefile.common
 #
-# OPERATOR_NAME is required: it is used to derive the Kind cluster name and the
-# buildx builder name. Operator-specific targets go in the operator's Makefile,
-# after the include.
+# Operators take the defaults (controller-gen + envtest wiring). A plain Go
+# service opts out of the kubebuilder machinery by overriding, before the
+# include:
+#
+#   BINARY := my-service
+#   BUILD_DEPS  := fmt vet
+#   TEST_DEPS   := fmt vet
+#   GO_TEST_CMD := go test ./... -coverprofile cover.out
+#
+# Project-specific targets go in the project's Makefile, after the include.
 
-ifndef OPERATOR_NAME
-$(error OPERATOR_NAME must be set by the including Makefile before `include ../../Makefile.common`)
-endif
+# APP_NAME identifies the project; used to derive the Kind cluster and buildx
+# builder names. Defaults to the including Makefile's directory name.
+APP_NAME ?= $(notdir $(CURDIR))
+
+# Binary name and main package built by `build`/`run`.
+BINARY ?= manager
+MAIN ?= cmd/main.go
+
+# Extra args appended to `make run`.
+RUN_ARGS ?=
+
+# Prerequisite targets. Kubebuilder operators regenerate code and set up envtest
+# first; plain services override these to just `fmt vet`.
+GENERATE_DEPS ?= manifests generate
+BUILD_DEPS ?= $(GENERATE_DEPS) fmt vet
+TEST_DEPS ?= $(GENERATE_DEPS) fmt vet setup-envtest
+
+# Command run by `test`. Operators run under envtest; plain services override.
+GO_TEST_CMD ?= KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
@@ -75,14 +99,14 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 .PHONY: test
-test: manifests generate fmt vet setup-envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
+test: $(TEST_DEPS) ## Run tests.
+	$(GO_TEST_CMD)
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
 # CertManager is installed by default; skip with:
 # - CERT_MANAGER_INSTALL_SKIP=true
-KIND_CLUSTER ?= $(OPERATOR_NAME)-test-e2e
+KIND_CLUSTER ?= $(APP_NAME)-test-e2e
 
 .PHONY: setup-test-e2e
 setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
@@ -123,12 +147,12 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 ##@ Build
 
 .PHONY: build
-build: manifests generate fmt vet ## Build manager binary.
-	go build -o bin/manager cmd/main.go
+build: $(BUILD_DEPS) ## Build the binary.
+	go build -o bin/$(BINARY) $(MAIN)
 
 .PHONY: run
-run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/main.go
+run: $(BUILD_DEPS) ## Run from your host.
+	go run ./$(MAIN) $(RUN_ARGS)
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
@@ -152,10 +176,10 @@ PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
 docker-buildx: ## Build and push docker image for the manager for cross-platform support
 	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
-	- $(CONTAINER_TOOL) buildx create --name $(OPERATOR_NAME)-builder
-	$(CONTAINER_TOOL) buildx use $(OPERATOR_NAME)-builder
+	- $(CONTAINER_TOOL) buildx create --name $(APP_NAME)-builder
+	$(CONTAINER_TOOL) buildx use $(APP_NAME)-builder
 	- $(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile.cross .
-	- $(CONTAINER_TOOL) buildx rm $(OPERATOR_NAME)-builder
+	- $(CONTAINER_TOOL) buildx rm $(APP_NAME)-builder
 	rm Dockerfile.cross
 
 .PHONY: build-installer
@@ -268,3 +292,40 @@ endef
 define gomodver
 $(shell go list -m -f '{{if .Replace}}{{.Replace.Version}}{{else}}{{.Version}}{{end}}' $(1) 2>/dev/null)
 endef
+
+##@ Checks
+
+.PHONY: tidy
+tidy: ## Run go mod tidy.
+	go mod tidy
+
+# Targets run by `run-checks-ci`, in order. Override per project (operators add
+# generate/manifests; plain services keep the default).
+RUN_CHECKS ?= fmt vet test lint
+
+.PHONY: run-checks-ci
+run-checks-ci: ## Run the CI check suite (override the list via RUN_CHECKS).
+	@set -e; for t in $(RUN_CHECKS); do echo ">> make $$t"; $(MAKE) $$t; done
+
+# Tools installed by `setup-local-env`. Operators add: kustomize controller-gen setup-envtest.
+SETUP_TOOLS ?= golangci-lint
+
+.PHONY: setup-local-env
+setup-local-env: cache-setup ## Bootstrap local dev tooling into bin/.
+	@for t in $(SETUP_TOOLS); do $(MAKE) $$t; done
+	@echo "Local environment bootstrap completed."
+
+##@ Cache
+
+# Repo-local Go build cache so check runs stay sandbox-friendly.
+CACHE_DIR ?= $(CURDIR)/.cache
+GOCACHE ?= $(CACHE_DIR)/go-build
+
+.PHONY: cache-setup
+cache-setup:
+	@mkdir -p "$(GOCACHE)"
+
+# `make <target>-cache` runs <target> with the repo-local GOCACHE exported.
+%-cache: export GOCACHE := $(GOCACHE)
+%-cache: cache-setup
+	$(MAKE) $*
