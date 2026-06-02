@@ -38,7 +38,7 @@ repo, so prefer reading them over guessing.
 `principalId`/`clientId` that the other resources resolve. Most useful setups
 need an identity first, then the resource that references it.
 
-```
+```text
 ApplicationIdentity
    ├─ DatabaseServer.spec.auth.admin.identity.identityRef   (server admin)
    ├─ Database.spec.access.principals[].identityRef          (app access)

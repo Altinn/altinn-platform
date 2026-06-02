@@ -8,6 +8,7 @@
       "expected_output": "A single Database manifest (storage.dis.altinn.cloud/v1alpha1) named orders on server shared-db in namespace myteam-dev, with a Writer principal using identityRef myproduct-orders-dev and an Owner principal using the group. Pure YAML, no comments.",
       "files": [],
       "assertions": [
+        "Output contains exactly one YAML document (a single Database manifest, since the server and identity are stated to already exist)",
         "Output contains a manifest with apiVersion 'storage.dis.altinn.cloud/v1alpha1' and kind 'Database'",
         "spec.name is 'orders' and spec.server.name is 'shared-db'",
         "An access principal has role 'Writer' and identityRef.name 'myproduct-orders-dev'",
@@ -21,9 +22,10 @@
       "id": 1,
       "name": "dedicated-server-plus-database",
       "prompt": "I need a dedicated PostgreSQL 16 server for production with HA turned on, in namespace `myteam-dev`. Put a database called `router` on it for my router service — the service identity is `myproduct-router-dev` and it should be the owner. The server admin identity is `db-admin`.",
-      "expected_output": "A DatabaseServer (Dedicated, version 16, serverType prod, HA enabled, no network block, admin identityRef db-admin) plus a Database named router referencing that server with an Owner principal for myproduct-router-dev. All in namespace myteam-dev with consistent names. Optionally also the ApplicationIdentity resources. Pure YAML, no comments.",
+      "expected_output": "A DatabaseServer (Dedicated, version 16, serverType prod, HA enabled, no network block, admin identityRef db-admin) plus a Database named router referencing that server with an Owner principal for myproduct-router-dev. All in namespace myteam-dev with consistent names. It also authors prerequisite ApplicationIdentity manifests for db-admin and myproduct-router-dev, since the prompt does not state they already exist. Pure YAML, no comments.",
       "files": [],
       "assertions": [
+        "Because the prompt names identities not stated as pre-existing, output also contains ApplicationIdentity manifests for 'db-admin' and 'myproduct-router-dev'",
         "Output contains a manifest with kind 'DatabaseServer' (storage.dis.altinn.cloud/v1alpha1) with spec.version 16, spec.serverType 'prod', and spec.highAvailabilityEnabled true",
         "The DatabaseServer omits spec.network (it is Dedicated mode)",
         "DatabaseServer spec.auth.admin.identity.identityRef.name is 'db-admin'",
@@ -41,6 +43,7 @@
       "files": [],
       "assertions": [
         "Output contains a manifest with apiVersion 'vault.dis.altinn.cloud/v1alpha1' and kind 'Vault'",
+        "Because the prompt does not state the identity already exists, output also contains an ApplicationIdentity manifest named 'myproduct-orders-dev'",
         "spec.identityRef.name is 'myproduct-orders-dev' and spec.serviceAccountRef is absent (exactly one owner)",
         "spec.externalSecrets is true",
         "metadata.namespace is 'myteam-dev'",
