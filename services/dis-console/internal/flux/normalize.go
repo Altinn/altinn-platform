@@ -55,6 +55,12 @@ func normalize(u *unstructured.Unstructured) (Resource, error) {
 	}
 
 	r.applyReadyCondition(obj)
+	// A stale Ready=True (the controller has not observed the latest spec yet)
+	// is not actually healthy; surface it as Unknown rather than counting it
+	// toward the ready totals.
+	if r.Ready == ReadyTrue && r.ObservedGeneration > 0 && r.Generation > r.ObservedGeneration {
+		r.Ready = ReadyUnknown
+	}
 	r.Revision = extractRevision(obj)
 
 	raw, err := json.Marshal(obj)

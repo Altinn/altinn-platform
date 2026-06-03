@@ -60,6 +60,28 @@ func TestNormalizeKustomization(t *testing.T) {
 	}
 }
 
+func TestNormalizeStaleReadyDowngradedToUnknown(t *testing.T) {
+	u := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
+		"kind":       "Kustomization",
+		"metadata":   map[string]any{"namespace": "apps", "name": "stale", "generation": int64(5)},
+		"status": map[string]any{
+			"observedGeneration": int64(4),
+			"conditions": []any{
+				map[string]any{"type": "Ready", "status": "True", "reason": "ReconciliationSucceeded"},
+			},
+		},
+	}}
+
+	r, err := normalize(u)
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if r.Ready != ReadyUnknown {
+		t.Fatalf("expected stale Ready downgraded to Unknown, got %q", r.Ready)
+	}
+}
+
 func TestNormalizeHelmReleaseRevisionFromHistory(t *testing.T) {
 	u := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "helm.toolkit.fluxcd.io/v2",

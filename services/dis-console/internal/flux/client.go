@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
@@ -84,9 +85,11 @@ func restConfig(local bool) (*rest.Config, error) {
 // Sweep lists every instance of each target kind across all namespaces and
 // returns them as normalized resources. Kinds that are not installed are
 // skipped (reported as warnings) so the sweep still succeeds when only a
-// subset of Flux controllers is present. The discovery cache is refreshed each
-// sweep so newly installed CRDs are picked up.
-func (c *Client) Sweep(ctx context.Context) ([]Resource, []error) {
+// subset of Flux controllers is present. Any other discovery/list failure
+// (RBAC, auth, apiserver outage) aborts the sweep with an error so the caller
+// keeps the previous snapshot instead of publishing a partial one. The
+// discovery cache is refreshed each sweep so newly installed CRDs are picked up.
+func (c *Client) Sweep(ctx context.Context) ([]Resource, []error, error) {
 	c.mapper.Reset()
 
 	resources := make([]Resource, 0)
@@ -95,14 +98,19 @@ func (c *Client) Sweep(ctx context.Context) ([]Resource, []error) {
 	for _, gk := range TargetKinds {
 		mapping, err := c.mapper.RESTMapping(gk)
 		if err != nil {
-			warnings = append(warnings, fmt.Errorf("resolve %s: %w", gk, err))
-			continue
+			// A kind that isn't installed is expected (optional source kinds);
+			// skip it. Any other mapping error is a discovery/access failure and
+			// must abort the sweep.
+			if apimeta.IsNoMatchError(err) {
+				warnings = append(warnings, fmt.Errorf("skip %s: not installed", gk))
+				continue
+			}
+			return nil, warnings, fmt.Errorf("resolve %s: %w", gk, err)
 		}
 		nri := c.dyn.Resource(mapping.Resource).Namespace(metav1.NamespaceAll)
 		list, err := nri.List(ctx, metav1.ListOptions{})
 		if err != nil {
-			warnings = append(warnings, fmt.Errorf("list %s: %w", gk, err))
-			continue
+			return nil, warnings, fmt.Errorf("list %s: %w", gk, err)
 		}
 		for i := range list.Items {
 			r, err := normalize(&list.Items[i])
@@ -113,5 +121,5 @@ func (c *Client) Sweep(ctx context.Context) ([]Resource, []error) {
 			resources = append(resources, r)
 		}
 	}
-	return resources, warnings
+	return resources, warnings, nil
 }

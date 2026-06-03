@@ -14,6 +14,10 @@ import (
 	"github.com/Altinn/altinn-platform/services/dis-console/internal/flux"
 )
 
+// sweepTimeout bounds a single Flux sweep so a hung apiserver call cannot stall
+// the initial load or freeze the polling loop. It stays below the poll interval.
+const sweepTimeout = 20 * time.Second
+
 var (
 	httpAddr     = flag.String("http-address", ":8080", "Address for the HTTP API (e.g. :8080)")
 	pollInterval = flag.Duration("poll-interval", 30*time.Second, "Flux resource poll interval (e.g. 30s, 1m)")
@@ -23,6 +27,10 @@ var (
 func main() {
 	log.SetFlags(0)
 	flag.Parse()
+
+	if *pollInterval <= 0 {
+		log.Fatalf("--poll-interval must be greater than 0, got %s", *pollInterval)
+	}
 
 	client, err := flux.NewClient(*local)
 	if err != nil {
@@ -64,9 +72,16 @@ func main() {
 }
 
 func poll(ctx context.Context, client *flux.Client, srv *api.Server) {
-	resources, warnings := client.Sweep(ctx)
+	sweepCtx, cancel := context.WithTimeout(ctx, sweepTimeout)
+	defer cancel()
+
+	resources, warnings, err := client.Sweep(sweepCtx)
 	for _, w := range warnings {
 		log.Printf("sweep warning: %v", w)
+	}
+	if err != nil {
+		log.Printf("sweep failed, keeping previous snapshot: %v", err)
+		return
 	}
 	srv.SetSnapshot(resources, time.Now())
 	log.Printf("swept %d Flux resources", len(resources))
