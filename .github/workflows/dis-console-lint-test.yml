@@ -6,12 +6,14 @@ on:
       - main
     paths:
       - services/dis-console/**
+      - Makefile.common
       - .github/workflows/dis-console-lint-test.yml
   pull_request:
     branches:
       - main
     paths:
       - services/dis-console/**
+      - Makefile.common
       - .github/workflows/dis-console-lint-test.yml
 
 permissions:
@@ -55,7 +57,5 @@ jobs:
           go-version-file: "services/dis-console/go.mod"
           cache-dependency-path: "services/dis-console/go.sum"
 
-      - name: Running Tests
-        run: |
-          go mod tidy
-          make test
+      - name: Run tests
+        run: make test
