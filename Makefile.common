@@ -148,6 +148,7 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 
 .PHONY: build
 build: $(BUILD_DEPS) ## Build the binary.
+	mkdir -p bin
 	go build -o bin/$(BINARY) $(MAIN)
 
 .PHONY: run
