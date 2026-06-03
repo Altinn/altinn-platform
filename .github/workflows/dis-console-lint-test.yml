@@ -22,7 +22,7 @@ permissions:
 jobs:
   lint:
     name: Run linter on Ubuntu
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: services/dis-console
@@ -43,7 +43,7 @@ jobs:
           working-directory: services/dis-console
   test:
     name: Run tests on Ubuntu
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: services/dis-console
