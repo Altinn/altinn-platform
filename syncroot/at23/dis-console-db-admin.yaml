@@ -1,6 +1,6 @@
 apiVersion: application.dis.altinn.cloud/v1alpha1
 kind: ApplicationIdentity
 metadata:
-  name: dis-sample-db-admin
+  name: dis-console-db-admin
   namespace: product-dis
 spec: {}

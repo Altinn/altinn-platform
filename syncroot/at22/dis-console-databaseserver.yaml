@@ -1,7 +1,7 @@
 apiVersion: storage.dis.altinn.cloud/v1alpha1
 kind: DatabaseServer
 metadata:
-  name: dis-sample-db
+  name: dis-console-db-server
   namespace: product-dis
 spec:
   version: 17
@@ -10,4 +10,4 @@ spec:
     admin:
       identity:
         identityRef:
-          name: dis-sample-db-admin
+          name: dis-console-db-admin
