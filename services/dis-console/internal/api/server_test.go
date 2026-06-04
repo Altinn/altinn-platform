@@ -25,6 +25,16 @@ type fakeStore struct {
 
 func (f *fakeStore) Ping(context.Context) error { return f.pingErr }
 
+func (f *fakeStore) LastSweep(context.Context) (time.Time, error) {
+	return time.Unix(1700000000, 0).UTC(), nil
+}
+
+// histKey mirrors the real store, which looks up history by the full resource
+// identity (kind + namespace + name), not just the name.
+func histKey(kind, namespace, name string) string {
+	return kind + "\x00" + namespace + "\x00" + name
+}
+
 func (f *fakeStore) Summary(context.Context) ([]store.KindCount, error) {
 	byKind := map[string]*store.KindCount{}
 	order := []string{}
@@ -77,7 +87,7 @@ func (f *fakeStore) Get(_ context.Context, kind, namespace, name string) (*flux.
 	for i := range f.resources {
 		r := f.resources[i]
 		if strings.EqualFold(r.Kind, kind) && r.Namespace == namespace && r.Name == name {
-			return &r, f.history[r.Name], nil
+			return &r, f.history[histKey(r.Kind, r.Namespace, r.Name)], nil
 		}
 	}
 	return nil, nil, store.ErrNotFound
@@ -91,10 +101,10 @@ func testServer() *Server {
 			{Kind: "HelmRelease", Namespace: "apps", Name: "chart", Ready: flux.ReadyUnknown, Suspended: true},
 		},
 		history: map[string][]store.Event{
-			"broken": {{Ready: flux.ReadyFalse, Reason: "ReconciliationFailed", ObservedAt: time.Now()}},
+			histKey("Kustomization", "apps", "broken"): {{Ready: flux.ReadyFalse, Reason: "ReconciliationFailed", ObservedAt: time.Now()}},
 		},
 	})
-	s.MarkSynced(time.Now())
+	s.MarkSynced()
 	return s
 }
 
@@ -109,7 +119,7 @@ func TestReadyzBeforeSync(t *testing.T) {
 
 func TestReadyzAfterSyncPingFails(t *testing.T) {
 	s := NewServer(&fakeStore{pingErr: errors.New("db down")})
-	s.MarkSynced(time.Now())
+	s.MarkSynced()
 	rec := httptest.NewRecorder()
 	s.Routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
 	if rec.Code != http.StatusServiceUnavailable {

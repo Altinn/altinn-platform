@@ -12,6 +12,7 @@ import (
 	"github.com/Altinn/altinn-platform/services/dis-console/internal/dbauth"
 	"github.com/Altinn/altinn-platform/services/dis-console/internal/flux"
 	"github.com/Altinn/altinn-platform/services/dis-console/internal/store"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // newStore connects to the Postgres named by DISCONSOLE_TEST_DB_URI (set by the
@@ -19,7 +20,7 @@ import (
 // for it to accept connections, migrates the schema and truncates the tables.
 // It uses dbauth with a nil credential, exercising the no-Entra (trust/PGPASSWORD)
 // auth path the service uses in Kind/CI.
-func newStore(t *testing.T) *store.Store {
+func newStore(t *testing.T) (*store.Store, *pgxpool.Pool) {
 	t.Helper()
 	uri := os.Getenv("DISCONSOLE_TEST_DB_URI")
 	if uri == "" {
@@ -56,7 +57,7 @@ func newStore(t *testing.T) *store.Store {
 	if _, err := pool.Exec(ctx, "TRUNCATE flux_resource, flux_status_event"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
-	return s
+	return s, pool
 }
 
 func res(name, ready, reason, revision string) flux.Resource {
@@ -77,7 +78,7 @@ func res(name, ready, reason, revision string) flux.Resource {
 // status change writes a new history row, a disappeared object is pruned, and
 // the summary/list/get queries reflect the final state.
 func TestSyncUpsertHistoryAndPrune(t *testing.T) {
-	s := newStore(t)
+	s, pool := newStore(t)
 	ctx := context.Background()
 
 	// First sweep: two resources, both new => two history events.
@@ -121,6 +122,18 @@ func TestSyncUpsertHistoryAndPrune(t *testing.T) {
 	// "apps" is gone.
 	if _, _, err := s.Get(ctx, "Kustomization", "flux-system", "apps"); err != store.ErrNotFound {
 		t.Fatalf("expected apps pruned, got err=%v", err)
+	}
+
+	// Its history rows were pruned too (no orphaned, unreachable events).
+	var appsEvents int
+	if err := pool.QueryRow(ctx,
+		"SELECT count(*) FROM flux_status_event WHERE namespace = $1 AND name = $2",
+		"flux-system", "apps",
+	).Scan(&appsEvents); err != nil {
+		t.Fatalf("count apps events: %v", err)
+	}
+	if appsEvents != 0 {
+		t.Fatalf("expected apps history pruned, got %d orphaned events", appsEvents)
 	}
 
 	// "infra" has two history events (initial False, then recovered True), newest first.

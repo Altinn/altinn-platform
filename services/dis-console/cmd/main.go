@@ -137,7 +137,7 @@ func poll(ctx context.Context, client *flux.Client, st *store.Store, srv *api.Se
 		return
 	}
 
-	srv.MarkSynced(time.Now())
+	srv.MarkSynced()
 	log.Printf("swept %d Flux resources (%d changed, %d pruned)", stats.Upserted, stats.Changed, stats.Pruned)
 }
 

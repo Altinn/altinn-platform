@@ -163,10 +163,46 @@ func (s *Store) Sync(ctx context.Context, resources []flux.Resource) (SyncStats,
 	}
 	stats.Pruned = tag.RowsAffected()
 
+	// When resources disappeared, drop their now-orphaned history rows: Get
+	// requires the parent resource row, so those events are unreachable and
+	// would otherwise accumulate unbounded.
+	if stats.Pruned > 0 {
+		if _, err := tx.Exec(ctx, pruneEventsStmt); err != nil {
+			return stats, fmt.Errorf("prune events: %w", err)
+		}
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return stats, fmt.Errorf("commit: %w", err)
 	}
 	return stats, nil
+}
+
+// pruneEventsStmt removes history rows whose resource no longer exists. Run only
+// after a resource prune actually deleted rows.
+const pruneEventsStmt = `
+DELETE FROM flux_status_event e
+WHERE NOT EXISTS (
+    SELECT 1 FROM flux_resource r
+    WHERE r.kind = e.kind AND r.namespace = e.namespace AND r.name = e.name
+)`
+
+const lastSweepStmt = `SELECT max(last_seen) FROM flux_resource`
+
+// LastSweep returns the timestamp of the most recent sweep — the maximum
+// last_seen across all rows, which every sweep sets to its transaction time.
+// Returns the zero time when the table is empty. Sourcing the API's updatedAt
+// from this (rather than process memory) keeps it correct across restarts and
+// free of app/DB clock skew.
+func (s *Store) LastSweep(ctx context.Context) (time.Time, error) {
+	var t *time.Time
+	if err := s.pool.QueryRow(ctx, lastSweepStmt).Scan(&t); err != nil {
+		return time.Time{}, fmt.Errorf("last sweep query: %w", err)
+	}
+	if t == nil {
+		return time.Time{}, nil
+	}
+	return t.UTC(), nil
 }
 
 // KindCount is the per-kind ready-state breakdown for the summary endpoint.

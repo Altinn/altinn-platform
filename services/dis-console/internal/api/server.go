@@ -25,14 +25,14 @@ type Store interface {
 	Summary(ctx context.Context) ([]store.KindCount, error)
 	List(ctx context.Context, kind, namespace, ready string) ([]flux.Resource, error)
 	Get(ctx context.Context, kind, namespace, name string) (*flux.Resource, []store.Event, error)
+	LastSweep(ctx context.Context) (time.Time, error)
 	Ping(ctx context.Context) error
 }
 
 // Server serves the API from the store.
 type Server struct {
-	store    Store
-	ready    atomic.Bool
-	lastSync atomic.Int64 // unix nanos of the last successful sync; 0 = never
+	store Store
+	ready atomic.Bool
 }
 
 // NewServer returns a Server backed by st. /readyz reports not-ready until
@@ -41,18 +41,23 @@ func NewServer(st Store) *Server {
 	return &Server{store: st}
 }
 
-// MarkSynced records that a sweep was persisted at t and flips readiness on.
-func (s *Server) MarkSynced(t time.Time) {
-	s.lastSync.Store(t.UnixNano())
+// MarkSynced records that this process has persisted at least one sweep, which
+// flips /readyz to ready. The "as of" timestamp the API reports comes from the
+// database (LastSweep), not from here, so it survives restarts.
+func (s *Server) MarkSynced() {
 	s.ready.Store(true)
 }
 
-func (s *Server) lastSyncTime() time.Time {
-	n := s.lastSync.Load()
-	if n == 0 {
+// updatedAt is the timestamp of the most recent persisted sweep, read from the
+// database. On error it logs and returns the zero time rather than failing the
+// data response (the timestamp is metadata, not the payload).
+func (s *Server) updatedAt(r *http.Request) time.Time {
+	t, err := s.store.LastSweep(r.Context())
+	if err != nil {
+		log.Printf("last sweep query failed: %v", err)
 		return time.Time{}
 	}
-	return time.Unix(0, n).UTC()
+	return t
 }
 
 // Routes returns the HTTP handler with all endpoints registered.
@@ -135,7 +140,7 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 		total += c.Total
 	}
 	writeJSON(w, http.StatusOK, summaryResponse{
-		UpdatedAt: s.lastSyncTime(),
+		UpdatedAt: s.updatedAt(r),
 		Total:     total,
 		Kinds:     kinds,
 	})
@@ -161,7 +166,7 @@ func (s *Server) writeFiltered(w http.ResponseWriter, r *http.Request, kind, nam
 		return
 	}
 	writeJSON(w, http.StatusOK, listResponse{
-		UpdatedAt: s.lastSyncTime(),
+		UpdatedAt: s.updatedAt(r),
 		Count:     len(rows),
 		Resources: rows,
 	})
