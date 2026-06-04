@@ -56,7 +56,9 @@ Translate the request into the set of resources to author, in order:
 
 - **"A database for one app"** → an `ApplicationIdentity` for the app + a
   `DatabaseServer` (if the team has none yet) + a `Database` that references
-  both. Giving the app its own server is the *single-tenant* layout.
+  both. Giving the app its own server is the *single-tenant* layout. The
+  operator then publishes a connection ConfigMap the app's workload consumes —
+  always tell the user how to connect (see [references/database.md](references/database.md)).
 - **"Databases for several apps that share infrastructure"** → one
   `DatabaseServer` with `mode: Shared` (plus `network`) + one `Database` per app,
   each with its own `access.principals`. This is the *multitenant* layout.
@@ -79,6 +81,10 @@ their repo, reference it rather than recreating it — ask if you're unsure.
    consistent and in a single namespace.
 5. Validate (below).
 6. Place the manifest at the team's GitOps path for that namespace.
+7. For a `Database`, the app's connection details are published by the operator
+   as a ConfigMap, not set in the manifest — surface its deterministic name and
+   keys and give the user the workload snippet that consumes it (see
+   [references/database.md](references/database.md)).
 
 ## Validation
 
