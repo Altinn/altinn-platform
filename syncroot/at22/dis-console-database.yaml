@@ -1,15 +1,15 @@
 apiVersion: storage.dis.altinn.cloud/v1alpha1
 kind: Database
 metadata:
-  name: dis-sample-appdb
+  name: dis-console-db
   namespace: product-dis
 spec:
-  name: appdb
+  name: dis-console
   server:
-    name: dis-sample-db
+    name: dis-console-db-server
   access:
     principals:
       - role: Owner
         identityRef:
-          name: dis-sample-app
+          name: dis-console
   deletionPolicy: Retain
