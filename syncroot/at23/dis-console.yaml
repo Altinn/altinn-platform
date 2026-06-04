@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dis-console
+  namespace: product-dis
+  labels:
+    app: dis-console
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dis-console
+  template:
+    metadata:
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+      labels:
+        app: dis-console
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: dis-console
+      automountServiceAccountToken: true
+      # drop legacy per-Service env vars (noise/collisions); KUBERNETES_* still injected
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: dis-console
+          image: ghcr.io/altinn/altinn-platform/dis-console:latest
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: DB_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: dis-console-db-dis-console-dis-pgsql
+                  key: uri
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dis-console
+  namespace: product-dis
+  labels:
+    app: dis-console
+spec:
+  selector:
+    app: dis-console
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: dis-console-reader
+rules:
+  - apiGroups:
+      - kustomize.toolkit.fluxcd.io
+    resources:
+      - kustomizations
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - helm.toolkit.fluxcd.io
+    resources:
+      - helmreleases
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - source.toolkit.fluxcd.io
+    resources:
+      - ocirepositories
+      - helmrepositories
+      - helmcharts
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dis-console-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: dis-console-reader
+subjects:
+  - kind: ServiceAccount
+    name: dis-console
+    namespace: product-dis
