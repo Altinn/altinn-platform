@@ -82,3 +82,56 @@ spec:
 ([DatabaseServer](databaseserver.md)), and each `identityRef.name` an
 `ApplicationIdentity` in that namespace. The group `principalId` is the Entra
 group object ID (quote it so YAML keeps it a string).
+
+## Connecting an app — the connection ConfigMap
+
+Authoring the `Database` is only half the job: the app still has to connect, and
+this is the step the manifest alone does not cover. You request nothing for it —
+once the Database is `Ready`, dis-pgsql-operator automatically publishes a
+ConfigMap in the same namespace, **one per `access.principals[]` entry that uses
+`identityRef`** (group principals get none). The workload **must** consume it, or
+it has no coordinates to connect with.
+
+- **Name (deterministic — derivable before it exists):**
+  `<database.metadata.name>-<identityRef.name>-dis-pgsql`, sanitized to DNS-1123
+  and hash-suffixed if it would exceed 63 chars. For the multitenant template
+  above (Database `orders`, identity `myproduct-orders-dev`) →
+  `orders-myproduct-orders-dev-dis-pgsql`.
+- **Keys:** `host`, `port`, `dbname`, `user`, `sslmode` (always `require`), and
+  `uri` (`postgresql://<user>@<host>:5432/<dbname>?sslmode=require`).
+- **No password.** Auth is Entra workload identity: the pod runs as the
+  ServiceAccount the app's `ApplicationIdentity` created and authenticates with a
+  short-lived token, so the ConfigMap carries only non-secret coordinates. The
+  `user` value is the resolved managed-identity name, which can differ from
+  `identityRef.name`.
+
+Wire the workload to it — the workload-identity ServiceAccount plus the
+ConfigMap:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders
+  namespace: myteam-dev
+spec:
+  template:
+    metadata:
+      labels:
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: myproduct-orders-dev
+      containers:
+        - name: app
+          env:
+            - name: DB_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: orders-myproduct-orders-dev-dis-pgsql
+                  key: uri
+```
+
+`serviceAccountName` is the app's `ApplicationIdentity` name (the operator
+creates a ServiceAccount of that name); the pod label switches on the
+workload-identity webhook. Source of truth for the name and keys:
+`services/dis-pgsql-operator/internal/connection/configmap.go`.
