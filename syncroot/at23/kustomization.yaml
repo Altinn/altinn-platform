@@ -6,3 +6,4 @@ resources:
   - dis-console-db-admin.yaml
   - dis-console-databaseserver.yaml
   - dis-console-database.yaml
+  - dis-console.yaml
