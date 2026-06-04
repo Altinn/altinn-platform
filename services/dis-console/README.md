@@ -10,9 +10,10 @@ yaml`.
 The name is deliberately product-level (not `flux-*`) so the Console can grow
 to cover other DIS state later.
 
-> Status: PoC. This first cut keeps the latest snapshot in memory and serves
-> the API from it. Postgres persistence (status history) and the in-cluster
-> deployment land in follow-up changes.
+> Status: PoC. A background poller sweeps the Flux CRs every interval and
+> persists a normalized snapshot into a DIS-provisioned PostgreSQL database
+> (with a `flux_status_event` history table); the API serves from the database.
+> The in-cluster deployment lands in a follow-up change.
 
 ## What it reads
 
@@ -36,20 +37,44 @@ For each object it extracts a small normalized shape (`ready`/`reason`/
 | method | path | description |
 |---|---|---|
 | GET | `/healthz` | liveness (always 200) |
-| GET | `/readyz` | 200 only once the first sweep has completed |
+| GET | `/readyz` | 200 once the first sweep has been persisted **and** the database pings |
 | GET | `/api/summary` | counts per kind by ready state (+ suspended) |
 | GET | `/api/resources?kind=&namespace=&ready=` | normalized rows; `ready=False` is the "what's broken" view |
 | GET | `/api/kustomizations` | alias for `?kind=Kustomization` |
 | GET | `/api/helmreleases` | alias for `?kind=HelmRelease` |
-| GET | `/api/resources/{kind}/{namespace}/{name}` | single row incl. the full `raw` object |
+| GET | `/api/resources/{kind}/{namespace}/{name}` | single row incl. the full `raw` object + recent status `history` |
+
+## Database & auth
+
+The poller upserts each Flux resource into `flux_resource` and, whenever its
+`ready`/`reason`/`revision` changes, appends a row to `flux_status_event`;
+objects that disappear from the cluster are pruned each sweep. The schema is
+created on startup (`CREATE TABLE IF NOT EXISTS`).
+
+Connection coordinates come from `--db-uri` (default `DB_URI` env) — in the
+cluster this is the DIS connection ConfigMap's `uri` key, which carries no
+password. Authentication:
+
+- **In the cluster:** a workload-identity Entra token is fetched per new
+  connection (`BeforeConnect`) and used as the Postgres password — no static
+  secret. This is the DIS database-consumption path.
+- **Kind / CI / local:** pass `--db-disable-entra` (or `DB_DISABLE_ENTRA=1`) to
+  skip Entra and authenticate with `PGPASSWORD` (or trust auth), since there is
+  no workload identity there.
 
 ## Run locally
 
-Reads Flux CRs through your current kubeconfig and serves on `:8080`:
+Reads Flux CRs through your current kubeconfig, persists to a local Postgres,
+and serves on `:8080`:
 
 ```bash
 make setup-local-env   # once per fresh checkout: installs bin/golangci-lint
-make run               # == go run ./cmd/main.go --local
+
+# a throwaway Postgres (podman); trust auth, no password
+podman run -d --rm --name dis-console-pg -e POSTGRES_HOST_AUTH_METHOD=trust -p 5432:5432 postgres:16
+
+DB_URI="postgres://postgres@localhost:5432/postgres?sslmode=disable" \
+  go run ./cmd/main.go --local --db-disable-entra
 ```
 
 ```bash
@@ -59,15 +84,20 @@ curl -s localhost:8080/api/kustomizations | jq
 ```
 
 Flags: `--http-address` (default `:8080`), `--poll-interval` (default `30s`),
-`--local` (use kubeconfig instead of in-cluster config).
+`--local` (kubeconfig instead of in-cluster config), `--db-uri` (default
+`DB_URI`), `--db-disable-entra` (default `DB_DISABLE_ENTRA`).
 
 ## Develop
 
 ```bash
 make help                 # list targets
 make run-checks-ci-cache  # fmt + vet + test + lint (the CI check suite)
+make test-e2e-kind-ci     # store SQL e2e against a trust-auth Postgres on Kind
 make docker-build         # build the container image (podman by default)
 ```
+
+`make test`/`run-checks-ci` never touch a database (the API is tested against an
+in-memory fake store); the store's SQL is validated by the Kind e2e above.
 
 See [AGENTS.md](AGENTS.md) for the required verification flow.
 

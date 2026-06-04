@@ -1,51 +1,63 @@
-// Package api serves the read-only JSON API from the latest in-memory
-// snapshot of Flux resources produced by the poller.
+// Package api serves the read-only JSON API backed by the PostgreSQL store the
+// poller writes to. The poller calls MarkSynced after each successful sweep so
+// /readyz reports ready only once data has been persisted and the DB pings.
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"log"
 	"net/http"
-	"sort"
-	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/Altinn/altinn-platform/services/dis-console/internal/flux"
+	"github.com/Altinn/altinn-platform/services/dis-console/internal/store"
 )
 
-const noSnapshotMsg = "no snapshot yet"
+// readyzPingTimeout bounds the DB ping done by /readyz.
+const readyzPingTimeout = 3 * time.Second
 
-// Snapshot is an immutable point-in-time view of all Flux resources.
-type Snapshot struct {
-	Resources []flux.Resource
-	UpdatedAt time.Time
+// Store is the read surface the API needs from the persistence layer. The
+// concrete *store.Store satisfies it; tests use an in-memory fake.
+type Store interface {
+	Summary(ctx context.Context) ([]store.KindCount, error)
+	List(ctx context.Context, kind, namespace, ready string) ([]flux.Resource, error)
+	Get(ctx context.Context, kind, namespace, name string) (*flux.Resource, []store.Event, error)
+	LastSweep(ctx context.Context) (time.Time, error)
+	Ping(ctx context.Context) error
 }
 
-// Server holds the latest snapshot and serves it over HTTP.
+// Server serves the API from the store.
 type Server struct {
-	snap atomic.Pointer[Snapshot]
+	store Store
+	ready atomic.Bool
 }
 
-// NewServer returns a Server with no snapshot yet; /readyz reports not-ready
-// until SetSnapshot is first called.
-func NewServer() *Server {
-	return &Server{}
+// NewServer returns a Server backed by st. /readyz reports not-ready until
+// MarkSynced is first called.
+func NewServer(st Store) *Server {
+	return &Server{store: st}
 }
 
-// SetSnapshot atomically replaces the served snapshot. Called by the poller
-// after each sweep. The input slice is sorted in place by kind/namespace/name.
-func (s *Server) SetSnapshot(resources []flux.Resource, updatedAt time.Time) {
-	sort.Slice(resources, func(i, j int) bool {
-		a, b := resources[i], resources[j]
-		if a.Kind != b.Kind {
-			return a.Kind < b.Kind
-		}
-		if a.Namespace != b.Namespace {
-			return a.Namespace < b.Namespace
-		}
-		return a.Name < b.Name
-	})
-	s.snap.Store(&Snapshot{Resources: resources, UpdatedAt: updatedAt})
+// MarkSynced records that this process has persisted at least one sweep, which
+// flips /readyz to ready. The "as of" timestamp the API reports comes from the
+// database (LastSweep), not from here, so it survives restarts.
+func (s *Server) MarkSynced() {
+	s.ready.Store(true)
+}
+
+// updatedAt is the timestamp of the most recent persisted sweep, read from the
+// database. On error it logs and returns the zero time rather than failing the
+// data response (the timestamp is metadata, not the payload).
+func (s *Server) updatedAt(r *http.Request) time.Time {
+	t, err := s.store.LastSweep(r.Context())
+	if err != nil {
+		log.Printf("last sweep query failed: %v", err)
+		return time.Time{}
+	}
+	return t
 }
 
 // Routes returns the HTTP handler with all endpoints registered.
@@ -82,110 +94,101 @@ type summaryResponse struct {
 	Kinds     []kindSummary `json:"kinds"`
 }
 
+type detailResponse struct {
+	flux.Resource
+	History []store.Event `json:"history"`
+}
+
 func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *Server) handleReadyz(w http.ResponseWriter, _ *http.Request) {
-	if s.snap.Load() == nil {
+// handleReadyz reports ready only once the first sweep has been persisted and
+// the DB still pings. Liveness (/healthz) stays 200 regardless, so a transient
+// DB blip does not get the pod killed.
+func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
+	if !s.ready.Load() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), readyzPingTimeout)
+	defer cancel()
+	if err := s.store.Ping(ctx); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *Server) handleSummary(w http.ResponseWriter, _ *http.Request) {
-	snap := s.snap.Load()
-	if snap == nil {
-		writeJSON(w, http.StatusServiceUnavailable, errorBody(noSnapshotMsg))
+func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
+	counts, err := s.store.Summary(r.Context())
+	if err != nil {
+		s.fail(w, "summary", err)
 		return
 	}
-	// Resources are sorted by kind, so same-kind rows are contiguous.
-	kinds := make([]kindSummary, 0, len(flux.TargetKinds))
-	for _, res := range snap.Resources {
-		if len(kinds) == 0 || kinds[len(kinds)-1].Kind != res.Kind {
-			kinds = append(kinds, kindSummary{Kind: res.Kind})
-		}
-		k := &kinds[len(kinds)-1]
-		k.Total++
-		switch res.Ready {
-		case flux.ReadyTrue:
-			k.Ready++
-		case flux.ReadyFalse:
-			k.NotReady++
-		default:
-			k.Unknown++
-		}
-		if res.Suspended {
-			k.Suspended++
-		}
+	kinds := make([]kindSummary, 0, len(counts))
+	total := 0
+	for _, c := range counts {
+		kinds = append(kinds, kindSummary{
+			Kind:      c.Kind,
+			Total:     c.Total,
+			Ready:     c.Ready,
+			NotReady:  c.NotReady,
+			Unknown:   c.Unknown,
+			Suspended: c.Suspended,
+		})
+		total += c.Total
 	}
 	writeJSON(w, http.StatusOK, summaryResponse{
-		UpdatedAt: snap.UpdatedAt,
-		Total:     len(snap.Resources),
+		UpdatedAt: s.updatedAt(r),
+		Total:     total,
 		Kinds:     kinds,
 	})
 }
 
 func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	s.writeFiltered(w, q.Get("kind"), q.Get("namespace"), q.Get("ready"))
+	s.writeFiltered(w, r, q.Get("kind"), q.Get("namespace"), q.Get("ready"))
 }
 
 func (s *Server) handleKustomizations(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	s.writeFiltered(w, flux.KindKustomization, q.Get("namespace"), q.Get("ready"))
+	s.writeFiltered(w, r, flux.KindKustomization, r.URL.Query().Get("namespace"), r.URL.Query().Get("ready"))
 }
 
 func (s *Server) handleHelmReleases(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	s.writeFiltered(w, flux.KindHelmRelease, q.Get("namespace"), q.Get("ready"))
+	s.writeFiltered(w, r, flux.KindHelmRelease, r.URL.Query().Get("namespace"), r.URL.Query().Get("ready"))
 }
 
-func (s *Server) writeFiltered(w http.ResponseWriter, kind, namespace, ready string) {
-	snap := s.snap.Load()
-	if snap == nil {
-		writeJSON(w, http.StatusServiceUnavailable, errorBody(noSnapshotMsg))
+func (s *Server) writeFiltered(w http.ResponseWriter, r *http.Request, kind, namespace, ready string) {
+	rows, err := s.store.List(r.Context(), kind, namespace, ready)
+	if err != nil {
+		s.fail(w, "list", err)
 		return
 	}
-	out := make([]flux.Resource, 0, len(snap.Resources))
-	for _, res := range snap.Resources {
-		if kind != "" && !strings.EqualFold(res.Kind, kind) {
-			continue
-		}
-		if namespace != "" && res.Namespace != namespace {
-			continue
-		}
-		if ready != "" && !strings.EqualFold(res.Ready, ready) {
-			continue
-		}
-		res.Raw = nil // omit the heavy raw payload from list responses
-		out = append(out, res)
-	}
 	writeJSON(w, http.StatusOK, listResponse{
-		UpdatedAt: snap.UpdatedAt,
-		Count:     len(out),
-		Resources: out,
+		UpdatedAt: s.updatedAt(r),
+		Count:     len(rows),
+		Resources: rows,
 	})
 }
 
 func (s *Server) handleResourceDetail(w http.ResponseWriter, r *http.Request) {
-	snap := s.snap.Load()
-	if snap == nil {
-		writeJSON(w, http.StatusServiceUnavailable, errorBody(noSnapshotMsg))
+	res, history, err := s.store.Get(r.Context(), r.PathValue("kind"), r.PathValue("namespace"), r.PathValue("name"))
+	if errors.Is(err, store.ErrNotFound) {
+		writeJSON(w, http.StatusNotFound, errorBody("resource not found"))
 		return
 	}
-	kind := r.PathValue("kind")
-	namespace := r.PathValue("namespace")
-	name := r.PathValue("name")
-	for i := range snap.Resources {
-		res := snap.Resources[i]
-		if strings.EqualFold(res.Kind, kind) && res.Namespace == namespace && res.Name == name {
-			writeJSON(w, http.StatusOK, res)
-			return
-		}
+	if err != nil {
+		s.fail(w, "get", err)
+		return
 	}
-	writeJSON(w, http.StatusNotFound, errorBody("resource not found"))
+	writeJSON(w, http.StatusOK, detailResponse{Resource: *res, History: history})
+}
+
+// fail logs the underlying error and returns a generic 500 to the client.
+func (s *Server) fail(w http.ResponseWriter, op string, err error) {
+	log.Printf("%s query failed: %v", op, err)
+	writeJSON(w, http.StatusInternalServerError, errorBody(op+" query failed"))
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
