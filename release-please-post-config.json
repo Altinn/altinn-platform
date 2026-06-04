@@ -18,6 +18,11 @@
         }
       ]
     },
+    "services/dis-console": {
+      "dispatch-pipelines": [
+        {"filename": "dis-console-release.yml"}
+      ]
+    },
     "services/dis-pgsql-operator": {
       "dispatch-pipelines": [
         {"filename": "dis-pgsql-release.yml"}
