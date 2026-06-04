@@ -37,7 +37,7 @@ For each object it extracts a small normalized shape (`ready`/`reason`/
 | method | path | description |
 |---|---|---|
 | GET | `/healthz` | liveness (always 200) |
-| GET | `/readyz` | 200 only once the first sweep has completed |
+| GET | `/readyz` | 200 once the first sweep has been persisted **and** the database pings |
 | GET | `/api/summary` | counts per kind by ready state (+ suspended) |
 | GET | `/api/resources?kind=&namespace=&ready=` | normalized rows; `ready=False` is the "what's broken" view |
 | GET | `/api/kustomizations` | alias for `?kind=Kustomization` |

@@ -18,8 +18,8 @@ CREATE TABLE IF NOT EXISTS flux_resource (
     PRIMARY KEY (kind, namespace, name)
 );
 
-CREATE INDEX IF NOT EXISTS idx_flux_resource_ready ON flux_resource (ready);
-CREATE INDEX IF NOT EXISTS idx_flux_resource_kind  ON flux_resource (kind);
+CREATE INDEX IF NOT EXISTS idx_flux_resource_ready ON flux_resource (lower(ready));
+CREATE INDEX IF NOT EXISTS idx_flux_resource_kind  ON flux_resource (lower(kind));
 
 CREATE TABLE IF NOT EXISTS flux_status_event (
     id          bigserial PRIMARY KEY,
