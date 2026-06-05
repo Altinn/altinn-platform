@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.6](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.9.5...tf-azdev-agent-0.9.6) (2026-06-05)
+
+
+### Bug Fixes
+
+* Add CVE-2026-42504 to trivyignore ([#3651](https://github.com/Altinn/altinn-platform/issues/3651)) ([e095eaa](https://github.com/Altinn/altinn-platform/commit/e095eaa67ba630897e9b488a933c8ebb82b36732))
+
 ## [0.9.5](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.9.4...tf-azdev-agent-0.9.5) (2026-06-05)
 
 
