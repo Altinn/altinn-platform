@@ -32,6 +32,13 @@ CVE-2026-39820
 CVE-2026-39836
 # https://avd.aquasec.com/nvd/cve-2026-42499
 CVE-2026-42499
+# golang library vulnerabilities in kubectl/helm binaries - will be resolved when upstream tools rebuild with fixed dependencies
+# https://avd.aquasec.com/nvd/cve-2026-39823
+CVE-2026-39823
+# https://avd.aquasec.com/nvd/cve-2026-39825
+CVE-2026-39825
+# https://avd.aquasec.com/nvd/cve-2026-39826
+CVE-2026-39826
 # containerd vulnerability - will be resolved when base image updates containerd
 # https://avd.aquasec.com/nvd/cve-2026-46680
 CVE-2026-46680
