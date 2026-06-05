@@ -12,7 +12,39 @@
   "postUpdateOptions": [
     "gomodTidy"
   ],
+  "kubernetes": {
+    "managerFilePatterns": [
+      "/^syncroot/.+\\.ya?ml$/"
+    ]
+  },
   "packageRules": [
+    {
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/altinn/altinn-platform/dis-console"
+      ],
+      "versioning": "semver",
+      "allowedVersions": "/^v?\\d+\\.\\d+\\.\\d+$/",
+      "pinDigests": false,
+      "groupName": "dis console image tags",
+      "groupSlug": "dis-console-tags"
+    },
+    {
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/altinn/altinn-platform/dis-console"
+      ],
+      "matchUpdateTypes": [
+        "pin",
+        "pinDigest",
+        "digest"
+      ],
+      "enabled": false
+    },
     {
       "matchManagers": [
         "terraform",

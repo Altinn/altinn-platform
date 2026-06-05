@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.5](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.9.4...tf-azdev-agent-0.9.5) (2026-06-05)
+
+
+### Bug Fixes
+
+* **tf-azdev-agent:** suppress Go stdlib CVE-2026-39823/39825/39826 in trivyignore ([#3625](https://github.com/Altinn/altinn-platform/issues/3625)) ([1ca65cb](https://github.com/Altinn/altinn-platform/commit/1ca65cb05324c1499045bf9ad3d1795eb384f0f1))
+
 ## [0.9.4](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.9.3...tf-azdev-agent-0.9.4) (2026-05-26)
 
 
