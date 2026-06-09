@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.9](https://github.com/Altinn/altinn-platform/compare/azdevops-agent-1.2.8...azdevops-agent-1.2.9) (2026-06-09)
+
+
+### Dependency Updates
+
+* update ubuntu:24.04 docker digest to 786a8b5 ([#3658](https://github.com/Altinn/altinn-platform/issues/3658)) ([58b1a8d](https://github.com/Altinn/altinn-platform/commit/58b1a8d4cdafd7e67c914b1b2ea0f0352f4a2a3a))
+
 ## [1.2.8](https://github.com/Altinn/altinn-platform/compare/azdevops-agent-1.2.7...azdevops-agent-1.2.8) (2026-05-31)
 
 
