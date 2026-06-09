@@ -3,7 +3,7 @@ module github.com/Altinn/altinn-platform/services/dis-vault-operator
 go 1.26.3
 
 require (
-	github.com/Altinn/altinn-platform/services/dis-identity-operator v0.0.0-20260522135147-5189c1dd13ab
+	github.com/Altinn/altinn-platform/services/dis-identity-operator v0.0.0-20260605164008-e095eaa67ba6
 	github.com/Azure/azure-service-operator/v2 v2.19.0
 	github.com/external-secrets/external-secrets/apis v0.0.0-20260528125014-cedf209141b4
 	github.com/google/uuid v1.6.0
@@ -87,12 +87,12 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93 // indirect
 	golang.org/x/mod v0.35.0 // indirect
-	golang.org/x/net v0.53.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
-	golang.org/x/term v0.42.0 // indirect
-	golang.org/x/text v0.36.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/term v0.43.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
