@@ -13,7 +13,7 @@ module "gh_runners_dialogporten_frontend" {
   runner_cpu                    = "4.0"
   runner_memory                 = "8Gi"
   tags = merge(local.tags, {
-    finops_product = "altinn-arbeidsflate"
-    product        = "altinn-arbeidsflate"
+    finops_product = "arbeidsflate"
+    product        = "arbeidsflate"
   })
 }

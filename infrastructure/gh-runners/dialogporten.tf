@@ -13,7 +13,7 @@ module "gh_runners_dialogporten" {
   runner_cpu                    = "4.0"
   runner_memory                 = "8Gi"
   tags = merge(local.tags, {
-    finops_product = "altinn-dialogporten"
-    product        = "altinn-dialogporten"
+    finops_product = "dialogporten"
+    product        = "dialogporten"
   })
 }
