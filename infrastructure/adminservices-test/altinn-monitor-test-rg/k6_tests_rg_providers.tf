@@ -31,3 +31,10 @@ provider "helm" {
 provider "kubernetes" {
   config_path = "~/.kube/config"
 }
+
+provider "azurerm" {
+  alias           = "platform_dev"
+  subscription_id = "0b6a2a23-6d44-4b71-b23c-05c2d79baed1"
+  features {}
+  resource_provider_registrations = "none"
+}
