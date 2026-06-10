@@ -43,6 +43,8 @@ var _ = Describe("DatabaseServer controller", func() {
 	const databaseAppPrincipalID = "00000000-0000-0000-0000-000000000001"
 	const databaseOwnerGroup = "my-team-db-owners"
 	const databaseOwnerPrincipalID = "11111111-1111-1111-1111-111111111111"
+	const databaseExternalServicePrincipal = "myapp-workflow-at23"
+	const databaseExternalServicePrincipalID = "22222222-2222-2222-2222-222222222222"
 	const (
 		serverTypeDev          = "dev"
 		serverTypeProd         = "prod"
@@ -2549,6 +2551,27 @@ var _ = Describe("DatabaseServer controller", func() {
 					PrincipalId: databaseOwnerPrincipalID,
 				},
 			},
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleReader,
+				ServicePrincipal: &storagev1alpha1.DatabaseServicePrincipalSpec{
+					Name:        "sp-one",
+					PrincipalId: "not-a-guid",
+				},
+			},
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleWriter,
+				ServicePrincipal: &storagev1alpha1.DatabaseServicePrincipalSpec{
+					Name:        "sp-two",
+					PrincipalId: databaseExternalServicePrincipalID,
+				},
+			},
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleOwner,
+				ServicePrincipal: &storagev1alpha1.DatabaseServicePrincipalSpec{
+					Name:        "sp-three",
+					PrincipalId: databaseExternalServicePrincipalID,
+				},
+			},
 		}
 		Expect(k8sClient.Create(ctx, database)).To(Succeed())
 
@@ -2570,6 +2593,8 @@ var _ = Describe("DatabaseServer controller", func() {
 				HaveKeyWithValue("spec.access.principals[2]", databaseValidationReasonConflict),
 				HaveKeyWithValue("spec.access.principals[3].group.principalId", databaseValidationReasonInvalid),
 				HaveKeyWithValue("spec.access.principals[5]", databaseValidationReasonConflict),
+				HaveKeyWithValue("spec.access.principals[6].servicePrincipal.principalId", databaseValidationReasonInvalid),
+				HaveKeyWithValue("spec.access.principals[8]", databaseValidationReasonConflict),
 			))
 
 		Consistently(func(g Gomega) []dbforpostgresqlv1.FlexibleServersDatabase {
@@ -2921,6 +2946,180 @@ var _ = Describe("DatabaseServer controller", func() {
 			},
 		)).To(Succeed())
 		Expect(cms.Items).To(HaveLen(1))
+	})
+
+	It("grants access to a servicePrincipal principal without publishing a ConfigMap", func() {
+		db := newSharedDatabaseServer("shared-db-sp-only")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		database := newDatabase("router-sp-only", db.Name)
+		database.Spec.Access.Principals = []storagev1alpha1.DatabaseAccessPrincipalSpec{
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleWriter,
+				ServicePrincipal: &storagev1alpha1.DatabaseServicePrincipalSpec{
+					Name:        databaseExternalServicePrincipal,
+					PrincipalId: databaseExternalServicePrincipalID,
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			return len(listDatabaseASOChildren(g, database.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+
+		markDatabaseASOReady(ctx, database)
+
+		job := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
+		var accessPayload string
+		for _, env := range job.Spec.Template.Spec.Containers[0].Env {
+			if env.Name == dbUtil.AccessPrincipalsEnv {
+				accessPayload = env.Value
+			}
+		}
+		accessPrincipals, err := dbUtil.ParseAccessPrincipalsPayload(accessPayload)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(accessPrincipals).To(ConsistOf(
+			dbUtil.AccessPrincipal{
+				Role:          dbUtil.AccessRoleWriter,
+				Name:          databaseExternalServicePrincipal,
+				PrincipalID:   databaseExternalServicePrincipalID,
+				PrincipalType: dbUtil.PrincipalTypeService,
+			},
+		))
+
+		completeDatabaseAccessJob(ctx, job)
+
+		Eventually(func(g Gomega) metav1.ConditionStatus {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      database.Name,
+				Namespace: database.Namespace,
+			}, &updated)).To(Succeed())
+
+			ready := meta.FindStatusCondition(updated.Status.Conditions, databaseConditionReady)
+			g.Expect(ready).NotTo(BeNil())
+			return ready.Status
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(metav1.ConditionTrue))
+
+		// servicePrincipal principals get no connection ConfigMap.
+		Consistently(func(g Gomega) []corev1.ConfigMap {
+			var cms corev1.ConfigMapList
+			g.Expect(k8sClient.List(ctx, &cms,
+				client.InNamespace(database.Namespace),
+				client.MatchingLabels{
+					connection.LabelComponent: connection.ComponentValue,
+					connection.LabelDatabase:  database.Name,
+				},
+			)).To(Succeed())
+			return cms.Items
+		}).WithTimeout(2 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+	})
+
+	It("grants access to mixed identityRef, group, and servicePrincipal principals", func() {
+		db := newSharedDatabaseServer("shared-db-sp-mixed")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
+
+		database := newDatabase("router-sp-mixed", db.Name)
+		database.Spec.Access.Principals = append(database.Spec.Access.Principals,
+			storagev1alpha1.DatabaseAccessPrincipalSpec{
+				Role: storagev1alpha1.DatabaseAccessRoleWriter,
+				ServicePrincipal: &storagev1alpha1.DatabaseServicePrincipalSpec{
+					Name:        databaseExternalServicePrincipal,
+					PrincipalId: databaseExternalServicePrincipalID,
+				},
+			},
+		)
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			return len(listDatabaseASOChildren(g, database.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+
+		markDatabaseASOReady(ctx, database)
+
+		job := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
+		var accessPayload string
+		for _, env := range job.Spec.Template.Spec.Containers[0].Env {
+			if env.Name == dbUtil.AccessPrincipalsEnv {
+				accessPayload = env.Value
+			}
+		}
+		accessPrincipals, err := dbUtil.ParseAccessPrincipalsPayload(accessPayload)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(accessPrincipals).To(ConsistOf(
+			dbUtil.AccessPrincipal{
+				Role:          dbUtil.AccessRoleWriter,
+				Name:          databaseAppManagedIdentity,
+				PrincipalID:   databaseAppPrincipalID,
+				PrincipalType: dbUtil.PrincipalTypeService,
+			},
+			dbUtil.AccessPrincipal{
+				Role:          dbUtil.AccessRoleOwner,
+				Name:          databaseOwnerGroup,
+				PrincipalID:   databaseOwnerPrincipalID,
+				PrincipalType: dbUtil.PrincipalTypeGroup,
+			},
+			dbUtil.AccessPrincipal{
+				Role:          dbUtil.AccessRoleWriter,
+				Name:          databaseExternalServicePrincipal,
+				PrincipalID:   databaseExternalServicePrincipalID,
+				PrincipalType: dbUtil.PrincipalTypeService,
+			},
+		))
+
+		completeDatabaseAccessJob(ctx, job)
+
+		// Only the identityRef principal gets a connection ConfigMap.
+		cmName := connection.DeterministicConfigMapName(database.Name, databaseAppIdentityRef)
+		var cms corev1.ConfigMapList
+		Eventually(func(g Gomega) []corev1.ConfigMap {
+			g.Expect(k8sClient.List(ctx, &cms,
+				client.InNamespace(database.Namespace),
+				client.MatchingLabels{
+					connection.LabelComponent: connection.ComponentValue,
+					connection.LabelDatabase:  database.Name,
+				},
+			)).To(Succeed())
+			return cms.Items
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(HaveLen(1))
+		Expect(cms.Items[0].Name).To(Equal(cmName))
+	})
+
+	It("rejects Database principals with zero or multiple principal sources", func() {
+		database := newDatabase("router-sp-zero-sources", "any-server")
+		database.Spec.Access.Principals = []storagev1alpha1.DatabaseAccessPrincipalSpec{
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleReader,
+			},
+		}
+		err := k8sClient.Create(ctx, database)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("exactly one principal source"))
+
+		database = newDatabase("router-sp-two-sources", "any-server")
+		database.Spec.Access.Principals = []storagev1alpha1.DatabaseAccessPrincipalSpec{
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleOwner,
+				Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+					Name:        databaseOwnerGroup,
+					PrincipalId: databaseOwnerPrincipalID,
+				},
+				ServicePrincipal: &storagev1alpha1.DatabaseServicePrincipalSpec{
+					Name:        databaseExternalServicePrincipal,
+					PrincipalId: databaseExternalServicePrincipalID,
+				},
+			},
+		}
+		err = k8sClient.Create(ctx, database)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("exactly one principal source"))
 	})
 
 	It("removes stale connection ConfigMaps it owns on the ready reconcile", func() {

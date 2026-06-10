@@ -373,12 +373,19 @@ func validateDatabaseAccess(
 
 		hasIdentityRef := principal.IdentityRef != nil
 		hasGroup := principal.Group != nil
-		if hasIdentityRef == hasGroup {
+		hasServicePrincipal := principal.ServicePrincipal != nil
+		sourceCount := 0
+		for _, set := range []bool{hasIdentityRef, hasGroup, hasServicePrincipal} {
+			if set {
+				sourceCount++
+			}
+		}
+		if sourceCount != 1 {
 			validationErrors = appendDatabaseValidationError(
 				validationErrors,
 				field(""),
 				databaseValidationReasonInvalid,
-				"exactly one principal source must be set: identityRef or group",
+				"exactly one principal source must be set: identityRef, group, or servicePrincipal",
 			)
 			continue
 		}
@@ -434,6 +441,42 @@ func validateDatabaseAccess(
 				principalKey = "group:" + strings.ToLower(groupPrincipalID)
 			} else if groupName != "" {
 				principalKey = "group-name:" + groupName
+			}
+		}
+
+		if hasServicePrincipal {
+			servicePrincipalName := principal.ServicePrincipal.Name
+			servicePrincipalID := principal.ServicePrincipal.PrincipalId
+			servicePrincipalNameField := field("servicePrincipal.name")
+			servicePrincipalIDField := field("servicePrincipal.principalId")
+
+			validationErrors = validateAccessName(validationErrors, servicePrincipalNameField, servicePrincipalName, databaseMaxPrincipalNameLength)
+			if strings.TrimSpace(servicePrincipalID) == "" {
+				validationErrors = appendDatabaseValidationError(
+					validationErrors,
+					servicePrincipalIDField,
+					databaseValidationReasonRequired,
+					"servicePrincipal.principalId must be set",
+				)
+			} else if servicePrincipalID != strings.TrimSpace(servicePrincipalID) {
+				validationErrors = appendDatabaseValidationError(
+					validationErrors,
+					servicePrincipalIDField,
+					databaseValidationReasonInvalid,
+					"servicePrincipal.principalId must not have leading or trailing whitespace",
+				)
+			} else if !entraPrincipalIDPattern.MatchString(servicePrincipalID) {
+				validationErrors = appendDatabaseValidationError(
+					validationErrors,
+					servicePrincipalIDField,
+					databaseValidationReasonInvalid,
+					"servicePrincipal.principalId must be an Entra object ID GUID",
+				)
+			}
+			if servicePrincipalID != "" {
+				principalKey = "servicePrincipal:" + strings.ToLower(servicePrincipalID)
+			} else if servicePrincipalName != "" {
+				principalKey = "servicePrincipal-name:" + servicePrincipalName
 			}
 		}
 

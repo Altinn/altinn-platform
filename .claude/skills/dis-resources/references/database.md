@@ -3,9 +3,9 @@
 `storage.dis.altinn.cloud/v1alpha1`, owned by **dis-pgsql-operator**.
 
 Creates one PostgreSQL database inside an existing `DatabaseServer` and grants
-role-based access to a set of Entra principals (app identities and/or groups).
-A `Database` always needs a `DatabaseServer` to live on — create or pick one
-first.
+role-based access to a set of Entra principals (app identities, groups, and/or
+service principals). A `Database` always needs a `DatabaseServer` to live on —
+create or pick one first.
 
 ## Source of truth
 
@@ -24,11 +24,15 @@ first.
 | `access.principals[].role` | **yes** | enum | — | `Reader` (read-only), `Writer` (DML, no DDL), or `Owner` (DML + schema ownership). |
 | `access.principals[].identityRef` | one-of | object | — | `name` of an [ApplicationIdentity](applicationidentity.md) in the same namespace. |
 | `access.principals[].group` | one-of | object | — | An existing Entra group: `{name, principalId}`. |
+| `access.principals[].servicePrincipal` | one-of | object | — | An existing Entra service principal (e.g. a user-assigned managed identity) granted directly by object id: `{name, principalId}`. |
 | `deletionPolicy` | no | enum `Retain` | `Retain` | Only `Retain` is supported; the DB is kept when the resource is deleted. |
 
-Each principal must set **exactly one** of `identityRef` or `group`. Use
-`identityRef` for an app's managed identity and `group` for a human team
-(e.g. DB owners).
+Each principal must set **exactly one** of `identityRef`, `group`, or
+`servicePrincipal`. Use `identityRef` for an app's managed identity in this
+cluster, `group` for a human team (e.g. DB owners), and `servicePrincipal` to
+grant an existing service principal directly by Entra object id — for example
+a workload in another cluster that cannot be referenced via `identityRef`. No
+group needed.
 
 ## Template — single-tenant (own server)
 
@@ -78,10 +82,37 @@ spec:
   deletionPolicy: Retain
 ```
 
+## Template — direct grant by object id (`servicePrincipal`)
+
+```yaml
+apiVersion: storage.dis.altinn.cloud/v1alpha1
+kind: Database
+metadata:
+  name: orders
+  namespace: myteam-dev
+spec:
+  name: orders
+  server:
+    name: shared-db
+  access:
+    principals:
+      - role: Writer
+        servicePrincipal:
+          name: myapp-workflow-at23
+          principalId: "22222222-2222-2222-2222-222222222222"
+  deletionPolicy: Retain
+```
+
+`servicePrincipal.name` becomes the PostgreSQL login role — it is the username
+the workload connects with, and the token's object id must match `principalId`.
+Convention: use the managed identity's name for both, so the wiring stays
+obvious.
+
 `server.name` must match a `DatabaseServer` in the same namespace
 ([DatabaseServer](databaseserver.md)), and each `identityRef.name` an
-`ApplicationIdentity` in that namespace. The group `principalId` is the Entra
-group object ID (quote it so YAML keeps it a string).
+`ApplicationIdentity` in that namespace. The group and servicePrincipal
+`principalId` is the principal's Entra object ID (quote it so YAML keeps it a
+string).
 
 ## Connecting an app — the connection ConfigMap
 
@@ -89,8 +120,9 @@ Authoring the `Database` is only half the job: the app still has to connect, and
 this is the step the manifest alone does not cover. You request nothing for it —
 once the Database is `Ready`, dis-pgsql-operator automatically publishes a
 ConfigMap in the same namespace, **one per `access.principals[]` entry that uses
-`identityRef`** (group principals get none). The workload **must** consume it, or
-it has no coordinates to connect with.
+`identityRef`** (group and servicePrincipal principals get none — there is no
+`ApplicationIdentity` to wire a consumer to). The workload **must** consume it,
+or it has no coordinates to connect with.
 
 - **Name (deterministic — derivable before it exists):**
   `<database.metadata.name>-<identityRef.name>-dis-pgsql`, sanitized to DNS-1123
