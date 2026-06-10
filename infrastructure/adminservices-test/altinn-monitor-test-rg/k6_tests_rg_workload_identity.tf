@@ -28,9 +28,9 @@ data "azurerm_storage_container" "playwrightartifacts" {
   storage_account_id = data.azurerm_storage_account.playwrightartifacts.id
 }
 
-resource "azurerm_role_assignment" "storage_blob_data_writer" {
+resource "azurerm_role_assignment" "playwright_reports_storage_blob_data_contributor" {
   scope                = data.azurerm_storage_container.playwrightartifacts.id
-  role_definition_name = "Storage Blob Data Writer"
+  role_definition_name = "Storage Blob Data Contributor"
   principal_id         = azuread_service_principal.playwright_reporter.object_id
 }
 
