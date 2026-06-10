@@ -5,7 +5,7 @@ module "gh_runners_dialogporten" {
   resource_group_name           = azurerm_resource_group.gh_runners.name
   repository_name               = "dialogporten"
   private_runners_address_space = "172.17.132.0/24"
-  private_runners_prefix        = "dport"
+  private_runners_prefix        = "dp"
   altinn_app_id                 = var.altinn_app_id
   altinn_app_install_id         = var.altinn_app_install_id
   altinn_app_key                = var.altinn_app_key
