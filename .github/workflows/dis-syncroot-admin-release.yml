@@ -1,0 +1,59 @@
+name: Publish DIS Admin Syncroot Artifacts
+run-name: Publish DIS admin syncroot to ${{ inputs.environment }}
+
+env:
+  SYNCROOT_ARTIFACT_NAME: dis/syncroot-admin
+  TEMPLATE_ARTIFACT_NAME: dis/dis-console-tenant-db-template
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target admin environment"
+        type: choice
+        required: true
+        options:
+          - test
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: dis-syncroot-admin-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  publish-admin-syncroot:
+    name: Publish admin syncroot artifacts
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Validate admin syncroot structure
+        shell: bash
+        run: |
+          test -f "./syncroot-admin/${{ inputs.environment }}/kustomization.yaml"
+          test -f "./syncroot-templates/dis-console-tenant-db-template/kustomization.yaml"
+
+      - name: Build and push admin syncroot artifact
+        uses: Altinn/altinn-platform/actions/flux/build-push-image@e095eaa67ba630897e9b488a933c8ebb82b36732 # main
+        with:
+          image_name: ${{ env.SYNCROOT_ARTIFACT_NAME }}
+          tag: ${{ inputs.environment }}
+          workdir: ./syncroot-admin
+          azure_subscription_id: ${{ secrets.DIS_SYNCROOT_AZURE_SUBSCRIPTION_ID }}
+          azure_app_id: ${{ secrets.DIS_SYNCROOT_AZURE_CLIENT_ID }}
+          azure_tenant_id: ${{ secrets.DIS_SYNCROOT_AZURE_TENANT_ID }}
+
+      - name: Build and push tenant DB template artifact
+        uses: Altinn/altinn-platform/actions/flux/build-push-image@e095eaa67ba630897e9b488a933c8ebb82b36732 # main
+        with:
+          image_name: ${{ env.TEMPLATE_ARTIFACT_NAME }}
+          tag: ${{ inputs.environment }}
+          workdir: ./syncroot-templates/dis-console-tenant-db-template
+          azure_subscription_id: ${{ secrets.DIS_SYNCROOT_AZURE_SUBSCRIPTION_ID }}
+          azure_app_id: ${{ secrets.DIS_SYNCROOT_AZURE_CLIENT_ID }}
+          azure_tenant_id: ${{ secrets.DIS_SYNCROOT_AZURE_TENANT_ID }}
