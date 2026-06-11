@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.9.0...dis-pgsql-v0.10.0) (2026-06-11)
+
+
+### Features
+
+* **dis-pgsql:** support direct service-principal access grants (servicePrincipal) ([#3676](https://github.com/Altinn/altinn-platform/issues/3676)) ([1b15c6d](https://github.com/Altinn/altinn-platform/commit/1b15c6dd823f8341ae3fe0b48f5d5e75b0cffe29))
+
 ## [0.9.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.8.3...dis-pgsql-v0.9.0) (2026-06-01)
 
 

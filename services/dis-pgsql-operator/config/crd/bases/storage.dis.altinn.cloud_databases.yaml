@@ -87,14 +87,33 @@ spec:
                           - Writer
                           - Owner
                           type: string
+                        servicePrincipal:
+                          description: servicePrincipal identifies an existing Entra
+                            service principal by object id.
+                          properties:
+                            name:
+                              description: |-
+                                name is used as the PostgreSQL principal (login role) name. The workload
+                                connects with this as the username. Convention: the managed identity name.
+                              minLength: 1
+                              type: string
+                            principalId:
+                              description: principalId is the Entra object ID of the
+                                service principal.
+                              minLength: 1
+                              type: string
+                          required:
+                          - name
+                          - principalId
+                          type: object
                       required:
                       - role
                       type: object
                       x-kubernetes-validations:
-                      - message: 'Provide exactly one principal source: identityRef
-                          or group.'
-                        rule: (has(self.identityRef) && !has(self.group)) || (!has(self.identityRef)
-                          && has(self.group))
+                      - message: 'Provide exactly one principal source: identityRef,
+                          group, or servicePrincipal.'
+                        rule: '(has(self.identityRef) ? 1 : 0) + (has(self.group)
+                          ? 1 : 0) + (has(self.servicePrincipal) ? 1 : 0) == 1'
                     minItems: 1
                     type: array
                     x-kubernetes-list-type: atomic

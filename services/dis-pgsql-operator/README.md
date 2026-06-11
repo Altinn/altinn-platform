@@ -28,9 +28,10 @@ Dedicated and multitenant layouts use the same APIs:
 
 Once a `Database` is fully ready (its Azure resources exist and access has been
 provisioned), the operator publishes one **non-secret** ConfigMap per
-service-identity access principal so consuming apps can read the connection
-coordinates declaratively. Access principals declared as Entra `group`s do not
-get a ConfigMap (there is no single app consumer).
+`identityRef` access principal so consuming apps can read the connection
+coordinates declaratively. Access principals declared as Entra `group`s or
+`servicePrincipal`s do not get a ConfigMap (there is no `ApplicationIdentity`
+to derive a consumer from).
 
 The ConfigMap name is derivable before the database is deployed, from values
 known at authoring time:

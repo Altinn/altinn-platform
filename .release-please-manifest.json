@@ -1,13 +1,13 @@
 {
-  "services/dis-pgsql-operator": "0.9.0",
+  "services/dis-pgsql-operator": "0.10.0",
   "services/dis-identity-operator": "0.2.5",
   "services/dis-apim-operator": "1.0.5",
   "services/dis-vault-operator": "1.4.7",
   "services/lakmus": "1.1.6",
   "services/dis-console": "1.1.0",
-  "infrastructure/images/azure-devops-agent": "1.2.8",
+  "infrastructure/images/azure-devops-agent": "1.2.9",
   "infrastructure/images/gh-runner": "0.9.1",
   "infrastructure/images/k6-action": "0.1.2",
   "infrastructure/images/k6-image": "1.5.2",
-  "infrastructure/images/terraform-azure-devops-agent": "0.9.5"
+  "infrastructure/images/terraform-azure-devops-agent": "0.9.6"
 }

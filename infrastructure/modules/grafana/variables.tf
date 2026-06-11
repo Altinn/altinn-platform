@@ -53,7 +53,7 @@ variable "grafana_editor_access" {
 
 variable "grafana_major_version" {
   type        = number
-  default     = 11
+  default     = 12
   description = "Managed Grafana major version."
 }
 

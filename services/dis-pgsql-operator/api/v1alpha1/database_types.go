@@ -46,7 +46,22 @@ type DatabaseGroupPrincipalSpec struct {
 	PrincipalId string `json:"principalId"`
 }
 
-// +kubebuilder:validation:XValidation:rule="(has(self.identityRef) && !has(self.group)) || (!has(self.identityRef) && has(self.group))",message="Provide exactly one principal source: identityRef or group."
+// DatabaseServicePrincipalSpec identifies an existing Entra service principal
+// (e.g. a user-assigned managed identity) that should get access to the database.
+// Use this to grant access directly by object id, for example for workloads that
+// run outside this cluster and cannot be referenced via identityRef.
+type DatabaseServicePrincipalSpec struct {
+	// name is used as the PostgreSQL principal (login role) name. The workload
+	// connects with this as the username. Convention: the managed identity name.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// principalId is the Entra object ID of the service principal.
+	// +kubebuilder:validation:MinLength=1
+	PrincipalId string `json:"principalId"`
+}
+
+// +kubebuilder:validation:XValidation:rule="(has(self.identityRef) ? 1 : 0) + (has(self.group) ? 1 : 0) + (has(self.servicePrincipal) ? 1 : 0) == 1",message="Provide exactly one principal source: identityRef, group, or servicePrincipal."
 // DatabaseAccessPrincipalSpec describes one principal and the role it should get.
 type DatabaseAccessPrincipalSpec struct {
 	// role is the managed database access role granted to the principal.
@@ -60,6 +75,10 @@ type DatabaseAccessPrincipalSpec struct {
 	// group identifies an existing Entra group.
 	// +optional
 	Group *DatabaseGroupPrincipalSpec `json:"group,omitempty"`
+
+	// servicePrincipal identifies an existing Entra service principal by object id.
+	// +optional
+	ServicePrincipal *DatabaseServicePrincipalSpec `json:"servicePrincipal,omitempty"`
 }
 
 // DatabaseAccessSpec describes role-based access requirements for the database.
