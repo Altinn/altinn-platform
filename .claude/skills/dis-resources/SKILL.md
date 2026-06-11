@@ -99,7 +99,8 @@ their repo, reference it rather than recreating it — ask if you're unsure.
   - **Vault:** exactly one of `identityRef` / `serviceAccountRef`.
   - **DatabaseServer:** `network` is required when `mode: Shared` and must be
     omitted when `mode: Dedicated`; `mode` is immutable once created.
-  - **Database access principal:** exactly one of `identityRef` / `group`.
+  - **Database access principal:** exactly one of `identityRef` / `group` /
+    `servicePrincipal`.
   - **Server admin identity:** either `identityRef`, or both `name` and
     `principalId` — not a mix.
 
