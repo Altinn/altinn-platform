@@ -126,6 +126,25 @@ func (r *DatabaseReconciler) resolveDatabaseAccessPrincipals(
 			continue
 		}
 
+		if principal.ServicePrincipal != nil {
+			accessPrincipal := dbUtil.AccessPrincipal{
+				Role:          role,
+				Name:          strings.TrimSpace(principal.ServicePrincipal.Name),
+				PrincipalID:   strings.TrimSpace(principal.ServicePrincipal.PrincipalId),
+				PrincipalType: dbUtil.PrincipalTypeService,
+			}
+			key := string(accessPrincipal.PrincipalType) + ":" + strings.ToLower(accessPrincipal.PrincipalID)
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			// No connection ConfigMap for servicePrincipal principals (there is
+			// no ApplicationIdentity to wire a consumer to): not appended to
+			// serviceConnections.
+			accessPrincipals = append(accessPrincipals, accessPrincipal)
+			continue
+		}
+
 		if principal.IdentityRef == nil {
 			continue
 		}
