@@ -8,6 +8,6 @@
   "infrastructure/images/azure-devops-agent": "1.2.9",
   "infrastructure/images/gh-runner": "0.9.1",
   "infrastructure/images/k6-action": "0.1.2",
-  "infrastructure/images/k6-image": "1.5.2",
+  "infrastructure/images/k6-image": "1.5.3",
   "infrastructure/images/terraform-azure-devops-agent": "0.9.6"
 }
