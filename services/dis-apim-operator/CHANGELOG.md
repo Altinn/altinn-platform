@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.6](https://github.com/Altinn/altinn-platform/compare/dis-apim-v1.0.5...dis-apim-v1.0.6) (2026-06-12)
+
+
+### Dependency Updates
+
+* update actions/checkout digest to df4cb1c ([#3653](https://github.com/Altinn/altinn-platform/issues/3653)) ([44353b4](https://github.com/Altinn/altinn-platform/commit/44353b47ad5f9312641b244e2bb32b202c2e084b))
+
 ## [1.0.5](https://github.com/Altinn/altinn-platform/compare/dis-apim-v1.0.4...dis-apim-v1.0.5) (2026-05-26)
 
 
