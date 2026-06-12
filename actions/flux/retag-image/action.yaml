@@ -38,7 +38,7 @@ runs:
   using: composite
   steps:
     - name: Prepare Job for Pushing Flux OCI Artifacts to Azure Container Registry
-      uses: Altinn/altinn-platform/actions/flux/setup-flux-acr@e095eaa67ba630897e9b488a933c8ebb82b36732 # main
+      uses: Altinn/altinn-platform/actions/flux/setup-flux-acr@0e312e1fcea7322be64b68326f1019d608ec6ecf # main
       id: setup_flux_acr
       with:
         azure_app_id: ${{ inputs.azure_app_id }}
