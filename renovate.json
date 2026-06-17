@@ -14,7 +14,7 @@
   ],
   "kubernetes": {
     "managerFilePatterns": [
-      "/^syncroot/.+\\.ya?ml$/"
+      "/^deploy/.+\\.ya?ml$/"
     ]
   },
   "packageRules": [
