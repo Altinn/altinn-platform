@@ -5,12 +5,10 @@ inputs:
   workdir:
     description: 'Folder containing the OCI context'
     required: true
-    type: string
   environments:
     description: 'Space-separated environment folder names to check. Defaults to the TE environments.'
     required: false
     default: 'at22 at23 at24 tt02 yt01 prod'
-    type: string
 
 runs:
   using: composite
