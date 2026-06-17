@@ -6,7 +6,7 @@ metadata:
 spec:
   name: ${DISDB_PGNAME}
   server:
-    name: dis-console-db-server
+    name: dis-console-central
   access:
     principals:
       - role: Owner
