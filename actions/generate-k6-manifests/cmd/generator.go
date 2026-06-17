@@ -196,9 +196,9 @@ func generate(td *TestDefinition, c *TestContext, r K8sManifestGenerator, cf Con
 	if err != nil {
 		log.Fatalf("error: %v", err)
 	}
-	imageName := "ghcr.io/altinn/altinn-platform/k6-image:latest"
+	imageName := "ghcr.io/altinn/altinn-platform/k6-image:v2.0.0"
 	if *c.TestTypeDefinition.Type == "browser" {
-		imageName = "grafana/k6:1.7.1-with-browser"
+		imageName = "grafana/k6:2.0.0-with-browser"
 	}
 
 	mergedEnvsMarshalled, err := yaml.Marshal(mergedEnvs)
