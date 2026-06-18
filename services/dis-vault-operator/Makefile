@@ -194,6 +194,7 @@ seed-dis-identity-kind: setup-test-e2e ## Seed ApplicationIdentity and ready sta
 		-p '{"status":{"managedIdentityName":"app-identity-sample-managed","principalId":"app-identity-sample-principal","conditions":[{"type":"Ready","status":"True","reason":"Ready","message":"Seeded for Kind e2e","lastTransitionTime":"2026-01-01T00:00:00Z"}]}}'
 
 .PHONY: test-e2e-kind
+test-e2e-kind: export KUBECONFIG = $(KIND_KUBECONFIG)
 test-e2e-kind: cleanup-test-e2e setup-test-e2e docker-build kind-load install install-aso-crds-kind install-dis-identity-crd-kind install-external-secrets-crd-kind deploy-kind ## Setup Kind e2e env and apply samples.
 	$(MAKE) seed-dis-identity-kind
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) --context kind-$(KIND_CLUSTER) apply -k config/samples
