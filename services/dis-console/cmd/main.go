@@ -184,6 +184,9 @@ func runServer(args []string) {
 	if *syncInterval <= 0 {
 		log.Fatalf("--sync-interval must be greater than 0, got %s", *syncInterval)
 	}
+	if *staleAfter <= 0 {
+		log.Fatalf("--stale-after must be greater than 0, got %s", *staleAfter)
+	}
 	if *dbURI == "" {
 		log.Fatalf("--db-uri (or DB_URI env) must be set")
 	}

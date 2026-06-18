@@ -30,11 +30,14 @@ func NewEngine(central *Store, baseURI string, cred azcore.TokenCredential, inte
 	return &Engine{central: central, baseURI: baseURI, cred: cred, interval: interval}
 }
 
-// Run syncs all tenant databases once, calls ready (so /readyz can flip), then
-// repeats every interval until ctx is cancelled.
+// Run syncs all tenant databases on an interval until ctx is cancelled. It calls
+// ready (flipping /readyz) after the first cycle whose discovery succeeds — a
+// failed initial discovery must not report the server ready. ready is idempotent
+// (MarkSynced), so gating every cycle on it is fine.
 func (e *Engine) Run(ctx context.Context, ready func()) {
-	e.syncOnce(ctx)
-	ready()
+	if e.syncOnce(ctx) {
+		ready()
+	}
 
 	ticker := time.NewTicker(e.interval)
 	defer ticker.Stop()
@@ -43,24 +46,27 @@ func (e *Engine) Run(ctx context.Context, ready func()) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			e.syncOnce(ctx)
+			if e.syncOnce(ctx) {
+				ready()
+			}
 		}
 	}
 }
 
-// syncOnce discovers the tenant databases and syncs each in turn. One tenant's
-// failure is logged and skipped so it cannot stall the rest of the fleet.
-func (e *Engine) syncOnce(ctx context.Context) {
+// syncOnce discovers the tenant databases and syncs each in turn, returning
+// whether discovery succeeded. A per-tenant failure is logged and skipped so it
+// cannot stall the rest of the fleet, and does not fail the cycle.
+func (e *Engine) syncOnce(ctx context.Context) bool {
 	dbs, err := e.central.Discover(ctx)
 	if err != nil {
 		log.Printf("discover tenant databases failed: %v", err)
-		return
+		return false
 	}
 
 	var synced, failed int
 	for _, db := range dbs {
 		if ctx.Err() != nil {
-			return
+			return true
 		}
 		if err := e.syncCluster(ctx, db); err != nil {
 			failed++
@@ -70,6 +76,7 @@ func (e *Engine) syncOnce(ctx context.Context) {
 		synced++
 	}
 	log.Printf("synced %d/%d tenant databases (%d failed)", synced, len(dbs), failed)
+	return true
 }
 
 // syncCluster mirrors one tenant database into the central read model: pull the

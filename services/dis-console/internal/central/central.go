@@ -70,13 +70,13 @@ func (s *Store) Cursor(ctx context.Context, cluster string) (time.Time, error) {
 
 const discoverStmt = `
 SELECT datname FROM pg_database
-WHERE datname LIKE $1 AND datname <> current_database() AND datistemplate = false
+WHERE starts_with(datname, $1) AND datname <> current_database() AND datistemplate = false
 ORDER BY datname`
 
 // Discover lists the tenant databases on the shared server (by the dis_console_
 // prefix), excluding the console's own central database.
 func (s *Store) Discover(ctx context.Context) ([]string, error) {
-	rows, err := s.pool.Query(ctx, discoverStmt, dbPrefix+"%")
+	rows, err := s.pool.Query(ctx, discoverStmt, dbPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("discover databases: %w", err)
 	}

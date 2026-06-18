@@ -77,8 +77,7 @@ Do not claim checks passed unless you actually ran them.
 - `internal/store` — tenant pgxpool store: embedded `schema.sql`, `Migrate`,
   `Sync` (content-hash-gated upsert + `flux_status_event` history + prune,
   touches the `meta` row), the `meta` bookkeeping table (`InitMeta`/`GetMeta`,
-  `SchemaVersion`), summary/list/get queries, and the server-side tenant readers
-  (`ChangedSince`/`Keys`).
+  `SchemaVersion`), and the server-side tenant readers (`ChangedSince`/`Keys`).
 - `internal/central` — the server's central read model: cluster-keyed
   `schema.sql`, `Apply` (per-cluster upsert + prune + `cluster_report` in one
   tx), tenant `Discover`, the sync `Engine` (pulls each tenant incrementally via
