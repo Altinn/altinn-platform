@@ -157,6 +157,11 @@ run-checks-ci: ## Run CI checks with local Go caches.
 KIND_CLUSTER ?= dis-pgsql-operator-test-e2e
 E2E_TEST_TIMEOUT ?= 30m
 
+# Dedicated kubeconfig for the Kind e2e cluster. The whole e2e flow points KUBECONFIG
+# here so every kubectl/make step targets the Kind cluster this Makefile created, never
+# the caller's current context (which would otherwise silently apply to the wrong cluster).
+KIND_KUBECONFIG ?= $(LOCALBIN)/kind-$(KIND_CLUSTER).kubeconfig
+
 .PHONY: setup-test-e2e
 setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 	@command -v $(KIND) >/dev/null 2>&1 || { \
@@ -175,20 +180,23 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 		echo "Creating Kind cluster '$(KIND_CLUSTER)'..."; \
 		$(KIND) create cluster --name $(KIND_CLUSTER); \
 	fi
+	@mkdir -p "$(LOCALBIN)"
+	@$(KIND) export kubeconfig --name "$(KIND_CLUSTER)" --kubeconfig "$(KIND_KUBECONFIG)"
 
 .PHONY: test-e2e
 test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
-	CERT_MANAGER_INSTALL_SKIP=$(CERT_MANAGER_INSTALL_SKIP) KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v -timeout=$(E2E_TEST_TIMEOUT)
+	KUBECONFIG="$(KIND_KUBECONFIG)" CERT_MANAGER_INSTALL_SKIP=$(CERT_MANAGER_INSTALL_SKIP) KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v -timeout=$(E2E_TEST_TIMEOUT)
 	$(MAKE) cleanup-test-e2e
 
 .PHONY: test-e2e-kind
+test-e2e-kind: export KUBECONFIG = $(KIND_KUBECONFIG)
 test-e2e-kind: cleanup-test-e2e setup-test-e2e docker-build kind-load install install-aso-crds-kind install-dis-identity-crd-kind deploy-kind
 	kubectl apply -f config/samples/storage_v1alpha1_databaseserver.yaml
 	$(MAKE) seed-dis-identity-kind
 
 .PHONY: test-e2e-kind-ci
 test-e2e-kind-ci: cleanup-test-e2e setup-test-e2e manifests generate fmt vet install-aso-crds-kind install-dis-identity-crd-kind ## Run the e2e tests on Kind and cleanup (CI).
-	CERT_MANAGER_INSTALL_SKIP=$(CERT_MANAGER_INSTALL_SKIP) KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v -timeout=$(E2E_TEST_TIMEOUT)
+	KUBECONFIG="$(KIND_KUBECONFIG)" CERT_MANAGER_INSTALL_SKIP=$(CERT_MANAGER_INSTALL_SKIP) KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v -timeout=$(E2E_TEST_TIMEOUT)
 	$(MAKE) cleanup-test-e2e
 
 .PHONY: cleanup-test-e2e
@@ -196,6 +204,7 @@ cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
 	@$(KIND) delete cluster --name $(KIND_CLUSTER)
 
 .PHONY: install-aso-crds-kind
+install-aso-crds-kind: export KUBECONFIG = $(KIND_KUBECONFIG)
 install-aso-crds-kind: aso-crds
 	kubectl apply --server-side --force-conflicts -f bin/aso-crds/
 
@@ -225,10 +234,12 @@ install-aso-crds-kind: aso-crds
 	-p='[{"op":"replace","path":"/spec/conversion","value":{"strategy":"None"}}]'
 
 .PHONY: install-dis-identity-crd-kind
+install-dis-identity-crd-kind: export KUBECONFIG = $(KIND_KUBECONFIG)
 install-dis-identity-crd-kind: dis-identity-crd
 	kubectl apply --server-side --force-conflicts -f $(DIS_IDENTITY_CRD_FILE)
 
 .PHONY: seed-dis-identity-kind
+seed-dis-identity-kind: export KUBECONFIG = $(KIND_KUBECONFIG)
 seed-dis-identity-kind: ## Apply ApplicationIdentity stubs and patch status for Kind tests.
 	kubectl apply -f config/kind/applicationidentities.yaml
 	kubectl patch applicationidentity adminidentity -n default \
@@ -329,6 +340,7 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 		"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" apply -f -
 
 .PHONY: deploy-kind
+deploy-kind: export KUBECONFIG = $(KIND_KUBECONFIG)
 deploy-kind: manifests kustomize ## Deploy controller to a Kind cluster (IfNotPresent pull policy).
 	@set -e; \
 		trap '$(MAKE) -C "$(CURDIR)" restore-kustomize >/dev/null' EXIT; \
