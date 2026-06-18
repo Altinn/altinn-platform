@@ -2233,6 +2233,127 @@ var _ = Describe("DatabaseServer controller", func() {
 			Should(Equal(metav1.ConditionTrue))
 	})
 
+	It("surfaces a ServerNameConflict and suppresses owner-not-found parameter errors when the FlexibleServer name is taken", func() {
+		db := newDedicatedDatabaseServer("my-app-db-name-conflict", adminAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+		))
+		db.Spec.ServerParams = []storagev1alpha1.DatabaseServerParameter{
+			{
+				Name:  paramAutovacuumNaptime,
+				Value: intstr.FromInt(15),
+			},
+		}
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		parameterConfigName := serverParameterConfigResourceName(db.Name, paramAutovacuumNaptime)
+
+		// Wait until the operator has created the FlexibleServer and its parameter
+		// configuration child.
+		Eventually(func(g Gomega) {
+			var server dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &server)).To(Succeed())
+
+			var configuration dbforpostgresqlv1.FlexibleServersConfiguration
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      parameterConfigName,
+				Namespace: db.Namespace,
+			}, &configuration)).To(Succeed())
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		// Azure rejects the create because the (globally unique) server name is taken.
+		// ASO classifies this as retryable, so it is reported as a Warning-severity
+		// Ready=False on the FlexibleServer (distinct from the Info-severity
+		// "Reconciling" state used during normal provisioning).
+		Eventually(func() error {
+			var server dbforpostgresqlv1.FlexibleServer
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &server); err != nil {
+				return err
+			}
+			server.Status.Conditions = []asoconditions.Condition{
+				{
+					Type:               asoconditions.ConditionTypeReady,
+					Status:             metav1.ConditionFalse,
+					Severity:           asoconditions.ConditionSeverityWarning,
+					Reason:             azureReasonServerNameAlreadyExists,
+					Message:            fmt.Sprintf("Server name '%s' already exists.", db.Name),
+					LastTransitionTime: metav1.Now(),
+					ObservedGeneration: server.Generation,
+				},
+			}
+			return k8sClient.Status().Update(ctx, &server)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		// ASO then blocks the child configuration on its missing owner. This is the
+		// misleading symptom that must NOT surface on the DatabaseServer.
+		Eventually(func() error {
+			var configuration dbforpostgresqlv1.FlexibleServersConfiguration
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      parameterConfigName,
+				Namespace: db.Namespace,
+			}, &configuration); err != nil {
+				return err
+			}
+			configuration.Status.Conditions = []asoconditions.Condition{
+				{
+					Type:               asoconditions.ConditionTypeReady,
+					Status:             metav1.ConditionFalse,
+					Severity:           asoconditions.ConditionSeverityWarning,
+					Reason:             "ReconciliationBlocked",
+					Message:            fmt.Sprintf("Owner %q cannot be found. Progress is blocked until the owner is created.", db.Name),
+					LastTransitionTime: metav1.Now(),
+					ObservedGeneration: configuration.Generation,
+				},
+			}
+			return k8sClient.Status().Update(ctx, &configuration)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		// The DatabaseServer surfaces the real Azure error with an actionable message.
+		Eventually(func(g Gomega) {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &updated)).To(Succeed())
+
+			ready := meta.FindStatusCondition(updated.Status.Conditions, databaseServerConditionReady)
+			g.Expect(ready).NotTo(BeNil())
+			g.Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(ready.Reason).To(Equal(databaseServerReasonServerNameConflict))
+			g.Expect(ready.Message).To(ContainSubstring(db.Name))
+			g.Expect(ready.Message).To(ContainSubstring("globally unique"))
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		// It never surfaces the misleading owner-not-found parameter error, and stays in
+		// the conflict state instead of flapping back to it.
+		Consistently(func(g Gomega) {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &updated)).To(Succeed())
+
+			g.Expect(updated.Status.ServerParameterErrors).To(BeEmpty())
+			g.Expect(meta.FindStatusCondition(updated.Status.Conditions, serverParametersReadyConditionType)).To(BeNil())
+
+			ready := meta.FindStatusCondition(updated.Status.Conditions, databaseServerConditionReady)
+			g.Expect(ready).NotTo(BeNil())
+			g.Expect(ready.Reason).To(Equal(databaseServerReasonServerNameConflict))
+		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+	})
+
 	It("resolves ApplicationIdentity references for server admin", func() {
 		createApplicationIdentity(ctx, "adminidentity", adminManagedIdentity, adminManagedIdentityID)
 
