@@ -13,4 +13,7 @@ spec:
         servicePrincipal:
           name: ${DISDB_GRANTEE_NAME}
           principalId: "${DISDB_GRANTEE_OID}"
+      - role: Reader
+        identityRef:
+          name: dis-console
   deletionPolicy: Retain
