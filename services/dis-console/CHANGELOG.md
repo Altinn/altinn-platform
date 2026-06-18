@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.1.0...dis-console-v1.2.0) (2026-06-18)
+
+
+### Features
+
+* **dis-console:** agent/server split + write hygiene + typed Flux reader ([#3726](https://github.com/Altinn/altinn-platform/issues/3726)) ([4f3fec2](https://github.com/Altinn/altinn-platform/commit/4f3fec2ce935deaa932e5679f3391e14a68421be))
+* **dis-console:** server — central sync engine + fleet API ([#3734](https://github.com/Altinn/altinn-platform/issues/3734)) ([6e37f47](https://github.com/Altinn/altinn-platform/commit/6e37f4711a35c04ca7562752b91b7091a223e730))
+
 ## [1.1.0](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.0.0...dis-console-v1.1.0) (2026-06-04)
 
 
