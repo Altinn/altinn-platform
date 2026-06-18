@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.10.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.10.0...dis-pgsql-v0.10.1) (2026-06-18)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** order DatabaseServer teardown via finalizer to unstick DNS zone ([#3725](https://github.com/Altinn/altinn-platform/issues/3725)) ([55bf526](https://github.com/Altinn/altinn-platform/commit/55bf52629317c174d28678624d254d16b17accab))
+* **dis-pgsql-operator:** pin e2e kubectl to a dedicated Kind kubeconfig ([#3720](https://github.com/Altinn/altinn-platform/issues/3720)) ([38ba150](https://github.com/Altinn/altinn-platform/commit/38ba150f2b86c2e2bd1a8e6cfc59fb840b78f8f6))
+* **dis-pgsql-operator:** surface FlexibleServer errors on DatabaseServer status ([#3724](https://github.com/Altinn/altinn-platform/issues/3724)) ([22261d4](https://github.com/Altinn/altinn-platform/commit/22261d428efb405e0f1c71c1ec2f4f6141cb0b40))
+
 ## [0.10.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.9.0...dis-pgsql-v0.10.0) (2026-06-11)
 
 
