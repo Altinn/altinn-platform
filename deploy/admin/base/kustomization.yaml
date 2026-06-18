@@ -3,4 +3,7 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - dis-console-db-admin.yaml
+  - dis-console.yaml
   - dis-console-databaseserver.yaml
+  - dis-console-database.yaml
+  - dis-console-deployment.yaml
