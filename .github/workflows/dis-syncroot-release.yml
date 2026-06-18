@@ -35,14 +35,14 @@ jobs:
       - name: Validate syncroot image
         uses: Altinn/altinn-platform/actions/flux/verify-syncroot@e095eaa67ba630897e9b488a933c8ebb82b36732 # main
         with:
-          workdir: ./syncroot
+          workdir: ./deploy/common
 
       - name: Build and push syncroot artifact
         uses: Altinn/altinn-platform/actions/flux/build-push-image@e095eaa67ba630897e9b488a933c8ebb82b36732 # main
         with:
           image_name: ${{ env.SYNCROOT_ARTIFACT_NAME }}
           tag: ${{ inputs.environment }}
-          workdir: ./syncroot
+          workdir: ./deploy/common
           azure_subscription_id: ${{ secrets.DIS_SYNCROOT_AZURE_SUBSCRIPTION_ID }}
           azure_app_id: ${{ secrets.DIS_SYNCROOT_AZURE_CLIENT_ID }}
           azure_tenant_id: ${{ secrets.DIS_SYNCROOT_AZURE_TENANT_ID }}
