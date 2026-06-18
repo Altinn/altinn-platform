@@ -1,6 +1,12 @@
 // Package flux reads Flux custom resources across all namespaces using the
 // dynamic client and a discovery-backed RESTMapper, and normalizes their
 // deployment status into a small, stable shape the API serves.
+//
+// The fetch stays dynamic on purpose (the discovery RESTMapper resolves
+// whichever served version Azure Flux exposes, and the full object is kept
+// verbatim for the raw payload); the projected status fields are then decoded
+// into the typed Flux api structs via runtime conversion — typed access without
+// a version-pinned typed client. See normalize.go and the README.
 package flux
 
 import (
@@ -24,8 +30,11 @@ const (
 	GroupHelm      = "helm.toolkit.fluxcd.io"
 	GroupSource    = "source.toolkit.fluxcd.io"
 
-	KindKustomization = "Kustomization"
-	KindHelmRelease   = "HelmRelease"
+	KindKustomization  = "Kustomization"
+	KindHelmRelease    = "HelmRelease"
+	KindOCIRepository  = "OCIRepository"
+	KindHelmRepository = "HelmRepository"
+	KindHelmChart      = "HelmChart"
 )
 
 // TargetKinds are the Flux custom resource kinds the Console reads. The served
@@ -34,9 +43,9 @@ const (
 var TargetKinds = []schema.GroupKind{
 	{Group: GroupKustomize, Kind: KindKustomization},
 	{Group: GroupHelm, Kind: KindHelmRelease},
-	{Group: GroupSource, Kind: "OCIRepository"},
-	{Group: GroupSource, Kind: "HelmRepository"},
-	{Group: GroupSource, Kind: "HelmChart"},
+	{Group: GroupSource, Kind: KindOCIRepository},
+	{Group: GroupSource, Kind: KindHelmRepository},
+	{Group: GroupSource, Kind: KindHelmChart},
 }
 
 // Client lists Flux custom resources across all namespaces.

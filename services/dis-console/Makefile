@@ -19,7 +19,7 @@ MAIN := cmd/main.go
 BUILD_DEPS := fmt vet
 TEST_DEPS := fmt vet
 GO_TEST_CMD := go test ./... -coverprofile cover.out
-RUN_ARGS := --local
+RUN_ARGS := agent --local
 
 include ../../Makefile.common
 

@@ -12,11 +12,14 @@ CREATE TABLE IF NOT EXISTS flux_resource (
     observed_generation bigint,
     last_transition     timestamptz,
     raw                 jsonb       NOT NULL,
+    content_hash        text,
     first_seen          timestamptz NOT NULL DEFAULT now(),
     last_seen           timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (kind, namespace, name)
 );
+
+ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS content_hash text;
 
 CREATE INDEX IF NOT EXISTS idx_flux_resource_ready ON flux_resource (lower(ready));
 CREATE INDEX IF NOT EXISTS idx_flux_resource_kind  ON flux_resource (lower(kind));
@@ -34,3 +37,11 @@ CREATE TABLE IF NOT EXISTS flux_status_event (
 );
 
 CREATE INDEX IF NOT EXISTS idx_flux_event_obj ON flux_status_event (kind, namespace, name, observed_at DESC);
+
+CREATE TABLE IF NOT EXISTS meta (
+    id             boolean     PRIMARY KEY DEFAULT true,
+    schema_version integer     NOT NULL,
+    agent_version  text        NOT NULL DEFAULT '',
+    last_sweep_at  timestamptz,
+    CONSTRAINT meta_singleton CHECK (id)
+);

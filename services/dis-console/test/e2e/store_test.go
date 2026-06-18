@@ -54,22 +54,29 @@ func newStore(t *testing.T) (*store.Store, *pgxpool.Pool) {
 	if err := s.Migrate(ctx); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	if _, err := pool.Exec(ctx, "TRUNCATE flux_resource, flux_status_event"); err != nil {
+	if _, err := pool.Exec(ctx, "TRUNCATE flux_resource, flux_status_event, meta"); err != nil {
 		t.Fatalf("truncate: %v", err)
+	}
+	if err := s.InitMeta(ctx, "e2e"); err != nil {
+		t.Fatalf("init meta: %v", err)
 	}
 	return s, pool
 }
 
+// res mirrors what flux.normalize produces: ContentHash is derived from the
+// content, so an identical resource hashes the same (the store skips the
+// rewrite) and a status change hashes differently (the store rewrites).
 func res(name, ready, reason, revision string) flux.Resource {
 	return flux.Resource{
-		Kind:       "Kustomization",
-		APIVersion: "kustomize.toolkit.fluxcd.io/v1",
-		Namespace:  "flux-system",
-		Name:       name,
-		Ready:      ready,
-		Reason:     reason,
-		Revision:   revision,
-		Raw:        json.RawMessage(`{"kind":"Kustomization"}`),
+		Kind:        "Kustomization",
+		APIVersion:  "kustomize.toolkit.fluxcd.io/v1",
+		Namespace:   "flux-system",
+		Name:        name,
+		Ready:       ready,
+		Reason:      reason,
+		Revision:    revision,
+		Raw:         json.RawMessage(`{"kind":"Kustomization"}`),
+		ContentHash: ready + "|" + reason + "|" + revision,
 	}
 }
 
@@ -164,5 +171,73 @@ func TestSyncUpsertHistoryAndPrune(t *testing.T) {
 	}
 	if len(notReady) != 0 {
 		t.Fatalf("expected no not-ready rows, got %d", len(notReady))
+	}
+}
+
+// TestSyncContentHashSkipsUnchangedRewrite asserts the write-hygiene contract:
+// an unchanged sweep leaves updated_at alone (no row/raw rewrite), while a
+// content change advances it. The central sync loop pulls on updated_at, so
+// this is what keeps idle resources from churning the fleet.
+func TestSyncContentHashSkipsUnchangedRewrite(t *testing.T) {
+	s, pool := newStore(t)
+	ctx := context.Background()
+
+	updatedAt := func() time.Time {
+		var ts time.Time
+		if err := pool.QueryRow(ctx,
+			"SELECT updated_at FROM flux_resource WHERE name = $1", "apps").Scan(&ts); err != nil {
+			t.Fatalf("query updated_at: %v", err)
+		}
+		return ts
+	}
+
+	if _, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyTrue, "OK", "sha-1")}); err != nil {
+		t.Fatalf("sync 1: %v", err)
+	}
+	first := updatedAt()
+
+	// Identical content => same content_hash => updated_at must not move.
+	if _, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyTrue, "OK", "sha-1")}); err != nil {
+		t.Fatalf("sync 2: %v", err)
+	}
+	if got := updatedAt(); !got.Equal(first) {
+		t.Fatalf("updated_at moved on an unchanged sweep: %v -> %v", first, got)
+	}
+
+	// A content change must advance updated_at.
+	if _, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyFalse, "Boom", "sha-2")}); err != nil {
+		t.Fatalf("sync 3: %v", err)
+	}
+	if got := updatedAt(); !got.After(first) {
+		t.Fatalf("updated_at did not advance on a content change: %v -> %v", first, got)
+	}
+}
+
+// TestMetaRecordedOnSync checks the meta row: InitMeta stamps schema/agent
+// version with no sweep time yet, and a sweep records last_sweep_at.
+func TestMetaRecordedOnSync(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+
+	m, err := s.GetMeta(ctx)
+	if err != nil {
+		t.Fatalf("get meta: %v", err)
+	}
+	if m.SchemaVersion != store.SchemaVersion || m.AgentVersion != "e2e" {
+		t.Fatalf("unexpected meta after init: %+v", m)
+	}
+	if !m.LastSweepAt.IsZero() {
+		t.Fatalf("expected zero last_sweep_at before any sweep, got %v", m.LastSweepAt)
+	}
+
+	if _, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyTrue, "OK", "sha-1")}); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	m, err = s.GetMeta(ctx)
+	if err != nil {
+		t.Fatalf("get meta after sync: %v", err)
+	}
+	if m.LastSweepAt.IsZero() {
+		t.Fatalf("expected last_sweep_at set after sweep")
 	}
 }

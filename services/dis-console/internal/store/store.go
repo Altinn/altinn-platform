@@ -51,6 +51,56 @@ func (s *Store) Migrate(ctx context.Context) error {
 	return nil
 }
 
+// SchemaVersion is the version of this tenant database's schema, stamped into
+// the meta row at startup. The central console reads it to stay tolerant of
+// agents rolling out across the fleet at different times.
+const SchemaVersion = 1
+
+// Meta is the single bookkeeping row each agent maintains in its tenant DB.
+type Meta struct {
+	SchemaVersion int
+	AgentVersion  string
+	LastSweepAt   time.Time
+}
+
+const initMetaStmt = `
+INSERT INTO meta (id, schema_version, agent_version)
+VALUES (true, $1, $2)
+ON CONFLICT (id) DO UPDATE SET
+    schema_version = EXCLUDED.schema_version,
+    agent_version  = EXCLUDED.agent_version`
+
+// InitMeta seeds (or refreshes) the singleton meta row with this agent's schema
+// version and build. It leaves last_sweep_at untouched. Call once at startup,
+// before the first sweep.
+func (s *Store) InitMeta(ctx context.Context, agentVersion string) error {
+	if _, err := s.pool.Exec(ctx, initMetaStmt, SchemaVersion, agentVersion); err != nil {
+		return fmt.Errorf("init meta: %w", err)
+	}
+	return nil
+}
+
+// touchMetaStmt advances last_sweep_at; run inside the Sync transaction so the
+// recorded time and the data it describes commit together.
+const touchMetaStmt = `UPDATE meta SET last_sweep_at = now()`
+
+const getMetaStmt = `SELECT schema_version, agent_version, last_sweep_at FROM meta WHERE id`
+
+// GetMeta returns the bookkeeping row. last_sweep_at is the zero time until the
+// first sweep commits.
+func (s *Store) GetMeta(ctx context.Context) (Meta, error) {
+	var m Meta
+	var lastSweep *time.Time
+	err := s.pool.QueryRow(ctx, getMetaStmt).Scan(&m.SchemaVersion, &m.AgentVersion, &lastSweep)
+	if err != nil {
+		return Meta{}, fmt.Errorf("get meta: %w", err)
+	}
+	if lastSweep != nil {
+		m.LastSweepAt = lastSweep.UTC()
+	}
+	return m, nil
+}
+
 // SyncStats reports what a Sync did.
 type SyncStats struct {
 	Upserted int   // rows seen this sweep
@@ -64,6 +114,13 @@ type SyncStats struct {
 // statement), so the comparison is against the previously stored values. The
 // command tag reflects the trailing INSERT, so RowsAffected() is 1 exactly when
 // a history event was written.
+//
+// raw and updated_at are rewritten only when content_hash changed: the small
+// projected columns are cheap to overwrite (and identical when unchanged), but
+// re-storing an unchanged raw blob would re-TOAST it and churn WAL on every
+// sweep across the whole fleet. Keeping r.raw on the unchanged branch reuses the
+// existing TOAST datum. last_seen is always bumped so prune can tell which rows
+// were seen this sweep.
 const upsertStmt = `
 WITH prev AS (
     SELECT ready, reason, revision
@@ -74,12 +131,12 @@ up AS (
     INSERT INTO flux_resource AS r (
         kind, api_version, namespace, name,
         ready, reason, message, revision, suspended,
-        generation, observed_generation, last_transition, raw,
+        generation, observed_generation, last_transition, raw, content_hash,
         first_seen, last_seen, updated_at
     ) VALUES (
         $1, $2, $3, $4,
         $5, $6, $7, $8, $9,
-        $10, $11, $12, $13,
+        $10, $11, $12, $13, $14,
         now(), now(), now()
     )
     ON CONFLICT (kind, namespace, name) DO UPDATE SET
@@ -92,12 +149,13 @@ up AS (
         generation          = EXCLUDED.generation,
         observed_generation = EXCLUDED.observed_generation,
         last_transition     = EXCLUDED.last_transition,
-        raw                 = EXCLUDED.raw,
+        raw                 = CASE
+            WHEN r.content_hash IS DISTINCT FROM EXCLUDED.content_hash
+            THEN EXCLUDED.raw ELSE r.raw END,
+        content_hash        = EXCLUDED.content_hash,
         last_seen           = now(),
         updated_at          = CASE
-            WHEN r.ready    IS DISTINCT FROM EXCLUDED.ready
-              OR r.reason   IS DISTINCT FROM EXCLUDED.reason
-              OR r.revision IS DISTINCT FROM EXCLUDED.revision
+            WHEN r.content_hash IS DISTINCT FROM EXCLUDED.content_hash
             THEN now() ELSE r.updated_at END
     RETURNING ready, reason, message, revision
 )
@@ -138,7 +196,7 @@ func (s *Store) Sync(ctx context.Context, resources []flux.Resource) (SyncStats,
 			batch.Queue(upsertStmt,
 				r.Kind, r.APIVersion, r.Namespace, r.Name,
 				r.Ready, r.Reason, r.Message, r.Revision, r.Suspended,
-				r.Generation, r.ObservedGeneration, r.LastTransition, []byte(raw),
+				r.Generation, r.ObservedGeneration, r.LastTransition, []byte(raw), r.ContentHash,
 			)
 		}
 		br := tx.SendBatch(ctx, batch)
@@ -170,6 +228,12 @@ func (s *Store) Sync(ctx context.Context, resources []flux.Resource) (SyncStats,
 		if _, err := tx.Exec(ctx, pruneEventsStmt); err != nil {
 			return stats, fmt.Errorf("prune events: %w", err)
 		}
+	}
+
+	// Record the sweep time atomically with its data. No-op until InitMeta has
+	// seeded the singleton row (the agent does so at startup, before sweeping).
+	if _, err := tx.Exec(ctx, touchMetaStmt); err != nil {
+		return stats, fmt.Errorf("update meta: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
