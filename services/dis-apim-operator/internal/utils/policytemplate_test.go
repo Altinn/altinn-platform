@@ -7,6 +7,10 @@ import (
 
 const ValidTemplate = "Hello, {{.Name}}!"
 
+const keyName = "Name"
+
+const valWorld = "World"
+
 var _ = Describe("GeneratePolicyFromTemplate", func() {
 
 	Context("with valid template and data", func() {
@@ -14,7 +18,7 @@ var _ = Describe("GeneratePolicyFromTemplate", func() {
 		It("should generate the correct policy", func() {
 			expected := "Hello, World!"
 			templateContent := ValidTemplate
-			data := map[string]string{"Name": "World"}
+			data := map[string]string{keyName: valWorld}
 			result, err := GeneratePolicyFromTemplate(templateContent, data)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(expected))
@@ -25,7 +29,7 @@ var _ = Describe("GeneratePolicyFromTemplate", func() {
 		It("should generate the correct policy", func() {
 			expected := `Hello, "World"!`
 			templateContent := `Hello, "{{.Name}}"!`
-			data := map[string]string{"Name": "World"}
+			data := map[string]string{keyName: valWorld}
 			result, err := GeneratePolicyFromTemplate(templateContent, data)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(expected))
@@ -36,7 +40,7 @@ var _ = Describe("GeneratePolicyFromTemplate", func() {
 		It("should generate the correct policy", func() {
 			expected := `Hello, "World"!`
 			templateContent := `Hello, "{{ .Name }}"!`
-			data := map[string]string{"Name": "World"}
+			data := map[string]string{keyName: valWorld}
 			result, err := GeneratePolicyFromTemplate(templateContent, data)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(expected))
@@ -68,7 +72,7 @@ var _ = Describe("GeneratePolicyFromTemplate", func() {
 		It("should return an error", func() {
 			expected := ""
 			templateContent := "Hello, {{.Name"
-			data := map[string]string{"Name": "World"}
+			data := map[string]string{keyName: valWorld}
 			result, err := GeneratePolicyFromTemplate(templateContent, data)
 			Expect(err).To(HaveOccurred())
 			Expect(result).To(Equal(expected))
@@ -79,7 +83,7 @@ var _ = Describe("GeneratePolicyFromTemplate", func() {
 		It("should return empty string", func() {
 			expected := ""
 			templateContent := ""
-			data := map[string]string{"Name": "World"}
+			data := map[string]string{keyName: valWorld}
 			result, err := GeneratePolicyFromTemplate(templateContent, data)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(expected))
