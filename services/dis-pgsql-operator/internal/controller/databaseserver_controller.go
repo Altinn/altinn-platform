@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
@@ -33,6 +34,15 @@ const (
 	databaseServerConditionReady = "Ready"
 	databaseServerReasonReady    = "Ready"
 	databaseServerReasonWaiting  = "Waiting"
+
+	// databaseServerReasonServerNameConflict marks a DatabaseServer whose Azure server
+	// name is already taken. Flexible Server names are globally unique, so this is a
+	// blocked state the author must resolve by choosing a unique DatabaseServer name.
+	databaseServerReasonServerNameConflict = "ServerNameConflict"
+
+	// azureReasonServerNameAlreadyExists is the reason ASO sets on the FlexibleServer's
+	// Ready condition when Azure rejects the create because the name is already in use.
+	azureReasonServerNameAlreadyExists = "ServerNameAlreadyExists"
 )
 
 // DatabaseServerReconciler reconciles the current DatabaseServer CRD as a PostgreSQL server.
@@ -228,6 +238,19 @@ func (r *DatabaseServerReconciler) reconcileCommonDatabaseServerResources(
 	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 ) (ctrl.Result, error) {
+	// Surface a blocked/failed FlexibleServer (e.g. a globally-taken server name) on the
+	// DatabaseServer before reconciling the server's child resources. The owned
+	// FlexibleServersConfiguration/administrator children only report a misleading
+	// "owner cannot be found" error while the server itself is the resource that failed,
+	// so checking the server first keeps the real cause visible. Skipped under az fakes,
+	// mirroring the asoResourcesReady check below.
+	if !r.Config.UseAzFakes {
+		blocked, result, err := r.surfaceBlockedFlexibleServer(ctx, logger, db)
+		if err != nil || blocked {
+			return result, err
+		}
+	}
+
 	if err := r.ensurePostgresExtensionSettings(ctx, logger, db); err != nil {
 		logger.Error(err, "failed to ensure PostgreSQL extension settings for database server")
 		return ctrl.Result{}, err
@@ -397,13 +420,120 @@ func (r *DatabaseServerReconciler) asoResourcesReady(
 func readyConditionInfo(
 	conds []asoconditions.Condition,
 ) (status metav1.ConditionStatus, reason, message string, ok bool) {
+	cond, found := findReadyCondition(conds)
+	if !found {
+		return "", "", "", false
+	}
+	return cond.Status, cond.Reason, cond.Message, true
+}
+
+// findReadyCondition returns the ASO Ready condition, if present.
+func findReadyCondition(conds []asoconditions.Condition) (asoconditions.Condition, bool) {
 	for i := range conds {
-		cond := conds[i]
-		if cond.Type == asoconditions.ConditionTypeReady {
-			return cond.Status, cond.Reason, cond.Message, true
+		if conds[i].Type == asoconditions.ConditionTypeReady {
+			return conds[i], true
 		}
 	}
-	return "", "", "", false
+	return asoconditions.Condition{}, false
+}
+
+// surfaceBlockedFlexibleServer inspects the owned FlexibleServer after it has been
+// ensured. When the server reports a non-transient Ready=False state (an actual Azure
+// failure such as ServerNameAlreadyExists, as opposed to the normal "Reconciling"
+// progress, which is also Ready=False but with Info severity), it records that failure on
+// the DatabaseServer Ready condition, clears any stale server-parameter errors, and asks
+// the caller to stop before the server's child resources are reconciled. It returns
+// blocked=false for the healthy/in-progress cases so reconciliation proceeds as usual.
+func (r *DatabaseServerReconciler) surfaceBlockedFlexibleServer(
+	ctx context.Context,
+	logger logr.Logger,
+	db *storagev1alpha1.DatabaseServer,
+) (bool, ctrl.Result, error) {
+	var server dbforpostgresqlv1.FlexibleServer
+	if err := r.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &server); err != nil {
+		if apierrors.IsNotFound(err) {
+			// Just created (or cache lag): nothing to surface yet.
+			return false, ctrl.Result{}, nil
+		}
+		return false, ctrl.Result{}, fmt.Errorf("get FlexibleServer %s/%s: %w", db.Namespace, db.Name, err)
+	}
+
+	cond, ok := findReadyCondition(server.Status.Conditions)
+	if !ok || cond.Status != metav1.ConditionFalse {
+		// No Ready condition yet, or it is True/Unknown: not a failure.
+		return false, ctrl.Result{}, nil
+	}
+	if cond.Severity == asoconditions.ConditionSeverityInfo || cond.Severity == asoconditions.ConditionSeverityNone {
+		// Ready=False at Info severity is the normal in-progress (Reconciling) state.
+		return false, ctrl.Result{}, nil
+	}
+
+	reason, message := describeBlockedFlexibleServer(db.Name, cond.Reason, cond.Message)
+	logger.Info("FlexibleServer reported a blocked state; surfacing it on the DatabaseServer and deferring child resources",
+		"server", db.Name,
+		"flexibleServerReason", cond.Reason,
+		"severity", string(cond.Severity),
+	)
+	if err := r.setDatabaseServerBlockedCondition(ctx, db, reason, message); err != nil {
+		return false, ctrl.Result{}, err
+	}
+
+	// Requeue: the block may clear once the conflicting name is freed.
+	return true, ctrl.Result{RequeueAfter: time.Minute}, nil
+}
+
+// describeBlockedFlexibleServer maps a FlexibleServer Ready=False reason/message to a
+// DatabaseServer condition reason/message, giving known-terminal Azure errors an
+// actionable explanation while passing other failures through unchanged.
+func describeBlockedFlexibleServer(serverName, asoReason, asoMessage string) (reason, message string) {
+	asoMessage = strings.TrimSpace(asoMessage)
+	switch asoReason {
+	case azureReasonServerNameAlreadyExists:
+		message = fmt.Sprintf(
+			"Azure PostgreSQL server name %q is already in use. Flexible Server names are globally unique, so choose a unique DatabaseServer name.",
+			serverName,
+		)
+		if asoMessage != "" {
+			message = fmt.Sprintf("%s Azure reported: %s", message, asoMessage)
+		}
+		return databaseServerReasonServerNameConflict, message
+	default:
+		if asoMessage == "" {
+			asoMessage = "FlexibleServer is not ready"
+		}
+		if asoReason == "" {
+			asoReason = databaseServerReasonWaiting
+		}
+		return asoReason, asoMessage
+	}
+}
+
+// setDatabaseServerBlockedCondition records a blocked Ready=False state and drops any
+// server-parameter errors/condition. While the server itself is blocked, those children
+// only echo the misleading "owner cannot be found" failure, so they are cleared in the
+// same status update to keep the real cause visible.
+func (r *DatabaseServerReconciler) setDatabaseServerBlockedCondition(
+	ctx context.Context,
+	db *storagev1alpha1.DatabaseServer,
+	reason, message string,
+) error {
+	previousStatus := db.Status.DeepCopy()
+
+	db.Status.ServerParameterErrors = nil
+	meta.RemoveStatusCondition(&db.Status.Conditions, serverParametersReadyConditionType)
+	meta.SetStatusCondition(&db.Status.Conditions, metav1.Condition{
+		Type:               databaseServerConditionReady,
+		Status:             metav1.ConditionFalse,
+		Reason:             reason,
+		Message:            message,
+		ObservedGeneration: db.Generation,
+	})
+
+	if apiequality.Semantic.DeepEqual(previousStatus, &db.Status) {
+		return nil
+	}
+
+	return r.Status().Update(ctx, db)
 }
 
 func (r *DatabaseServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
