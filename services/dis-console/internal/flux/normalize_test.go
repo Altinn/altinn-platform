@@ -105,3 +105,32 @@ func TestNormalizeHelmReleaseRevisionFromHistory(t *testing.T) {
 		t.Fatalf("expected Unknown ready when no condition, got %q", r.Ready)
 	}
 }
+
+func TestNormalizeOCIRepositoryRevisionFromArtifact(t *testing.T) {
+	u := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "source.toolkit.fluxcd.io/v1",
+		"kind":       "OCIRepository",
+		"metadata":   map[string]any{"namespace": "flux-system", "name": "podinfo"},
+		"spec":       map[string]any{"suspend": true},
+		"status": map[string]any{
+			"artifact": map[string]any{"revision": "latest@sha256:abc123"},
+			"conditions": []any{
+				map[string]any{"type": "Ready", "status": "True", "reason": "Succeeded"},
+			},
+		},
+	}}
+
+	r, err := normalize(u)
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if r.Revision != "latest@sha256:abc123" {
+		t.Fatalf("expected revision from artifact, got %q", r.Revision)
+	}
+	if r.Ready != ReadyTrue {
+		t.Fatalf("expected ready True, got %q", r.Ready)
+	}
+	if !r.Suspended {
+		t.Fatalf("expected suspended")
+	}
+}
