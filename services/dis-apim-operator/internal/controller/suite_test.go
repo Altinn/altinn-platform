@@ -110,7 +110,7 @@ var _ = BeforeSuite(func() {
 			SubscriptionId:  "fake-subscription-id",
 			ResourceGroup:   "fake-resource-group",
 			ApimServiceName: "fake-apim-service",
-			NamespaceSuffix: "test",
+			NamespaceSuffix: nsTest,
 		},
 		FactoryOptions: &arm.ClientOptions{
 			ClientOptions: azcore.ClientOptions{

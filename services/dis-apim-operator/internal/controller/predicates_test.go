@@ -10,6 +10,13 @@ import (
 	apimv1alpha1 "github.com/Altinn/altinn-platform/services/dis-apim-operator/api/v1alpha1"
 )
 
+const (
+	nsTest         = "test"
+	nsResourceTest = "resource-test"
+	nsResourceProd = "resource-prod"
+	nsTestProd     = "test-prod"
+)
+
 var _ = Describe("DefaultPredicate", func() {
 	var (
 		namespaceSuffix string
@@ -17,7 +24,7 @@ var _ = Describe("DefaultPredicate", func() {
 	)
 
 	BeforeEach(func() {
-		namespaceSuffix = "test"
+		namespaceSuffix = nsTest
 		pred = defaultPredicate(namespaceSuffix)
 	})
 
@@ -26,7 +33,7 @@ var _ = Describe("DefaultPredicate", func() {
 			createEvent := event.CreateEvent{
 				Object: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "resource-test",
+						Namespace: nsResourceTest,
 					},
 				},
 			}
@@ -37,7 +44,7 @@ var _ = Describe("DefaultPredicate", func() {
 			createEvent := event.CreateEvent{
 				Object: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "test",
+						Namespace: nsTest,
 					},
 				},
 			}
@@ -48,7 +55,7 @@ var _ = Describe("DefaultPredicate", func() {
 			createEvent := event.CreateEvent{
 				Object: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "resource-prod",
+						Namespace: nsResourceProd,
 					},
 				},
 			}
@@ -58,7 +65,7 @@ var _ = Describe("DefaultPredicate", func() {
 			createEvent := event.CreateEvent{
 				Object: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "test-prod",
+						Namespace: nsTestProd,
 					},
 				},
 			}
@@ -71,7 +78,7 @@ var _ = Describe("DefaultPredicate", func() {
 			deleteEvent := event.DeleteEvent{
 				Object: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "resource-test",
+						Namespace: nsResourceTest,
 					},
 				},
 			}
@@ -82,7 +89,7 @@ var _ = Describe("DefaultPredicate", func() {
 			deleteEvent := event.DeleteEvent{
 				Object: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "test",
+						Namespace: nsTest,
 					},
 				},
 			}
@@ -93,7 +100,7 @@ var _ = Describe("DefaultPredicate", func() {
 			deleteEvent := event.DeleteEvent{
 				Object: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "resource-prod",
+						Namespace: nsResourceProd,
 					},
 				},
 			}
@@ -103,7 +110,7 @@ var _ = Describe("DefaultPredicate", func() {
 			deleteEvent := event.DeleteEvent{
 				Object: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "test-prod",
+						Namespace: nsTestProd,
 					},
 				},
 			}
@@ -116,12 +123,12 @@ var _ = Describe("DefaultPredicate", func() {
 			updateEvent := event.UpdateEvent{
 				ObjectOld: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "resource-test",
+						Namespace: nsResourceTest,
 					},
 				},
 				ObjectNew: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "resource-test",
+						Namespace: nsResourceTest,
 					},
 				},
 			}
@@ -132,12 +139,12 @@ var _ = Describe("DefaultPredicate", func() {
 			updateEvent := event.UpdateEvent{
 				ObjectOld: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "test",
+						Namespace: nsTest,
 					},
 				},
 				ObjectNew: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "test",
+						Namespace: nsTest,
 					},
 				},
 			}
@@ -148,12 +155,12 @@ var _ = Describe("DefaultPredicate", func() {
 			updateEvent := event.UpdateEvent{
 				ObjectOld: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "resource-test",
+						Namespace: nsResourceTest,
 					},
 				},
 				ObjectNew: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "resource-prod",
+						Namespace: nsResourceProd,
 					},
 				},
 			}
@@ -164,12 +171,12 @@ var _ = Describe("DefaultPredicate", func() {
 			updateEvent := event.UpdateEvent{
 				ObjectOld: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "resource-test",
+						Namespace: nsResourceTest,
 					},
 				},
 				ObjectNew: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "test-prod",
+						Namespace: nsTestProd,
 					},
 				},
 			}
@@ -182,7 +189,7 @@ var _ = Describe("DefaultPredicate", func() {
 			genericEvent := event.GenericEvent{
 				Object: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "resource-test",
+						Namespace: nsResourceTest,
 					},
 				},
 			}
@@ -193,7 +200,7 @@ var _ = Describe("DefaultPredicate", func() {
 			genericEvent := event.GenericEvent{
 				Object: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "test",
+						Namespace: nsTest,
 					},
 				},
 			}
@@ -204,7 +211,7 @@ var _ = Describe("DefaultPredicate", func() {
 			genericEvent := event.GenericEvent{
 				Object: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "resource-prod",
+						Namespace: nsResourceProd,
 					},
 				},
 			}
@@ -215,7 +222,7 @@ var _ = Describe("DefaultPredicate", func() {
 			genericEvent := event.GenericEvent{
 				Object: &apimv1alpha1.Backend{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "test-prod",
+						Namespace: nsTestProd,
 					},
 				},
 			}
