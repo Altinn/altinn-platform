@@ -1,0 +1,74 @@
+name: Publish DIS Admin Syncroot Artifacts
+run-name: Publish DIS admin syncroot to ${{ inputs.environment }}
+
+env:
+  SYNCROOT_ARTIFACT_NAME: dis/syncroot-admin
+  TEMPLATE_ARTIFACT_NAME: dis/dis-console-tenant-db-template
+  APP_TEMPLATE_ARTIFACT_NAME: dis/dis-console-tenant-app-template
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target admin environment"
+        type: choice
+        required: true
+        options:
+          - test
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: dis-syncroot-admin-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  publish-admin-syncroot:
+    name: Publish admin syncroot artifacts
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Validate admin syncroot structure
+        # Local path (not the pinned published ref): this PR adds the `environments`
+        # input to verify-syncroot, so the workflow must run the in-tree version.
+        uses: ./actions/flux/verify-syncroot
+        with:
+          workdir: ./deploy/admin
+          environments: ${{ inputs.environment }}
+
+      - name: Build and push admin syncroot artifact
+        uses: Altinn/altinn-platform/actions/flux/build-push-image@e095eaa67ba630897e9b488a933c8ebb82b36732 # main
+        with:
+          image_name: ${{ env.SYNCROOT_ARTIFACT_NAME }}
+          tag: ${{ inputs.environment }}
+          workdir: ./deploy/admin
+          azure_subscription_id: ${{ secrets.DIS_SYNCROOT_AZURE_SUBSCRIPTION_ID }}
+          azure_app_id: ${{ secrets.DIS_SYNCROOT_AZURE_CLIENT_ID }}
+          azure_tenant_id: ${{ secrets.DIS_SYNCROOT_AZURE_TENANT_ID }}
+
+      - name: Build and push tenant DB template artifact
+        uses: Altinn/altinn-platform/actions/flux/build-push-image@e095eaa67ba630897e9b488a933c8ebb82b36732 # main
+        with:
+          image_name: ${{ env.TEMPLATE_ARTIFACT_NAME }}
+          tag: ${{ inputs.environment }}
+          workdir: ./deploy/templates/dis-console-tenant-db-template
+          azure_subscription_id: ${{ secrets.DIS_SYNCROOT_AZURE_SUBSCRIPTION_ID }}
+          azure_app_id: ${{ secrets.DIS_SYNCROOT_AZURE_CLIENT_ID }}
+          azure_tenant_id: ${{ secrets.DIS_SYNCROOT_AZURE_TENANT_ID }}
+
+      - name: Build and push tenant app template artifact
+        uses: Altinn/altinn-platform/actions/flux/build-push-image@e095eaa67ba630897e9b488a933c8ebb82b36732 # main
+        with:
+          image_name: ${{ env.APP_TEMPLATE_ARTIFACT_NAME }}
+          tag: ${{ inputs.environment }}
+          workdir: ./deploy/templates/dis-console-tenant-app-template
+          azure_subscription_id: ${{ secrets.DIS_SYNCROOT_AZURE_SUBSCRIPTION_ID }}
+          azure_app_id: ${{ secrets.DIS_SYNCROOT_AZURE_CLIENT_ID }}
+          azure_tenant_id: ${{ secrets.DIS_SYNCROOT_AZURE_TENANT_ID }}

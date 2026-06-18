@@ -59,7 +59,7 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
     name                 = "default"
     auto_scaling_enabled = true
     min_count            = 1
-    max_count            = 10
+    max_count            = 5
     vm_size              = "Standard_D4s_v6"
     upgrade_settings { # Adding these to keep plans clean
       drain_timeout_in_minutes      = 0

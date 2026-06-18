@@ -5,7 +5,10 @@ inputs:
   workdir:
     description: 'Folder containing the OCI context'
     required: true
-    type: string
+  environments:
+    description: 'Space-separated environment folder names to check. Defaults to the TE environments.'
+    required: false
+    default: 'at22 at23 at24 tt02 yt01 prod'
 
 runs:
   using: composite
@@ -14,10 +17,11 @@ runs:
       shell: bash
       env:
         WORKDIR: ${{ inputs.workdir }}
+        ENVIRONMENTS: ${{ inputs.environments }}
       run: |
         cd ${WORKDIR}
-        # Loop over a list of environment names and check that the kustomization.yaml file exists in each environment folder
-        environments=("at22" "at23" "at24" "tt02" "yt01" "prod")
+        # Loop over the configured environment names and check that the kustomization.yaml file exists in each environment folder
+        read -ra environments <<< "${ENVIRONMENTS}"
         for env in "${environments[@]}"; do
           if [ ! -f "./${env}/kustomization.yaml" ]; then
             echo "Error: kustomization.yaml not found in ./${env}/"
