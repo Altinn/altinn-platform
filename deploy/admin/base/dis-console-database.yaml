@@ -1,0 +1,15 @@
+apiVersion: storage.dis.altinn.cloud/v1alpha1
+kind: Database
+metadata:
+  name: dis-console-central
+  namespace: product-dis
+spec:
+  name: dis_console_central
+  server:
+    name: dis-console-central
+  access:
+    principals:
+      - role: Owner
+        identityRef:
+          name: dis-console
+  deletionPolicy: Retain
