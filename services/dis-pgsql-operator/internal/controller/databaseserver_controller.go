@@ -22,6 +22,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -43,6 +44,16 @@ const (
 	// azureReasonServerNameAlreadyExists is the reason ASO sets on the FlexibleServer's
 	// Ready condition when Azure rejects the create because the name is already in use.
 	azureReasonServerNameAlreadyExists = "ServerNameAlreadyExists"
+
+	// databaseServerFinalizer lets the controller order teardown of the owned network
+	// resources on deletion. The private DNS zone cannot be deleted by Azure while its
+	// virtual network links still exist, and the zone + links are sibling children of the
+	// DatabaseServer, so unordered garbage collection wedges the zone deletion.
+	databaseServerFinalizer = "storage.dis.altinn.cloud/databaseserver-finalizer"
+
+	// databaseServerDeleteRequeueInterval backstops the owned-resource delete watches
+	// while Azure tears the children down (deletion is not latency-sensitive).
+	databaseServerDeleteRequeueInterval = 15 * time.Second
 )
 
 // DatabaseServerReconciler reconciles the current DatabaseServer CRD as a PostgreSQL server.
@@ -101,6 +112,16 @@ func (r *DatabaseServerReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	if !db.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(ctx, logger, &db)
+	}
+
+	// Register the teardown finalizer before any owned resources are created, so deletion
+	// can always sequence the network children. Returning after adding it lets the update
+	// re-trigger reconciliation cleanly.
+	if controllerutil.AddFinalizer(&db, databaseServerFinalizer) {
+		if err := r.Update(ctx, &db); err != nil {
+			return ctrl.Result{}, fmt.Errorf("add finalizer to DatabaseServer %s/%s: %w", db.Namespace, db.Name, err)
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -108,6 +129,109 @@ func (r *DatabaseServerReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return r.reconcileSharedDatabaseServer(ctx, logger, &db)
 	}
 	return r.reconcileDedicatedDatabaseServer(ctx, logger, &db)
+}
+
+// reconcileDelete tears down the owned resources in an order Azure accepts, then removes
+// the finalizer. The private DNS zone can only be deleted once its virtual network links
+// (and the FlexibleServer that references it) are gone, so those are deleted first and the
+// zone is held back until they no longer exist. Resources without ordering constraints
+// (server parameters, the administrator) are left to garbage collection once the finalizer
+// is removed.
+func (r *DatabaseServerReconciler) reconcileDelete(
+	ctx context.Context,
+	logger logr.Logger,
+	db *storagev1alpha1.DatabaseServer,
+) (ctrl.Result, error) {
+	if !controllerutil.ContainsFinalizer(db, databaseServerFinalizer) {
+		return ctrl.Result{}, nil
+	}
+
+	// Only dedicated servers own a private DNS zone and its links; shared servers reference
+	// pre-existing external network resources that the operator must not delete.
+	if databaseServerMode(db) == storagev1alpha1.DatabaseServerModeDedicated {
+		pending, err := r.deleteDedicatedNetworkChildren(ctx, logger, db)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if pending {
+			return ctrl.Result{RequeueAfter: databaseServerDeleteRequeueInterval}, nil
+		}
+	}
+
+	controllerutil.RemoveFinalizer(db, databaseServerFinalizer)
+	if err := r.Update(ctx, db); err != nil {
+		return ctrl.Result{}, fmt.Errorf("remove finalizer from DatabaseServer %s/%s: %w", db.Namespace, db.Name, err)
+	}
+	return ctrl.Result{}, nil
+}
+
+// deleteDedicatedNetworkChildren deletes the FlexibleServer and virtual network links,
+// then the private DNS zone, never attempting the zone until the first wave is fully gone.
+// It returns pending=true while any of them still exist so the caller can requeue.
+func (r *DatabaseServerReconciler) deleteDedicatedNetworkChildren(
+	ctx context.Context,
+	logger logr.Logger,
+	db *storagev1alpha1.DatabaseServer,
+) (pending bool, err error) {
+	// First wave: the resources that block the private DNS zone deletion in Azure.
+	firstWaveGone := true
+	for _, child := range []struct {
+		name string
+		obj  client.Object
+	}{
+		{db.Name, &dbforpostgresqlv1.FlexibleServer{}},
+		{dbVNetLinkNameForDatabaseServer(db), &networkv1.PrivateDnsZonesVirtualNetworkLink{}},
+		{aksVNetLinkNameForDatabaseServer(db), &networkv1.PrivateDnsZonesVirtualNetworkLink{}},
+	} {
+		gone, err := r.ensureChildDeleted(ctx, logger, db.Namespace, child.name, child.obj)
+		if err != nil {
+			return false, err
+		}
+		if !gone {
+			firstWaveGone = false
+		}
+	}
+	if !firstWaveGone {
+		return true, nil
+	}
+
+	// Second wave: the zone, now that nothing nested under it remains.
+	zoneGone, err := r.ensureChildDeleted(ctx, logger, db.Namespace, zoneNameForDatabaseServer(db), &networkv1.PrivateDnsZone{})
+	if err != nil {
+		return false, err
+	}
+	return !zoneGone, nil
+}
+
+// ensureChildDeleted issues a delete for the named owned resource if it is still present
+// and not already being deleted, and reports whether it is fully gone.
+func (r *DatabaseServerReconciler) ensureChildDeleted(
+	ctx context.Context,
+	logger logr.Logger,
+	namespace, name string,
+	obj client.Object,
+) (gone bool, err error) {
+	key := types.NamespacedName{Name: name, Namespace: namespace}
+	if err := r.Get(ctx, key, obj); err != nil {
+		if apierrors.IsNotFound(err) {
+			return true, nil
+		}
+		return false, fmt.Errorf("get %T %s/%s for deletion: %w", obj, namespace, name, err)
+	}
+
+	if obj.GetDeletionTimestamp().IsZero() {
+		logger.Info("deleting owned resource during DatabaseServer teardown",
+			"kind", fmt.Sprintf("%T", obj),
+			"name", name,
+			"namespace", namespace,
+		)
+		if err := r.Delete(ctx, obj); err != nil && !apierrors.IsNotFound(err) {
+			return false, fmt.Errorf("delete %T %s/%s: %w", obj, namespace, name, err)
+		}
+	}
+
+	// Still present (deletion is in progress in Azure via ASO); not gone yet.
+	return false, nil
 }
 
 func databaseServerMode(db *storagev1alpha1.DatabaseServer) storagev1alpha1.DatabaseServerMode {

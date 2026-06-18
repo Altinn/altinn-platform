@@ -2354,6 +2354,105 @@ var _ = Describe("DatabaseServer controller", func() {
 			Should(Succeed())
 	})
 
+	It("tears down a dedicated server's private DNS zone only after its vnet links are gone", func() {
+		const holdFinalizer = "test.dis.altinn.cloud/hold-link"
+
+		db := newDedicatedDatabaseServer("my-app-db-teardown", adminAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+		))
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		zoneName := zoneNameForDatabaseServer(db)
+		dbLinkName := dbVNetLinkNameForDatabaseServer(db)
+		aksLinkName := aksVNetLinkNameForDatabaseServer(db)
+
+		// Wait until the operator has created the FlexibleServer, the private DNS zone and
+		// both vnet links, and has registered its teardown finalizer.
+		Eventually(func(g Gomega) {
+			var server dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &server)).To(Succeed())
+
+			var zone networkv1.PrivateDnsZone
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: zoneName, Namespace: db.Namespace}, &zone)).To(Succeed())
+
+			var dbLink networkv1.PrivateDnsZonesVirtualNetworkLink
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: dbLinkName, Namespace: db.Namespace}, &dbLink)).To(Succeed())
+
+			var aksLink networkv1.PrivateDnsZonesVirtualNetworkLink
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: aksLinkName, Namespace: db.Namespace}, &aksLink)).To(Succeed())
+
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
+			g.Expect(controllerutil.ContainsFinalizer(&updated, databaseServerFinalizer)).To(BeTrue())
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		// Hold the DB vnet link with an extra finalizer so its deletion cannot complete.
+		// This lets us observe that the zone is held back while a link still exists.
+		Eventually(func() error {
+			var dbLink networkv1.PrivateDnsZonesVirtualNetworkLink
+			if err := k8sClient.Get(ctx, types.NamespacedName{Name: dbLinkName, Namespace: db.Namespace}, &dbLink); err != nil {
+				return err
+			}
+			controllerutil.AddFinalizer(&dbLink, holdFinalizer)
+			return k8sClient.Update(ctx, &dbLink)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Expect(k8sClient.Delete(ctx, db)).To(Succeed())
+
+		// The FlexibleServer and the unheld link are deleted right away.
+		Eventually(func(g Gomega) {
+			var server dbforpostgresqlv1.FlexibleServer
+			g.Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &server))).To(BeTrue())
+
+			var aksLink networkv1.PrivateDnsZonesVirtualNetworkLink
+			g.Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: aksLinkName, Namespace: db.Namespace}, &aksLink))).To(BeTrue())
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		// While the held DB link is still being deleted, the zone must NOT be deleted, and
+		// the DatabaseServer must retain its finalizer.
+		Consistently(func(g Gomega) {
+			var zone networkv1.PrivateDnsZone
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: zoneName, Namespace: db.Namespace}, &zone)).To(Succeed())
+
+			var dbLink networkv1.PrivateDnsZonesVirtualNetworkLink
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: dbLinkName, Namespace: db.Namespace}, &dbLink)).To(Succeed())
+			g.Expect(dbLink.DeletionTimestamp.IsZero()).To(BeFalse())
+
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
+			g.Expect(controllerutil.ContainsFinalizer(&updated, databaseServerFinalizer)).To(BeTrue())
+		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		// Release the held link; teardown then completes cleanly.
+		Eventually(func() error {
+			var dbLink networkv1.PrivateDnsZonesVirtualNetworkLink
+			if err := k8sClient.Get(ctx, types.NamespacedName{Name: dbLinkName, Namespace: db.Namespace}, &dbLink); err != nil {
+				return err
+			}
+			controllerutil.RemoveFinalizer(&dbLink, holdFinalizer)
+			return k8sClient.Update(ctx, &dbLink)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func(g Gomega) {
+			var dbLink networkv1.PrivateDnsZonesVirtualNetworkLink
+			g.Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: dbLinkName, Namespace: db.Namespace}, &dbLink))).To(BeTrue())
+
+			var zone networkv1.PrivateDnsZone
+			g.Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: zoneName, Namespace: db.Namespace}, &zone))).To(BeTrue())
+
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated))).To(BeTrue())
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+	})
+
 	It("resolves ApplicationIdentity references for server admin", func() {
 		createApplicationIdentity(ctx, "adminidentity", adminManagedIdentity, adminManagedIdentityID)
 
