@@ -24,9 +24,8 @@ clusterEvents:
 nodeLogs:
   enabled: false
 
-podLogs:
+podLogsViaKubernetesApi:
   enabled: true
-  gatherMethod: kubernetesApi
   collector: alloy-logs
   namespaces: ${jsonencode(namespaces)}
   labels:
