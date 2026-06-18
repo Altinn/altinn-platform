@@ -55,8 +55,8 @@ yet); they are listed here as the target contract.
 
 | method | path | served by | description |
 |---|---|---|---|
-| GET | `/healthz` | agent + server | liveness (always 200) |
-| GET | `/readyz` | agent + server | 200 once the first sweep has been persisted **and** the database pings |
+| GET | `/healthz` | agent (server planned) | liveness (always 200) |
+| GET | `/readyz` | agent (server planned) | 200 once the first sweep has been persisted **and** the database pings |
 | GET | `/api/summary` | server | counts per kind by ready state (+ suspended) |
 | GET | `/api/resources?kind=&namespace=&ready=` | server | normalized rows; `ready=False` is the "what's broken" view |
 | GET | `/api/kustomizations` | server | alias for `?kind=Kustomization` |

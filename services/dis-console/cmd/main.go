@@ -164,7 +164,12 @@ func runAgent(args []string) {
 
 // runServer is a placeholder: the central sync loop, central schema, and fleet
 // API land in a later slice of the dis-console fleet work.
-func runServer(_ []string) {
+func runServer(args []string) {
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help" || args[0] == "help") {
+		fmt.Fprintln(os.Stderr, "dis-console server: not implemented yet — the central sync "+
+			"loop and fleet API land in a later slice. Use `dis-console agent`.")
+		return
+	}
 	log.Fatalln("dis-console server: not implemented yet — the central sync loop and " +
 		"fleet API land in a later slice; use `dis-console agent` for the per-cluster sweep.")
 }
