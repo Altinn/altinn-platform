@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Altinn/altinn-platform/services/dis-console/internal/api"
+	"github.com/Altinn/altinn-platform/services/dis-console/internal/central"
 	"github.com/Altinn/altinn-platform/services/dis-console/internal/dbauth"
 	"github.com/Altinn/altinn-platform/services/dis-console/internal/flux"
 	"github.com/Altinn/altinn-platform/services/dis-console/internal/health"
@@ -162,16 +164,75 @@ func runAgent(args []string) {
 	}
 }
 
-// runServer is a placeholder: the central sync loop, central schema, and fleet
-// API land in a later slice of the dis-console fleet work.
+// runServer runs the central read model: it migrates the central schema, then
+// incrementally syncs every tenant database on the shared server into it and
+// serves the fleet JSON API (plus health probes) reading only the central DB.
 func runServer(args []string) {
-	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help" || args[0] == "help") {
-		fmt.Fprintln(os.Stderr, "dis-console server: not implemented yet — the central sync "+
-			"loop and fleet API land in a later slice. Use `dis-console agent`.")
-		return
+	fs := flag.NewFlagSet("server", flag.ExitOnError)
+	httpAddr := fs.String("http-address", ":8080", "Address for the fleet API and health probes")
+	syncInterval := fs.Duration("sync-interval", 30*time.Second, "Tenant database sync interval (e.g. 30s, 1m)")
+	staleAfter := fs.Duration("stale-after", 2*time.Minute,
+		"Mark a cluster stale when its agent sweep / console sync is older than this")
+	dbURI := fs.String("db-uri", os.Getenv("DB_URI"),
+		"Central PostgreSQL connection URI without password (default from DB_URI env). "+
+			"Tenant databases are discovered on the same server.")
+	dbDisableEntra := fs.Bool("db-disable-entra", envBool("DB_DISABLE_ENTRA"),
+		"Skip Entra token auth; use PGPASSWORD or trust auth instead. For Kind/CI/local "+
+			"without Azure workload identity (default from DB_DISABLE_ENTRA env)")
+	_ = fs.Parse(args)
+
+	if *syncInterval <= 0 {
+		log.Fatalf("--sync-interval must be greater than 0, got %s", *syncInterval)
 	}
-	log.Fatalln("dis-console server: not implemented yet — the central sync loop and " +
-		"fleet API land in a later slice; use `dis-console agent` for the per-cluster sweep.")
+	if *dbURI == "" {
+		log.Fatalf("--db-uri (or DB_URI env) must be set")
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	var cred azcore.TokenCredential
+	if !*dbDisableEntra {
+		var err error
+		cred, err = azidentity.NewDefaultAzureCredential(nil)
+		if err != nil {
+			log.Fatalf("azure credential: %v", err)
+		}
+	}
+
+	pool, err := dbauth.NewPool(ctx, *dbURI, cred)
+	if err != nil {
+		log.Fatalf("db pool: %v", err)
+	}
+	cs := central.New(pool)
+	defer cs.Close()
+
+	migrateCtx, cancel := context.WithTimeout(ctx, migrateTimeout)
+	err = cs.Migrate(migrateCtx)
+	cancel()
+	if err != nil {
+		log.Fatalf("migrate central schema: %v", err)
+	}
+	log.Println("central schema migrated")
+
+	srv := api.NewServer(cs, *staleAfter)
+	httpServer := &http.Server{
+		Addr:              *httpAddr,
+		Handler:           srv.Routes(),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	go func() {
+		log.Printf("dis-console server: fleet API on %s", *httpAddr)
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("http server error: %v", err)
+		}
+	}()
+
+	// Run the sync loop until shutdown; readiness flips after the first cycle.
+	engine := central.NewEngine(cs, *dbURI, cred, *syncInterval)
+	engine.Run(ctx, srv.MarkSynced)
+
+	gracefulShutdown(httpServer)
 }
 
 func poll(ctx context.Context, client *flux.Client, st *store.Store, h *health.Server) {

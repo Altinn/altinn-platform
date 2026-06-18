@@ -10,35 +10,32 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Altinn/altinn-platform/services/dis-console/internal/central"
 	"github.com/Altinn/altinn-platform/services/dis-console/internal/flux"
 	"github.com/Altinn/altinn-platform/services/dis-console/internal/store"
 )
 
-// fakeStore is an in-memory Store implementing the same filtering/summary
-// semantics as the SQL store, so the HTTP handlers can be exercised without a
-// database.
+// fakeStore is an in-memory Store implementing the same cluster/kind/namespace/
+// ready filtering as the central SQL store, so the handlers run without a DB.
 type fakeStore struct {
-	resources []flux.Resource
-	history   map[string][]store.Event
+	resources []central.Resource
+	clusters  []central.Cluster
 	pingErr   error
 }
 
 func (f *fakeStore) Ping(context.Context) error { return f.pingErr }
 
-func (f *fakeStore) LastSweep(context.Context) (time.Time, error) {
-	return time.Unix(1700000000, 0).UTC(), nil
+func (f *fakeStore) Clusters(context.Context, time.Duration) ([]central.Cluster, error) {
+	return f.clusters, nil
 }
 
-// histKey mirrors the real store, which looks up history by the full resource
-// identity (kind + namespace + name), not just the name.
-func histKey(kind, namespace, name string) string {
-	return kind + "\x00" + namespace + "\x00" + name
-}
-
-func (f *fakeStore) Summary(context.Context) ([]store.KindCount, error) {
+func (f *fakeStore) Summary(_ context.Context, cluster string) ([]store.KindCount, error) {
 	byKind := map[string]*store.KindCount{}
 	order := []string{}
 	for _, r := range f.resources {
+		if cluster != "" && r.Cluster != cluster {
+			continue
+		}
 		c, ok := byKind[r.Kind]
 		if !ok {
 			c = &store.KindCount{Kind: r.Kind}
@@ -65,9 +62,12 @@ func (f *fakeStore) Summary(context.Context) ([]store.KindCount, error) {
 	return out, nil
 }
 
-func (f *fakeStore) List(_ context.Context, kind, namespace, ready string) ([]flux.Resource, error) {
-	out := []flux.Resource{}
+func (f *fakeStore) List(_ context.Context, cluster, kind, namespace, ready string) ([]central.Resource, error) {
+	out := []central.Resource{}
 	for _, r := range f.resources {
+		if cluster != "" && r.Cluster != cluster {
+			continue
+		}
 		if kind != "" && !strings.EqualFold(r.Kind, kind) {
 			continue
 		}
@@ -83,33 +83,43 @@ func (f *fakeStore) List(_ context.Context, kind, namespace, ready string) ([]fl
 	return out, nil
 }
 
-func (f *fakeStore) Get(_ context.Context, kind, namespace, name string) (*flux.Resource, []store.Event, error) {
+func (f *fakeStore) Get(_ context.Context, cluster, kind, namespace, name string) (*central.Resource, error) {
 	for i := range f.resources {
 		r := f.resources[i]
-		if strings.EqualFold(r.Kind, kind) && r.Namespace == namespace && r.Name == name {
-			return &r, f.history[histKey(r.Kind, r.Namespace, r.Name)], nil
+		if r.Cluster == cluster && strings.EqualFold(r.Kind, kind) && r.Namespace == namespace && r.Name == name {
+			return &r, nil
 		}
 	}
-	return nil, nil, store.ErrNotFound
+	return nil, central.ErrNotFound
+}
+
+func res(cluster, kind, namespace, name, ready, reason string, suspended bool) central.Resource {
+	return central.Resource{
+		Cluster: cluster,
+		Resource: flux.Resource{
+			Kind: kind, Namespace: namespace, Name: name, Ready: ready, Reason: reason, Suspended: suspended,
+		},
+	}
 }
 
 func testServer() *Server {
 	s := NewServer(&fakeStore{
-		resources: []flux.Resource{
-			{Kind: "Kustomization", Namespace: "flux-system", Name: "apps", Ready: flux.ReadyTrue},
-			{Kind: "Kustomization", Namespace: "apps", Name: "broken", Ready: flux.ReadyFalse, Reason: "ReconciliationFailed"},
-			{Kind: "HelmRelease", Namespace: "apps", Name: "chart", Ready: flux.ReadyUnknown, Suspended: true},
+		resources: []central.Resource{
+			res("ttd_at23", "Kustomization", "flux-system", "apps", flux.ReadyTrue, "", false),
+			res("ttd_at23", "Kustomization", "apps", "broken", flux.ReadyFalse, "ReconciliationFailed", false),
+			res("skd_at23", "HelmRelease", "apps", "chart", flux.ReadyUnknown, "", true),
 		},
-		history: map[string][]store.Event{
-			histKey("Kustomization", "apps", "broken"): {{Ready: flux.ReadyFalse, Reason: "ReconciliationFailed", ObservedAt: time.Now()}},
+		clusters: []central.Cluster{
+			{Cluster: "ttd_at23", Environment: "at23", ResourceCount: 2, Stale: false},
+			{Cluster: "skd_at23", Environment: "at23", ResourceCount: 1, Stale: true},
 		},
-	})
+	}, time.Minute)
 	s.MarkSynced()
 	return s
 }
 
 func TestReadyzBeforeSync(t *testing.T) {
-	s := NewServer(&fakeStore{})
+	s := NewServer(&fakeStore{}, time.Minute)
 	rec := httptest.NewRecorder()
 	s.Routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
 	if rec.Code != http.StatusServiceUnavailable {
@@ -118,7 +128,7 @@ func TestReadyzBeforeSync(t *testing.T) {
 }
 
 func TestReadyzAfterSyncPingFails(t *testing.T) {
-	s := NewServer(&fakeStore{pingErr: errors.New("db down")})
+	s := NewServer(&fakeStore{pingErr: errors.New("db down")}, time.Minute)
 	s.MarkSynced()
 	rec := httptest.NewRecorder()
 	s.Routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
@@ -127,13 +137,45 @@ func TestReadyzAfterSyncPingFails(t *testing.T) {
 	}
 }
 
+func TestClusters(t *testing.T) {
+	s := testServer()
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/clusters", nil))
+	var resp clustersResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Count != 2 {
+		t.Fatalf("expected 2 clusters, got %d", resp.Count)
+	}
+	var stale int
+	for _, c := range resp.Clusters {
+		if c.Stale {
+			stale++
+		}
+	}
+	if stale != 1 {
+		t.Fatalf("expected 1 stale cluster, got %d", stale)
+	}
+}
+
+func TestResourcesClusterFilter(t *testing.T) {
+	s := testServer()
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/resources?cluster=skd_at23", nil))
+	var resp listResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Count != 1 || resp.Resources[0].Cluster != "skd_at23" {
+		t.Fatalf("unexpected cluster filter result: %+v", resp)
+	}
+}
+
 func TestResourcesReadyFalseFilter(t *testing.T) {
 	s := testServer()
 	rec := httptest.NewRecorder()
 	s.Routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/resources?ready=False", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status: %d", rec.Code)
-	}
 	var resp listResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -165,31 +207,32 @@ func TestSummaryCounts(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 	if resp.Total != 3 {
-		t.Fatalf("expected total 3, got %d", resp.Total)
+		t.Fatalf("expected total 3 across the fleet, got %d", resp.Total)
 	}
-	var ks *kindSummary
-	for i := range resp.Kinds {
-		if resp.Kinds[i].Kind == "Kustomization" {
-			ks = &resp.Kinds[i]
-		}
-	}
-	if ks == nil || ks.Ready != 1 || ks.NotReady != 1 {
-		t.Fatalf("unexpected kustomization summary: %+v", ks)
-	}
-}
 
-func TestResourceDetailWithHistory(t *testing.T) {
-	s := testServer()
-	rec := httptest.NewRecorder()
-	s.Routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/resources/Kustomization/apps/broken", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status: %d", rec.Code)
-	}
-	var resp detailResponse
+	// Scoped to one cluster.
+	rec = httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/summary?cluster=ttd_at23", nil))
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if resp.Name != "broken" || len(resp.History) != 1 {
+	if resp.Cluster != "ttd_at23" || resp.Total != 2 {
+		t.Fatalf("unexpected per-cluster summary: %+v", resp)
+	}
+}
+
+func TestResourceDetail(t *testing.T) {
+	s := testServer()
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/resources/ttd_at23/Kustomization/apps/broken", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: %d", rec.Code)
+	}
+	var resp central.Resource
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Name != "broken" || resp.Cluster != "ttd_at23" {
 		t.Fatalf("unexpected detail: %+v", resp)
 	}
 }
@@ -197,7 +240,7 @@ func TestResourceDetailWithHistory(t *testing.T) {
 func TestResourceDetailNotFound(t *testing.T) {
 	s := testServer()
 	rec := httptest.NewRecorder()
-	s.Routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/resources/Kustomization/apps/missing", nil))
+	s.Routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/resources/ttd_at23/Kustomization/apps/missing", nil))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rec.Code)
 	}

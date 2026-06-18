@@ -15,9 +15,10 @@ to cover other DIS state later.
 >   and persists a normalized snapshot (plus a `flux_status_event` history table)
 >   into that cluster's own tenant PostgreSQL database. It exposes only health
 >   probes.
-> - `dis-console server` runs centrally: it syncs the tenant databases into a
->   central read model and serves the fleet JSON API below. **Not built yet** —
->   it's a placeholder; the endpoints table is the target contract.
+> - `dis-console server` runs centrally: it incrementally syncs the tenant
+>   databases into a central read model and serves the fleet JSON API below over
+>   it (`/api/clusters`, `?cluster=` filters, staleness). Status `history` in the
+>   detail endpoint is the one piece still pending.
 
 ## What it reads
 
@@ -49,19 +50,21 @@ structs, never the framework.
 
 ## Endpoints
 
-The `agent` serves only `/healthz` and `/readyz`. The `/api/*` endpoints are the
-**fleet API** the `server` will serve over the central read model (not built
-yet); they are listed here as the target contract.
+Both `agent` and `server` serve `/healthz` and `/readyz`. The `/api/*` endpoints
+are the **fleet API** the `server` serves over the central read model; every
+list/summary endpoint takes an optional `?cluster=` filter. (Status `history` in
+the detail endpoint is not populated yet.)
 
 | method | path | served by | description |
 |---|---|---|---|
-| GET | `/healthz` | agent (server planned) | liveness (always 200) |
-| GET | `/readyz` | agent (server planned) | 200 once the first sweep has been persisted **and** the database pings |
-| GET | `/api/summary` | server | counts per kind by ready state (+ suspended) |
-| GET | `/api/resources?kind=&namespace=&ready=` | server | normalized rows; `ready=False` is the "what's broken" view |
-| GET | `/api/kustomizations` | server | alias for `?kind=Kustomization` |
-| GET | `/api/helmreleases` | server | alias for `?kind=HelmRelease` |
-| GET | `/api/resources/{kind}/{namespace}/{name}` | server | single row incl. the full `raw` object + recent status `history` |
+| GET | `/healthz` | agent + server | liveness (always 200) |
+| GET | `/readyz` | agent + server | 200 once the first sweep (agent) / sync cycle (server) completes **and** the database pings |
+| GET | `/api/clusters` | server | every synced cluster + sweep/sync times, counts, and a `stale` flag |
+| GET | `/api/summary?cluster=` | server | counts per kind by ready state (+ suspended); fleet-wide or one cluster |
+| GET | `/api/resources?cluster=&kind=&namespace=&ready=` | server | normalized rows; `ready=False` is the "what's broken" view |
+| GET | `/api/kustomizations?cluster=` | server | alias for `?kind=Kustomization` |
+| GET | `/api/helmreleases?cluster=` | server | alias for `?kind=HelmRelease` |
+| GET | `/api/resources/{cluster}/{kind}/{namespace}/{name}` | server | single row incl. the full `raw` object (status `history` pending) |
 
 ## Database & auth
 
