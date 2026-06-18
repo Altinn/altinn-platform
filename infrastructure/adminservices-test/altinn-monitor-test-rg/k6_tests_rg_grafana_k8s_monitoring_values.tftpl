@@ -4,7 +4,7 @@ cluster:
   name: "${cluster_name}"
 
 destinations:
-  - name: loki
+  loki:
     type: loki
     url: http://loki-loki-distributed-gateway.monitoring.svc.cluster.local/loki/api/v1/push
     auth:
