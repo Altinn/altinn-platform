@@ -5,9 +5,10 @@ dis-console is a small Go service (plain `net/http`) with two subcommands:
 - `dis-console agent` — runs per cluster: reads Flux custom resources across all
   namespaces and persists a normalized snapshot into that cluster's own tenant
   PostgreSQL database. Exposes only `/healthz` and `/readyz` (no JSON API).
-- `dis-console server` — runs centrally: syncs the tenant databases into a
-  central read model and serves the fleet JSON API. Placeholder for now; the
-  central sync loop and API land in a later slice (it `log.Fatalln`s if invoked).
+- `dis-console server` — runs centrally: migrates the central read model,
+  incrementally syncs every tenant database on the shared server into it, and
+  serves the fleet JSON API over it (`/api/clusters`, `?cluster=` filters,
+  staleness) plus `/healthz` + `/readyz`.
 
 It is NOT a kubebuilder operator: no controllers, no CRDs, and no
 controller-gen/envtest toolchain. (controller-runtime is present only as an
@@ -63,10 +64,9 @@ CI). This is the dis-console analogue of the operators' `test-e2e-kind-ci` job.
 Do not claim checks passed unless you actually ran them.
 
 ## Layout
-- `cmd/main.go` — subcommand dispatch (`agent`, `server`). `agent` owns the
-  poller ticker, DB wiring, and the agent flags (`--http-address`,
-  `--poll-interval`, `--local`, `--db-uri`, `--db-disable-entra`); `server` is a
-  placeholder.
+- `cmd/main.go` — subcommand dispatch. `agent` runs the per-cluster sweep loop
+  (health probes only); `server` migrates the central schema, runs the tenant
+  sync loop, and serves the fleet API. Each wires its own DB pool and flags.
 - `internal/flux` — version-agnostic dynamic-client reader; `normalize.go`
   decodes the projected status into the typed Flux `api` structs (kustomize/helm/
   source `api` + `pkg/apis/meta`) via runtime conversion, while keeping the full
@@ -74,12 +74,18 @@ Do not claim checks passed unless you actually ran them.
   `resourceVersion`), computes the `content_hash`, and caps `raw` at `MaxRawBytes`.
 - `internal/dbauth` — pgxpool builder; Entra-token `BeforeConnect` hook in the
   cluster, PGPASSWORD/trust fallback when Entra is disabled (Kind/CI/local).
-- `internal/store` — pgxpool store: embedded `schema.sql`, `Migrate`, `Sync`
-  (content-hash-gated upsert + `flux_status_event` history + prune, touches the
-  `meta` row), the `meta` bookkeeping table (`InitMeta`/`GetMeta`,
-  `SchemaVersion`), and summary/list/get queries.
+- `internal/store` — tenant pgxpool store: embedded `schema.sql`, `Migrate`,
+  `Sync` (content-hash-gated upsert + `flux_status_event` history + prune,
+  touches the `meta` row), the `meta` bookkeeping table (`InitMeta`/`GetMeta`,
+  `SchemaVersion`), and the server-side tenant readers (`ChangedSince`/`Keys`).
+- `internal/central` — the server's central read model: cluster-keyed
+  `schema.sql`, `Apply` (per-cluster upsert + prune + `cluster_report` in one
+  tx), tenant `Discover`, the sync `Engine` (pulls each tenant incrementally via
+  `updated_at > cursor`), and the fleet-API read methods (`Clusters` with
+  staleness, `Summary`/`List`/`Get`).
 - `internal/health` — `/healthz` + `/readyz` handlers used by the agent.
-- `internal/api` — `net/http` mux + JSON handlers serving from the store; for
-  the server subcommand (over the central read model), not yet wired.
-- `test/e2e` — `e2e`-tagged store test run against Kind Postgres.
+- `internal/api` — the fleet API: `net/http` mux + JSON handlers reading the
+  central store (`/api/clusters`, `?cluster=` filters, detail by cluster), wired
+  by `server`.
+- `test/e2e` — `e2e`-tagged store + central tests run against Kind Postgres.
 - `config/kind/postgres.yaml` — trust-auth Postgres for the e2e.

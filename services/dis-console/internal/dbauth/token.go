@@ -36,6 +36,29 @@ const maxConnLifetime = 30 * time.Minute
 // workload identity exists): the connection uses PGPASSWORD if set, otherwise
 // no password (e.g. a trust-auth Postgres).
 func NewPool(ctx context.Context, dbURI string, cred azcore.TokenCredential) (*pgxpool.Pool, error) {
+	cfg, err := configFor(dbURI, cred)
+	if err != nil {
+		return nil, err
+	}
+	return newPool(ctx, cfg)
+}
+
+// NewPoolForDatabase builds a pool to a sibling database on the same server as
+// baseURI — same host, user, sslmode and auth — overriding only the database
+// name. The server uses this to reach each tenant database (dis_console_*) on
+// the shared server it also hosts its own central database on.
+func NewPoolForDatabase(ctx context.Context, baseURI, database string, cred azcore.TokenCredential) (*pgxpool.Pool, error) {
+	cfg, err := configFor(baseURI, cred)
+	if err != nil {
+		return nil, err
+	}
+	cfg.ConnConfig.Database = database
+	return newPool(ctx, cfg)
+}
+
+// configFor parses dbURI and wires the auth: an Entra-token BeforeConnect hook
+// when cred is set, otherwise PGPASSWORD (or no password) for Kind/CI/local.
+func configFor(dbURI string, cred azcore.TokenCredential) (*pgxpool.Config, error) {
 	cfg, err := pgxpool.ParseConfig(dbURI)
 	if err != nil {
 		return nil, fmt.Errorf("parse db uri: %w", err)
@@ -54,7 +77,10 @@ func NewPool(ctx context.Context, dbURI string, cred azcore.TokenCredential) (*p
 	} else if pw := os.Getenv("PGPASSWORD"); pw != "" {
 		cfg.ConnConfig.Password = pw
 	}
+	return cfg, nil
+}
 
+func newPool(ctx context.Context, cfg *pgxpool.Config) (*pgxpool.Pool, error) {
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("create connection pool: %w", err)

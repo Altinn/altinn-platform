@@ -400,3 +400,80 @@ func (s *Store) Get(ctx context.Context, kind, namespace, name string) (*flux.Re
 	}
 	return &r, events, nil
 }
+
+// ResourceKey identifies a stored resource. The server uses the full key set to
+// reconcile a tenant's current resources against the central mirror (pruning
+// the ones that disappeared).
+type ResourceKey struct {
+	Kind      string
+	Namespace string
+	Name      string
+}
+
+// ChangedResource is a resource row plus its updated_at, so the server can
+// advance its per-cluster sync cursor to the newest row it pulled.
+type ChangedResource struct {
+	flux.Resource
+	UpdatedAt time.Time
+}
+
+const changedSinceStmt = `
+SELECT kind, api_version, namespace, name, ready, reason, message, revision,
+       suspended, generation, observed_generation, last_transition, raw, content_hash, updated_at
+FROM flux_resource
+WHERE updated_at > $1
+ORDER BY updated_at`
+
+// ChangedSince returns the resources whose content changed after cursor (the
+// server's per-cluster high-water), including the raw payload. Because the
+// agent only advances updated_at on a real content change, an idle cluster
+// returns no rows and transfers no payloads.
+func (s *Store) ChangedSince(ctx context.Context, cursor time.Time) ([]ChangedResource, error) {
+	rows, err := s.pool.Query(ctx, changedSinceStmt, cursor)
+	if err != nil {
+		return nil, fmt.Errorf("changed-since query: %w", err)
+	}
+	defer rows.Close()
+
+	out := []ChangedResource{}
+	for rows.Next() {
+		var c ChangedResource
+		var raw []byte
+		var hash *string
+		if err := rows.Scan(
+			&c.Kind, &c.APIVersion, &c.Namespace, &c.Name, &c.Ready, &c.Reason,
+			&c.Message, &c.Revision, &c.Suspended, &c.Generation,
+			&c.ObservedGeneration, &c.LastTransition, &raw, &hash, &c.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan changed row: %w", err)
+		}
+		c.Raw = raw
+		if hash != nil {
+			c.ContentHash = *hash
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+const keysStmt = `SELECT kind, namespace, name FROM flux_resource`
+
+// Keys returns the identity of every resource currently stored, so the server
+// can prune central rows for resources that no longer exist in the tenant.
+func (s *Store) Keys(ctx context.Context) ([]ResourceKey, error) {
+	rows, err := s.pool.Query(ctx, keysStmt)
+	if err != nil {
+		return nil, fmt.Errorf("keys query: %w", err)
+	}
+	defer rows.Close()
+
+	out := []ResourceKey{}
+	for rows.Next() {
+		var k ResourceKey
+		if err := rows.Scan(&k.Kind, &k.Namespace, &k.Name); err != nil {
+			return nil, fmt.Errorf("scan key: %w", err)
+		}
+		out = append(out, k)
+	}
+	return out, rows.Err()
+}
