@@ -99,7 +99,9 @@ type ClusterState struct {
 	Environment   string
 	Changed       []store.ChangedResource // rows to upsert (content changed since the cursor)
 	Keys          []store.ResourceKey     // the tenant's full current key set (prune basis)
-	Cursor        time.Time               // new high-water
+	Cursor        time.Time               // new resource high-water
+	Events        []store.HistoryEvent    // status events newer than the event cursor (append-only copy)
+	EventCursor   int64                   // new event high-water (largest tenant event id copied)
 	SchemaVersion int
 	AgentVersion  string
 	LastSweepAt   time.Time // agent's last sweep (data freshness), from tenant meta
@@ -145,16 +147,35 @@ WHERE c.cluster = $1
 
 const reportStmt = `
 INSERT INTO cluster_report (
-    cluster, environment, sync_cursor, last_synced_at, last_sweep_at, agent_version, schema_version, resource_count
-) VALUES ($1, $2, $3, now(), $4, $5, $6, $7)
+    cluster, environment, sync_cursor, event_cursor,
+    last_synced_at, last_sweep_at, agent_version, schema_version, resource_count
+) VALUES ($1, $2, $3, $4, now(), $5, $6, $7, $8)
 ON CONFLICT (cluster) DO UPDATE SET
     environment    = EXCLUDED.environment,
     sync_cursor    = EXCLUDED.sync_cursor,
+    event_cursor   = EXCLUDED.event_cursor,
     last_synced_at = now(),
     last_sweep_at  = EXCLUDED.last_sweep_at,
     agent_version  = EXCLUDED.agent_version,
     schema_version = EXCLUDED.schema_version,
     resource_count = EXCLUDED.resource_count`
+
+const eventInsertStmt = `
+INSERT INTO flux_status_event (
+    cluster, tenant_id, kind, namespace, name, ready, reason, message, revision, observed_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+ON CONFLICT (cluster, tenant_id) DO NOTHING`
+
+// pruneEventsStmt removes a cluster's history rows whose resource no longer
+// exists in the central mirror. Run only after the resource prune removed rows.
+const pruneEventsStmt = `
+DELETE FROM flux_status_event e
+WHERE e.cluster = $1
+  AND NOT EXISTS (
+    SELECT 1 FROM flux_resource r
+    WHERE r.cluster = e.cluster AND r.kind = e.kind
+      AND r.namespace = e.namespace AND r.name = e.name
+  )`
 
 // Apply mirrors one cluster's state into the central DB in a single transaction
 // — upsert the changed rows, prune the ones that disappeared, and record the
@@ -193,9 +214,38 @@ func (s *Store) Apply(ctx context.Context, st ClusterState) error {
 		}
 	}
 
+	if len(st.Events) > 0 {
+		batch := &pgx.Batch{}
+		for i := range st.Events {
+			e := &st.Events[i]
+			batch.Queue(eventInsertStmt,
+				st.Cluster, e.ID, e.Kind, e.Namespace, e.Name,
+				e.Ready, e.Reason, e.Message, e.Revision, e.ObservedAt,
+			)
+		}
+		br := tx.SendBatch(ctx, batch)
+		for range st.Events {
+			if _, err := br.Exec(); err != nil {
+				_ = br.Close()
+				return fmt.Errorf("copy events cluster %s: %w", st.Cluster, err)
+			}
+		}
+		if err := br.Close(); err != nil {
+			return fmt.Errorf("close event batch: %w", err)
+		}
+	}
+
 	kinds, namespaces, names := splitKeys(st.Keys)
-	if _, err := tx.Exec(ctx, pruneStmt, st.Cluster, kinds, namespaces, names); err != nil {
+	pruned, err := tx.Exec(ctx, pruneStmt, st.Cluster, kinds, namespaces, names)
+	if err != nil {
 		return fmt.Errorf("prune cluster %s: %w", st.Cluster, err)
+	}
+	// Drop history for resources that disappeared, mirroring the resource prune
+	// so orphaned events don't accumulate — only when the prune removed rows.
+	if pruned.RowsAffected() > 0 {
+		if _, err := tx.Exec(ctx, pruneEventsStmt, st.Cluster); err != nil {
+			return fmt.Errorf("prune events cluster %s: %w", st.Cluster, err)
+		}
 	}
 
 	var cursor, lastSweep *time.Time
@@ -208,7 +258,7 @@ func (s *Store) Apply(ctx context.Context, st ClusterState) error {
 		lastSweep = &ls
 	}
 	if _, err := tx.Exec(ctx, reportStmt,
-		st.Cluster, st.Environment, cursor, lastSweep, st.AgentVersion, st.SchemaVersion, len(st.Keys),
+		st.Cluster, st.Environment, cursor, st.EventCursor, lastSweep, st.AgentVersion, st.SchemaVersion, len(st.Keys),
 	); err != nil {
 		return fmt.Errorf("cluster_report %s: %w", st.Cluster, err)
 	}
@@ -256,6 +306,18 @@ func advanceCursor(old time.Time, changed []store.ChangedResource) time.Time {
 	for i := range changed {
 		if changed[i].UpdatedAt.After(next) {
 			next = changed[i].UpdatedAt
+		}
+	}
+	return next
+}
+
+// advanceEventCursor returns the new event high-water: the largest tenant event
+// id among the copied events, or the old cursor when none (never regresses).
+func advanceEventCursor(old int64, events []store.HistoryEvent) int64 {
+	next := old
+	for i := range events {
+		if events[i].ID > next {
+			next = events[i].ID
 		}
 	}
 	return next
@@ -415,4 +477,50 @@ func (s *Store) Get(ctx context.Context, cluster, kind, namespace, name string) 
 	}
 	r.Raw = raw
 	return &r, nil
+}
+
+const eventCursorStmt = `SELECT event_cursor FROM cluster_report WHERE cluster = $1`
+
+// EventCursor returns a cluster's event high-water — the largest tenant event
+// id copied so far. Zero means none copied yet (or the cluster is unknown).
+func (s *Store) EventCursor(ctx context.Context, cluster string) (int64, error) {
+	var c int64
+	err := s.pool.QueryRow(ctx, eventCursorStmt, cluster).Scan(&c)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("event cursor query: %w", err)
+	}
+	return c, nil
+}
+
+// historyLimit caps how many recent status events the detail endpoint returns.
+const historyLimit = 50
+
+const historyStmt = `
+SELECT ready, reason, revision, observed_at
+FROM flux_status_event
+WHERE cluster = $1 AND lower(kind) = lower($2) AND namespace = $3 AND name = $4
+ORDER BY observed_at DESC, tenant_id DESC
+LIMIT $5`
+
+// History returns a resource's recent status transitions in this cluster,
+// newest first, capped at historyLimit. An unknown resource yields no rows.
+func (s *Store) History(ctx context.Context, cluster, kind, namespace, name string) ([]store.Event, error) {
+	rows, err := s.pool.Query(ctx, historyStmt, cluster, kind, namespace, name, historyLimit)
+	if err != nil {
+		return nil, fmt.Errorf("history query: %w", err)
+	}
+	defer rows.Close()
+
+	out := []store.Event{}
+	for rows.Next() {
+		var e store.Event
+		if err := rows.Scan(&e.Ready, &e.Reason, &e.Revision, &e.ObservedAt); err != nil {
+			return nil, fmt.Errorf("scan event: %w", err)
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
 }

@@ -118,6 +118,14 @@ func (e *Engine) syncCluster(ctx context.Context, dbName string) error {
 	if err != nil {
 		return err
 	}
+	eventCursor, err := e.central.EventCursor(ctx, cluster)
+	if err != nil {
+		return err
+	}
+	events, err := ts.EventsSince(ctx, eventCursor)
+	if err != nil {
+		return err
+	}
 
 	return e.central.Apply(ctx, ClusterState{
 		Cluster:       cluster,
@@ -125,6 +133,8 @@ func (e *Engine) syncCluster(ctx context.Context, dbName string) error {
 		Changed:       changed,
 		Keys:          keys,
 		Cursor:        advanceCursor(cursor, changed),
+		Events:        events,
+		EventCursor:   advanceEventCursor(eventCursor, events),
 		SchemaVersion: meta.SchemaVersion,
 		AgentVersion:  meta.AgentVersion,
 		LastSweepAt:   meta.LastSweepAt,

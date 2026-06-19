@@ -27,6 +27,7 @@ type Store interface {
 	Summary(ctx context.Context, cluster string) ([]store.KindCount, error)
 	List(ctx context.Context, cluster, kind, namespace, ready string) ([]central.Resource, error)
 	Get(ctx context.Context, cluster, kind, namespace, name string) (*central.Resource, error)
+	History(ctx context.Context, cluster, kind, namespace, name string) ([]store.Event, error)
 	Ping(ctx context.Context) error
 }
 
@@ -164,9 +165,17 @@ func (s *Server) writeFiltered(w http.ResponseWriter, r *http.Request, cluster, 
 	writeJSON(w, http.StatusOK, listResponse{Count: len(rows), Resources: rows})
 }
 
+// resourceDetail is the detail-endpoint payload: the resource (flattened) plus
+// its recent status history, newest first.
+type resourceDetail struct {
+	*central.Resource
+	History []store.Event `json:"history"`
+}
+
 func (s *Server) handleResourceDetail(w http.ResponseWriter, r *http.Request) {
+	cluster := r.PathValue("cluster")
 	res, err := s.store.Get(r.Context(),
-		r.PathValue("cluster"), r.PathValue("kind"), r.PathValue("namespace"), r.PathValue("name"))
+		cluster, r.PathValue("kind"), r.PathValue("namespace"), r.PathValue("name"))
 	if errors.Is(err, central.ErrNotFound) {
 		writeJSON(w, http.StatusNotFound, errorBody("resource not found"))
 		return
@@ -175,7 +184,12 @@ func (s *Server) handleResourceDetail(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, "get", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, res)
+	history, err := s.store.History(r.Context(), cluster, res.Kind, res.Namespace, res.Name)
+	if err != nil {
+		s.fail(w, "history", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resourceDetail{Resource: res, History: history})
 }
 
 // fail logs the underlying error and returns a generic 500 to the client.

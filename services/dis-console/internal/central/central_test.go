@@ -73,6 +73,21 @@ func TestAdvanceCursor(t *testing.T) {
 	}
 }
 
+func TestAdvanceEventCursor(t *testing.T) {
+	// No events: cursor must not move.
+	if got := advanceEventCursor(7, nil); got != 7 {
+		t.Fatalf("empty events should keep cursor, got %d", got)
+	}
+	events := []store.HistoryEvent{{ID: 3}, {ID: 9}, {ID: 5}}
+	if got := advanceEventCursor(7, events); got != 9 {
+		t.Fatalf("advanceEventCursor should pick the largest id 9, got %d", got)
+	}
+	// All ids at/below the cursor: must never regress.
+	if got := advanceEventCursor(20, events); got != 20 {
+		t.Fatalf("advanceEventCursor must not regress, got %d", got)
+	}
+}
+
 func TestStaleSince(t *testing.T) {
 	d := time.Minute
 	if !staleSince(time.Time{}, d) {

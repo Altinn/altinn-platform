@@ -20,6 +20,7 @@ import (
 type fakeStore struct {
 	resources []central.Resource
 	clusters  []central.Cluster
+	history   map[string][]store.Event
 	pingErr   error
 }
 
@@ -93,6 +94,14 @@ func (f *fakeStore) Get(_ context.Context, cluster, kind, namespace, name string
 	return nil, central.ErrNotFound
 }
 
+func histKey(cluster, kind, namespace, name string) string {
+	return cluster + "|" + strings.ToLower(kind) + "|" + namespace + "|" + name
+}
+
+func (f *fakeStore) History(_ context.Context, cluster, kind, namespace, name string) ([]store.Event, error) {
+	return f.history[histKey(cluster, kind, namespace, name)], nil
+}
+
 func res(cluster, kind, namespace, name, ready, reason string, suspended bool) central.Resource {
 	return central.Resource{
 		Cluster: cluster,
@@ -112,6 +121,12 @@ func testServer() *Server {
 		clusters: []central.Cluster{
 			{Cluster: "ttd_at23", Environment: "at23", ResourceCount: 2, Stale: false},
 			{Cluster: "skd_at23", Environment: "at23", ResourceCount: 1, Stale: true},
+		},
+		history: map[string][]store.Event{
+			histKey("ttd_at23", "Kustomization", "apps", "broken"): {
+				{Ready: flux.ReadyFalse, Reason: "ReconciliationFailed", ObservedAt: time.Now()},
+				{Ready: flux.ReadyTrue, ObservedAt: time.Now().Add(-time.Hour)},
+			},
 		},
 	}, time.Minute)
 	s.MarkSynced()
@@ -243,5 +258,24 @@ func TestResourceDetailNotFound(t *testing.T) {
 	s.Routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/resources/ttd_at23/Kustomization/apps/missing", nil))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+}
+
+func TestResourceDetailHistory(t *testing.T) {
+	s := testServer()
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/resources/ttd_at23/Kustomization/apps/broken", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: %d", rec.Code)
+	}
+	var resp resourceDetail
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Resource == nil || resp.Name != "broken" {
+		t.Fatalf("unexpected detail: %+v", resp)
+	}
+	if len(resp.History) != 2 || resp.History[0].Ready != flux.ReadyFalse {
+		t.Fatalf("expected 2 history events newest-first, got %+v", resp.History)
 	}
 }
