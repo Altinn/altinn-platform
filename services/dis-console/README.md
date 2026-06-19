@@ -37,6 +37,11 @@ For each object it extracts a small normalized shape (`ready`/`reason`/
 `message`/`revision`/`suspended`/`generation`/`observedGeneration`) from the
 `Ready` condition and keeps the full object under `raw` for the detail endpoint.
 
+Each kind is listed from the apiserver watch cache (`resourceVersion=0`, not a
+quorum read from etcd) and the discovery cache is refreshed only periodically,
+so the repeated all-namespace sweeps stay cheap; the agent polls on an interval
+rather than holding a watch.
+
 **How the fields are read.** The fetch is intentionally dynamic — the discovery
 `RESTMapper` resolves whatever apiVersion Azure Flux serves, and the full object
 is kept verbatim for `raw`. The projected status fields are then decoded into
