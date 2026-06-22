@@ -12,6 +12,7 @@ package flux
 import (
 	"context"
 	"fmt"
+	"time"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,10 +49,27 @@ var TargetKinds = []schema.GroupKind{
 	{Group: GroupSource, Kind: KindHelmChart},
 }
 
+// discoveryTTL bounds how often Sweep refreshes the discovery cache. It is long
+// on purpose: re-discovery only matters to notice a newly installed Flux CRD (a
+// rare extension-upgrade event), while each refresh re-fetches every API group's
+// discovery document. A long TTL keeps the steady-state sweep to plain List
+// calls and still picks new kinds up within the TTL.
+const discoveryTTL = 10 * time.Minute
+
 // Client lists Flux custom resources across all namespaces.
+//
+// A Client is not safe for concurrent use: Sweep reads and writes lastDiscovery
+// without synchronization, so each Client must be swept from a single goroutine
+// (the agent drives it from one poll loop).
 type Client struct {
-	dyn    dynamic.Interface
-	mapper *restmapper.DeferredDiscoveryRESTMapper
+	dyn dynamic.Interface
+	// mapper is held as the ResettableRESTMapper interface, not the concrete
+	// deferred mapper, so tests can inject a fake; production still uses the
+	// discovery-backed DeferredDiscoveryRESTMapper built in NewClient.
+	mapper apimeta.ResettableRESTMapper
+	// lastDiscovery is when the discovery cache was last reset; Sweep resets it
+	// at most once per discoveryTTL (see the concurrency note above).
+	lastDiscovery time.Time
 }
 
 // NewClient builds a Flux client. When local is true it uses the default
@@ -96,10 +114,17 @@ func restConfig(local bool) (*rest.Config, error) {
 // skipped (reported as warnings) so the sweep still succeeds when only a
 // subset of Flux controllers is present. Any other discovery/list failure
 // (RBAC, auth, apiserver outage) aborts the sweep with an error so the caller
-// keeps the previous snapshot instead of publishing a partial one. The
-// discovery cache is refreshed each sweep so newly installed CRDs are picked up.
+// keeps the previous snapshot instead of publishing a partial one.
+//
+// The discovery cache is reset at most once per discoveryTTL rather than on
+// every sweep, so a newly installed Flux CRD is detected only on the next reset
+// — up to discoveryTTL (~10 min) after it appears. Sweep is not safe for
+// concurrent use; call it from a single goroutine.
 func (c *Client) Sweep(ctx context.Context) ([]Resource, []error, error) {
-	c.mapper.Reset()
+	if time.Since(c.lastDiscovery) >= discoveryTTL {
+		c.mapper.Reset()
+		c.lastDiscovery = time.Now()
+	}
 
 	resources := make([]Resource, 0)
 	var warnings []error
@@ -117,7 +142,12 @@ func (c *Client) Sweep(ctx context.Context) ([]Resource, []error, error) {
 			return nil, warnings, fmt.Errorf("resolve %s: %w", gk, err)
 		}
 		nri := c.dyn.Resource(mapping.Resource).Namespace(metav1.NamespaceAll)
-		list, err := nri.List(ctx, metav1.ListOptions{})
+		// ResourceVersion "0" serves the list from the apiserver's watch cache
+		// instead of a quorum read from etcd. The sub-second staleness that
+		// allows is irrelevant to a status poller (the agent re-lists every poll
+		// interval and the Console marks clusters stale only after minutes), and
+		// it keeps the repeated fleet-wide lists off etcd.
+		list, err := nri.List(ctx, metav1.ListOptions{ResourceVersion: "0"})
 		if err != nil {
 			return nil, warnings, fmt.Errorf("list %s: %w", gk, err)
 		}
