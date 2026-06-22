@@ -99,7 +99,10 @@ func histKey(cluster, kind, namespace, name string) string {
 }
 
 func (f *fakeStore) History(_ context.Context, cluster, kind, namespace, name string) ([]store.Event, error) {
-	return f.history[histKey(cluster, kind, namespace, name)], nil
+	if h, ok := f.history[histKey(cluster, kind, namespace, name)]; ok {
+		return h, nil
+	}
+	return []store.Event{}, nil
 }
 
 func res(cluster, kind, namespace, name, ready, reason string, suspended bool) central.Resource {

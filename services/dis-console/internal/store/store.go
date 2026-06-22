@@ -349,7 +349,7 @@ FROM flux_resource
 WHERE lower(kind) = lower($1) AND namespace = $2 AND name = $3`
 
 const historyStmt = `
-SELECT ready, reason, revision, observed_at
+SELECT ready, COALESCE(reason, ''), COALESCE(revision, ''), observed_at
 FROM flux_status_event
 WHERE kind = $1 AND namespace = $2 AND name = $3
 ORDER BY observed_at DESC
@@ -494,7 +494,8 @@ type HistoryEvent struct {
 }
 
 const eventsSinceStmt = `
-SELECT id, kind, namespace, name, ready, reason, message, revision, observed_at
+SELECT id, kind, namespace, name, ready,
+       COALESCE(reason, ''), COALESCE(message, ''), COALESCE(revision, ''), observed_at
 FROM flux_status_event
 WHERE id > $1
 ORDER BY id`

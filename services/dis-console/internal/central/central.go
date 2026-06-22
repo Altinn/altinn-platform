@@ -499,7 +499,7 @@ func (s *Store) EventCursor(ctx context.Context, cluster string) (int64, error) 
 const historyLimit = 50
 
 const historyStmt = `
-SELECT ready, reason, revision, observed_at
+SELECT ready, COALESCE(reason, ''), COALESCE(revision, ''), observed_at
 FROM flux_status_event
 WHERE cluster = $1 AND lower(kind) = lower($2) AND namespace = $3 AND name = $4
 ORDER BY observed_at DESC, tenant_id DESC
