@@ -84,6 +84,23 @@ variable "prefix" {
   }
 }
 
+variable "grafana_operator_token_expiration_days" {
+  type        = number
+  default     = 360
+  description = "Lifetime in days for the grafana-operator service account token. Must be less than or equal to the Grafana instance's service_accounts.token_expiration_day_limit."
+}
+
+variable "grafana_operator_token_rotation_days" {
+  type        = number
+  default     = 180
+  description = "Number of days after which the grafana-operator service account token is rotated. Must be less than grafana_operator_token_expiration_days so the token is recreated before it expires."
+
+  validation {
+    condition     = var.grafana_operator_token_rotation_days < var.grafana_operator_token_expiration_days
+    error_message = "grafana_operator_token_rotation_days must be less than grafana_operator_token_expiration_days so the token is rotated before it expires."
+  }
+}
+
 variable "localtags" {
   type        = map(string)
   description = "A map of tags to assign to the created resources."

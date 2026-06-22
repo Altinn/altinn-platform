@@ -44,7 +44,19 @@ resource "grafana_service_account" "admin" {
   role       = "Admin"
 }
 
+# Rotate the grafana-operator token before it expires so grafana-operator
+# always has a valid token. The instance enforces
+# service_accounts.token_expiration_day_limit, so the token must have an expiry.
+resource "time_rotating" "grafana_operator_token" {
+  rotation_days = var.grafana_operator_token_rotation_days
+}
+
 resource "grafana_service_account_token" "grafana_operator" {
   name               = "grafana-operator"
   service_account_id = grafana_service_account.admin.id
+  seconds_to_live    = var.grafana_operator_token_expiration_days * 24 * 60 * 60
+
+  lifecycle {
+    replace_triggered_by = [time_rotating.grafana_operator_token.id]
+  }
 }
