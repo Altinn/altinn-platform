@@ -349,7 +349,7 @@ FROM flux_resource
 WHERE lower(kind) = lower($1) AND namespace = $2 AND name = $3`
 
 const historyStmt = `
-SELECT ready, reason, revision, observed_at
+SELECT ready, COALESCE(reason, ''), COALESCE(revision, ''), observed_at
 FROM flux_status_event
 WHERE kind = $1 AND namespace = $2 AND name = $3
 ORDER BY observed_at DESC
@@ -474,6 +474,52 @@ func (s *Store) Keys(ctx context.Context) ([]ResourceKey, error) {
 			return nil, fmt.Errorf("scan key: %w", err)
 		}
 		out = append(out, k)
+	}
+	return out, rows.Err()
+}
+
+// HistoryEvent is one status transition the server copies from a tenant into
+// the central event log. ID is the tenant-local flux_status_event id, used as
+// the server's per-cluster copy high-water.
+type HistoryEvent struct {
+	ID         int64
+	Kind       string
+	Namespace  string
+	Name       string
+	Ready      string
+	Reason     string
+	Message    string
+	Revision   string
+	ObservedAt time.Time
+}
+
+const eventsSinceStmt = `
+SELECT id, kind, namespace, name, ready,
+       COALESCE(reason, ''), COALESCE(message, ''), COALESCE(revision, ''), observed_at
+FROM flux_status_event
+WHERE id > $1
+ORDER BY id`
+
+// EventsSince returns status events with a tenant id greater than cursorID
+// (the server's per-cluster event high-water), oldest first. The agent writes
+// events one sweep at a time, so ids land in commit order with no visibility
+// gaps — a high-water id cursor never skips an event the way an updated_at
+// cursor could.
+func (s *Store) EventsSince(ctx context.Context, cursorID int64) ([]HistoryEvent, error) {
+	rows, err := s.pool.Query(ctx, eventsSinceStmt, cursorID)
+	if err != nil {
+		return nil, fmt.Errorf("events-since query: %w", err)
+	}
+	defer rows.Close()
+
+	out := []HistoryEvent{}
+	for rows.Next() {
+		var e HistoryEvent
+		if err := rows.Scan(&e.ID, &e.Kind, &e.Namespace, &e.Name, &e.Ready,
+			&e.Reason, &e.Message, &e.Revision, &e.ObservedAt); err != nil {
+			return nil, fmt.Errorf("scan event: %w", err)
+		}
+		out = append(out, e)
 	}
 	return out, rows.Err()
 }

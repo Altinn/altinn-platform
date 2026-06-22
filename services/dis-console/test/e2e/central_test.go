@@ -261,3 +261,131 @@ func TestCentralReads(t *testing.T) {
 		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 }
+
+// TestCentralEventCopyAndHistory drives the status-history pipeline against real
+// PostgreSQL: an agent writes status events into its tenant database, the server
+// copies them into the cluster-keyed central event log (incremental, id-cursored),
+// History serves them newest-first, a redundant sync doesn't duplicate, and a
+// pruned resource loses its events.
+func TestCentralEventCopyAndHistory(t *testing.T) {
+	cs, cpool := newCentral(t)
+	ctx := context.Background()
+	uri := os.Getenv("DISCONSOLE_TEST_DB_URI")
+
+	// Agent side: a tenant store on the tenant database newCentral created.
+	tpool, err := dbauth.NewPoolForDatabase(ctx, uri, "dis_console_ttd_at23", nil)
+	if err != nil {
+		t.Fatalf("tenant pool: %v", err)
+	}
+	defer tpool.Close()
+	ts := store.New(tpool)
+	if err := ts.Migrate(ctx); err != nil {
+		t.Fatalf("migrate tenant: %v", err)
+	}
+	if err := ts.InitMeta(ctx, "e2e"); err != nil {
+		t.Fatalf("init tenant meta: %v", err)
+	}
+
+	// Sweep 1: two resources => two status events in the tenant.
+	if _, err := ts.Sync(ctx, []flux.Resource{
+		res("apps", flux.ReadyTrue, "ReconciliationSucceeded", "sha-1"),
+		res("infra", flux.ReadyFalse, "BuildFailed", "sha-1"),
+	}); err != nil {
+		t.Fatalf("tenant sync 1: %v", err)
+	}
+
+	// Server pulls resources + events from the cursors and applies to central.
+	pullAndApply(t, cs, ts, "ttd_at23")
+
+	if ec, err := cs.EventCursor(ctx, "ttd_at23"); err != nil || ec == 0 {
+		t.Fatalf("event cursor should have advanced past 0, got %d err %v", ec, err)
+	}
+	if h, err := cs.History(ctx, "ttd_at23", "Kustomization", "flux-system", "infra"); err != nil ||
+		len(h) != 1 || h[0].Ready != flux.ReadyFalse {
+		t.Fatalf("infra history after sweep 1: %+v err=%v", h, err)
+	}
+
+	// Sweep 2: infra recovers (new event); apps disappears (pruned in the tenant).
+	if _, err := ts.Sync(ctx, []flux.Resource{
+		res("infra", flux.ReadyTrue, "ReconciliationSucceeded", "sha-2"),
+	}); err != nil {
+		t.Fatalf("tenant sync 2: %v", err)
+	}
+	pullAndApply(t, cs, ts, "ttd_at23")
+
+	// infra now has two events, newest first (case-insensitive kind lookup).
+	h, err := cs.History(ctx, "ttd_at23", "kustomization", "flux-system", "infra")
+	if err != nil || len(h) != 2 || h[0].Ready != flux.ReadyTrue || h[1].Ready != flux.ReadyFalse {
+		t.Fatalf("infra history after sweep 2: %+v err=%v", h, err)
+	}
+
+	// apps was pruned, so its central events were pruned too (no orphans).
+	var appsEvents int
+	if err := cpool.QueryRow(ctx,
+		"SELECT count(*) FROM flux_status_event WHERE cluster=$1 AND name=$2", "ttd_at23", "apps",
+	).Scan(&appsEvents); err != nil {
+		t.Fatalf("count apps events: %v", err)
+	}
+	if appsEvents != 0 {
+		t.Fatalf("expected apps history pruned in central, got %d orphaned events", appsEvents)
+	}
+
+	// A redundant sync (nothing new) must not duplicate events.
+	pullAndApply(t, cs, ts, "ttd_at23")
+	if h, err := cs.History(ctx, "ttd_at23", "Kustomization", "flux-system", "infra"); err != nil || len(h) != 2 {
+		t.Fatalf("redundant sync changed history: %+v err=%v", h, err)
+	}
+}
+
+// pullAndApply mirrors the engine's per-cluster sync against a tenant store: pull
+// the rows + events newer than the central cursors, then apply both (with the
+// advanced cursors) to the central store in one transaction.
+func pullAndApply(t *testing.T, cs *central.Store, ts *store.Store, cluster string) {
+	t.Helper()
+	ctx := context.Background()
+	cur, err := cs.Cursor(ctx, cluster)
+	if err != nil {
+		t.Fatalf("cursor: %v", err)
+	}
+	changed, err := ts.ChangedSince(ctx, cur)
+	if err != nil {
+		t.Fatalf("changed-since: %v", err)
+	}
+	keys, err := ts.Keys(ctx)
+	if err != nil {
+		t.Fatalf("keys: %v", err)
+	}
+	ec, err := cs.EventCursor(ctx, cluster)
+	if err != nil {
+		t.Fatalf("event cursor: %v", err)
+	}
+	events, err := ts.EventsSince(ctx, ec)
+	if err != nil {
+		t.Fatalf("events-since: %v", err)
+	}
+	newCur := cur
+	for _, c := range changed {
+		if c.UpdatedAt.After(newCur) {
+			newCur = c.UpdatedAt
+		}
+	}
+	newEC := ec
+	for _, e := range events {
+		if e.ID > newEC {
+			newEC = e.ID
+		}
+	}
+	if err := cs.Apply(ctx, central.ClusterState{
+		Cluster:       cluster,
+		Environment:   "at23",
+		Changed:       changed,
+		Keys:          keys,
+		Cursor:        newCur,
+		Events:        events,
+		EventCursor:   newEC,
+		SchemaVersion: store.SchemaVersion,
+		AgentVersion:  "e2e",
+	}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+}
