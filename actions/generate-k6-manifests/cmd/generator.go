@@ -430,9 +430,13 @@ func (r K8sManifestGenerator) CallKubectl(dirName string, configMapName string, 
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	generationTimestamp := strings.Split(uniqName, "-")[1]
+
 	temp.SetLabels(map[string]string{
-		"generated-by": "k6-action-image",
-		"uniq_name":    uniqName,
+		"generated-by":         "k6-action-image",
+		"uniq_name":            uniqName,
+		"generation_timestamp": generationTimestamp,
 	})
 	temp.SetAnnotations(map[string]string{
 		"k6-action-image/test_name":    testName,
