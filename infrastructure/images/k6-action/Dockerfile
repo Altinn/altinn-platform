@@ -2,7 +2,7 @@ FROM golang:1.26-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9
 # renovate: datasource=github-tags depName=kubectl packageName=kubernetes/kubectl versioning=semver extractVersion=^kubernetes-(?<version>.*)$
 ARG KUBECTL_VERSION=1.36.2
 # renovate: datasource=github-releases depName=kubeseal packageName=bitnami/sealed-secrets versioning=semver extractVersion=^sealed-secrets-(?<version>.*)$
-ARG KUBESEAL_VERSION=0.37.0
+ARG KUBESEAL_VERSION=0.38.1
 # renovate: datasource=github-releases depName=jsonnet packageName=google/jsonnet versioning=semver
 ARG JSONNET_VERSION=0.22.0
 # renovate: datasource=github-releases depName=jsonnet-bundler packageName=jsonnet-bundler/jsonnet-bundler versioning=semver extractVersion=^v(?<version>.*)$
@@ -38,9 +38,8 @@ RUN curl -L "https://github.com/google/jsonnet/archive/refs/tags/v${JSONNET_VERS
     chmod +x jsonnet && mv jsonnet /usr/local/bin &&\
     chmod +x jsonnetfmt && mv jsonnetfmt /usr/local/bin
 
-# Install jb (built from source so it uses the builder's Go version rather than the pre-built binary's Go 1.23)
-RUN go install github.com/jsonnet-bundler/jsonnet-bundler/cmd/jb@v${JB_VERSION} && \
-    mv /go/bin/jb /usr/local/bin/jb
+RUN curl -OL "https://github.com/jsonnet-bundler/jsonnet-bundler/releases/download/v${JB_VERSION}/jb-linux-amd64" &&\
+    chmod +x jb-linux-amd64 && mv jb-linux-amd64 /usr/local/bin/jb
 
 WORKDIR /jsonnet/vendor
 
