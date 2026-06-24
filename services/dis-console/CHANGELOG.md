@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.3.0...dis-console-v1.3.1) (2026-06-24)
+
+
+### Bug Fixes
+
+* **dis-console:** bump golang.org/x/crypto to v0.52.0+ for 8 HIGH CVEs ([#3753](https://github.com/Altinn/altinn-platform/issues/3753)) ([4701fde](https://github.com/Altinn/altinn-platform/commit/4701fdefa1d2791f4fe8d98f7077f63b4b170704))
+
 ## [1.3.0](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.2.0...dis-console-v1.3.0) (2026-06-23)
 
 
