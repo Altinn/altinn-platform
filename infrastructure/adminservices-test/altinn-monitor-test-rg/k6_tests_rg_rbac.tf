@@ -168,6 +168,11 @@ variable "k8s_rbac" {
       dev_group = "01505bd1-7216-419d-ae24-bdad763d7e06"
       sp_group  = "3b2529e7-8fa6-48d8-a4ce-eb4683d79c0c"
     }
+    broker = {
+      namespace = "broker",
+      dev_group = "d3ed431d-bd25-46dd-a539-48d716f47b1d"
+      sp_group  = "76b9c1c2-30e5-4338-88d6-63932a26251a"
+    }
   }
 }
 
