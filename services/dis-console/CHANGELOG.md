@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.2.0...dis-console-v1.3.0) (2026-06-23)
+
+
+### Features
+
+* **dis-console:** status history on the resource detail endpoint ([#3737](https://github.com/Altinn/altinn-platform/issues/3737)) ([937b770](https://github.com/Altinn/altinn-platform/commit/937b770952055fb2bc96658578f6fcf25d0f088d))
+
 ## [1.2.0](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.1.0...dis-console-v1.2.0) (2026-06-18)
 
 
