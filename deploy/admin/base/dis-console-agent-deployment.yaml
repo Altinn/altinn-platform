@@ -1,26 +1,25 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: dis-console
+  name: dis-console-agent
   namespace: product-dis
   labels:
-    app: dis-console
+    app: dis-console-agent
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: dis-console
+      app: dis-console-agent
   template:
     metadata:
       annotations:
         cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
       labels:
-        app: dis-console
+        app: dis-console-agent
         azure.workload.identity/use: "true"
     spec:
-      serviceAccountName: dis-console
+      serviceAccountName: dis-console-agent
       automountServiceAccountToken: true
-      # drop legacy per-Service env vars (noise/collisions); KUBERNETES_* still injected
       enableServiceLinks: false
       securityContext:
         runAsNonRoot: true
@@ -38,7 +37,7 @@ spec:
             - name: DB_URI
               valueFrom:
                 configMapKeyRef:
-                  name: dis-console-db-dis-console-dis-pgsql
+                  name: dis-console-admin-dis-console-agent-dis-pgsql
                   key: uri
           livenessProbe:
             httpGet:
@@ -54,18 +53,3 @@ spec:
             capabilities:
               drop:
                 - ALL
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: dis-console
-  namespace: product-dis
-  labels:
-    app: dis-console
-spec:
-  selector:
-    app: dis-console
-  ports:
-    - name: http
-      port: 80
-      targetPort: http
