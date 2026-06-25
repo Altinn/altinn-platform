@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dis-console-agent
+  namespace: product-dis
+  labels:
+    app: dis-console-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dis-console-agent
+  template:
+    metadata:
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+      labels:
+        app: dis-console-agent
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: dis-console-agent
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: dis-console
+          image: ghcr.io/altinn/altinn-platform/dis-console:v1.3.1
+          args:
+            - agent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: DB_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: dis-console-admin-dis-console-agent-dis-pgsql
+                  key: uri
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL

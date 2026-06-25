@@ -7,3 +7,7 @@ resources:
   - dis-console-databaseserver.yaml
   - dis-console-database.yaml
   - dis-console-deployment.yaml
+  - dis-console-agent.yaml
+  - dis-console-agent-database.yaml
+  - dis-console-agent-rbac.yaml
+  - dis-console-agent-deployment.yaml
