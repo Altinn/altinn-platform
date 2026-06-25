@@ -195,6 +195,23 @@ type DatabaseServerStatus struct {
 	// +optional
 	SubnetCIDR string `json:"subnetCIDR,omitempty"`
 
+	// serverName is the Azure PostgreSQL Flexible Server name (the AzureName
+	// of the owned FlexibleServer). It is the authoritative server identity
+	// for consumers and may differ from metadata.name because the operator
+	// appends the cluster-id ("<metadata.name>-<cluster-id>") to keep the
+	// Azure name globally unique across clusters. Existing servers keep
+	// their original AzureName so this can be rolled out without
+	// recreating Azure resources.
+	// +optional
+	ServerName string `json:"serverName,omitempty"`
+
+	// host is the fully qualified DNS name of the PostgreSQL Flexible Server
+	// (server.Status.FullyQualifiedDomainName). It is populated once Azure
+	// has provisioned the server. Consumers should read this instead of
+	// deriving "<metadata.name>.postgres.database.azure.com".
+	// +optional
+	Host string `json:"host,omitempty"`
+
 	// conditions represent the current state of the DatabaseServer resource.
 	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
 	//

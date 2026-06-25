@@ -500,6 +500,44 @@ var _ = Describe("User provisioning", Ordered, func() {
 			Should(Equal("14"))
 	})
 
+	It("appends the cluster-id to the FlexibleServer AzureName for global uniqueness", func() {
+		// The Kind manager patch sets DISPG_CLUSTER_ID=kind; the operator must
+		// suffix every new FlexibleServer's Spec.AzureName with that value so
+		// two clusters can host a DatabaseServer of the same CR name without
+		// colliding on Azure's global PostgreSQL server-name registry. The
+		// DatabaseServer.status.serverName field mirrors the AzureName for
+		// out-of-cluster consumers.
+		By("verifying the FlexibleServer Spec.AzureName carries the cluster-id suffix")
+		Eventually(func(g Gomega) string {
+			cmd := exec.Command(
+				"kubectl", "get",
+				"flexibleservers.dbforpostgresql.azure.com",
+				dbName,
+				"-n", namespace,
+				"-o", "jsonpath={.spec.azureName}",
+			)
+			output, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			return strings.TrimSpace(output)
+		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).
+			Should(Equal(dbName + "-kind"))
+
+		By("verifying DatabaseServer.status.serverName mirrors the AzureName")
+		Eventually(func(g Gomega) string {
+			cmd := exec.Command(
+				"kubectl", "get",
+				"databaseservers.storage.dis.altinn.cloud",
+				dbName,
+				"-n", namespace,
+				"-o", "jsonpath={.status.serverName}",
+			)
+			output, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			return strings.TrimSpace(output)
+		}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).
+			Should(Equal(dbName + "-kind"))
+	})
+
 	It("applies explicit backupRetentionDays when set on DatabaseServer", func() {
 		manifestPath := writeTestManifestWithBackupRetention(
 			explicitRetentionDBName,

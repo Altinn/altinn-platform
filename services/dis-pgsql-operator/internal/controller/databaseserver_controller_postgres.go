@@ -16,6 +16,7 @@ import (
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
 	k8sutil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/k8s"
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/naming"
 	to "github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	genruntime "github.com/Azure/azure-service-operator/v2/pkg/genruntime"
@@ -34,6 +35,16 @@ const (
 	defaultMaintenanceStartHour          = 3
 	defaultMaintenanceStartMinute        = 0
 	maintenanceCustomWindowEnabled       = "Enabled"
+
+	// flexibleServerNameMaxLen is Azure's upper bound on a PostgreSQL Flexible
+	// Server name (3-63 chars, lowercase letters/digits/hyphens, starts with a
+	// letter). New AzureNames must respect it even after the uniqueness suffix.
+	flexibleServerNameMaxLen = 63
+
+	// flexibleServerNameFallback is used when db.Name is empty or sanitizes to
+	// nothing usable; the helper requires a non-empty fallback to stay inside
+	// Azure's naming rules.
+	flexibleServerNameFallback = "dispg-srv"
 )
 
 type postgresNetworkConfig struct {
@@ -221,6 +232,31 @@ func resourceReferenceLogValue(ref *genruntime.ResourceReference) string {
 	return ref.Name
 }
 
+// flexibleServerAzureName resolves the globally-unique Azure name for the
+// FlexibleServer that backs this DatabaseServer.
+//
+// When a FlexibleServer already exists with a non-empty Spec.AzureName, that
+// value is reused so existing servers keep their Azure identity (changing
+// AzureName triggers a destructive recreate in ASO). When the FlexibleServer
+// does not exist yet, a new name "<db.Name>-<cluster-id>" is derived from the
+// operator's --cluster-id flag, which is the same per-cluster suffix
+// out-of-cluster consumers (service-owner Terraform that cannot read K8s
+// status) use to compute the server name. Two DatabaseServers with the same
+// CR name in different clusters get distinct AzureNames because each cluster
+// has its own cluster-id.
+func (r *DatabaseServerReconciler) flexibleServerAzureName(
+	db *storagev1alpha1.DatabaseServer,
+	existing *dbforpostgresqlv1.FlexibleServer,
+) string {
+	if existing != nil {
+		if name := strings.TrimSpace(existing.Spec.AzureName); name != "" {
+			return name
+		}
+	}
+	suffix := naming.SanitizeLowerHyphen(r.Config.ClusterId)
+	return naming.WithRequiredSuffix(db.Name, "-"+suffix, flexibleServerNameMaxLen, flexibleServerNameFallback)
+}
+
 // ensurePostgresServer ensures a PostgreSQL Flexible Server ASO resource exists
 // for the given database server.
 func (r *DatabaseServerReconciler) ensurePostgresServer(
@@ -231,12 +267,15 @@ func (r *DatabaseServerReconciler) ensurePostgresServer(
 ) error {
 	ns := db.Namespace
 
-	// The current DatabaseServer CR represents a PostgreSQL server, so the FlexibleServer
-	// uses the CR name.
-	serverName := db.Name
+	// The FlexibleServer's Kubernetes object name stays equal to the DatabaseServer
+	// CR name (used as a stable identifier across watches, owner refs, status
+	// lookups). The Azure-side server name (Spec.AzureName) is the globally unique
+	// identifier in Azure's PostgreSQL namespace and is resolved separately below
+	// after we know whether the resource already exists.
+	k8sName := db.Name
 
 	key := types.NamespacedName{
-		Name:      serverName,
+		Name:      k8sName,
 		Namespace: ns,
 	}
 
@@ -246,9 +285,16 @@ func (r *DatabaseServerReconciler) ensurePostgresServer(
 		if apierrors.IsNotFound(err) {
 			found = false
 		} else {
-			return fmt.Errorf("get FlexibleServer %s/%s: %w", ns, serverName, err)
+			return fmt.Errorf("get FlexibleServer %s/%s: %w", ns, k8sName, err)
 		}
 	}
+
+	var existingPtr *dbforpostgresqlv1.FlexibleServer
+	if found {
+		existingPtr = &existing
+	}
+	serverAzureName := r.flexibleServerAzureName(db, existingPtr)
+	db.Status.ServerName = serverAzureName
 
 	// define if dev/prod profile
 	profile := dbUtil.GetProfile(db.Spec.ServerType)
@@ -278,7 +324,7 @@ func (r *DatabaseServerReconciler) ensurePostgresServer(
 
 	// 5) Build server
 	desiredSpec := dbforpostgresqlv1.FlexibleServer_Spec{
-		AzureName: serverName,
+		AzureName: serverAzureName,
 		Location:  to.Ptr(loc),
 
 		Owner: &genruntime.KnownResourceReference{
@@ -312,7 +358,7 @@ func (r *DatabaseServerReconciler) ensurePostgresServer(
 	if !found {
 		server := &dbforpostgresqlv1.FlexibleServer{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      serverName,
+				Name:      k8sName,
 				Namespace: ns,
 				Labels:    desiredLabels,
 			},
@@ -324,7 +370,8 @@ func (r *DatabaseServerReconciler) ensurePostgresServer(
 		}
 
 		logger.Info("creating PostgreSQL FlexibleServer for database server",
-			"serverName", serverName,
+			"k8sName", k8sName,
+			"azureName", serverAzureName,
 			"namespace", ns,
 			"location", loc,
 			"version", versionStr,
@@ -338,7 +385,7 @@ func (r *DatabaseServerReconciler) ensurePostgresServer(
 			if apierrors.IsAlreadyExists(err) {
 				return nil
 			}
-			return fmt.Errorf("create FlexibleServer %s/%s: %w", ns, serverName, err)
+			return fmt.Errorf("create FlexibleServer %s/%s: %w", ns, k8sName, err)
 		}
 		return nil
 	}
@@ -347,11 +394,12 @@ func (r *DatabaseServerReconciler) ensurePostgresServer(
 	existing.Labels, updated = k8sutil.SyncSpecAndLabels(&existing.Spec, desiredSpec, existing.Labels, desiredLabels)
 	if updated {
 		logger.Info("updating PostgreSQL FlexibleServer to match database server",
-			"serverName", serverName,
+			"k8sName", k8sName,
+			"azureName", serverAzureName,
 			"namespace", ns,
 		)
 		if err := r.Update(ctx, &existing); err != nil {
-			return fmt.Errorf("update FlexibleServer %s/%s: %w", ns, serverName, err)
+			return fmt.Errorf("update FlexibleServer %s/%s: %w", ns, k8sName, err)
 		}
 	}
 

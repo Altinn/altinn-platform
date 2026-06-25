@@ -507,6 +507,15 @@ func (r *DatabaseServerReconciler) asoResourcesReady(
 		return false, fmt.Errorf("get FlexibleServer %s/%s: %w", ns, serverName, err)
 	}
 
+	// Publish the Azure-side identity on the DatabaseServer status as soon as ASO
+	// has filled it in. setDatabaseServerReadyCondition flushes the status, so
+	// this only needs to mutate the in-memory object.
+	if server.Status.FullyQualifiedDomainName != nil {
+		if host := strings.TrimSpace(*server.Status.FullyQualifiedDomainName); host != "" {
+			db.Status.Host = host
+		}
+	}
+
 	serverStatus, serverReason, serverMessage, serverReady := readyConditionInfo(server.Status.Conditions)
 	if !serverReady || serverStatus != metav1.ConditionTrue {
 		logger.Info("FlexibleServer not ready yet",

@@ -92,6 +92,7 @@ func main() {
 	var aksResourceGroup string
 	var tenantID string
 	var userProvisionImage string
+	var clusterID string
 	var provisionUser bool
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -153,6 +154,14 @@ func main() {
 		"user-provision-image",
 		os.Getenv("DISPG_USER_PROVISION_IMAGE"),
 		"Image used for user provisioning Jobs (required)",
+	)
+	flag.StringVar(
+		&clusterID,
+		"cluster-id",
+		os.Getenv("DISPG_CLUSTER_ID"),
+		"Stable, human-readable cluster identifier (e.g. 'admin-test'); appended to new "+
+			"Flexible Server AzureNames to keep them globally unique across clusters and "+
+			"derivable by out-of-cluster consumers (required)",
 	)
 
 	opts := zap.Options{
@@ -291,6 +300,7 @@ func main() {
 		tenantID,
 		aksResourceGroup,
 		userProvisionImage,
+		clusterID,
 		useFakes,
 	)
 	if err != nil {
