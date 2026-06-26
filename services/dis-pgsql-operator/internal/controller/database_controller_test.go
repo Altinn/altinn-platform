@@ -741,6 +741,31 @@ var _ = Describe("DatabaseServer controller", func() {
 		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
 			Should(Equal(db.Name))
 
+		// The Azure-side server name carries the cluster-id suffix so it stays
+		// globally unique across clusters; the suite config sets ClusterId="envtest".
+		Eventually(func(g Gomega) string {
+			var server dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &server)).To(Succeed())
+			return server.Spec.AzureName
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(db.Name + "-envtest"))
+
+		// DatabaseServer.status.serverName mirrors that AzureName so downstream
+		// consumers can read the authoritative identity from K8s without
+		// re-implementing the naming convention.
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &updated)).To(Succeed())
+			return updated.Status.ServerName
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(db.Name + "-envtest"))
+
 		Consistently(func(g Gomega) int {
 			var jobs batchv1.JobList
 			g.Expect(k8sClient.List(ctx, &jobs,
@@ -753,6 +778,59 @@ var _ = Describe("DatabaseServer controller", func() {
 			return len(jobs.Items)
 		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
 			Should(Equal(0))
+	})
+
+	It("preserves a pre-existing FlexibleServer AzureName instead of recreating it", func() {
+		// Backward-compat guarantee: if a FlexibleServer for this DatabaseServer
+		// already exists with a hand-picked AzureName (e.g. the pre-cluster-id
+		// per-env-name mitigation), the operator must keep that AzureName so
+		// rolling out cluster-id-based naming does not orphan or recreate the
+		// underlying Azure resource.
+		const dbCRName = "preserve-existing-azurename"
+		const legacyAzureName = "preserve-existing-azurename-test"
+
+		db := newDedicatedDatabaseServer(dbCRName, adminAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+		))
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		// Wait for the operator to create the FlexibleServer, then overwrite its
+		// AzureName with a value that doesn't follow the cluster-id convention.
+		Eventually(func(g Gomega) {
+			var server dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &server)).To(Succeed())
+			server.Spec.AzureName = legacyAzureName
+			g.Expect(k8sClient.Update(ctx, &server)).To(Succeed())
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		// Trigger a re-reconcile by mutating the DatabaseServer spec.
+		Eventually(func(g Gomega) {
+			var current storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &current)).To(Succeed())
+			retention := 21
+			current.Spec.BackupRetentionDays = &retention
+			g.Expect(k8sClient.Update(ctx, &current)).To(Succeed())
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Consistently(func(g Gomega) string {
+			var server dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &server)).To(Succeed())
+			return server.Spec.AzureName
+		}).WithTimeout(5 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(legacyAzureName))
 	})
 
 	It("rejects dedicated database servers with shared network config", func() {

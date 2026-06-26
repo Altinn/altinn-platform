@@ -53,7 +53,11 @@ func RunUserProvisioner(ctx context.Context) error {
 		if disableAAD {
 			host = "postgres.default.svc"
 		} else {
-			host = fmt.Sprintf("%s.postgres.database.azure.com", serverName)
+			// In Azure mode the controller publishes the real Flexible Server FQDN
+			// from DatabaseServer.Status.Host (server.Status.FullyQualifiedDomainName).
+			// Deriving "<serverName>.postgres.database.azure.com" is no longer correct
+			// because AzureName now carries a stable uniqueness suffix.
+			return fmt.Errorf("%s must be set when AAD is enabled", DBHostEnv)
 		}
 	}
 	dbName := strings.TrimSpace(os.Getenv(DBNameEnv))

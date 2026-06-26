@@ -118,6 +118,7 @@ var _ = BeforeSuite(func() {
 		SubscriptionId:     "my-subscription-id",
 		TenantId:           "my-tenant-id",
 		AKSResourceGroup:   "aks-vnet-rg",
+		ClusterId:          "envtest",
 		UserProvisionImage: "controller:latest",
 	}
 	err = (&DatabaseServerReconciler{
