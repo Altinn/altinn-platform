@@ -2,3 +2,12 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../base
+patches:
+  - patch: |
+      apiVersion: storage.dis.altinn.cloud/v1alpha1
+      kind: Database
+      metadata:
+        name: dis-console-admin
+        namespace: product-dis
+      spec:
+        name: dis_console_admin_test
