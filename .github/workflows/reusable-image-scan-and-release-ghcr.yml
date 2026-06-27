@@ -46,7 +46,7 @@ jobs:
       timestamp: ${{ steps.git-info.outputs.timestamp }}
       reponame: ${{ steps.git-info.outputs.reponame }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - name: Get Git commit timestamps
         id: git-info
         run: |
@@ -85,7 +85,7 @@ jobs:
     needs: scan
     if: inputs.tag_prefix!= '-' && startsWith(github.ref, format('refs/tags/{0}', inputs.tag_prefix))
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - name: Get variables from tags
         id: vars
         run: |
@@ -120,7 +120,7 @@ jobs:
     needs: scan
     if: github.ref == 'refs/heads/main' && inputs.release_latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - name: Set up QEMU
         uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4
       - name: Set up Docker Buildx
