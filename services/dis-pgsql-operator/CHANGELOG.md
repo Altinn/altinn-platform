@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.11.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.10.1...dis-pgsql-v0.11.0) (2026-06-29)
+
+
+### Features
+
+* **dis-pgsql:** suffix Flexible Server AzureName with --cluster-id ([#3758](https://github.com/Altinn/altinn-platform/issues/3758)) ([3ffdf8f](https://github.com/Altinn/altinn-platform/commit/3ffdf8f6f4773526461b91c4996033f73fd33ea9))
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** bump golang.org/x/crypto + x/net for HIGH CVEs ([#3760](https://github.com/Altinn/altinn-platform/issues/3760)) ([ab6a31c](https://github.com/Altinn/altinn-platform/commit/ab6a31c8543dda56e5e5bea127853f644020e8b9))
+* **dis-pgsql-operator:** decouple Private DNS zone CR name from Azure FQDN ([#3769](https://github.com/Altinn/altinn-platform/issues/3769)) ([50ea1a5](https://github.com/Altinn/altinn-platform/commit/50ea1a50b5e6d76b0d10d3ead83d1171c89f059c))
+
 ## [0.10.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.10.0...dis-pgsql-v0.10.1) (2026-06-18)
 
 
