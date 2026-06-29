@@ -221,8 +221,12 @@ reader, writer, and owner. It grants access by role membership:
   and sequences.
 - `Writer`: Reader plus `INSERT`, `UPDATE`, `DELETE`, and sequence write access.
   It does not get DDL.
-- `Owner`: Writer plus schema ownership/DDL capability for migrations and
-  maintainers.
+- `Owner`: Writer plus ownership of the managed schema and `CREATE` on the
+  database, so migrations and maintainers can run DDL and create their own
+  schemas (e.g. an app that puts its tables in a dedicated `engine` schema).
+  Because each database is dedicated to its app, this mirrors CloudNativePG's
+  model where the application role owns its database; `Reader`/`Writer` stay
+  scoped to the managed schema.
 
 `identityRef` entries are provisioned as PostgreSQL AAD `service` principals.
 `group` entries are provisioned as PostgreSQL AAD `group` principals.
