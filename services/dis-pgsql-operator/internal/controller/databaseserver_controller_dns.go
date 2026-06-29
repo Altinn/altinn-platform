@@ -19,8 +19,21 @@ import (
 // The suffix we use for per-database-server private DNS zones.
 const postgresPrivateZoneSuffix = "private.postgres.database.azure.com"
 
-// zoneNameForDatabaseServer computes the Private DNS zone name for a server.
-func zoneNameForDatabaseServer(db *storagev1alpha1.DatabaseServer) string {
+// zoneCRNameForDatabaseServer is the Kubernetes object name of the server's
+// Private DNS zone CR. It stays equal to the DatabaseServer CR name (which is a
+// valid flexible-server name, so <=63 chars) rather than the FQDN. ASO stamps a
+// serviceoperator.azure.com/owner-name=<owner CR name> label on child resources
+// (the vnet links), truncated to the 63-char label limit. Using the FQDN as the
+// owner name made that label exceed 63 chars for longer server names, ending in
+// a '.' and failing label validation, which blocked the vnet links entirely.
+func zoneCRNameForDatabaseServer(db *storagev1alpha1.DatabaseServer) string {
+	return db.Name
+}
+
+// zoneAzureNameForDatabaseServer is the Azure-side name of the server's Private
+// DNS zone (used only for Spec.AzureName) — the FQDN PostgreSQL Flexible Server
+// requires.
+func zoneAzureNameForDatabaseServer(db *storagev1alpha1.DatabaseServer) string {
 	return fmt.Sprintf("%s.%s", db.Name, postgresPrivateZoneSuffix)
 }
 
@@ -42,9 +55,10 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSZone(
 		return fmt.Errorf("ResourceGroup is not configured on DatabaseServerReconciler")
 	}
 	ns := db.Namespace
-	zoneName := zoneNameForDatabaseServer(db)
+	zoneCRName := zoneCRNameForDatabaseServer(db)
+	zoneAzureName := zoneAzureNameForDatabaseServer(db)
 	key := types.NamespacedName{
-		Name:      zoneName,
+		Name:      zoneCRName,
 		Namespace: ns,
 	}
 
@@ -52,7 +66,8 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSZone(
 	err := r.Get(ctx, key, &existing)
 	if err == nil {
 		logger.Info("private DNS zone already exists for database server",
-			"zoneName", zoneName,
+			"zoneCRName", zoneCRName,
+			"azureName", zoneAzureName,
 			"asoNamespace", ns)
 		return nil
 	}
@@ -61,21 +76,22 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSZone(
 	}
 
 	logger.Info("creating private DNS zone for database server",
-		"zoneName", zoneName,
+		"zoneCRName", zoneCRName,
+		"azureName", zoneAzureName,
 		"asoNamespace", ns)
 
 	loc := "global" // Private DNS zones use 'global' for Location in Azure.
 
 	zone := &networkv1.PrivateDnsZone{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      zoneName,
+			Name:      zoneCRName,
 			Namespace: ns,
 			Labels: map[string]string{
 				databaseServerNameLabelKey: db.Name,
 			},
 		},
 		Spec: networkv1.PrivateDnsZone_Spec{
-			AzureName: zoneName,
+			AzureName: zoneAzureName,
 			Location:  &loc,
 			Owner: &genruntime.KnownResourceReference{
 				ARMID: fmt.Sprintf(
@@ -97,7 +113,8 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSZone(
 	if err := r.Create(ctx, zone); err != nil {
 		if errors.IsAlreadyExists(err) {
 			logger.Info("private DNS zone already created by another reconcile",
-				"zoneName", zoneName,
+				"zoneCRName", zoneCRName,
+				"azureName", zoneAzureName,
 				"asoNamespace", ns)
 			return nil
 		}
@@ -113,7 +130,7 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSVNetLink(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
-	zoneName string,
+	zoneCRName string,
 	linkName string,
 	targetVNetName string,
 	vnetID string,
@@ -130,7 +147,7 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSVNetLink(
 
 		// REQUIRED: owner is the PrivateDnsZone CR
 		Owner: &genruntime.KnownResourceReference{
-			Name: zoneName,
+			Name: zoneCRName,
 		},
 
 		RegistrationEnabled: &regFalse,
@@ -163,7 +180,7 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSVNetLink(
 		if updated {
 			logger.Info("updating private DNS VNet link",
 				"linkName", existing.Name,
-				"zoneName", zoneName,
+				"zoneCRName", zoneCRName,
 				"vnetName", targetVNetName,
 				"vnetID", vnetID,
 			)
@@ -187,7 +204,7 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSVNetLink(
 
 	logger.Info("creating private DNS VNet link",
 		"linkName", linkName,
-		"zoneName", zoneName,
+		"zoneCRName", zoneCRName,
 		"vnetName", targetVNetName,
 		"vnetID", vnetID,
 	)
@@ -206,11 +223,13 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSVNetLink(
 	return nil
 }
 
-// privateZoneARMIDResourceReference builds the resource reference for the server's Private DNS zone.
-func (r *DatabaseServerReconciler) privateZoneARMIDResourceReference(zoneName string) *genruntime.ResourceReference {
+// privateZoneARMIDResourceReference builds the resource reference for the server's
+// Private DNS zone. Name is a Kubernetes cross-resource reference (the zone CR
+// name), not the Azure FQDN.
+func (r *DatabaseServerReconciler) privateZoneARMIDResourceReference(zoneCRName string) *genruntime.ResourceReference {
 	return &genruntime.ResourceReference{
 		Group: "network.azure.com",
 		Kind:  "PrivateDnsZone",
-		Name:  zoneName,
+		Name:  zoneCRName,
 	}
 }

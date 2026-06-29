@@ -196,7 +196,7 @@ func (r *DatabaseServerReconciler) deleteDedicatedNetworkChildren(
 	}
 
 	// Second wave: the zone, now that nothing nested under it remains.
-	zoneGone, err := r.ensureChildDeleted(ctx, logger, db.Namespace, zoneNameForDatabaseServer(db), &networkv1.PrivateDnsZone{})
+	zoneGone, err := r.ensureChildDeleted(ctx, logger, db.Namespace, zoneCRNameForDatabaseServer(db), &networkv1.PrivateDnsZone{})
 	if err != nil {
 		return false, err
 	}
@@ -303,7 +303,7 @@ func (r *DatabaseServerReconciler) reconcileDedicatedDatabaseServer(
 	// DB VNet link
 	if err := r.ensurePrivateDNSVNetLink(
 		ctx, logger, db,
-		zoneNameForDatabaseServer(db),
+		zoneCRNameForDatabaseServer(db),
 		dbVNetLinkNameForDatabaseServer(db),
 		r.Config.DBVNetName,
 		dbVnetID,
@@ -315,7 +315,7 @@ func (r *DatabaseServerReconciler) reconcileDedicatedDatabaseServer(
 	// AKS VNet link
 	if err := r.ensurePrivateDNSVNetLink(
 		ctx, logger, db,
-		zoneNameForDatabaseServer(db),
+		zoneCRNameForDatabaseServer(db),
 		aksVNetLinkNameForDatabaseServer(db),
 		r.Config.AKSVNetName,
 		aksVnetID,
@@ -324,7 +324,7 @@ func (r *DatabaseServerReconciler) reconcileDedicatedDatabaseServer(
 		return ctrl.Result{}, err
 	}
 
-	networkConfig, err := r.dedicatedPostgresNetworkConfig(db, zoneNameForDatabaseServer(db))
+	networkConfig, err := r.dedicatedPostgresNetworkConfig(db, zoneCRNameForDatabaseServer(db))
 	if err != nil {
 		logger.Error(err, "failed to build dedicated PostgreSQL network config")
 		return ctrl.Result{}, err
