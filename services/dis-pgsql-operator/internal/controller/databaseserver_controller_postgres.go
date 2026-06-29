@@ -129,7 +129,7 @@ func (r *DatabaseServerReconciler) subnetARMIDResourceReference(subnetName strin
 
 func (r *DatabaseServerReconciler) dedicatedPostgresNetworkConfig(
 	db *storagev1alpha1.DatabaseServer,
-	zoneName string,
+	zoneCRName string,
 ) (postgresNetworkConfig, error) {
 	// Use the subnet allocated to this database server from the status.
 	if db.Status.SubnetCIDR == "" {
@@ -143,7 +143,7 @@ func (r *DatabaseServerReconciler) dedicatedPostgresNetworkConfig(
 	}
 
 	subnetID := r.subnetARMIDResourceReference(subnetInfo.Name)
-	zoneID := r.privateZoneARMIDResourceReference(zoneName)
+	zoneID := r.privateZoneARMIDResourceReference(zoneCRName)
 
 	publicNetworkAccess := dbforpostgresqlv1.ServerPublicNetworkAccessState_Disabled
 	return postgresNetworkConfig{

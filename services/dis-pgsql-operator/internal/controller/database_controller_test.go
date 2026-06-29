@@ -555,12 +555,13 @@ var _ = Describe("DatabaseServer controller", func() {
 
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
-		expectedZoneName := fmt.Sprintf("%s.private.postgres.database.azure.com", db.Name)
+		expectedZoneCRName := zoneCRNameForDatabaseServer(db)
+		expectedZoneAzureName := fmt.Sprintf("%s.private.postgres.database.azure.com", db.Name)
 
 		Eventually(func(g Gomega) error {
 			var zone networkv1.PrivateDnsZone
 			key := types.NamespacedName{
-				Name:      expectedZoneName,
+				Name:      expectedZoneCRName,
 				Namespace: ns,
 			}
 			err := k8sClient.Get(ctx, key, &zone)
@@ -571,13 +572,16 @@ var _ = Describe("DatabaseServer controller", func() {
 		// Inspect metadata of created Private DNS zone
 		var zone networkv1.PrivateDnsZone
 		key := types.NamespacedName{
-			Name:      expectedZoneName,
+			Name:      expectedZoneCRName,
 			Namespace: ns,
 		}
 		Expect(k8sClient.Get(ctx, key, &zone)).To(Succeed())
 
-		// Miminal expectations about the created zone
-		Expect(zone.Name).To(Equal(expectedZoneName))
+		// The zone CR name is the short DatabaseServer name so ASO's owner-name
+		// label on child vnet links stays a valid <=63-char label; the Azure-side
+		// name (Spec.AzureName) remains the FQDN PostgreSQL requires.
+		Expect(zone.Name).To(Equal(expectedZoneCRName))
+		Expect(zone.Spec.AzureName).To(Equal(expectedZoneAzureName))
 		Expect(zone.Namespace).To(Equal(ns))
 	})
 
@@ -601,13 +605,13 @@ var _ = Describe("DatabaseServer controller", func() {
 		}
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
-		zoneName := fmt.Sprintf("%s.private.postgres.database.azure.com", db.Name)
+		zoneCRName := zoneCRNameForDatabaseServer(db)
 
 		// Wait for the zone
 		Eventually(func(g Gomega) error {
 			var zone networkv1.PrivateDnsZone
 			key := types.NamespacedName{
-				Name:      zoneName,
+				Name:      zoneCRName,
 				Namespace: ns,
 			}
 			return k8sClient.Get(ctx, key, &zone)
@@ -938,7 +942,7 @@ var _ = Describe("DatabaseServer controller", func() {
 		Consistently(func() bool {
 			var zone networkv1.PrivateDnsZone
 			err := k8sClient.Get(ctx, types.NamespacedName{
-				Name:      zoneNameForDatabaseServer(db),
+				Name:      zoneCRNameForDatabaseServer(db),
 				Namespace: db.Namespace,
 			}, &zone)
 			return apierrors.IsNotFound(err)
@@ -2442,7 +2446,7 @@ var _ = Describe("DatabaseServer controller", func() {
 		))
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
-		zoneName := zoneNameForDatabaseServer(db)
+		zoneName := zoneCRNameForDatabaseServer(db)
 		dbLinkName := dbVNetLinkNameForDatabaseServer(db)
 		aksLinkName := aksVNetLinkNameForDatabaseServer(db)
 
