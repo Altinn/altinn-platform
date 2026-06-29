@@ -61,6 +61,11 @@ func TestUserProvisionSQL(t *testing.T) {
 			want: `GRANT CONNECT ON DATABASE "app-db" TO "app-user";`,
 		},
 		{
+			name: "grant database create",
+			got:  grantDatabaseCreateSQL(dbName, "owner-role"),
+			want: `GRANT CREATE ON DATABASE "app-db" TO "owner-role";`,
+		},
+		{
 			name: "create schema",
 			got:  createSchemaSQL(schema, user),
 			want: `CREATE SCHEMA IF NOT EXISTS "app-db" AUTHORIZATION "app-user";`,
@@ -263,6 +268,7 @@ func TestEnsureAccessCreatesManagedRolesAndPrincipalMemberships(t *testing.T) {
 	requireExec(t, conn, grantSchemaUsageSQL(appDBName, roles.Reader))
 	requireExec(t, conn, grantAllTablesReadSQL(appDBName, roles.Reader))
 	requireExec(t, conn, grantAllTablesWriteSQL(appDBName, roles.Writer))
+	requireExec(t, conn, grantDatabaseCreateSQL(appDBName, roles.Owner))
 	requireExec(t, conn, grantRoleSQL(roles.Reader, roles.Writer))
 	requireExec(t, conn, grantRoleSQL(roles.Writer, roles.Owner))
 	requireExec(t, conn, grantRoleSQL(roles.Writer, "app-user"))

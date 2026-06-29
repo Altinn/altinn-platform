@@ -380,6 +380,7 @@ func ensureManagedRoleGrants(
 		{name: "grant writer sequence write", sql: grantAllSequencesWriteSQL(opts.SchemaName, roles.Writer)},
 		{name: "grant owner schema usage", sql: grantSchemaUsageSQL(opts.SchemaName, roles.Owner)},
 		{name: "grant owner schema create", sql: grantSchemaCreateSQL(opts.SchemaName, roles.Owner)},
+		{name: "grant owner database create", sql: grantDatabaseCreateSQL(opts.DatabaseName, roles.Owner)},
 	}
 
 	for _, statement := range statements {
@@ -535,6 +536,17 @@ func grantConnectSQL(dbName, user string) string {
 	return fmt.Sprintf("GRANT CONNECT ON DATABASE %s TO %s;",
 		pgx.Identifier{dbName}.Sanitize(),
 		pgx.Identifier{user}.Sanitize(),
+	)
+}
+
+// grantDatabaseCreateSQL grants CREATE on the database to a role, allowing it to
+// create new schemas. The Owner managed role gets this so apps that manage their
+// own schemas (e.g. EF Core's CREATE SCHEMA) work in their dedicated database,
+// mirroring how CloudNativePG makes the application role own its database.
+func grantDatabaseCreateSQL(dbName, role string) string {
+	return fmt.Sprintf("GRANT CREATE ON DATABASE %s TO %s;",
+		pgx.Identifier{dbName}.Sanitize(),
+		pgx.Identifier{role}.Sanitize(),
 	)
 }
 
