@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.11.0...dis-pgsql-v0.11.1) (2026-06-29)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** grant Owner CREATE on its database ([#3772](https://github.com/Altinn/altinn-platform/issues/3772)) ([1715a2f](https://github.com/Altinn/altinn-platform/commit/1715a2f8e01269128b5b88327b5183339d1ba6c8))
+
 ## [0.11.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.10.1...dis-pgsql-v0.11.0) (2026-06-29)
 
 
