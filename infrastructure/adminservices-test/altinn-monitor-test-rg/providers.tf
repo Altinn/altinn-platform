@@ -4,6 +4,10 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.0"
     }
+    azapi = {
+      source  = "Azure/azapi"
+      version = ">= 2.3.0"
+    }
   }
   backend "azurerm" {
     use_azuread_auth = true
@@ -20,6 +24,8 @@ provider "azurerm" {
     "Microsoft.KubernetesConfiguration"
   ]
 }
+
+provider "azapi" {}
 
 # Dialogporten
 provider "azurerm" {

@@ -20,6 +20,30 @@ resource "azurerm_dashboard_grafana" "grafana" {
   }
 }
 
+# Let members of the Grafana "Viewer" role use Explore and run ad-hoc queries against
+# data sources (temporary, in-session panel edits that cannot be saved). Without this,
+# viewers can only look at existing dashboards — they cannot open Explore or query data
+# sources. The azurerm_dashboard_grafana resource does not expose this toggle (it only
+# maps grafanaConfigurations.smtp), so we set grafanaConfigurations.users.viewersCanEdit
+# directly via azapi.
+#
+# NOTE: azurerm only rebuilds grafanaConfigurations when an `smtp` block changes on the
+# grafana resource above (none is configured today). If an `smtp` block is ever added,
+# re-apply this resource to restore the setting.
+resource "azapi_update_resource" "grafana_viewers_can_edit" {
+  type        = "Microsoft.Dashboard/grafana@2024-10-01"
+  resource_id = azurerm_dashboard_grafana.grafana.id
+  body = {
+    properties = {
+      grafanaConfigurations = {
+        users = {
+          viewersCanEdit = true
+        }
+      }
+    }
+  }
+}
+
 resource "azurerm_role_assignment" "tf_grafana_admin" {
   scope                            = azurerm_dashboard_grafana.grafana.id
   role_definition_name             = "Grafana Admin"
