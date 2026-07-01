@@ -42,5 +42,12 @@ func databaseServerReferencesIdentity(db *storagev1alpha1.DatabaseServer, identi
 	if db.Spec.Auth.Admin.Identity.IdentityRef != nil && db.Spec.Auth.Admin.Identity.IdentityRef.Name == identityName {
 		return true
 	}
+	if db.Spec.DebugAccess != nil {
+		for _, principal := range db.Spec.DebugAccess.Principals {
+			if principal.IdentityRef != nil && principal.IdentityRef.Name == identityName {
+				return true
+			}
+		}
+	}
 	return false
 }

@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -58,7 +60,9 @@ func (r *DatabaseServerReconciler) ensureDebugAccessRoleAssignments(
 	// Server. Shared servers must not own any, so leave the desired set empty for
 	// them and let the prune below converge any stale assignments to zero.
 	desired := map[string]*authorizationv1.RoleAssignment{}
-	if databaseServerMode(db) != storagev1alpha1.DatabaseServerModeShared && db.Spec.DebugAccess != nil {
+	var pendingIdentities []string
+	debugAccessConfigured := databaseServerMode(db) != storagev1alpha1.DatabaseServerModeShared && db.Spec.DebugAccess != nil
+	if debugAccessConfigured {
 		for _, principal := range db.Spec.DebugAccess.Principals {
 			resolved, ok, err := r.resolveDebugAccessPrincipal(ctx, logger, db, principal)
 			if err != nil {
@@ -66,7 +70,11 @@ func (r *DatabaseServerReconciler) ensureDebugAccessRoleAssignments(
 			}
 			if !ok {
 				// Not-ready identityRef: skip this principal without failing the whole
-				// reconcile; a later reconcile picks it up once the identity is ready.
+				// reconcile; a later reconcile picks it up once the identity is ready
+				// (the ApplicationIdentity watch re-triggers reconciliation).
+				if principal.IdentityRef != nil {
+					pendingIdentities = append(pendingIdentities, strings.TrimSpace(principal.IdentityRef.Name))
+				}
 				continue
 			}
 
@@ -84,7 +92,52 @@ func (r *DatabaseServerReconciler) ensureDebugAccessRoleAssignments(
 		}
 	}
 
-	return r.pruneDebugAccessRoleAssignments(ctx, logger, db, desired)
+	if err := r.pruneDebugAccessRoleAssignments(ctx, logger, db, desired); err != nil {
+		return err
+	}
+
+	return r.setDebugAccessReadyCondition(ctx, db, debugAccessConfigured, pendingIdentities)
+}
+
+// setDebugAccessReadyCondition records the DebugAccessReady condition on the
+// DatabaseServer status and persists it. It never touches the core Ready
+// condition. When debug access is not configured (unset or shared mode) the
+// condition is removed so no stale state lingers.
+func (r *DatabaseServerReconciler) setDebugAccessReadyCondition(
+	ctx context.Context,
+	db *storagev1alpha1.DatabaseServer,
+	debugAccessConfigured bool,
+	pendingIdentities []string,
+) error {
+	previousStatus := db.Status.DeepCopy()
+
+	switch {
+	case !debugAccessConfigured:
+		meta.RemoveStatusCondition(&db.Status.Conditions, databaseServerConditionDebugAccessReady)
+	case len(pendingIdentities) > 0:
+		meta.SetStatusCondition(&db.Status.Conditions, metav1.Condition{
+			Type:    databaseServerConditionDebugAccessReady,
+			Status:  metav1.ConditionFalse,
+			Reason:  databaseServerReasonDebugAccessWaitingForIdentity,
+			Message: fmt.Sprintf("Waiting for debug access ApplicationIdentity(ies) to be ready: %s", strings.Join(pendingIdentities, ", ")),
+
+			ObservedGeneration: db.Generation,
+		})
+	default:
+		meta.SetStatusCondition(&db.Status.Conditions, metav1.Condition{
+			Type:               databaseServerConditionDebugAccessReady,
+			Status:             metav1.ConditionTrue,
+			Reason:             databaseServerReasonDebugAccessProvisioned,
+			Message:            "Debug access role assignments are provisioned",
+			ObservedGeneration: db.Generation,
+		})
+	}
+
+	if apiequality.Semantic.DeepEqual(previousStatus, &db.Status) {
+		return nil
+	}
+
+	return r.Status().Update(ctx, db)
 }
 
 // resolveDebugAccessPrincipal resolves one debug principal to its Entra object id

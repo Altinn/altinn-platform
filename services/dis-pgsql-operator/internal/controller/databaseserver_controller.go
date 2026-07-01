@@ -37,6 +37,20 @@ const (
 	databaseServerReasonReady    = "Ready"
 	databaseServerReasonWaiting  = "Waiting"
 
+	// databaseServerConditionDebugAccessReady reports the state of the auxiliary
+	// debug-access role assignments. It is intentionally decoupled from the core
+	// Ready condition: pending debug identities never block or affect Ready.
+	databaseServerConditionDebugAccessReady = "DebugAccessReady"
+
+	// databaseServerReasonDebugAccessProvisioned marks that all requested debug
+	// principals were resolved and their role assignments reconciled.
+	databaseServerReasonDebugAccessProvisioned = "Provisioned"
+
+	// databaseServerReasonDebugAccessWaitingForIdentity marks that one or more
+	// debug identityRef principals cannot be resolved yet because their
+	// ApplicationIdentity is missing or not ready.
+	databaseServerReasonDebugAccessWaitingForIdentity = "WaitingForIdentity"
+
 	// databaseServerReasonServerNameConflict marks a DatabaseServer whose Azure server
 	// name is already taken. Flexible Server names are globally unique, so this is a
 	// blocked state the author must resolve by choosing a unique DatabaseServer name.

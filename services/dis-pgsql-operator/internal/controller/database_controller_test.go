@@ -2447,6 +2447,18 @@ var _ = Describe("DatabaseServer controller", func() {
 				{
 					IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: databaseAppIdentityRef},
 				},
+				{
+					Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+						Name:        databaseOwnerGroup,
+						PrincipalId: databaseOwnerPrincipalID,
+					},
+				},
+				{
+					ServicePrincipal: &storagev1alpha1.DatabaseServicePrincipalSpec{
+						Name:        databaseExternalServicePrincipal,
+						PrincipalId: databaseExternalServicePrincipalID,
+					},
+				},
 			},
 		}
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
@@ -2468,19 +2480,37 @@ var _ = Describe("DatabaseServer controller", func() {
 			assignments = listDebugAccessRoleAssignments(g)
 			return len(assignments)
 		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
-			Should(Equal(1))
+			Should(Equal(3))
 
-		ra := assignments[0]
-		Expect(ra.Spec.PrincipalId).NotTo(BeNil())
-		Expect(*ra.Spec.PrincipalId).To(Equal(databaseAppPrincipalID))
-		Expect(ra.Spec.PrincipalType).NotTo(BeNil())
-		Expect(string(*ra.Spec.PrincipalType)).To(Equal("ServicePrincipal"))
-		Expect(ra.Spec.RoleDefinitionReference).NotTo(BeNil())
-		Expect(ra.Spec.RoleDefinitionReference.WellKnownName).To(Equal("Reader"))
-		Expect(ra.Spec.Owner).NotTo(BeNil())
-		Expect(ra.Spec.Owner.Kind).To(Equal("FlexibleServer"))
-		Expect(ra.Spec.Owner.Name).To(Equal(db.Name))
-		Expect(metav1.IsControlledBy(&ra, db)).To(BeTrue())
+		byPrincipalID := map[string]authorizationv1.RoleAssignment{}
+		for _, ra := range assignments {
+			Expect(ra.Spec.PrincipalId).NotTo(BeNil())
+			byPrincipalID[*ra.Spec.PrincipalId] = ra
+		}
+		Expect(byPrincipalID).To(HaveKey(databaseAppPrincipalID))
+
+		resolvedRef := byPrincipalID[databaseAppPrincipalID]
+		Expect(resolvedRef.Spec.PrincipalType).NotTo(BeNil())
+		Expect(string(*resolvedRef.Spec.PrincipalType)).To(Equal("ServicePrincipal"))
+		Expect(resolvedRef.Spec.RoleDefinitionReference).NotTo(BeNil())
+		Expect(resolvedRef.Spec.RoleDefinitionReference.WellKnownName).To(Equal("Reader"))
+		Expect(resolvedRef.Spec.Owner).NotTo(BeNil())
+		Expect(resolvedRef.Spec.Owner.Kind).To(Equal("FlexibleServer"))
+		Expect(resolvedRef.Spec.Owner.Name).To(Equal(db.Name))
+		Expect(metav1.IsControlledBy(&resolvedRef, db)).To(BeTrue())
+
+		// All principals resolved -> DebugAccessReady=True (Provisioned).
+		Eventually(func(g Gomega) metav1.Condition {
+			var current storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &current)).To(Succeed())
+			cond := meta.FindStatusCondition(current.Status.Conditions, "DebugAccessReady")
+			g.Expect(cond).NotTo(BeNil())
+			return *cond
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(And(
+				HaveField("Status", metav1.ConditionTrue),
+				HaveField("Reason", "Provisioned"),
+			))
 	})
 
 	It("does not create a debug RoleAssignment while the identityRef ApplicationIdentity is not ready", func() {
@@ -2531,6 +2561,53 @@ var _ = Describe("DatabaseServer controller", func() {
 			return len(list.Items)
 		}).WithTimeout(5 * time.Second).WithPolling(500 * time.Millisecond).
 			Should(Equal(0))
+
+		// Pending identity -> DebugAccessReady=False (WaitingForIdentity), naming the identity.
+		Eventually(func(g Gomega) metav1.Condition {
+			var current storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &current)).To(Succeed())
+			cond := meta.FindStatusCondition(current.Status.Conditions, "DebugAccessReady")
+			g.Expect(cond).NotTo(BeNil())
+			return *cond
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(And(
+				HaveField("Status", metav1.ConditionFalse),
+				HaveField("Reason", "WaitingForIdentity"),
+				HaveField("Message", ContainSubstring(notReadyIdentity.Name)),
+			))
+
+		// The core Ready condition must be unaffected by a pending debug identity:
+		// once the ASO children report ready, the server reaches Ready=True.
+		markASOReady(ctx, db)
+		Eventually(func(g Gomega) metav1.Condition {
+			var current storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &current)).To(Succeed())
+			cond := meta.FindStatusCondition(current.Status.Conditions, "Ready")
+			g.Expect(cond).NotTo(BeNil())
+			return *cond
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(HaveField("Status", metav1.ConditionTrue))
+
+		// DebugAccessReady stays False while the identity is still pending, even
+		// though the server as a whole is Ready.
+		var afterReady storagev1alpha1.DatabaseServer
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &afterReady)).To(Succeed())
+		debugCond := meta.FindStatusCondition(afterReady.Status.Conditions, "DebugAccessReady")
+		Expect(debugCond).NotTo(BeNil())
+		Expect(debugCond.Status).To(Equal(metav1.ConditionFalse))
+
+		// Removing spec.debugAccess removes the DebugAccessReady condition entirely.
+		var updated storagev1alpha1.DatabaseServer
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
+		updated.Spec.DebugAccess = nil
+		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
+
+		Eventually(func(g Gomega) *metav1.Condition {
+			var current storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &current)).To(Succeed())
+			return meta.FindStatusCondition(current.Status.Conditions, "DebugAccessReady")
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(BeNil())
 	})
 
 	It("does not create a database server-owned user provisioning Job from legacy user auth", func() {
