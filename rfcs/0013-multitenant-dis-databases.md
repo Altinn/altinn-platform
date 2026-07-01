@@ -161,7 +161,11 @@ This RFC also expects `DatabaseServer` CRD changes:
 - keep delegated-subnet networking as the default
 - add an explicit shared mode
 - make shared mode consume existing private access network references
-- do not add database access fields to `DatabaseServer`
+- do not add per-database access fields (`Reader`/`Writer`/`Owner`) to
+  `DatabaseServer`; those stay on `Database`. Read-only, server-scoped
+  *operational* access (`spec.debugAccess`: Azure Reader on the Flexible Server
+  for portal/debug visibility, dedicated servers only) is a distinct concern and
+  does live on `DatabaseServer`.
 
 Important spec fields:
 
@@ -333,7 +337,7 @@ databases in their own resource.
 
 Alternatives:
 
-- Put database access fields on `DatabaseServer`: rejected because one kind would mean two very different things.
+- Put per-database access fields on `DatabaseServer`: rejected because one kind would mean two very different things. Read-only, server-scoped *observability/debug* access (`spec.debugAccess`, dedicated-only) is separate and does live on `DatabaseServer` — it is not per-database DML access.
 - Manage databases outside DIS: rejected because this should be a DIS database API.
 - Let "tenant" clusters create shared databases directly: possible, but spreads shared `DatabaseServer` authority too widely.
 - Derive the target `DatabaseServer` from operator config: rejected because the operator must support multiple shared `DatabaseServer` resources.
