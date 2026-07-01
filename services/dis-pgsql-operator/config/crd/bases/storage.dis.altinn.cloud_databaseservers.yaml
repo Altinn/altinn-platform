@@ -140,6 +140,81 @@ spec:
                 maximum: 35
                 minimum: 7
                 type: integer
+              debugAccess:
+                description: |-
+                  debugAccess grants read-only debug access to this server.
+                  It is only supported for dedicated servers.
+                properties:
+                  principals:
+                    description: |-
+                      principals are the Entra principals granted read-only debug access to this
+                      server: Azure Reader on the Flexible Server (Azure portal). A later slice
+                      will also grant the PostgreSQL pg_monitor role and read-only SELECT on
+                      managed databases.
+                    items:
+                      description: DebugAccessPrincipalSpec identifies one principal
+                        granted debug access.
+                      properties:
+                        group:
+                          description: group identifies an existing Entra group.
+                          properties:
+                            name:
+                              description: name is the Entra group display name used
+                                as the PostgreSQL principal name.
+                              minLength: 1
+                              type: string
+                            principalId:
+                              description: principalId is the Entra group object ID.
+                              minLength: 1
+                              type: string
+                          required:
+                          - name
+                          - principalId
+                          type: object
+                        identityRef:
+                          description: identityRef points to an ApplicationIdentity
+                            in the same namespace.
+                          properties:
+                            name:
+                              description: name is the ApplicationIdentity name in
+                                the same namespace.
+                              minLength: 1
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        servicePrincipal:
+                          description: servicePrincipal identifies an existing Entra
+                            service principal by object id.
+                          properties:
+                            name:
+                              description: |-
+                                name is used as the PostgreSQL principal (login role) name. The workload
+                                connects with this as the username. Convention: the managed identity name.
+                              minLength: 1
+                              type: string
+                            principalId:
+                              description: principalId is the Entra object ID of the
+                                service principal.
+                              minLength: 1
+                              type: string
+                          required:
+                          - name
+                          - principalId
+                          type: object
+                      type: object
+                      x-kubernetes-validations:
+                      - message: 'Provide exactly one principal source: identityRef,
+                          group, or servicePrincipal.'
+                        rule: '(has(self.identityRef) ? 1 : 0) + (has(self.group)
+                          ? 1 : 0) + (has(self.servicePrincipal) ? 1 : 0) == 1'
+                    maxItems: 20
+                    minItems: 1
+                    type: array
+                    x-kubernetes-list-type: atomic
+                required:
+                - principals
+                type: object
               enableExtensions:
                 description: |-
                   enableExtensions is the curated list of PostgreSQL extensions that should be enabled.
@@ -260,6 +335,9 @@ spec:
                 when mode is Dedicated.
               rule: '(has(self.mode) && self.mode == ''Shared'') ? has(self.network)
                 : !has(self.network)'
+            - message: 'spec.debugAccess is only supported for dedicated servers (mode:
+                Dedicated).'
+              rule: '!has(self.debugAccess) || !has(self.mode) || self.mode == ''Dedicated'''
           status:
             description: status defines the observed state of DatabaseServer.
             properties:

@@ -30,6 +30,7 @@ import (
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/network"
+	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
 )
@@ -69,6 +70,8 @@ var _ = BeforeSuite(func() {
 	err = networkv1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = dbforpostgresqlv1.AddToScheme(scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = authorizationv1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:scheme
