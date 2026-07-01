@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.8](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.4.7...dis-vault-v1.4.8) (2026-07-01)
+
+
+### Bug Fixes
+
+* **dis-operators:** pin e2e to a dedicated Kind kubeconfig ([#3727](https://github.com/Altinn/altinn-platform/issues/3727)) ([20fb836](https://github.com/Altinn/altinn-platform/commit/20fb8367683bf88021897597d3d156e32ed064c5))
+
 ## [1.4.7](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.4.6...dis-vault-v1.4.7) (2026-06-01)
 
 
