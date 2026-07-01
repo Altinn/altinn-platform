@@ -44,7 +44,7 @@ jobs:
           environments: ${{ inputs.environment }}
 
       - name: Build and push admin syncroot artifact
-        uses: Altinn/altinn-platform/actions/flux/build-push-image@e095eaa67ba630897e9b488a933c8ebb82b36732 # main
+        uses: Altinn/altinn-platform/actions/flux/build-push-image@f5fa38e997b5c025ea5f9b56708fdd0aa38104ed # main
         with:
           image_name: ${{ env.SYNCROOT_ARTIFACT_NAME }}
           tag: ${{ inputs.environment }}
@@ -54,7 +54,7 @@ jobs:
           azure_tenant_id: ${{ secrets.DIS_SYNCROOT_AZURE_TENANT_ID }}
 
       - name: Build and push tenant DB template artifact
-        uses: Altinn/altinn-platform/actions/flux/build-push-image@e095eaa67ba630897e9b488a933c8ebb82b36732 # main
+        uses: Altinn/altinn-platform/actions/flux/build-push-image@f5fa38e997b5c025ea5f9b56708fdd0aa38104ed # main
         with:
           image_name: ${{ env.TEMPLATE_ARTIFACT_NAME }}
           tag: ${{ inputs.environment }}
@@ -64,7 +64,7 @@ jobs:
           azure_tenant_id: ${{ secrets.DIS_SYNCROOT_AZURE_TENANT_ID }}
 
       - name: Build and push tenant app template artifact
-        uses: Altinn/altinn-platform/actions/flux/build-push-image@e095eaa67ba630897e9b488a933c8ebb82b36732 # main
+        uses: Altinn/altinn-platform/actions/flux/build-push-image@f5fa38e997b5c025ea5f9b56708fdd0aa38104ed # main
         with:
           image_name: ${{ env.APP_TEMPLATE_ARTIFACT_NAME }}
           tag: ${{ inputs.environment }}
