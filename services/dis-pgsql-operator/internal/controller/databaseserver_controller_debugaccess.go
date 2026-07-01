@@ -45,22 +45,20 @@ type resolvedDebugAccessPrincipal struct {
 }
 
 // ensureDebugAccessRoleAssignments reconciles the Azure Reader role assignments
-// that grant read-only debug access to this server's Flexible Server. Shared
-// servers are a no-op. When debugAccess is unset or has no principals, any
-// previously-created debug-access role assignments are pruned.
+// that grant read-only debug access to this server's Flexible Server. Debug
+// access is only supported on dedicated servers; shared servers (and servers with
+// debugAccess unset or empty) converge to zero role assignments as the prune
+// removes any previously-created ones.
 func (r *DatabaseServerReconciler) ensureDebugAccessRoleAssignments(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 ) error {
 	// Debug-access role assignments are scoped to a dedicated server's Flexible
-	// Server. Shared servers must not create them.
-	if databaseServerMode(db) == storagev1alpha1.DatabaseServerModeShared {
-		return nil
-	}
-
+	// Server. Shared servers must not own any, so leave the desired set empty for
+	// them and let the prune below converge any stale assignments to zero.
 	desired := map[string]*authorizationv1.RoleAssignment{}
-	if db.Spec.DebugAccess != nil {
+	if databaseServerMode(db) != storagev1alpha1.DatabaseServerModeShared && db.Spec.DebugAccess != nil {
 		for _, principal := range db.Spec.DebugAccess.Principals {
 			resolved, ok, err := r.resolveDebugAccessPrincipal(ctx, logger, db, principal)
 			if err != nil {
@@ -104,6 +102,9 @@ func (r *DatabaseServerReconciler) resolveDebugAccessPrincipal(
 		if principalID == "" {
 			return resolvedDebugAccessPrincipal{}, false, fmt.Errorf("debug access group principalId must not be empty")
 		}
+		if _, err := uuid.Parse(principalID); err != nil {
+			return resolvedDebugAccessPrincipal{}, false, fmt.Errorf("debug access group principalId %q is not a valid GUID", principalID)
+		}
 		return resolvedDebugAccessPrincipal{
 			PrincipalID:   principalID,
 			PrincipalType: authorizationv1.RoleAssignmentProperties_PrincipalType_Group,
@@ -113,6 +114,9 @@ func (r *DatabaseServerReconciler) resolveDebugAccessPrincipal(
 		principalID := strings.TrimSpace(principal.ServicePrincipal.PrincipalId)
 		if principalID == "" {
 			return resolvedDebugAccessPrincipal{}, false, fmt.Errorf("debug access servicePrincipal principalId must not be empty")
+		}
+		if _, err := uuid.Parse(principalID); err != nil {
+			return resolvedDebugAccessPrincipal{}, false, fmt.Errorf("debug access servicePrincipal principalId %q is not a valid GUID", principalID)
 		}
 		return resolvedDebugAccessPrincipal{
 			PrincipalID:   principalID,

@@ -176,6 +176,7 @@ type DatabaseServerDebugAccessSpec struct {
 	// managed databases.
 	// +listType=atomic
 	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=20
 	Principals []DebugAccessPrincipalSpec `json:"principals"`
 }
 

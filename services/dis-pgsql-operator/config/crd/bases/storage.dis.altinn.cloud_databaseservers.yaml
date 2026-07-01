@@ -208,6 +208,7 @@ spec:
                           group, or servicePrincipal.'
                         rule: '(has(self.identityRef) ? 1 : 0) + (has(self.group)
                           ? 1 : 0) + (has(self.servicePrincipal) ? 1 : 0) == 1'
+                    maxItems: 20
                     minItems: 1
                     type: array
                     x-kubernetes-list-type: atomic

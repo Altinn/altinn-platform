@@ -2432,6 +2432,107 @@ var _ = Describe("DatabaseServer controller", func() {
 		Expect(err.Error()).To(ContainSubstring("dedicated"))
 	})
 
+	It("creates a Reader RoleAssignment for an identityRef debugger once the ApplicationIdentity is ready", func() {
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
+
+		db := newDedicatedDatabaseServer("my-app-db-debug-identityref", directAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+			"user",
+			"user-id",
+		))
+		db.Spec.DebugAccess = &storagev1alpha1.DatabaseServerDebugAccessSpec{
+			Principals: []storagev1alpha1.DebugAccessPrincipalSpec{
+				{
+					IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: databaseAppIdentityRef},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		listDebugAccessRoleAssignments := func(g Gomega) []authorizationv1.RoleAssignment {
+			var list authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(ctx, &list,
+				client.InNamespace(db.Namespace),
+				client.MatchingLabels{
+					databaseServerNameLabelKey:   db.Name,
+					debugAccessComponentLabelKey: debugAccessComponentLabelValue,
+				},
+			)).To(Succeed())
+			return list.Items
+		}
+
+		var assignments []authorizationv1.RoleAssignment
+		Eventually(func(g Gomega) int {
+			assignments = listDebugAccessRoleAssignments(g)
+			return len(assignments)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(1))
+
+		ra := assignments[0]
+		Expect(ra.Spec.PrincipalId).NotTo(BeNil())
+		Expect(*ra.Spec.PrincipalId).To(Equal(databaseAppPrincipalID))
+		Expect(ra.Spec.PrincipalType).NotTo(BeNil())
+		Expect(string(*ra.Spec.PrincipalType)).To(Equal("ServicePrincipal"))
+		Expect(ra.Spec.RoleDefinitionReference).NotTo(BeNil())
+		Expect(ra.Spec.RoleDefinitionReference.WellKnownName).To(Equal("Reader"))
+		Expect(ra.Spec.Owner).NotTo(BeNil())
+		Expect(ra.Spec.Owner.Kind).To(Equal("FlexibleServer"))
+		Expect(ra.Spec.Owner.Name).To(Equal(db.Name))
+		Expect(metav1.IsControlledBy(&ra, db)).To(BeTrue())
+	})
+
+	It("does not create a debug RoleAssignment while the identityRef ApplicationIdentity is not ready", func() {
+		// ApplicationIdentity exists but its status is not populated yet, so the
+		// principalId cannot be resolved and the debugger is skipped.
+		notReadyIdentity := &identityv1alpha1.ApplicationIdentity{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "debug-identity-not-ready",
+				Namespace: ns,
+			},
+			Spec: identityv1alpha1.ApplicationIdentitySpec{},
+		}
+		Expect(k8sClient.Create(ctx, notReadyIdentity)).To(Succeed())
+
+		db := newDedicatedDatabaseServer("my-app-db-debug-identityref-pending", directAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+			"user",
+			"user-id",
+		))
+		db.Spec.DebugAccess = &storagev1alpha1.DatabaseServerDebugAccessSpec{
+			Principals: []storagev1alpha1.DebugAccessPrincipalSpec{
+				{
+					IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: notReadyIdentity.Name},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		// Give the controller time to reconcile the server (its Flexible Server is
+		// created), then confirm no debug RoleAssignment appears for the pending identity.
+		Eventually(func(g Gomega) error {
+			var s dbforpostgresqlv1.FlexibleServer
+			return k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &s)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Consistently(func(g Gomega) int {
+			var list authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(ctx, &list,
+				client.InNamespace(db.Namespace),
+				client.MatchingLabels{
+					databaseServerNameLabelKey:   db.Name,
+					debugAccessComponentLabelKey: debugAccessComponentLabelValue,
+				},
+			)).To(Succeed())
+			return len(list.Items)
+		}).WithTimeout(5 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(0))
+	})
+
 	It("does not create a database server-owned user provisioning Job from legacy user auth", func() {
 		db := newDedicatedDatabaseServer("my-app-db-user-job-ignored", directAuth(
 			adminManagedIdentity,
