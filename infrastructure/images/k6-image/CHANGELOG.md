@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.5.3](https://github.com/Altinn/altinn-platform/compare/k6-image-1.5.2...k6-image-1.5.3) (2026-07-01)
+
+
+### Dependency Updates
+
+* update golang:1.26-alpine docker digest to a6a091e ([#3678](https://github.com/Altinn/altinn-platform/issues/3678)) ([aed8da1](https://github.com/Altinn/altinn-platform/commit/aed8da1d7c9bd21eb116382778ebaa43df03b27c))
+* update golang:1.26-alpine docker digest to f1ddd9f ([#3689](https://github.com/Altinn/altinn-platform/issues/3689)) ([fc64aa8](https://github.com/Altinn/altinn-platform/commit/fc64aa82e3840bd361fc08e584c6b5d7b7f485f6))
+* update golang:1.26-alpine docker digest to f23e8b2 ([#3631](https://github.com/Altinn/altinn-platform/issues/3631)) ([4b4e7f8](https://github.com/Altinn/altinn-platform/commit/4b4e7f8296d68af1020380c2d5958b5fa018a7b9))
+* update grafana/k6 docker tag to v2 ([#3533](https://github.com/Altinn/altinn-platform/issues/3533)) ([bef8b92](https://github.com/Altinn/altinn-platform/commit/bef8b92fefcbbdf5d2db0e57847f32d7706e9bef))
+
 ## [1.5.2](https://github.com/Altinn/altinn-platform/compare/k6-image-1.5.1...k6-image-1.5.2) (2026-05-26)
 
 
