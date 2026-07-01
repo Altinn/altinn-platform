@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.11.1...dis-pgsql-v0.12.0) (2026-07-01)
+
+
+### Features
+
+* **dis-pgsql-operator:** read-only debug access on dedicated servers ([#3782](https://github.com/Altinn/altinn-platform/issues/3782)) ([f5fa38e](https://github.com/Altinn/altinn-platform/commit/f5fa38e997b5c025ea5f9b56708fdd0aa38104ed))
+
 ## [0.11.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.11.0...dis-pgsql-v0.11.1) (2026-06-29)
 
 
