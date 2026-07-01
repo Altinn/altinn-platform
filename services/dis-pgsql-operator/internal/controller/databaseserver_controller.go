@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
+	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -89,6 +90,10 @@ type DatabaseServerReconciler struct {
 // ASO: Flexible Server AAD administrator
 // +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversadministrators,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleserversadministrators/status,verbs=get;update;patch
+
+// ASO: Azure Reader role assignments for debug access
+// +kubebuilder:rbac:groups=authorization.azure.com,resources=roleassignments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=authorization.azure.com,resources=roleassignments/status,verbs=get;update;patch
 
 // ASO: Private DNS zone + vnet links
 // +kubebuilder:rbac:groups=network.azure.com,resources=privatednszones,verbs=get;list;watch;create;update;patch;delete
@@ -405,6 +410,12 @@ func (r *DatabaseServerReconciler) reconcileCommonDatabaseServerResources(
 		return ctrl.Result{}, err
 	}
 
+	// Debug access: Azure Reader on the Flexible Server.
+	if err := r.ensureDebugAccessRoleAssignments(ctx, logger, db); err != nil {
+		logger.Error(err, "failed to ensure debug access role assignments for database server")
+		return ctrl.Result{}, err
+	}
+
 	if !r.Config.UseAzFakes {
 		ready, err := r.asoResourcesReady(ctx, logger, db)
 		if err != nil {
@@ -677,6 +688,7 @@ func (r *DatabaseServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&dbforpostgresqlv1.FlexibleServer{}).
 		Owns(&dbforpostgresqlv1.FlexibleServersConfiguration{}).
 		Owns(&dbforpostgresqlv1.FlexibleServersAdministrator{}).
+		Owns(&authorizationv1.RoleAssignment{}).
 		Watches(&identityv1alpha1.ApplicationIdentity{}, handler.EnqueueRequestsFromMapFunc(r.mapApplicationIdentityToDatabaseServers)).
 		WithOptions(controller.Options{
 			// Force single-threaded reconciliation

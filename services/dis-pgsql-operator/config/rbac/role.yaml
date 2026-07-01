@@ -25,6 +25,26 @@ rules:
   - list
   - watch
 - apiGroups:
+  - authorization.azure.com
+  resources:
+  - roleassignments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - authorization.azure.com
+  resources:
+  - roleassignments/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - batch
   resources:
   - jobs

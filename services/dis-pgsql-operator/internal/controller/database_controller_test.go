@@ -15,6 +15,7 @@ import (
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/connection"
 	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
+	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
 	"github.com/Azure/azure-service-operator/v2/pkg/common/annotations"
@@ -373,6 +374,7 @@ var _ = Describe("DatabaseServer controller", func() {
 		deleteAll(&dbforpostgresqlv1.FlexibleServersDatabase{})
 		deleteAll(&dbforpostgresqlv1.FlexibleServersAdministrator{})
 		deleteAll(&dbforpostgresqlv1.FlexibleServersConfiguration{})
+		deleteAll(&authorizationv1.RoleAssignment{})
 		deleteAll(&dbforpostgresqlv1.FlexibleServer{})
 		deleteAll(&networkv1.PrivateDnsZonesVirtualNetworkLink{})
 		deleteAll(&networkv1.PrivateDnsZone{})
@@ -2262,6 +2264,172 @@ var _ = Describe("DatabaseServer controller", func() {
 				azureName:     "admin-new-id",
 				principalName: "admin-new",
 			}))
+	})
+
+	It("creates a Reader RoleAssignment for each spec.debugAccess principal", func() {
+		db := newDedicatedDatabaseServer("my-app-db-debug", directAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+			"user",
+			"user-id",
+		))
+		db.Spec.DebugAccess = &storagev1alpha1.DatabaseServerDebugAccessSpec{
+			Principals: []storagev1alpha1.DebugAccessPrincipalSpec{
+				{
+					Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+						Name:        databaseOwnerGroup,
+						PrincipalId: databaseOwnerPrincipalID,
+					},
+				},
+				{
+					ServicePrincipal: &storagev1alpha1.DatabaseServicePrincipalSpec{
+						Name:        databaseExternalServicePrincipal,
+						PrincipalId: databaseExternalServicePrincipalID,
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		listDebugAccessRoleAssignments := func(g Gomega) []authorizationv1.RoleAssignment {
+			var list authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(ctx, &list,
+				client.InNamespace(db.Namespace),
+				client.MatchingLabels{
+					databaseServerNameLabelKey:   db.Name,
+					debugAccessComponentLabelKey: debugAccessComponentLabelValue,
+				},
+			)).To(Succeed())
+			return list.Items
+		}
+
+		Eventually(func(g Gomega) int {
+			return len(listDebugAccessRoleAssignments(g))
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(2))
+
+		var assignments []authorizationv1.RoleAssignment
+		Eventually(func(g Gomega) int {
+			assignments = listDebugAccessRoleAssignments(g)
+			return len(assignments)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(2))
+
+		byPrincipalID := map[string]authorizationv1.RoleAssignment{}
+		for _, ra := range assignments {
+			Expect(ra.Spec.PrincipalId).NotTo(BeNil())
+			byPrincipalID[*ra.Spec.PrincipalId] = ra
+		}
+
+		Expect(byPrincipalID).To(HaveKey(databaseOwnerPrincipalID))
+		Expect(byPrincipalID).To(HaveKey(databaseExternalServicePrincipalID))
+
+		expectedType := map[string]string{
+			databaseOwnerPrincipalID:           "Group",
+			databaseExternalServicePrincipalID: "ServicePrincipal",
+		}
+		for principalID, ra := range byPrincipalID {
+			raCopy := ra
+			Expect(raCopy.Spec.RoleDefinitionReference).NotTo(BeNil())
+			Expect(raCopy.Spec.RoleDefinitionReference.WellKnownName).To(Equal("Reader"))
+
+			Expect(raCopy.Spec.PrincipalType).NotTo(BeNil())
+			Expect(string(*raCopy.Spec.PrincipalType)).To(Equal(expectedType[principalID]))
+
+			Expect(raCopy.Spec.Owner).NotTo(BeNil())
+			Expect(raCopy.Spec.Owner.Kind).To(Equal("FlexibleServer"))
+			Expect(raCopy.Spec.Owner.Name).To(Equal(db.Name))
+
+			Expect(metav1.IsControlledBy(&raCopy, db)).To(BeTrue())
+		}
+	})
+
+	It("prunes a debug RoleAssignment when a principal is removed", func() {
+		db := newDedicatedDatabaseServer("my-app-db-debug-prune", directAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+			"user",
+			"user-id",
+		))
+		db.Spec.DebugAccess = &storagev1alpha1.DatabaseServerDebugAccessSpec{
+			Principals: []storagev1alpha1.DebugAccessPrincipalSpec{
+				{
+					Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+						Name:        databaseOwnerGroup,
+						PrincipalId: databaseOwnerPrincipalID,
+					},
+				},
+				{
+					ServicePrincipal: &storagev1alpha1.DatabaseServicePrincipalSpec{
+						Name:        databaseExternalServicePrincipal,
+						PrincipalId: databaseExternalServicePrincipalID,
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		principalIDs := func(g Gomega) []string {
+			var list authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(ctx, &list,
+				client.InNamespace(db.Namespace),
+				client.MatchingLabels{
+					databaseServerNameLabelKey:   db.Name,
+					debugAccessComponentLabelKey: debugAccessComponentLabelValue,
+				},
+			)).To(Succeed())
+			ids := make([]string, 0, len(list.Items))
+			for _, ra := range list.Items {
+				g.Expect(ra.Spec.PrincipalId).NotTo(BeNil())
+				ids = append(ids, *ra.Spec.PrincipalId)
+			}
+			return ids
+		}
+
+		Eventually(func(g Gomega) []string {
+			return principalIDs(g)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(ConsistOf(databaseOwnerPrincipalID, databaseExternalServicePrincipalID))
+
+		var updated storagev1alpha1.DatabaseServer
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
+		updated.Spec.DebugAccess = &storagev1alpha1.DatabaseServerDebugAccessSpec{
+			Principals: []storagev1alpha1.DebugAccessPrincipalSpec{
+				{
+					Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+						Name:        databaseOwnerGroup,
+						PrincipalId: databaseOwnerPrincipalID,
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
+
+		Eventually(func(g Gomega) []string {
+			return principalIDs(g)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(ConsistOf(databaseOwnerPrincipalID))
+	})
+
+	It("rejects spec.debugAccess on a shared DatabaseServer", func() {
+		db := newSharedDatabaseServer("my-app-db-debug-shared")
+		db.Spec.DebugAccess = &storagev1alpha1.DatabaseServerDebugAccessSpec{
+			Principals: []storagev1alpha1.DebugAccessPrincipalSpec{
+				{
+					Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+						Name:        databaseOwnerGroup,
+						PrincipalId: databaseOwnerPrincipalID,
+					},
+				},
+			},
+		}
+
+		err := k8sClient.Create(ctx, db)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("debugAccess"))
+		Expect(err.Error()).To(ContainSubstring("dedicated"))
 	})
 
 	It("does not create a database server-owned user provisioning Job from legacy user auth", func() {

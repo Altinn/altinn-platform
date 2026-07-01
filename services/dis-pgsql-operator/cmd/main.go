@@ -31,6 +31,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -68,6 +69,8 @@ func init() {
 	utilruntime.Must(networkv1.AddToScheme(scheme))
 
 	utilruntime.Must(dbforpostgresqlv1.AddToScheme(scheme))
+
+	utilruntime.Must(authorizationv1.AddToScheme(scheme))
 
 	// +kubebuilder:scaffold:scheme
 }

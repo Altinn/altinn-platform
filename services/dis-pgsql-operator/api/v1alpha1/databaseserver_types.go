@@ -107,6 +107,7 @@ type DatabaseServerNetworkSpec struct {
 
 // DatabaseServerSpec defines the desired state of DatabaseServer.
 // +kubebuilder:validation:XValidation:rule="(has(self.mode) && self.mode == 'Shared') ? has(self.network) : !has(self.network)",message="spec.network is required when mode is Shared and must be omitted when mode is Dedicated."
+// +kubebuilder:validation:XValidation:rule="!has(self.debugAccess) || !has(self.mode) || self.mode == 'Dedicated'",message="spec.debugAccess is only supported for dedicated servers (mode: Dedicated)."
 type DatabaseServerSpec struct {
 	// mode controls whether this DatabaseServer provisions a dedicated server or a shared server.
 	// Defaults to Dedicated.
@@ -159,6 +160,39 @@ type DatabaseServerSpec struct {
 	// +kubebuilder:validation:Minimum=7
 	// +kubebuilder:validation:Maximum=35
 	BackupRetentionDays *int `json:"backupRetentionDays,omitempty"`
+
+	// debugAccess grants read-only debug access to this server.
+	// It is only supported for dedicated servers.
+	// +optional
+	DebugAccess *DatabaseServerDebugAccessSpec `json:"debugAccess,omitempty"`
+}
+
+// DatabaseServerDebugAccessSpec grants read-only debug access to this server.
+// It is only valid for dedicated servers.
+type DatabaseServerDebugAccessSpec struct {
+	// principals are the Entra principals granted read-only debug access to this
+	// server: Azure Reader on the Flexible Server (Azure portal). A later slice
+	// will also grant the PostgreSQL pg_monitor role and read-only SELECT on
+	// managed databases.
+	// +listType=atomic
+	// +kubebuilder:validation:MinItems=1
+	Principals []DebugAccessPrincipalSpec `json:"principals"`
+}
+
+// +kubebuilder:validation:XValidation:rule="(has(self.identityRef) ? 1 : 0) + (has(self.group) ? 1 : 0) + (has(self.servicePrincipal) ? 1 : 0) == 1",message="Provide exactly one principal source: identityRef, group, or servicePrincipal."
+// DebugAccessPrincipalSpec identifies one principal granted debug access.
+type DebugAccessPrincipalSpec struct {
+	// identityRef points to an ApplicationIdentity in the same namespace.
+	// +optional
+	IdentityRef *ApplicationIdentityRef `json:"identityRef,omitempty"`
+
+	// group identifies an existing Entra group.
+	// +optional
+	Group *DatabaseGroupPrincipalSpec `json:"group,omitempty"`
+
+	// servicePrincipal identifies an existing Entra service principal by object id.
+	// +optional
+	ServicePrincipal *DatabaseServicePrincipalSpec `json:"servicePrincipal,omitempty"`
 }
 
 type DatabaseServerStorageSpec struct {

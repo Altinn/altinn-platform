@@ -93,6 +93,28 @@ spec:
       identity:
         identityRef:
           name: adminidentity
+---
+apiVersion: storage.dis.altinn.cloud/v1alpha1
+kind: DatabaseServer
+metadata:
+  name: db-debug-access
+  namespace: default
+spec:
+  version: 17
+  serverType: dev
+  storage:
+    sizeGB: 32
+    tier: P6
+  auth:
+    admin:
+      identity:
+        identityRef:
+          name: adminidentity
+  debugAccess:
+    principals:
+      - group:
+          name: dis-db-debuggers
+          principalId: 33333333-3333-3333-3333-333333333333
 # ---
 # apiVersion: storage.dis.altinn.cloud/v1alpha1
 # kind: DatabaseServer
