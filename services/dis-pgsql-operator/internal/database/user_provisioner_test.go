@@ -312,6 +312,9 @@ func TestEnsureAccessRevokesRemovedManagedRoleMembers(t *testing.T) {
 type recordingConn struct {
 	execs   []execCall
 	members map[string][]string
+	// databases is returned for the no-argument database enumeration query used
+	// by server debug access provisioning (listConnectableDatabasesSQL).
+	databases []string
 }
 
 type execCall struct {
@@ -329,8 +332,13 @@ func (c *recordingConn) Exec(_ context.Context, sql string, args ...any) (pgconn
 }
 
 func (c *recordingConn) Query(_ context.Context, _ string, args ...any) (pgx.Rows, error) {
+	// The database enumeration query takes no arguments; return the configured
+	// database list.
+	if len(args) == 0 {
+		return &recordingRows{values: append([]string(nil), c.databases...)}, nil
+	}
 	if len(args) != 1 {
-		return nil, fmt.Errorf("recordingConn.Query: expected 1 arg, got %d", len(args))
+		return nil, fmt.Errorf("recordingConn.Query: expected 0 or 1 args, got %d", len(args))
 	}
 	roleName, ok := args[0].(string)
 	if !ok {

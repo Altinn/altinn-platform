@@ -31,6 +31,8 @@ func RunUserProvisioner(ctx context.Context) error {
 	disableAAD := parseBoolEnv(os.Getenv(DisableAADEnv))
 	revokePublicConnect := parseBoolEnv(os.Getenv(RevokePublicConnectEnv))
 	databaseScopedSearchPath := strings.EqualFold(strings.TrimSpace(os.Getenv(DBSearchPathScopeEnv)), "database")
+	serverDebugAccess := parseBoolEnv(os.Getenv(ServerDebugAccessEnv))
+	debugBuiltinRoles := NormalizeBuiltinRoles(os.Getenv(DebugBuiltinRolesEnv))
 	sslMode := strings.TrimSpace(os.Getenv("DISPG_DB_SSLMODE"))
 
 	if serverName == "" {
@@ -38,6 +40,9 @@ func RunUserProvisioner(ctx context.Context) error {
 	}
 	if adminAppIdentity == "" && !disableAAD {
 		return fmt.Errorf("%s must be set", AdminAppIdentityEnv)
+	}
+	if serverDebugAccess && len(debugBuiltinRoles) == 0 {
+		return fmt.Errorf("%s must contain at least one built-in role in server debug access mode", DebugBuiltinRolesEnv)
 	}
 	if schemaName == "" {
 		schemaName = serverName
@@ -62,7 +67,7 @@ func RunUserProvisioner(ctx context.Context) error {
 	}
 	dbName := strings.TrimSpace(os.Getenv(DBNameEnv))
 	if dbName == "" {
-		dbName = "postgres"
+		dbName = maintenanceDatabase
 	}
 	if sslMode == "" {
 		if disableAAD {
@@ -128,6 +133,18 @@ func RunUserProvisioner(ctx context.Context) error {
 			}
 		}()
 		principalConn = maintenanceConn
+	}
+
+	if serverDebugAccess {
+		if err := ensureServerDebugAccess(ctx, conn, principalConn, serverDebugOptions{
+			ServerName:   serverName,
+			BuiltinRoles: debugBuiltinRoles,
+			Principals:   accessPrincipals,
+			UseAAD:       !disableAAD,
+		}); err != nil {
+			return err
+		}
+		return nil
 	}
 
 	if err := ensureAccess(ctx, conn, principalConn, accessOptions{

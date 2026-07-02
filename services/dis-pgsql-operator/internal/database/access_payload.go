@@ -29,6 +29,17 @@ const (
 	DisableAADEnv          = "DISPG_DISABLE_AAD"
 	RevokePublicConnectEnv = "DISPG_REVOKE_PUBLIC_CONNECT"
 	DBSearchPathScopeEnv   = "DISPG_DB_SEARCH_PATH_SCOPE"
+
+	// ServerDebugAccessEnv toggles the server-wide debug-access provisioning mode.
+	// In this mode the Job grants each principal read-only visibility across every
+	// database on the server (one managed NOLOGIN role holding the built-in
+	// monitoring roles plus CONNECT on all databases) instead of per-database
+	// schema access. The per-principal Role field in the access payload is unused.
+	ServerDebugAccessEnv = "DISPG_SERVER_DEBUG_ACCESS"
+
+	// DebugBuiltinRolesEnv carries the comma-separated set of built-in PostgreSQL
+	// roles granted to the managed debug role (e.g. "pg_monitor,pg_read_all_data").
+	DebugBuiltinRolesEnv = "DISPG_DEBUG_BUILTIN_ROLES"
 )
 
 type AccessRole string
@@ -115,4 +126,26 @@ func normalizedAccessPrincipals(principals []AccessPrincipal) []AccessPrincipal 
 	})
 
 	return normalized
+}
+
+// NormalizeBuiltinRoles parses a comma-separated built-in role list into a
+// trimmed, de-duplicated, sorted slice. It is deterministic so the same set
+// always yields the same order, keeping the derived managed-role name and Job
+// hash stable across reconciles regardless of input ordering or whitespace.
+func NormalizeBuiltinRoles(raw string) []string {
+	seen := map[string]struct{}{}
+	roles := make([]string, 0)
+	for part := range strings.SplitSeq(raw, ",") {
+		role := strings.TrimSpace(part)
+		if role == "" {
+			continue
+		}
+		if _, ok := seen[role]; ok {
+			continue
+		}
+		seen[role] = struct{}{}
+		roles = append(roles, role)
+	}
+	slices.Sort(roles)
+	return roles
 }

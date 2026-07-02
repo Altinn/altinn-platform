@@ -430,6 +430,15 @@ func (r *DatabaseServerReconciler) reconcileCommonDatabaseServerResources(
 		return ctrl.Result{}, err
 	}
 
+	// Debug access (data plane): read-only PostgreSQL access for the same
+	// principals. Dedicated-only, mirroring the role-assignment path above.
+	if databaseServerMode(db) != storagev1alpha1.DatabaseServerModeShared {
+		if err := r.ensureDebugAccessProvisioning(ctx, logger, db, adminIdentity); err != nil {
+			logger.Error(err, "failed to ensure debug access provisioning for database server")
+			return ctrl.Result{}, err
+		}
+	}
+
 	if !r.Config.UseAzFakes {
 		ready, err := r.asoResourcesReady(ctx, logger, db)
 		if err != nil {
