@@ -48,7 +48,9 @@ func RunUserProvisioner(ctx context.Context) error {
 		schemaName = serverName
 	}
 
-	accessPrincipals, err := accessPrincipalsFromEnv(disableAAD)
+	// Server debug access allows an empty principal set: the revocation Job runs
+	// with zero principals so the membership reconcile revokes everyone.
+	accessPrincipals, err := accessPrincipalsFromEnv(disableAAD, serverDebugAccess)
 	if err != nil {
 		return err
 	}
@@ -237,16 +239,19 @@ func ensureAccess(ctx context.Context, conn pgxConn, principalConn pgxConn, opts
 	return nil
 }
 
-func accessPrincipalsFromEnv(disableAAD bool) ([]AccessPrincipal, error) {
-	principals, err := ParseAccessPrincipalsPayload(os.Getenv(AccessPrincipalsEnv))
+func accessPrincipalsFromEnv(disableAAD, allowEmpty bool) ([]AccessPrincipal, error) {
+	principals, err := parseAccessPrincipalsPayload(os.Getenv(AccessPrincipalsEnv), allowEmpty)
 	if err != nil {
 		return nil, err
 	}
-	return validateAccessPrincipals(principals, !disableAAD)
+	return validateAccessPrincipals(principals, !disableAAD, allowEmpty)
 }
 
-func validateAccessPrincipals(principals []AccessPrincipal, useAAD bool) ([]AccessPrincipal, error) {
+func validateAccessPrincipals(principals []AccessPrincipal, useAAD, allowEmpty bool) ([]AccessPrincipal, error) {
 	if len(principals) == 0 {
+		if allowEmpty {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("%s must contain at least one principal", AccessPrincipalsEnv)
 	}
 

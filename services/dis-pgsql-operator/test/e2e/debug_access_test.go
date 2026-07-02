@@ -179,6 +179,25 @@ func waitForDebugAccessJobComplete(serverName, namespace string) {
 		"dis.altinn.cloud/database-server-name=%s,dis.altinn.cloud/component=debug-access,dis.altinn.cloud/user-provision=true",
 		serverName,
 	)
+
+	// Wait for the Job to exist first: kubectl wait errors immediately when the
+	// label selector matches nothing, and a missing Job (operator never created
+	// it) is a different failure than a Job that never completes.
+	Eventually(func() error {
+		cmd := exec.Command("kubectl", "get", "job", "-l", labelSelector, "-n", namespace, "-o", "name")
+		output, err := utils.Run(cmd)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(output) == "" {
+			return fmt.Errorf("no debug access provisioning job matches %q yet", labelSelector)
+		}
+		return nil
+	}).WithTimeout(3*time.Minute).WithPolling(3*time.Second).
+		Should(Succeed(), func() string {
+			return "debug access provisioning job was never created\n" + debugAccessDiagnostics(namespace)
+		})
+
 	Eventually(func() error {
 		cmd := exec.Command(
 			"kubectl", "wait",
@@ -190,8 +209,40 @@ func waitForDebugAccessJobComplete(serverName, namespace string) {
 		)
 		_, err := utils.Run(cmd)
 		return err
-	}).WithTimeout(5*time.Minute).WithPolling(3*time.Second).
-		Should(Succeed(), "debug access provisioning job did not complete")
+	}).WithTimeout(3*time.Minute).WithPolling(3*time.Second).
+		Should(Succeed(), func() string {
+			return "debug access provisioning job did not complete\n" + debugAccessDiagnostics(namespace)
+		})
+}
+
+// debugAccessDiagnostics collects the state needed to diagnose a debug access
+// provisioning failure from CI output alone: the jobs with their labels and the
+// operator manager logs.
+func debugAccessDiagnostics(namespace string) string {
+	var b strings.Builder
+
+	b.WriteString("--- jobs (with labels) ---\n")
+	cmd := exec.Command("kubectl", "get", "jobs", "-n", namespace, "--show-labels")
+	if output, err := utils.Run(cmd); err == nil {
+		b.WriteString(output)
+	} else {
+		fmt.Fprintf(&b, "failed to list jobs: %v\n", err)
+	}
+
+	b.WriteString("--- operator logs (tail) ---\n")
+	cmd = exec.Command(
+		"kubectl", "logs",
+		"-n", "dis-pgsql-operator-system",
+		"deploy/dis-pgsql-operator-controller-manager",
+		"--tail", "100",
+	)
+	if output, err := utils.Run(cmd); err == nil {
+		b.WriteString(output)
+	} else {
+		fmt.Fprintf(&b, "failed to fetch operator logs: %v\n", err)
+	}
+
+	return b.String()
 }
 
 func patchDebugAccessGroupPrincipal(serverName, namespace, groupName, groupPrincipalID string) {

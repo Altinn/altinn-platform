@@ -82,6 +82,13 @@ func MarshalAccessPrincipals(principals []AccessPrincipal) (string, error) {
 }
 
 func ParseAccessPrincipalsPayload(raw string) ([]AccessPrincipal, error) {
+	return parseAccessPrincipalsPayload(raw, false)
+}
+
+// parseAccessPrincipalsPayload parses the serialized access payload. allowEmpty
+// permits a payload with zero principals: server debug access uses it for the
+// revocation run, where the membership reconcile revokes every member.
+func parseAccessPrincipalsPayload(raw string, allowEmpty bool) ([]AccessPrincipal, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil, fmt.Errorf("%s must be set", AccessPrincipalsEnv)
@@ -94,7 +101,7 @@ func ParseAccessPrincipalsPayload(raw string) ([]AccessPrincipal, error) {
 	if payload.Version != AccessPayloadVersion {
 		return nil, fmt.Errorf("%s version %d is not supported", AccessPrincipalsEnv, payload.Version)
 	}
-	if len(payload.Principals) == 0 {
+	if len(payload.Principals) == 0 && !allowEmpty {
 		return nil, fmt.Errorf("%s must contain at least one principal", AccessPrincipalsEnv)
 	}
 

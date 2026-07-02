@@ -215,7 +215,9 @@ func validateUserProvisionJobSpec(spec userProvisionJobSpec, useAzFakes bool) er
 	if spec.ServerDebugAccess && len(spec.DebugBuiltinRoles) == 0 {
 		return fmt.Errorf("at least one built-in role must be set for server debug access provisioning")
 	}
-	if len(spec.AccessPrincipals) == 0 {
+	// Server debug access allows an empty principal set: the revocation Job runs
+	// with zero principals so the membership reconcile revokes everyone.
+	if len(spec.AccessPrincipals) == 0 && !spec.ServerDebugAccess {
 		return fmt.Errorf("at least one access principal must be set for user provisioning")
 	}
 	for i, principal := range spec.AccessPrincipals {

@@ -410,6 +410,14 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              debugAccessProvisionedHash:
+                description: |-
+                  debugAccessProvisionedHash is an opaque marker of the debug-access
+                  principal set most recently provisioned into PostgreSQL (data plane).
+                  A non-empty value means grants may exist in the server, so when
+                  spec.debugAccess is removed the controller runs one revocation Job
+                  (empty principal set) and clears this field once that Job completes.
+                type: string
               host:
                 description: |-
                   host is the fully qualified DNS name of the PostgreSQL Flexible Server

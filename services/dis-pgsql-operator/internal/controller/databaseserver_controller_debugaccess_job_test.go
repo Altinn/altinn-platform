@@ -42,8 +42,8 @@ func TestDebugAccessProvisionJobNameDeterministicAndBounded(t *testing.T) {
 	principals := testDebugPrincipals()
 	builtin := []string{debugBuiltinRolePgMonitor, debugBuiltinRolePgReadAllData}
 
-	first := debugAccessProvisionJobName(db, admin, principals, builtin)
-	second := debugAccessProvisionJobName(db, admin, principals, builtin)
+	first := debugAccessProvisionJobName(db, admin, principals, builtin, nil)
+	second := debugAccessProvisionJobName(db, admin, principals, builtin, nil)
 
 	if first != second {
 		t.Fatalf("expected deterministic job name, got %q vs %q", first, second)
@@ -64,23 +64,38 @@ func TestDebugAccessProvisionJobNameChangesWithPrincipalSet(t *testing.T) {
 	admin := testDebugAdminIdentity()
 	builtin := []string{debugBuiltinRolePgMonitor, debugBuiltinRolePgReadAllData}
 
-	base := debugAccessProvisionJobName(db, admin, testDebugPrincipals(), builtin)
+	base := debugAccessProvisionJobName(db, admin, testDebugPrincipals(), builtin, nil)
 
 	added := debugAccessProvisionJobName(db, admin, append(testDebugPrincipals(), dbUtil.AccessPrincipal{
 		Name:          "another",
 		PrincipalID:   "22222222-2222-2222-2222-222222222222",
 		PrincipalType: dbUtil.PrincipalTypeService,
-	}), builtin)
+	}), builtin, nil)
 
 	if base == added {
 		t.Fatalf("expected job name to change when a principal is added, got %q for both", base)
 	}
 }
 
+func TestDebugAccessProvisionJobNameChangesWithDatabaseList(t *testing.T) {
+	db := testDebugJobServer()
+	admin := testDebugAdminIdentity()
+	principals := testDebugPrincipals()
+	builtin := []string{debugBuiltinRolePgMonitor, debugBuiltinRolePgReadAllData}
+
+	base := debugAccessProvisionJobName(db, admin, principals, builtin, nil)
+	withDB := debugAccessProvisionJobName(db, admin, principals, builtin, []string{"router"})
+	withMoreDBs := debugAccessProvisionJobName(db, admin, principals, builtin, []string{"billing", "router"})
+
+	if base == withDB || withDB == withMoreDBs {
+		t.Fatalf("expected job name to change when the database list changes, got %q / %q / %q", base, withDB, withMoreDBs)
+	}
+}
+
 func TestDebugAccessProvisionJobNameLongServerFits(t *testing.T) {
 	db := testDebugJobServer()
 	db.Name = strings.Repeat("a", 200)
-	name := debugAccessProvisionJobName(db, testDebugAdminIdentity(), testDebugPrincipals(), []string{debugBuiltinRolePgMonitor})
+	name := debugAccessProvisionJobName(db, testDebugAdminIdentity(), testDebugPrincipals(), []string{debugBuiltinRolePgMonitor}, nil)
 	if len(name) > 63 {
 		t.Fatalf("expected name within 63 chars, got len=%d (%q)", len(name), name)
 	}
@@ -187,6 +202,24 @@ func TestValidateUserProvisionJobSpecServerDebug(t *testing.T) {
 	// Debug mode ignores the per-principal Role field (unset is fine).
 	if valid.AccessPrincipals[0].Role != "" {
 		t.Fatalf("test precondition: debug principal Role should be empty")
+	}
+
+	// Debug mode allows zero principals: the revocation Job runs with an empty
+	// set so the membership reconcile revokes everyone.
+	revocation := valid
+	revocation.AccessPrincipals = nil
+	if err := validateUserProvisionJobSpec(revocation, false); err != nil {
+		t.Fatalf("expected zero-principal server-debug spec to be valid, got %v", err)
+	}
+
+	// Non-debug provisioning still requires at least one principal.
+	nonDebug := valid
+	nonDebug.ServerDebugAccess = false
+	nonDebug.DebugBuiltinRoles = nil
+	nonDebug.SchemaName = "app"
+	nonDebug.AccessPrincipals = nil
+	if err := validateUserProvisionJobSpec(nonDebug, false); err == nil {
+		t.Fatalf("expected error for zero principals outside debug mode")
 	}
 }
 
