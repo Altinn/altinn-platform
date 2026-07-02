@@ -229,6 +229,22 @@ func debugAccessDiagnostics(namespace string) string {
 		fmt.Fprintf(&b, "failed to list jobs: %v\n", err)
 	}
 
+	b.WriteString("--- provisioning job pod logs ---\n")
+	cmd = exec.Command("kubectl", "get", "job", "-n", namespace, "-o", "name")
+	if output, err := utils.Run(cmd); err == nil {
+		for _, jobRef := range strings.Fields(output) {
+			fmt.Fprintf(&b, "%s:\n", jobRef)
+			logsCmd := exec.Command("kubectl", "logs", jobRef, "-n", namespace, "--tail", "60")
+			if logs, logsErr := utils.Run(logsCmd); logsErr == nil {
+				b.WriteString(logs)
+			} else {
+				fmt.Fprintf(&b, "failed to fetch logs: %v\n", logsErr)
+			}
+		}
+	} else {
+		fmt.Fprintf(&b, "failed to list jobs for logs: %v\n", err)
+	}
+
 	b.WriteString("--- operator logs (tail) ---\n")
 	cmd = exec.Command(
 		"kubectl", "logs",

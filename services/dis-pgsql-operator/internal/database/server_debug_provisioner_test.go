@@ -15,7 +15,7 @@ const (
 
 func TestListConnectableDatabasesSQL(t *testing.T) {
 	got := listConnectableDatabasesSQL()
-	want := "SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn;"
+	want := "SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn AND has_database_privilege(current_user, oid, 'CONNECT WITH GRANT OPTION');"
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}

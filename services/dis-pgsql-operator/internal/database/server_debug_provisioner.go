@@ -121,8 +121,13 @@ func newSingleRoleMemberships(roleName string) *managedRoleMemberships {
 	}
 }
 
-// connectableDatabases returns the names of all non-template databases that
-// allow connections, so CONNECT can be granted on each to the debug role.
+// connectableDatabases returns the names of the non-template, connectable
+// databases the current user can grant CONNECT on (owner, superuser, or
+// CONNECT WITH GRANT OPTION), so CONNECT can be granted on each to the debug
+// role. Databases the admin cannot grant on (e.g. the postgres maintenance
+// database, owned by the superuser) are skipped: their PUBLIC CONNECT is never
+// revoked by this operator, so debug principals can already connect. App
+// databases are admin-owned and therefore always included.
 func connectableDatabases(ctx context.Context, conn pgxConn) ([]string, error) {
 	rows, err := conn.Query(ctx, listConnectableDatabasesSQL())
 	if err != nil {
@@ -145,5 +150,5 @@ func connectableDatabases(ctx context.Context, conn pgxConn) ([]string, error) {
 }
 
 func listConnectableDatabasesSQL() string {
-	return "SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn;"
+	return "SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn AND has_database_privilege(current_user, oid, 'CONNECT WITH GRANT OPTION');"
 }
