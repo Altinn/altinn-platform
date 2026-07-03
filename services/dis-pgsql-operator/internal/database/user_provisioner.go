@@ -31,6 +31,8 @@ func RunUserProvisioner(ctx context.Context) error {
 	disableAAD := parseBoolEnv(os.Getenv(DisableAADEnv))
 	revokePublicConnect := parseBoolEnv(os.Getenv(RevokePublicConnectEnv))
 	databaseScopedSearchPath := strings.EqualFold(strings.TrimSpace(os.Getenv(DBSearchPathScopeEnv)), "database")
+	serverDebugAccess := parseBoolEnv(os.Getenv(ServerDebugAccessEnv))
+	debugBuiltinRoles := NormalizeBuiltinRoles(os.Getenv(DebugBuiltinRolesEnv))
 	sslMode := strings.TrimSpace(os.Getenv("DISPG_DB_SSLMODE"))
 
 	if serverName == "" {
@@ -39,11 +41,16 @@ func RunUserProvisioner(ctx context.Context) error {
 	if adminAppIdentity == "" && !disableAAD {
 		return fmt.Errorf("%s must be set", AdminAppIdentityEnv)
 	}
+	if serverDebugAccess && len(debugBuiltinRoles) == 0 {
+		return fmt.Errorf("%s must contain at least one built-in role in server debug access mode", DebugBuiltinRolesEnv)
+	}
 	if schemaName == "" {
 		schemaName = serverName
 	}
 
-	accessPrincipals, err := accessPrincipalsFromEnv(disableAAD)
+	// Server debug access allows an empty principal set: the revocation Job runs
+	// with zero principals so the membership reconcile revokes everyone.
+	accessPrincipals, err := accessPrincipalsFromEnv(disableAAD, serverDebugAccess)
 	if err != nil {
 		return err
 	}
@@ -62,7 +69,7 @@ func RunUserProvisioner(ctx context.Context) error {
 	}
 	dbName := strings.TrimSpace(os.Getenv(DBNameEnv))
 	if dbName == "" {
-		dbName = "postgres"
+		dbName = maintenanceDatabase
 	}
 	if sslMode == "" {
 		if disableAAD {
@@ -128,6 +135,18 @@ func RunUserProvisioner(ctx context.Context) error {
 			}
 		}()
 		principalConn = maintenanceConn
+	}
+
+	if serverDebugAccess {
+		if err := ensureServerDebugAccess(ctx, conn, principalConn, serverDebugOptions{
+			ServerName:   serverName,
+			BuiltinRoles: debugBuiltinRoles,
+			Principals:   accessPrincipals,
+			UseAAD:       !disableAAD,
+		}); err != nil {
+			return err
+		}
+		return nil
 	}
 
 	if err := ensureAccess(ctx, conn, principalConn, accessOptions{
@@ -220,16 +239,22 @@ func ensureAccess(ctx context.Context, conn pgxConn, principalConn pgxConn, opts
 	return nil
 }
 
-func accessPrincipalsFromEnv(disableAAD bool) ([]AccessPrincipal, error) {
-	principals, err := ParseAccessPrincipalsPayload(os.Getenv(AccessPrincipalsEnv))
+func accessPrincipalsFromEnv(disableAAD, serverDebug bool) ([]AccessPrincipal, error) {
+	principals, err := parseAccessPrincipalsPayload(os.Getenv(AccessPrincipalsEnv), serverDebug)
 	if err != nil {
 		return nil, err
 	}
-	return validateAccessPrincipals(principals, !disableAAD)
+	return validateAccessPrincipals(principals, !disableAAD, serverDebug)
 }
 
-func validateAccessPrincipals(principals []AccessPrincipal, useAAD bool) ([]AccessPrincipal, error) {
+// validateAccessPrincipals validates the deserialized principal set. In server
+// debug mode the set may be empty (the revocation run) and principals carry no
+// per-database Role, so the Role-less debug validation applies.
+func validateAccessPrincipals(principals []AccessPrincipal, useAAD, serverDebug bool) ([]AccessPrincipal, error) {
 	if len(principals) == 0 {
+		if serverDebug {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("%s must contain at least one principal", AccessPrincipalsEnv)
 	}
 
@@ -237,7 +262,11 @@ func validateAccessPrincipals(principals []AccessPrincipal, useAAD bool) ([]Acce
 	seen := map[string]struct{}{}
 	for i, principal := range principals {
 		principal = normalizeAccessPrincipal(principal)
-		if err := validateAccessPrincipal(principal, useAAD); err != nil {
+		validate := validateAccessPrincipal
+		if serverDebug {
+			validate = validateDebugAccessPrincipal
+		}
+		if err := validate(principal, useAAD); err != nil {
 			return nil, fmt.Errorf("access principal %d: %w", i, err)
 		}
 		keyValue := principal.PrincipalID

@@ -44,6 +44,17 @@ type userProvisionJobSpec struct {
 
 	RevokePublicConnect bool
 	SearchPathScope     string
+
+	// ServerDebugAccess selects server-wide debug access provisioning instead of
+	// per-database schema access. In this mode SchemaName/SearchPathScope and the
+	// per-principal Role field are unused; principals are granted membership in a
+	// single managed role holding DebugBuiltinRoles plus CONNECT on all databases.
+	ServerDebugAccess bool
+
+	// DebugBuiltinRoles are the built-in PostgreSQL roles (e.g. pg_monitor,
+	// pg_read_all_data) granted to the managed debug role. Only used when
+	// ServerDebugAccess is true.
+	DebugBuiltinRoles []string
 }
 
 type userProvisionJobReconciler interface {
@@ -196,10 +207,17 @@ func validateUserProvisionJobSpec(spec userProvisionJobSpec, useAzFakes bool) er
 	if spec.ServerName == "" {
 		return fmt.Errorf("server name must be set for user provisioning")
 	}
-	if spec.SchemaName == "" {
+	// Server debug access is server-wide: it has no schema and does not use the
+	// per-principal Role field, so those checks are skipped for it below.
+	if !spec.ServerDebugAccess && spec.SchemaName == "" {
 		return fmt.Errorf("schema name must be set for user provisioning")
 	}
-	if len(spec.AccessPrincipals) == 0 {
+	if spec.ServerDebugAccess && len(spec.DebugBuiltinRoles) == 0 {
+		return fmt.Errorf("at least one built-in role must be set for server debug access provisioning")
+	}
+	// Server debug access allows an empty principal set: the revocation Job runs
+	// with zero principals so the membership reconcile revokes everyone.
+	if len(spec.AccessPrincipals) == 0 && !spec.ServerDebugAccess {
 		return fmt.Errorf("at least one access principal must be set for user provisioning")
 	}
 	for i, principal := range spec.AccessPrincipals {
@@ -213,6 +231,9 @@ func validateUserProvisionJobSpec(spec userProvisionJobSpec, useAzFakes bool) er
 		case dbUtil.PrincipalTypeService, dbUtil.PrincipalTypeGroup:
 		default:
 			return fmt.Errorf("access principal %d principal type must be service or group", i)
+		}
+		if spec.ServerDebugAccess {
+			continue
 		}
 		switch principal.Role {
 		case dbUtil.AccessRoleReader, dbUtil.AccessRoleWriter, dbUtil.AccessRoleOwner:
@@ -306,6 +327,12 @@ func userProvisionJobEnv(spec userProvisionJobSpec) []corev1.EnvVar {
 	}
 	if spec.SearchPathScope != "" {
 		env = append(env, corev1.EnvVar{Name: dbUtil.DBSearchPathScopeEnv, Value: spec.SearchPathScope})
+	}
+	if spec.ServerDebugAccess {
+		env = append(env,
+			corev1.EnvVar{Name: dbUtil.ServerDebugAccessEnv, Value: "1"},
+			corev1.EnvVar{Name: dbUtil.DebugBuiltinRolesEnv, Value: strings.Join(spec.DebugBuiltinRoles, ",")},
+		)
 	}
 	return env
 }

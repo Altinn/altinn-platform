@@ -2636,6 +2636,152 @@ var _ = Describe("DatabaseServer controller", func() {
 			Should(Equal(0))
 	})
 
+	It("creates a server-debug provisioning Job for debugAccess principals", func() {
+		db := newDedicatedDatabaseServer("my-app-db-debug-job", directAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+			"user",
+			"user-id",
+		))
+		db.Spec.DebugAccess = &storagev1alpha1.DatabaseServerDebugAccessSpec{
+			Principals: []storagev1alpha1.DebugAccessPrincipalSpec{
+				{
+					Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+						Name:        databaseOwnerGroup,
+						PrincipalId: databaseOwnerPrincipalID,
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		markASOReady(ctx, db)
+
+		Eventually(func(g Gomega) {
+			var jobs batchv1.JobList
+			g.Expect(k8sClient.List(ctx, &jobs,
+				client.InNamespace(db.Namespace),
+				client.MatchingLabels(map[string]string{
+					databaseServerNameLabelKey:   db.Name,
+					debugAccessComponentLabelKey: debugAccessComponentLabelValue,
+					userProvisionLabelKey:        labelValueTrue,
+				}),
+			)).To(Succeed())
+			g.Expect(jobs.Items).To(HaveLen(1))
+
+			job := jobs.Items[0]
+			var fetched storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &fetched)).To(Succeed())
+			g.Expect(metav1.IsControlledBy(&job, &fetched)).To(BeTrue())
+			g.Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+				corev1.EnvVar{Name: dbUtil.ServerDebugAccessEnv, Value: "1"},
+			))
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &updated)).To(Succeed())
+			return updated.Status.DebugAccessProvisionedHash
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			ShouldNot(BeEmpty())
+	})
+
+	It("runs a revocation Job and clears the provisioned marker when debugAccess is removed", func() {
+		db := newDedicatedDatabaseServer("my-app-db-debug-revoke", directAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+			"user",
+			"user-id",
+		))
+		db.Spec.DebugAccess = &storagev1alpha1.DatabaseServerDebugAccessSpec{
+			Principals: []storagev1alpha1.DebugAccessPrincipalSpec{
+				{
+					Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+						Name:        databaseOwnerGroup,
+						PrincipalId: databaseOwnerPrincipalID,
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		markASOReady(ctx, db)
+
+		serverKey := types.NamespacedName{Name: db.Name, Namespace: db.Namespace}
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, serverKey, &updated)).To(Succeed())
+			return updated.Status.DebugAccessProvisionedHash
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			ShouldNot(BeEmpty())
+
+		Eventually(func(g Gomega) {
+			var fetched storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, serverKey, &fetched)).To(Succeed())
+			fetched.Spec.DebugAccess = nil
+			g.Expect(k8sClient.Update(ctx, &fetched)).To(Succeed())
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		var revocationJobName string
+		Eventually(func(g Gomega) {
+			var jobs batchv1.JobList
+			g.Expect(k8sClient.List(ctx, &jobs,
+				client.InNamespace(db.Namespace),
+				client.MatchingLabels(map[string]string{
+					databaseServerNameLabelKey:   db.Name,
+					debugAccessComponentLabelKey: debugAccessComponentLabelValue,
+					userProvisionLabelKey:        labelValueTrue,
+				}),
+			)).To(Succeed())
+			g.Expect(jobs.Items).To(HaveLen(1))
+
+			payload := ""
+			for _, env := range jobs.Items[0].Spec.Template.Spec.Containers[0].Env {
+				if env.Name == dbUtil.AccessPrincipalsEnv {
+					payload = env.Value
+				}
+			}
+			g.Expect(payload).To(ContainSubstring(`"principals":[]`))
+			revocationJobName = jobs.Items[0].Name
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func(g Gomega) {
+			var job batchv1.Job
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      revocationJobName,
+				Namespace: db.Namespace,
+			}, &job)).To(Succeed())
+			now := metav1.Now()
+			job.Status.StartTime = &now
+			job.Status.CompletionTime = &now
+			job.Status.Succeeded = 1
+			job.Status.Conditions = []batchv1.JobCondition{
+				{Type: batchv1.JobSuccessCriteriaMet, Status: corev1.ConditionTrue, LastTransitionTime: now},
+				{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: now},
+			}
+			g.Expect(k8sClient.Status().Update(ctx, &job)).To(Succeed())
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, serverKey, &updated)).To(Succeed())
+			return updated.Status.DebugAccessProvisionedHash
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(BeEmpty())
+	})
+
 	It("sets DatabaseServer Ready after ASO resources are ready", func() {
 		db := newDedicatedDatabaseServer("my-app-db-ready", adminAuth(
 			adminManagedIdentity,

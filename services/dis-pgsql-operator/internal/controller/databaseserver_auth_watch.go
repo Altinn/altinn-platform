@@ -38,6 +38,29 @@ func (r *DatabaseServerReconciler) mapApplicationIdentityToDatabaseServers(
 	return requests
 }
 
+// mapDatabaseToDatabaseServer enqueues the same-namespace DatabaseServer a
+// Database targets, so server-scoped concerns that depend on the database set
+// (debug access CONNECT grants) reconcile when databases are added or removed.
+func (r *DatabaseServerReconciler) mapDatabaseToDatabaseServer(
+	_ context.Context,
+	obj client.Object,
+) []ctrl.Request {
+	database, ok := obj.(*storagev1alpha1.Database)
+	if !ok {
+		return nil
+	}
+	serverName := database.Spec.Server.Name
+	if serverName == "" {
+		return nil
+	}
+	return []ctrl.Request{{
+		NamespacedName: types.NamespacedName{
+			Name:      serverName,
+			Namespace: database.Namespace,
+		},
+	}}
+}
+
 func databaseServerReferencesIdentity(db *storagev1alpha1.DatabaseServer, identityName string) bool {
 	if db.Spec.Auth.Admin.Identity.IdentityRef != nil && db.Spec.Auth.Admin.Identity.IdentityRef.Name == identityName {
 		return true

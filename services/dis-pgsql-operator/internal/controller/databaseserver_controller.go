@@ -10,6 +10,7 @@ import (
 	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	asoconditions "github.com/Azure/azure-service-operator/v2/pkg/genruntime/conditions"
 	"github.com/go-logr/logr"
+	batchv1 "k8s.io/api/batch/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -430,6 +431,15 @@ func (r *DatabaseServerReconciler) reconcileCommonDatabaseServerResources(
 		return ctrl.Result{}, err
 	}
 
+	// Debug access (data plane): read-only PostgreSQL access for the same
+	// principals. Dedicated-only, mirroring the role-assignment path above.
+	if databaseServerMode(db) != storagev1alpha1.DatabaseServerModeShared {
+		if err := r.ensureDebugAccessProvisioning(ctx, logger, db, adminIdentity); err != nil {
+			logger.Error(err, "failed to ensure debug access provisioning for database server")
+			return ctrl.Result{}, err
+		}
+	}
+
 	if !r.Config.UseAzFakes {
 		ready, err := r.asoResourcesReady(ctx, logger, db)
 		if err != nil {
@@ -703,7 +713,9 @@ func (r *DatabaseServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&dbforpostgresqlv1.FlexibleServersConfiguration{}).
 		Owns(&dbforpostgresqlv1.FlexibleServersAdministrator{}).
 		Owns(&authorizationv1.RoleAssignment{}).
+		Owns(&batchv1.Job{}).
 		Watches(&identityv1alpha1.ApplicationIdentity{}, handler.EnqueueRequestsFromMapFunc(r.mapApplicationIdentityToDatabaseServers)).
+		Watches(&storagev1alpha1.Database{}, handler.EnqueueRequestsFromMapFunc(r.mapDatabaseToDatabaseServer)).
 		WithOptions(controller.Options{
 			// Force single-threaded reconciliation
 			MaxConcurrentReconciles: 1,

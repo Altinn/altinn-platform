@@ -7,6 +7,10 @@ data:
   10-dispg-admin.sql: |
     CREATE ROLE dispg_admin LOGIN CREATEROLE CREATEDB;
     ALTER ROLE dispg_admin SET createrole_self_grant = 'set, inherit';
+    -- Azure Flexible Server's azure_pg_admin holds ADMIN OPTION on the built-in
+    -- monitoring roles; mirror that so dispg_admin can grant them for debug access.
+    GRANT pg_monitor TO dispg_admin WITH ADMIN OPTION;
+    GRANT pg_read_all_data TO dispg_admin WITH ADMIN OPTION;
 ---
 apiVersion: apps/v1
 kind: Deployment

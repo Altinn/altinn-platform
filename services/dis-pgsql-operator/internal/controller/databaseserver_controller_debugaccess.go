@@ -40,8 +40,11 @@ const (
 )
 
 // resolvedDebugAccessPrincipal is a debug principal resolved to the values ASO
-// needs to create the Azure Reader role assignment.
+// needs to create the Azure Reader role assignment. Name is additionally the
+// PostgreSQL principal (role) name the data-plane provisioner uses; the Azure
+// role-assignment path ignores it.
 type resolvedDebugAccessPrincipal struct {
+	Name          string
 	PrincipalID   string
 	PrincipalType authorizationv1.RoleAssignmentProperties_PrincipalType
 }
@@ -159,6 +162,7 @@ func (r *DatabaseServerReconciler) resolveDebugAccessPrincipal(
 			return resolvedDebugAccessPrincipal{}, false, fmt.Errorf("debug access group principalId %q is not a valid GUID", principalID)
 		}
 		return resolvedDebugAccessPrincipal{
+			Name:          strings.TrimSpace(principal.Group.Name),
 			PrincipalID:   principalID,
 			PrincipalType: authorizationv1.RoleAssignmentProperties_PrincipalType_Group,
 		}, true, nil
@@ -172,6 +176,7 @@ func (r *DatabaseServerReconciler) resolveDebugAccessPrincipal(
 			return resolvedDebugAccessPrincipal{}, false, fmt.Errorf("debug access servicePrincipal principalId %q is not a valid GUID", principalID)
 		}
 		return resolvedDebugAccessPrincipal{
+			Name:          strings.TrimSpace(principal.ServicePrincipal.Name),
 			PrincipalID:   principalID,
 			PrincipalType: authorizationv1.RoleAssignmentProperties_PrincipalType_ServicePrincipal,
 		}, true, nil
@@ -205,7 +210,17 @@ func (r *DatabaseServerReconciler) resolveDebugAccessPrincipal(
 			return resolvedDebugAccessPrincipal{}, false, nil
 		}
 
+		var managedIdentityName string
+		if appIdentity.Status.ManagedIdentityName != nil {
+			managedIdentityName = strings.TrimSpace(*appIdentity.Status.ManagedIdentityName)
+		}
+
+		// managedIdentityName may still be empty here: the Azure RoleAssignment
+		// path only needs the principal id, so it is not gated on the name. The
+		// data-plane provisioner requires a name and skips a nameless principal
+		// (treating it as not-ready) via debugAccessDataPlanePrincipal.
 		return resolvedDebugAccessPrincipal{
+			Name:          managedIdentityName,
 			PrincipalID:   principalID,
 			PrincipalType: authorizationv1.RoleAssignmentProperties_PrincipalType_ServicePrincipal,
 		}, true, nil
