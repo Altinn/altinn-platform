@@ -169,6 +169,13 @@ var _ = Describe("DatabaseServer controller", func() {
 		return database.Spec.Name
 	}
 
+	expectedFlexibleServerResourceID := func(serverName string) string {
+		return fmt.Sprintf(
+			"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test-rg/providers/Microsoft.DBforPostgreSQL/flexibleServers/%s",
+			serverName,
+		)
+	}
+
 	ensureNamespace := func(ctx context.Context, namespace string) {
 		nsObject := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
@@ -274,6 +281,8 @@ var _ = Describe("DatabaseServer controller", func() {
 			}
 			host := fmt.Sprintf("%s.postgres.database.azure.com", serverName)
 			server.Status.FullyQualifiedDomainName = &host
+			resourceID := expectedFlexibleServerResourceID(serverName)
+			server.Status.Id = &resourceID
 			return k8sClient.Status().Update(ctx, &server)
 		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
 			Should(Succeed())
@@ -2802,6 +2811,8 @@ var _ = Describe("DatabaseServer controller", func() {
 			g.Expect(ready).NotTo(BeNil())
 			g.Expect(ready.Reason).To(Equal(databaseServerReasonReady))
 			g.Expect(ready.ObservedGeneration).To(Equal(updated.Generation))
+			g.Expect(updated.Status.Host).To(Equal(fmt.Sprintf("%s.postgres.database.azure.com", db.Name)))
+			g.Expect(updated.Status.ResourceID).To(Equal(expectedFlexibleServerResourceID(db.Name)))
 			return ready.Status
 		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
 			Should(Equal(metav1.ConditionTrue))

@@ -551,6 +551,12 @@ func (r *DatabaseServerReconciler) asoResourcesReady(
 		}
 	}
 
+	if server.Status.Id != nil {
+		if resourceID := strings.TrimSpace(*server.Status.Id); resourceID != "" {
+			db.Status.ResourceID = resourceID
+		}
+	}
+
 	serverStatus, serverReason, serverMessage, serverReady := readyConditionInfo(server.Status.Conditions)
 	if !serverReady || serverStatus != metav1.ConditionTrue {
 		logger.Info("FlexibleServer not ready yet",

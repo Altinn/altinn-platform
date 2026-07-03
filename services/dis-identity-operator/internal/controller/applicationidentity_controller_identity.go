@@ -78,6 +78,9 @@ func (r *ApplicationIdentityReconciler) updateUserAssignedIdentityStatus(ctx con
 		applicationIdentity.Status.PrincipalID = uaID.Status.PrincipalId
 		applicationIdentity.Status.ClientID = uaID.Status.ClientId
 		applicationIdentity.Status.ManagedIdentityName = utils.ToPointer(uaID.Spec.AzureName)
+		if uaID.Status.Id != nil {
+			applicationIdentity.Status.ResourceID = uaID.Status.Id
+		}
 		ready = true
 	}
 	applicationIdentity.ReplaceCondition(applicationv1alpha1.ConditionUserAssignedIdentityType, getMetav1ConditionFromAzureCondition(applicationv1alpha1.ConditionUserAssignedIdentityType, readyCondition, applicationIdentity.Generation))

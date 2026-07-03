@@ -247,6 +247,12 @@ type DatabaseServerStatus struct {
 	// +optional
 	Host string `json:"host,omitempty"`
 
+	// resourceId is the ARM resource id of the PostgreSQL Flexible Server
+	// (server.Status.Id). It is populated once Azure has provisioned the
+	// server.
+	// +optional
+	ResourceID string `json:"resourceId,omitempty"`
+
 	// debugAccessProvisionedHash is an opaque marker of the debug-access
 	// principal set most recently provisioned into PostgreSQL (data plane).
 	// A non-empty value means grants may exist in the server, so when
