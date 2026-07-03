@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.12.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.11.1...dis-pgsql-v0.12.0) (2026-07-03)
+
+
+### Features
+
+* **dis-operators:** surface status.resourceId on DatabaseServer and ApplicationIdentity ([#3786](https://github.com/Altinn/altinn-platform/issues/3786)) ([68751c1](https://github.com/Altinn/altinn-platform/commit/68751c1160eb4df8df1302e50ce100c779fe8f58))
+* **dis-pgsql-operator:** read-only debug access on dedicated servers ([#3782](https://github.com/Altinn/altinn-platform/issues/3782)) ([f5fa38e](https://github.com/Altinn/altinn-platform/commit/f5fa38e997b5c025ea5f9b56708fdd0aa38104ed))
+* **dis-pgsql-operator:** read-only PostgreSQL debug access on dedicated servers ([#3784](https://github.com/Altinn/altinn-platform/issues/3784)) ([a5bf020](https://github.com/Altinn/altinn-platform/commit/a5bf02013b93b23eea187e3f3569632f5283eb7d))
+
 ## [0.11.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.11.0...dis-pgsql-v0.11.1) (2026-06-29)
 
 
