@@ -8,6 +8,9 @@ CREATE TABLE IF NOT EXISTS flux_resource (
     reason              text,
     message             text,
     revision            text,
+    azure_resource_id   text,
+    parent_kind         text,
+    parent_name         text,
     suspended           boolean     NOT NULL DEFAULT false,
     generation          bigint,
     observed_generation bigint,
@@ -52,3 +55,7 @@ CREATE TABLE IF NOT EXISTS cluster_report (
 );
 
 ALTER TABLE cluster_report ADD COLUMN IF NOT EXISTS event_cursor bigint NOT NULL DEFAULT 0;
+
+ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS azure_resource_id text;
+ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS parent_kind text;
+ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS parent_name text;

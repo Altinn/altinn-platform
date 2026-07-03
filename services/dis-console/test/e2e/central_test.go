@@ -262,6 +262,144 @@ func TestCentralReads(t *testing.T) {
 	}
 }
 
+// TestCentralDISFieldsEndToEnd walks a DIS resource through the full pipeline
+// against real PostgreSQL: agent Sync into the tenant database, server pull
+// (ChangedSince at the current schema) and Apply, then the fleet-API reads —
+// asserting the azure id and the parent pair survive every hop.
+func TestCentralDISFieldsEndToEnd(t *testing.T) {
+	cs, _ := newCentral(t)
+	ctx := context.Background()
+	uri := os.Getenv("DISCONSOLE_TEST_DB_URI")
+
+	tpool, err := dbauth.NewPoolForDatabase(ctx, uri, "dis_console_ttd_at23", nil)
+	if err != nil {
+		t.Fatalf("tenant pool: %v", err)
+	}
+	defer tpool.Close()
+	ts := store.New(tpool)
+	if err := ts.Migrate(ctx); err != nil {
+		t.Fatalf("migrate tenant: %v", err)
+	}
+	if err := ts.InitMeta(ctx, "e2e"); err != nil {
+		t.Fatalf("init tenant meta: %v", err)
+	}
+
+	armID := "/subscriptions/s1/resourceGroups/rg/providers/Microsoft.KeyVault/vaults/kv-app"
+	if _, err := ts.Sync(ctx, []flux.Resource{
+		{
+			Kind: "Vault", APIVersion: "vault.dis.altinn.cloud/v1alpha1",
+			Namespace: "team-a", Name: "kv-app",
+			Ready: flux.ReadyTrue, AzureResourceID: armID,
+			Raw: json.RawMessage(`{"kind":"Vault"}`), ContentHash: "vault-1",
+		},
+		{
+			Kind: "Database", APIVersion: "storage.dis.altinn.cloud/v1alpha1",
+			Namespace: "team-a", Name: "appdb",
+			Ready: flux.ReadyFalse, Parent: &flux.ParentRef{Kind: "DatabaseServer", Name: "pg-main"},
+			Raw: json.RawMessage(`{"kind":"Database"}`), ContentHash: "db-1",
+		},
+	}); err != nil {
+		t.Fatalf("tenant sync: %v", err)
+	}
+
+	pullAndApply(t, cs, ts, "ttd_at23")
+
+	vault, err := cs.Get(ctx, "ttd_at23", "Vault", "team-a", "kv-app")
+	if err != nil {
+		t.Fatalf("central get vault: %v", err)
+	}
+	if vault.AzureResourceID != armID || vault.Parent != nil {
+		t.Fatalf("vault lost its projection in central: %+v", vault)
+	}
+
+	dbs, err := cs.List(ctx, "ttd_at23", "Database", "", "")
+	if err != nil || len(dbs) != 1 {
+		t.Fatalf("central list databases: %+v err=%v", dbs, err)
+	}
+	if dbs[0].Parent == nil || dbs[0].Parent.Kind != "DatabaseServer" || dbs[0].Parent.Name != "pg-main" {
+		t.Fatalf("database lost its parent in central: %+v", dbs[0])
+	}
+	if dbs[0].AzureResourceID != "" {
+		t.Fatalf("expected empty azure id on the database, got %q", dbs[0].AzureResourceID)
+	}
+}
+
+// TestCentralSyncSchemaV1Tenant proves the rollout order the schema gate
+// promises: a server at schema 2 can still pull a tenant whose agent is at
+// schema 1 (its database lacks the DIS columns entirely). The tenant is built
+// by hand — migrate, then drop the v2 columns and stamp schema_version 1 —
+// because a v2 agent binary can no longer write the v1 shape.
+func TestCentralSyncSchemaV1Tenant(t *testing.T) {
+	cs, _ := newCentral(t)
+	ctx := context.Background()
+	uri := os.Getenv("DISCONSOLE_TEST_DB_URI")
+
+	tpool, err := dbauth.NewPoolForDatabase(ctx, uri, "dis_console_ttd_at23", nil)
+	if err != nil {
+		t.Fatalf("tenant pool: %v", err)
+	}
+	defer tpool.Close()
+	ts := store.New(tpool)
+	if err := ts.Migrate(ctx); err != nil {
+		t.Fatalf("migrate tenant: %v", err)
+	}
+	if _, err := tpool.Exec(ctx, `ALTER TABLE flux_resource
+		DROP COLUMN azure_resource_id, DROP COLUMN parent_kind, DROP COLUMN parent_name`); err != nil {
+		t.Fatalf("shape tenant as v1: %v", err)
+	}
+	if _, err := tpool.Exec(ctx,
+		"INSERT INTO meta (id, schema_version, agent_version) VALUES (true, 1, 'v1-agent')"); err != nil {
+		t.Fatalf("stamp v1 meta: %v", err)
+	}
+	// The full column set a v1 agent writes: its upsert always passes the Go
+	// zero values, so reason/message/revision land as '' (never NULL).
+	if _, err := tpool.Exec(ctx, `INSERT INTO flux_resource
+		(kind, api_version, namespace, name, ready, reason, message, revision,
+		 suspended, generation, observed_generation, raw, content_hash)
+		VALUES ('Kustomization', 'kustomize.toolkit.fluxcd.io/v1', 'flux-system', 'apps', 'True', '', '', '',
+		 false, 0, 0, '{}', 'h1')`); err != nil {
+		t.Fatalf("insert v1 row: %v", err)
+	}
+
+	meta, err := ts.GetMeta(ctx)
+	if err != nil || meta.SchemaVersion != 1 {
+		t.Fatalf("tenant meta: %+v err=%v", meta, err)
+	}
+
+	// The version-keyed pull must succeed against the columnless table.
+	changed, err := ts.ChangedSince(ctx, time.Time{}, meta.SchemaVersion)
+	if err != nil {
+		t.Fatalf("changed-since on a v1 tenant: %v", err)
+	}
+	if len(changed) != 1 || changed[0].AzureResourceID != "" || changed[0].Parent != nil {
+		t.Fatalf("unexpected v1 pull: %+v", changed)
+	}
+	keys, err := ts.Keys(ctx)
+	if err != nil {
+		t.Fatalf("keys: %v", err)
+	}
+
+	if err := cs.Apply(ctx, central.ClusterState{
+		Cluster:       "ttd_at23",
+		Environment:   "at23",
+		Changed:       changed,
+		Keys:          keys,
+		Cursor:        changed[0].UpdatedAt,
+		SchemaVersion: meta.SchemaVersion,
+		AgentVersion:  meta.AgentVersion,
+	}); err != nil {
+		t.Fatalf("apply v1 tenant: %v", err)
+	}
+
+	rows, err := cs.List(ctx, "ttd_at23", "", "", "")
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("central list after v1 sync: %+v err=%v", rows, err)
+	}
+	if rows[0].AzureResourceID != "" || rows[0].Parent != nil {
+		t.Fatalf("v1 row should have empty DIS fields, got %+v", rows[0])
+	}
+}
+
 // TestCentralEventCopyAndHistory drives the status-history pipeline against real
 // PostgreSQL: an agent writes status events into its tenant database, the server
 // copies them into the cluster-keyed central event log (incremental, id-cursored),
@@ -347,7 +485,7 @@ func pullAndApply(t *testing.T, cs *central.Store, ts *store.Store, cluster stri
 	if err != nil {
 		t.Fatalf("cursor: %v", err)
 	}
-	changed, err := ts.ChangedSince(ctx, cur)
+	changed, err := ts.ChangedSince(ctx, cur, store.SchemaVersion)
 	if err != nil {
 		t.Fatalf("changed-since: %v", err)
 	}

@@ -112,12 +112,14 @@ INSERT INTO flux_resource (
     cluster, kind, api_version, namespace, name,
     ready, reason, message, revision, suspended,
     generation, observed_generation, last_transition, raw, content_hash,
+    azure_resource_id, parent_kind, parent_name,
     updated_at, synced_at
 ) VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8, $9, $10,
     $11, $12, $13, $14, $15,
-    $16, now()
+    $16, $17, $18,
+    $19, now()
 )
 ON CONFLICT (cluster, kind, namespace, name) DO UPDATE SET
     api_version         = EXCLUDED.api_version,
@@ -125,6 +127,9 @@ ON CONFLICT (cluster, kind, namespace, name) DO UPDATE SET
     reason              = EXCLUDED.reason,
     message             = EXCLUDED.message,
     revision            = EXCLUDED.revision,
+    azure_resource_id   = EXCLUDED.azure_resource_id,
+    parent_kind         = EXCLUDED.parent_kind,
+    parent_name         = EXCLUDED.parent_name,
     suspended           = EXCLUDED.suspended,
     generation          = EXCLUDED.generation,
     observed_generation = EXCLUDED.observed_generation,
@@ -195,10 +200,12 @@ func (s *Store) Apply(ctx context.Context, st ClusterState) error {
 			if len(raw) == 0 {
 				raw = json.RawMessage("{}")
 			}
+			parentKind, parentName := parentCols(c.Parent)
 			batch.Queue(upsertStmt,
 				st.Cluster, c.Kind, c.APIVersion, c.Namespace, c.Name,
 				c.Ready, c.Reason, c.Message, c.Revision, c.Suspended,
 				c.Generation, c.ObservedGeneration, c.LastTransition, []byte(raw), c.ContentHash,
+				c.AzureResourceID, parentKind, parentName,
 				c.UpdatedAt,
 			)
 		}
@@ -277,6 +284,22 @@ func splitKeys(keys []store.ResourceKey) (kinds, namespaces, names []string) {
 		kinds[i], namespaces[i], names[i] = k.Kind, k.Namespace, k.Name
 	}
 	return kinds, namespaces, names
+}
+
+// parentCols splits an optional parent into its nullable column pair.
+func parentCols(p *flux.ParentRef) (kind, name *string) {
+	if p == nil {
+		return nil, nil
+	}
+	return &p.Kind, &p.Name
+}
+
+// parentRef rebuilds the optional parent from its nullable column pair.
+func parentRef(kind, name *string) *flux.ParentRef {
+	if kind == nil || name == nil {
+		return nil
+	}
+	return &flux.ParentRef{Kind: *kind, Name: *name}
 }
 
 // clusterID strips the tenant-database prefix to get the cluster identifier
@@ -420,7 +443,8 @@ func (s *Store) Summary(ctx context.Context, cluster string) ([]store.KindCount,
 
 const listStmt = `
 SELECT cluster, kind, api_version, namespace, name, ready, reason, message, revision,
-       suspended, generation, observed_generation, last_transition
+       suspended, generation, observed_generation, last_transition,
+       COALESCE(azure_resource_id, ''), parent_kind, parent_name
 FROM flux_resource
 WHERE ($1 = '' OR cluster = $1)
   AND ($2 = '' OR lower(kind) = lower($2))
@@ -441,13 +465,16 @@ func (s *Store) List(ctx context.Context, cluster, kind, namespace, ready string
 	out := []Resource{}
 	for rows.Next() {
 		var r Resource
+		var parentKind, parentName *string
 		if err := rows.Scan(
 			&r.Cluster, &r.Kind, &r.APIVersion, &r.Namespace, &r.Name, &r.Ready, &r.Reason,
 			&r.Message, &r.Revision, &r.Suspended, &r.Generation,
 			&r.ObservedGeneration, &r.LastTransition,
+			&r.AzureResourceID, &parentKind, &parentName,
 		); err != nil {
 			return nil, fmt.Errorf("scan row: %w", err)
 		}
+		r.Parent = parentRef(parentKind, parentName)
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -455,7 +482,8 @@ func (s *Store) List(ctx context.Context, cluster, kind, namespace, ready string
 
 const getStmt = `
 SELECT cluster, kind, api_version, namespace, name, ready, reason, message, revision,
-       suspended, generation, observed_generation, last_transition, raw
+       suspended, generation, observed_generation, last_transition, raw,
+       COALESCE(azure_resource_id, ''), parent_kind, parent_name
 FROM flux_resource
 WHERE cluster = $1 AND lower(kind) = lower($2) AND namespace = $3 AND name = $4`
 
@@ -464,10 +492,12 @@ WHERE cluster = $1 AND lower(kind) = lower($2) AND namespace = $3 AND name = $4`
 func (s *Store) Get(ctx context.Context, cluster, kind, namespace, name string) (*Resource, error) {
 	var r Resource
 	var raw []byte
+	var parentKind, parentName *string
 	err := s.pool.QueryRow(ctx, getStmt, cluster, kind, namespace, name).Scan(
 		&r.Cluster, &r.Kind, &r.APIVersion, &r.Namespace, &r.Name, &r.Ready, &r.Reason,
 		&r.Message, &r.Revision, &r.Suspended, &r.Generation,
 		&r.ObservedGeneration, &r.LastTransition, &raw,
+		&r.AzureResourceID, &parentKind, &parentName,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -476,6 +506,7 @@ func (s *Store) Get(ctx context.Context, cluster, kind, namespace, name string) 
 		return nil, fmt.Errorf("get query: %w", err)
 	}
 	r.Raw = raw
+	r.Parent = parentRef(parentKind, parentName)
 	return &r, nil
 }
 

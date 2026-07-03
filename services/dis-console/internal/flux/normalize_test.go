@@ -106,6 +106,162 @@ func TestNormalizeHelmReleaseRevisionFromHistory(t *testing.T) {
 	}
 }
 
+func TestNormalizeVaultResourceIDAndReady(t *testing.T) {
+	armID := "/subscriptions/s1/resourceGroups/rg/providers/Microsoft.KeyVault/vaults/kv-app"
+	u := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "vault.dis.altinn.cloud/v1alpha1",
+		"kind":       "Vault",
+		"metadata":   map[string]any{"namespace": "team-a", "name": "kv-app"},
+		"status": map[string]any{
+			"resourceId": armID,
+			"conditions": []any{
+				map[string]any{
+					"type":               "Ready",
+					"status":             "True",
+					"reason":             "Provisioned",
+					"lastTransitionTime": "2026-06-02T10:00:00Z",
+				},
+			},
+		},
+	}}
+
+	r, err := normalize(u)
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if r.Ready != ReadyTrue || r.Reason != "Provisioned" {
+		t.Fatalf("unexpected ready condition: %+v", r)
+	}
+	if r.AzureResourceID != armID {
+		t.Fatalf("azureResourceId: got %q, want %q", r.AzureResourceID, armID)
+	}
+	if r.Parent != nil {
+		t.Fatalf("expected no parent for a Vault, got %+v", r.Parent)
+	}
+	if r.LastTransition == nil {
+		t.Fatalf("expected lastTransition parsed")
+	}
+}
+
+func TestNormalizeDatabaseParentFromServerRef(t *testing.T) {
+	u := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "storage.dis.altinn.cloud/v1alpha1",
+		"kind":       "Database",
+		"metadata":   map[string]any{"namespace": "team-a", "name": "appdb"},
+		"spec": map[string]any{
+			"name":   "appdb",
+			"server": map[string]any{"name": "pg-main"},
+		},
+		"status": map[string]any{
+			"observedGeneration": int64(1),
+			"conditions": []any{
+				map[string]any{"type": "Ready", "status": "False", "reason": "Provisioning"},
+			},
+		},
+	}}
+
+	r, err := normalize(u)
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if r.Ready != ReadyFalse || r.Reason != "Provisioning" {
+		t.Fatalf("unexpected ready condition: %+v", r)
+	}
+	if r.Parent == nil || r.Parent.Kind != KindDatabaseServer || r.Parent.Name != "pg-main" {
+		t.Fatalf("unexpected parent: %+v", r.Parent)
+	}
+	if r.AzureResourceID != "" {
+		t.Fatalf("expected no azureResourceId for a Database, got %q", r.AzureResourceID)
+	}
+}
+
+func TestNormalizeApiVersionParentFromOwnerReference(t *testing.T) {
+	u := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "apim.dis.altinn.cloud/v1alpha1",
+		"kind":       "ApiVersion",
+		"metadata": map[string]any{
+			"namespace": "team-a",
+			"name":      "orders-v1",
+			"ownerReferences": []any{
+				map[string]any{
+					"apiVersion": "apim.dis.altinn.cloud/v1alpha1",
+					"kind":       "Api",
+					"name":       "orders",
+					"uid":        "u1",
+					"controller": true,
+				},
+			},
+		},
+		"status": map[string]any{"provisioningState": "Succeeded"},
+	}}
+
+	r, err := normalize(u)
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if r.Parent == nil || r.Parent.Kind != KindApi || r.Parent.Name != "orders" {
+		t.Fatalf("unexpected parent: %+v", r.Parent)
+	}
+	if r.Ready != ReadyTrue || r.Reason != "Succeeded" {
+		t.Fatalf("expected Succeeded mapped to ready True, got %+v", r)
+	}
+}
+
+func TestNormalizeApimProvisioningState(t *testing.T) {
+	cases := []struct {
+		name      string
+		kind      string
+		status    map[string]any
+		wantReady string
+		wantARM   string
+	}{
+		{
+			name:      "api succeeded with version set id",
+			kind:      "Api",
+			status:    map[string]any{"provisioningState": "Succeeded", "apiVersionSetID": "/subscriptions/s1/apiVersionSets/orders"},
+			wantReady: ReadyTrue,
+			wantARM:   "/subscriptions/s1/apiVersionSets/orders",
+		},
+		{
+			name:      "backend failed with backend id",
+			kind:      "Backend",
+			status:    map[string]any{"provisioningState": "Failed", "backendID": "/subscriptions/s1/backends/orders-be"},
+			wantReady: ReadyFalse,
+			wantARM:   "/subscriptions/s1/backends/orders-be",
+		},
+		{
+			name:      "transitional state stays unknown",
+			kind:      "Api",
+			status:    map[string]any{"provisioningState": "Updating"},
+			wantReady: ReadyUnknown,
+			wantARM:   "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			u := &unstructured.Unstructured{Object: map[string]any{
+				"apiVersion": "apim.dis.altinn.cloud/v1alpha1",
+				"kind":       tc.kind,
+				"metadata":   map[string]any{"namespace": "team-a", "name": "orders"},
+				"status":     tc.status,
+			}}
+			r, err := normalize(u)
+			if err != nil {
+				t.Fatalf("normalize: %v", err)
+			}
+			if r.Ready != tc.wantReady {
+				t.Fatalf("ready: got %q, want %q", r.Ready, tc.wantReady)
+			}
+			if state, _ := tc.status["provisioningState"].(string); r.Reason != state {
+				t.Fatalf("reason: got %q, want the provisioning state %q", r.Reason, state)
+			}
+			if r.AzureResourceID != tc.wantARM {
+				t.Fatalf("azureResourceId: got %q, want %q", r.AzureResourceID, tc.wantARM)
+			}
+		})
+	}
+}
+
 func TestNormalizeOCIRepositoryRevisionFromArtifact(t *testing.T) {
 	u := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "source.toolkit.fluxcd.io/v1",

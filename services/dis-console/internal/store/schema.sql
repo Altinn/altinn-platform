@@ -7,6 +7,9 @@ CREATE TABLE IF NOT EXISTS flux_resource (
     reason              text,
     message             text,
     revision            text,
+    azure_resource_id   text,
+    parent_kind         text,
+    parent_name         text,
     suspended           boolean     NOT NULL DEFAULT false,
     generation          bigint,
     observed_generation bigint,
@@ -20,6 +23,9 @@ CREATE TABLE IF NOT EXISTS flux_resource (
 );
 
 ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS content_hash text;
+ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS azure_resource_id text;
+ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS parent_kind text;
+ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS parent_name text;
 
 CREATE INDEX IF NOT EXISTS idx_flux_resource_ready ON flux_resource (lower(ready));
 CREATE INDEX IF NOT EXISTS idx_flux_resource_kind  ON flux_resource (lower(kind));

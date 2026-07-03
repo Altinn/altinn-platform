@@ -59,10 +59,10 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprint(os.Stderr, `dis-console — Flux fleet console
+	fmt.Fprint(os.Stderr, `dis-console — DIS fleet console
 
 Usage:
-  dis-console agent [flags]    Sweep this cluster's Flux resources into its own tenant database.
+  dis-console agent [flags]    Sweep this cluster's Flux and DIS resources into its own tenant database.
   dis-console server [flags]   Sync tenant databases into the central read model and serve the fleet API.
 
 Run "dis-console <subcommand> -h" for that subcommand's flags.
@@ -70,8 +70,8 @@ Run "dis-console <subcommand> -h" for that subcommand's flags.
 }
 
 // runAgent runs the per-cluster sweep-and-store loop: every poll interval it
-// lists the Flux resources and persists a normalized snapshot to this cluster's
-// tenant database. It exposes only liveness/readiness probes — the fleet API
+// lists the Flux and DIS resources and persists a normalized snapshot to this
+// cluster's tenant database. It exposes only liveness/readiness probes — the fleet API
 // lives in the server, reading the central database.
 func runAgent(args []string) {
 	fs := flag.NewFlagSet("agent", flag.ExitOnError)
@@ -260,7 +260,7 @@ func poll(ctx context.Context, client *flux.Client, st *store.Store, h *health.S
 	}
 
 	h.MarkReady()
-	log.Printf("swept %d Flux resources (%d changed, %d pruned)", stats.Upserted, stats.Changed, stats.Pruned)
+	log.Printf("swept %d resources (%d changed, %d pruned)", stats.Upserted, stats.Changed, stats.Pruned)
 }
 
 func gracefulShutdown(srv *http.Server) {

@@ -174,6 +174,77 @@ func TestSyncUpsertHistoryAndPrune(t *testing.T) {
 	}
 }
 
+// TestSyncRoundTripsDISColumns checks the schema-v2 columns against real
+// PostgreSQL: a swept DIS resource's azure_resource_id and parent pair survive
+// Sync and come back out of List, Get and ChangedSince.
+func TestSyncRoundTripsDISColumns(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+
+	armID := "/subscriptions/s1/resourceGroups/rg/providers/Microsoft.KeyVault/vaults/kv-app"
+	vault := flux.Resource{
+		Kind:            "Vault",
+		APIVersion:      "vault.dis.altinn.cloud/v1alpha1",
+		Namespace:       "team-a",
+		Name:            "kv-app",
+		Ready:           flux.ReadyTrue,
+		Reason:          "Provisioned",
+		AzureResourceID: armID,
+		Raw:             json.RawMessage(`{"kind":"Vault"}`),
+		ContentHash:     "vault-1",
+	}
+	database := flux.Resource{
+		Kind:        "Database",
+		APIVersion:  "storage.dis.altinn.cloud/v1alpha1",
+		Namespace:   "team-a",
+		Name:        "appdb",
+		Ready:       flux.ReadyFalse,
+		Reason:      "Provisioning",
+		Parent:      &flux.ParentRef{Kind: "DatabaseServer", Name: "pg-main"},
+		Raw:         json.RawMessage(`{"kind":"Database"}`),
+		ContentHash: "db-1",
+	}
+	if _, err := s.Sync(ctx, []flux.Resource{vault, database}); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+
+	rows, err := s.List(ctx, "Vault", "", "")
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("list vaults: %+v err=%v", rows, err)
+	}
+	if rows[0].AzureResourceID != armID || rows[0].Parent != nil {
+		t.Fatalf("unexpected vault projection: %+v", rows[0])
+	}
+
+	got, _, err := s.Get(ctx, "Database", "team-a", "appdb")
+	if err != nil {
+		t.Fatalf("get database: %v", err)
+	}
+	if got.Parent == nil || got.Parent.Kind != "DatabaseServer" || got.Parent.Name != "pg-main" {
+		t.Fatalf("unexpected database parent: %+v", got.Parent)
+	}
+	if got.AzureResourceID != "" {
+		t.Fatalf("expected empty azure id on the database, got %q", got.AzureResourceID)
+	}
+
+	changed, err := s.ChangedSince(ctx, time.Time{}, store.SchemaVersion)
+	if err != nil || len(changed) != 2 {
+		t.Fatalf("changed-since: %d rows err=%v", len(changed), err)
+	}
+	for _, c := range changed {
+		switch c.Kind {
+		case "Vault":
+			if c.AzureResourceID != armID {
+				t.Fatalf("changed vault lost azure id: %+v", c.Resource)
+			}
+		case "Database":
+			if c.Parent == nil || c.Parent.Name != "pg-main" {
+				t.Fatalf("changed database lost parent: %+v", c.Resource)
+			}
+		}
+	}
+}
+
 // TestSyncContentHashSkipsUnchangedRewrite asserts the write-hygiene contract:
 // an unchanged sweep leaves updated_at alone (no row/raw rewrite), while a
 // content change advances it. The central sync loop pulls on updated_at, so
