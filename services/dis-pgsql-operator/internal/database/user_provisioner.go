@@ -239,17 +239,20 @@ func ensureAccess(ctx context.Context, conn pgxConn, principalConn pgxConn, opts
 	return nil
 }
 
-func accessPrincipalsFromEnv(disableAAD, allowEmpty bool) ([]AccessPrincipal, error) {
-	principals, err := parseAccessPrincipalsPayload(os.Getenv(AccessPrincipalsEnv), allowEmpty)
+func accessPrincipalsFromEnv(disableAAD, serverDebug bool) ([]AccessPrincipal, error) {
+	principals, err := parseAccessPrincipalsPayload(os.Getenv(AccessPrincipalsEnv), serverDebug)
 	if err != nil {
 		return nil, err
 	}
-	return validateAccessPrincipals(principals, !disableAAD, allowEmpty)
+	return validateAccessPrincipals(principals, !disableAAD, serverDebug)
 }
 
-func validateAccessPrincipals(principals []AccessPrincipal, useAAD, allowEmpty bool) ([]AccessPrincipal, error) {
+// validateAccessPrincipals validates the deserialized principal set. In server
+// debug mode the set may be empty (the revocation run) and principals carry no
+// per-database Role, so the Role-less debug validation applies.
+func validateAccessPrincipals(principals []AccessPrincipal, useAAD, serverDebug bool) ([]AccessPrincipal, error) {
 	if len(principals) == 0 {
-		if allowEmpty {
+		if serverDebug {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("%s must contain at least one principal", AccessPrincipalsEnv)
@@ -259,7 +262,11 @@ func validateAccessPrincipals(principals []AccessPrincipal, useAAD, allowEmpty b
 	seen := map[string]struct{}{}
 	for i, principal := range principals {
 		principal = normalizeAccessPrincipal(principal)
-		if err := validateAccessPrincipal(principal, useAAD); err != nil {
+		validate := validateAccessPrincipal
+		if serverDebug {
+			validate = validateDebugAccessPrincipal
+		}
+		if err := validate(principal, useAAD); err != nil {
 			return nil, fmt.Errorf("access principal %d: %w", i, err)
 		}
 		keyValue := principal.PrincipalID

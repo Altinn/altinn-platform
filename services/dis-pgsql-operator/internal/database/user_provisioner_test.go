@@ -439,3 +439,66 @@ func equalArgs(got, want []any) bool {
 
 	return true
 }
+
+const testDebugEnvPrincipalName = "dbg-group"
+
+func TestValidateAccessPrincipalsServerDebugSkipsRole(t *testing.T) {
+	principals := []AccessPrincipal{
+		{Name: testDebugEnvPrincipalName, PrincipalID: "11111111-1111-1111-1111-111111111111", PrincipalType: PrincipalTypeGroup},
+	}
+
+	got, err := validateAccessPrincipals(principals, true, true)
+	if err != nil {
+		t.Fatalf("expected Role-less principal to be valid in server debug mode, got %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 principal, got %d", len(got))
+	}
+
+	if _, err := validateAccessPrincipals(principals, true, false); err == nil {
+		t.Fatalf("expected Role-less principal to be rejected outside server debug mode")
+	}
+
+	empty, err := validateAccessPrincipals(nil, true, true)
+	if err != nil || empty != nil {
+		t.Fatalf("expected empty set to be valid in server debug mode, got %v / %v", empty, err)
+	}
+	if _, err := validateAccessPrincipals(nil, true, false); err == nil {
+		t.Fatalf("expected empty set to be rejected outside server debug mode")
+	}
+}
+
+func TestAccessPrincipalsFromEnvServerDebug(t *testing.T) {
+	payload, err := MarshalAccessPrincipals([]AccessPrincipal{
+		{Name: testDebugEnvPrincipalName, PrincipalID: "11111111-1111-1111-1111-111111111111", PrincipalType: PrincipalTypeGroup},
+	})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	t.Setenv(AccessPrincipalsEnv, payload)
+
+	got, err := accessPrincipalsFromEnv(false, true)
+	if err != nil {
+		t.Fatalf("expected server-debug payload without Role to parse, got %v", err)
+	}
+	if len(got) != 1 || got[0].Name != testDebugEnvPrincipalName {
+		t.Fatalf("unexpected principals: %#v", got)
+	}
+
+	if _, err := accessPrincipalsFromEnv(false, false); err == nil {
+		t.Fatalf("expected Role-less payload to be rejected outside server debug mode")
+	}
+
+	emptyPayload, err := MarshalAccessPrincipals(nil)
+	if err != nil {
+		t.Fatalf("marshal empty payload: %v", err)
+	}
+	t.Setenv(AccessPrincipalsEnv, emptyPayload)
+
+	if got, err := accessPrincipalsFromEnv(false, true); err != nil || len(got) != 0 {
+		t.Fatalf("expected empty payload to be valid in server debug mode, got %v / %v", got, err)
+	}
+	if _, err := accessPrincipalsFromEnv(false, false); err == nil {
+		t.Fatalf("expected empty payload to be rejected outside server debug mode")
+	}
+}
