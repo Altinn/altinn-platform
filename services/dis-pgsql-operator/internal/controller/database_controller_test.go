@@ -2903,6 +2903,78 @@ var _ = Describe("DatabaseServer controller", func() {
 			Should(Equal(expectedFlexibleServerResourceID(db.Name)))
 	})
 
+	It("preserves the legacy FQDN-named DNS zone and links on pre-rename servers", func() {
+		const serverName = "my-app-db-legacy-zone"
+		legacyZoneName := serverName + ".private.postgres.database.azure.com"
+		loc := privateDNSZoneLocation
+		regFalse := false
+
+		// The zone + links as the pre-rename operator laid them out: the zone CR
+		// named after the FQDN, the links owned by it.
+		zone := &networkv1.PrivateDnsZone{
+			ObjectMeta: metav1.ObjectMeta{Name: legacyZoneName, Namespace: ns},
+			Spec: networkv1.PrivateDnsZone_Spec{
+				AzureName: legacyZoneName,
+				Location:  &loc,
+				Owner: &genruntime.KnownResourceReference{
+					ARMID: "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network",
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, zone)).To(Succeed())
+
+		for linkName, vnetID := range map[string]string{
+			serverName + "-vnetlink":     "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-dev-001",
+			serverName + "-aks-vnetlink": "/subscriptions/my-subscription-id/resourceGroups/aks-vnet-rg/providers/Microsoft.Network/virtualNetworks/aks-vnet-dis-dev-001",
+		} {
+			link := &networkv1.PrivateDnsZonesVirtualNetworkLink{
+				ObjectMeta: metav1.ObjectMeta{Name: linkName, Namespace: ns},
+				Spec: networkv1.PrivateDnsZonesVirtualNetworkLink_Spec{
+					AzureName:           linkName,
+					Location:            &loc,
+					Owner:               &genruntime.KnownResourceReference{Name: legacyZoneName},
+					RegistrationEnabled: &regFalse,
+					VirtualNetwork: &networkv1.SubResource{
+						Reference: &genruntime.ResourceReference{ARMID: vnetID},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, link)).To(Succeed())
+		}
+
+		db := newDedicatedDatabaseServer(serverName, adminAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+		))
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		markASOReady(ctx, db)
+
+		// The reconcile completes past the DNS children and persists the ids.
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &updated)).To(Succeed())
+			return updated.Status.ResourceID
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(expectedFlexibleServerResourceID(db.Name)))
+
+		// The links still belong to the legacy zone (their owner is immutable in
+		// ASO), and no duplicate zone CR appeared under the new name.
+		var link networkv1.PrivateDnsZonesVirtualNetworkLink
+		Expect(k8sClient.Get(ctx, types.NamespacedName{
+			Name:      serverName + "-vnetlink",
+			Namespace: ns,
+		}, &link)).To(Succeed())
+		Expect(link.Spec.Owner.Name).To(Equal(legacyZoneName))
+
+		var dupe networkv1.PrivateDnsZone
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: serverName, Namespace: ns}, &dupe)
+		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "no zone CR should be created under the new name")
+	})
+
 	It("surfaces a ServerNameConflict and suppresses owner-not-found parameter errors when the FlexibleServer name is taken", func() {
 		db := newDedicatedDatabaseServer("my-app-db-name-conflict", adminAuth(
 			adminManagedIdentity,

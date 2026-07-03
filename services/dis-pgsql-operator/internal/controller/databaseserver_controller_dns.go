@@ -19,6 +19,9 @@ import (
 // The suffix we use for per-database-server private DNS zones.
 const postgresPrivateZoneSuffix = "private.postgres.database.azure.com"
 
+// Private DNS zones (and their vnet links) use 'global' for Location in Azure.
+const privateDNSZoneLocation = "global"
+
 // zoneCRNameForDatabaseServer is the Kubernetes object name of the server's
 // Private DNS zone CR. It stays equal to the DatabaseServer CR name (which is a
 // valid flexible-server name, so <=63 chars) rather than the FQDN. ASO stamps a
@@ -28,6 +31,27 @@ const postgresPrivateZoneSuffix = "private.postgres.database.azure.com"
 // a '.' and failing label validation, which blocked the vnet links entirely.
 func zoneCRNameForDatabaseServer(db *storagev1alpha1.DatabaseServer) string {
 	return db.Name
+}
+
+// resolveZoneCRName returns the zone CR name to use for this server. Servers
+// created before the zone CR was renamed to db.Name own a zone CR named after
+// the Azure FQDN, with vnet links owned by it; ASO forbids changing a link's
+// owner, and creating a second zone CR would double-manage the same Azure
+// zone, so the legacy name is preserved for as long as that CR exists.
+func (r *DatabaseServerReconciler) resolveZoneCRName(
+	ctx context.Context,
+	db *storagev1alpha1.DatabaseServer,
+) (string, error) {
+	legacyName := zoneAzureNameForDatabaseServer(db)
+	var legacy networkv1.PrivateDnsZone
+	err := r.Get(ctx, types.NamespacedName{Name: legacyName, Namespace: db.Namespace}, &legacy)
+	if err == nil {
+		return legacyName, nil
+	}
+	if !errors.IsNotFound(err) {
+		return "", fmt.Errorf("get legacy PrivateDnsZone %s/%s: %w", db.Namespace, legacyName, err)
+	}
+	return zoneCRNameForDatabaseServer(db), nil
 }
 
 // zoneAzureNameForDatabaseServer is the Azure-side name of the server's Private
@@ -50,12 +74,12 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSZone(
 	ctx context.Context,
 	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
+	zoneCRName string,
 ) error {
 	if r.Config.ResourceGroup == "" {
 		return fmt.Errorf("ResourceGroup is not configured on DatabaseServerReconciler")
 	}
 	ns := db.Namespace
-	zoneCRName := zoneCRNameForDatabaseServer(db)
 	zoneAzureName := zoneAzureNameForDatabaseServer(db)
 	key := types.NamespacedName{
 		Name:      zoneCRName,
@@ -80,7 +104,7 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSZone(
 		"azureName", zoneAzureName,
 		"asoNamespace", ns)
 
-	loc := "global" // Private DNS zones use 'global' for Location in Azure.
+	loc := privateDNSZoneLocation
 
 	zone := &networkv1.PrivateDnsZone{
 		ObjectMeta: metav1.ObjectMeta{
@@ -136,7 +160,7 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSVNetLink(
 	vnetID string,
 ) error {
 	ns := db.Namespace
-	loc := "global"
+	loc := privateDNSZoneLocation
 	regFalse := false
 	desiredLabels := map[string]string{
 		databaseServerNameLabelKey: db.Name,

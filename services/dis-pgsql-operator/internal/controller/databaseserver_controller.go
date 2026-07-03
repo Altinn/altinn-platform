@@ -216,11 +216,22 @@ func (r *DatabaseServerReconciler) deleteDedicatedNetworkChildren(
 	}
 
 	// Second wave: the zone, now that nothing nested under it remains.
-	zoneGone, err := r.ensureChildDeleted(ctx, logger, db.Namespace, zoneCRNameForDatabaseServer(db), &networkv1.PrivateDnsZone{})
-	if err != nil {
-		return false, err
+	// Pre-rename servers own the legacy FQDN-named zone CR, so both names are
+	// deleted; ensureChildDeleted treats an absent one as already gone.
+	zonesGone := true
+	for _, zoneName := range []string{
+		zoneCRNameForDatabaseServer(db),
+		zoneAzureNameForDatabaseServer(db),
+	} {
+		gone, err := r.ensureChildDeleted(ctx, logger, db.Namespace, zoneName, &networkv1.PrivateDnsZone{})
+		if err != nil {
+			return false, err
+		}
+		if !gone {
+			zonesGone = false
+		}
 	}
-	return !zoneGone, nil
+	return !zonesGone, nil
 }
 
 // ensureChildDeleted issues a delete for the named owned resource if it is still present
@@ -299,8 +310,15 @@ func (r *DatabaseServerReconciler) reconcileDedicatedDatabaseServer(
 		logger.Info("database server already has subnetCIDR", "subnetCIDR", db.Status.SubnetCIDR)
 	}
 
-	// Private Dns zone
-	if err := r.ensurePrivateDNSZone(ctx, logger, db); err != nil {
+	// Private Dns zone. Pre-rename servers keep their legacy FQDN-named zone CR
+	// (and the links owned by it); the resolved name is threaded through every
+	// child that references the zone.
+	zoneCRName, err := r.resolveZoneCRName(ctx, db)
+	if err != nil {
+		logger.Error(err, "failed to resolve private DNS zone CR name")
+		return ctrl.Result{}, err
+	}
+	if err := r.ensurePrivateDNSZone(ctx, logger, db, zoneCRName); err != nil {
 		logger.Error(err, "failed to ensure private DNS zone")
 		return ctrl.Result{}, err
 	}
@@ -323,7 +341,7 @@ func (r *DatabaseServerReconciler) reconcileDedicatedDatabaseServer(
 	// DB VNet link
 	if err := r.ensurePrivateDNSVNetLink(
 		ctx, logger, db,
-		zoneCRNameForDatabaseServer(db),
+		zoneCRName,
 		dbVNetLinkNameForDatabaseServer(db),
 		r.Config.DBVNetName,
 		dbVnetID,
@@ -335,7 +353,7 @@ func (r *DatabaseServerReconciler) reconcileDedicatedDatabaseServer(
 	// AKS VNet link
 	if err := r.ensurePrivateDNSVNetLink(
 		ctx, logger, db,
-		zoneCRNameForDatabaseServer(db),
+		zoneCRName,
 		aksVNetLinkNameForDatabaseServer(db),
 		r.Config.AKSVNetName,
 		aksVnetID,
@@ -344,7 +362,7 @@ func (r *DatabaseServerReconciler) reconcileDedicatedDatabaseServer(
 		return ctrl.Result{}, err
 	}
 
-	networkConfig, err := r.dedicatedPostgresNetworkConfig(db, zoneCRNameForDatabaseServer(db))
+	networkConfig, err := r.dedicatedPostgresNetworkConfig(db, zoneCRName)
 	if err != nil {
 		logger.Error(err, "failed to build dedicated PostgreSQL network config")
 		return ctrl.Result{}, err
