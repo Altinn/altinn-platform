@@ -2818,6 +2818,91 @@ var _ = Describe("DatabaseServer controller", func() {
 			Should(Equal(metav1.ConditionTrue))
 	})
 
+	It("persists the Azure resource id on an already-Ready DatabaseServer", func() {
+		db := newDedicatedDatabaseServer("my-app-db-late-id", adminAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+		))
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		serverKey := types.NamespacedName{Name: db.Name, Namespace: db.Namespace}
+
+		// ASO reports Ready before Azure has filled in the server's ARM id
+		// (no FullyQualifiedDomainName/Id yet).
+		Eventually(func() error {
+			var server dbforpostgresqlv1.FlexibleServer
+			if err := k8sClient.Get(ctx, serverKey, &server); err != nil {
+				return err
+			}
+			server.Status.Conditions = []asoconditions.Condition{
+				{
+					Type:               asoconditions.ConditionTypeReady,
+					Status:             metav1.ConditionTrue,
+					Reason:             databaseConditionReady,
+					LastTransitionTime: metav1.Now(),
+					ObservedGeneration: server.Generation,
+				},
+			}
+			return k8sClient.Status().Update(ctx, &server)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func() error {
+			var admin dbforpostgresqlv1.FlexibleServersAdministrator
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      fmt.Sprintf("%s-admin", db.Name),
+				Namespace: db.Namespace,
+			}, &admin); err != nil {
+				return err
+			}
+			admin.Status.Conditions = []asoconditions.Condition{
+				{
+					Type:               asoconditions.ConditionTypeReady,
+					Status:             metav1.ConditionTrue,
+					Reason:             databaseConditionReady,
+					LastTransitionTime: metav1.Now(),
+					ObservedGeneration: admin.Generation,
+				},
+			}
+			return k8sClient.Status().Update(ctx, &admin)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		// The server settles Ready without a resource id.
+		Eventually(func(g Gomega) metav1.ConditionStatus {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, serverKey, &updated)).To(Succeed())
+			ready := meta.FindStatusCondition(updated.Status.Conditions, databaseServerConditionReady)
+			g.Expect(ready).NotTo(BeNil())
+			g.Expect(updated.Status.ResourceID).To(BeEmpty())
+			return ready.Status
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(metav1.ConditionTrue))
+
+		// Azure reports the ARM id afterwards; the Ready condition no longer
+		// changes, but the id must still be persisted.
+		Eventually(func() error {
+			var server dbforpostgresqlv1.FlexibleServer
+			if err := k8sClient.Get(ctx, serverKey, &server); err != nil {
+				return err
+			}
+			host := fmt.Sprintf("%s.postgres.database.azure.com", db.Name)
+			server.Status.FullyQualifiedDomainName = &host
+			resourceID := expectedFlexibleServerResourceID(db.Name)
+			server.Status.Id = &resourceID
+			return k8sClient.Status().Update(ctx, &server)
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, serverKey, &updated)).To(Succeed())
+			g.Expect(updated.Status.Host).To(Equal(fmt.Sprintf("%s.postgres.database.azure.com", db.Name)))
+			return updated.Status.ResourceID
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(expectedFlexibleServerResourceID(db.Name)))
+	})
+
 	It("surfaces a ServerNameConflict and suppresses owner-not-found parameter errors when the FlexibleServer name is taken", func() {
 		db := newDedicatedDatabaseServer("my-app-db-name-conflict", adminAuth(
 			adminManagedIdentity,

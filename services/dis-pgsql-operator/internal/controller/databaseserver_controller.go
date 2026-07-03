@@ -543,17 +543,27 @@ func (r *DatabaseServerReconciler) asoResourcesReady(
 	}
 
 	// Publish the Azure-side identity on the DatabaseServer status as soon as ASO
-	// has filled it in. setDatabaseServerReadyCondition flushes the status, so
-	// this only needs to mutate the in-memory object.
+	// has filled it in. Persisted here, not left to the ready-condition flush:
+	// that flush diffs against a snapshot taken after these writes, so on a
+	// server whose condition is already settled it never sees them as a change.
+	azureIdentityChanged := false
 	if server.Status.FullyQualifiedDomainName != nil {
-		if host := strings.TrimSpace(*server.Status.FullyQualifiedDomainName); host != "" {
+		if host := strings.TrimSpace(*server.Status.FullyQualifiedDomainName); host != "" && host != db.Status.Host {
 			db.Status.Host = host
+			azureIdentityChanged = true
 		}
 	}
 
 	if server.Status.Id != nil {
-		if resourceID := strings.TrimSpace(*server.Status.Id); resourceID != "" {
+		if resourceID := strings.TrimSpace(*server.Status.Id); resourceID != "" && resourceID != db.Status.ResourceID {
 			db.Status.ResourceID = resourceID
+			azureIdentityChanged = true
+		}
+	}
+
+	if azureIdentityChanged {
+		if err := r.Status().Update(ctx, db); err != nil {
+			return false, fmt.Errorf("update database server status with Azure server identity: %w", err)
 		}
 	}
 
