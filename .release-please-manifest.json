@@ -1,6 +1,6 @@
 {
   "services/dis-pgsql-operator": "0.12.0",
-  "services/dis-identity-operator": "0.2.5",
+  "services/dis-identity-operator": "0.3.0",
   "services/dis-apim-operator": "1.0.5",
   "services/dis-vault-operator": "1.4.8",
   "services/lakmus": "1.1.6",

@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.0](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.2.5...dis-identity-v0.3.0) (2026-07-03)
+
+
+### Features
+
+* **dis-operators:** surface status.resourceId on DatabaseServer and ApplicationIdentity ([#3786](https://github.com/Altinn/altinn-platform/issues/3786)) ([68751c1](https://github.com/Altinn/altinn-platform/commit/68751c1160eb4df8df1302e50ce100c779fe8f58))
+
+
+### Bug Fixes
+
+* **dis-operators:** pin e2e to a dedicated Kind kubeconfig ([#3727](https://github.com/Altinn/altinn-platform/issues/3727)) ([20fb836](https://github.com/Altinn/altinn-platform/commit/20fb8367683bf88021897597d3d156e32ed064c5))
+* **dis-operators:** resolve goconst lint debt under golangci-lint v2.12.2 ([#3729](https://github.com/Altinn/altinn-platform/issues/3729)) ([a8b99a5](https://github.com/Altinn/altinn-platform/commit/a8b99a541e7be41f0e5e9ebcda632ba53e585562))
+
+
+### Dependency Updates
+
+* update actions/checkout digest to df4cb1c ([#3653](https://github.com/Altinn/altinn-platform/issues/3653)) ([44353b4](https://github.com/Altinn/altinn-platform/commit/44353b47ad5f9312641b244e2bb32b202c2e084b))
+
 ## [0.2.5](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.2.4...dis-identity-v0.2.5) (2026-05-26)
 
 
