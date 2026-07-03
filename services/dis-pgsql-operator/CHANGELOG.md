@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.12.0...dis-pgsql-v0.12.1) (2026-07-03)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** persist status.resourceId on already-Ready servers ([#3795](https://github.com/Altinn/altinn-platform/issues/3795)) ([4d77729](https://github.com/Altinn/altinn-platform/commit/4d77729b860ec81e479852793a08ad0acbbc7f48))
+
 ## [0.12.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.11.1...dis-pgsql-v0.12.0) (2026-07-03)
 
 
