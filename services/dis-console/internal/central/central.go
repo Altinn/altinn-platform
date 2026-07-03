@@ -113,31 +113,35 @@ INSERT INTO flux_resource (
     ready, reason, message, revision, suspended,
     generation, observed_generation, last_transition, raw, content_hash,
     azure_resource_id, parent_kind, parent_name,
+    applied_by_name, applied_by_namespace,
     updated_at, synced_at
 ) VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8, $9, $10,
     $11, $12, $13, $14, $15,
     $16, $17, $18,
-    $19, now()
+    $19, $20,
+    $21, now()
 )
 ON CONFLICT (cluster, kind, namespace, name) DO UPDATE SET
-    api_version         = EXCLUDED.api_version,
-    ready               = EXCLUDED.ready,
-    reason              = EXCLUDED.reason,
-    message             = EXCLUDED.message,
-    revision            = EXCLUDED.revision,
-    azure_resource_id   = EXCLUDED.azure_resource_id,
-    parent_kind         = EXCLUDED.parent_kind,
-    parent_name         = EXCLUDED.parent_name,
-    suspended           = EXCLUDED.suspended,
-    generation          = EXCLUDED.generation,
-    observed_generation = EXCLUDED.observed_generation,
-    last_transition     = EXCLUDED.last_transition,
-    raw                 = EXCLUDED.raw,
-    content_hash        = EXCLUDED.content_hash,
-    updated_at          = EXCLUDED.updated_at,
-    synced_at           = now()`
+    api_version          = EXCLUDED.api_version,
+    ready                = EXCLUDED.ready,
+    reason               = EXCLUDED.reason,
+    message              = EXCLUDED.message,
+    revision             = EXCLUDED.revision,
+    azure_resource_id    = EXCLUDED.azure_resource_id,
+    parent_kind          = EXCLUDED.parent_kind,
+    parent_name          = EXCLUDED.parent_name,
+    applied_by_name      = EXCLUDED.applied_by_name,
+    applied_by_namespace = EXCLUDED.applied_by_namespace,
+    suspended            = EXCLUDED.suspended,
+    generation           = EXCLUDED.generation,
+    observed_generation  = EXCLUDED.observed_generation,
+    last_transition      = EXCLUDED.last_transition,
+    raw                  = EXCLUDED.raw,
+    content_hash         = EXCLUDED.content_hash,
+    updated_at           = EXCLUDED.updated_at,
+    synced_at            = now()`
 
 // pruneStmt deletes the cluster's mirrored rows whose identity is not in the
 // tenant's current key set (passed as parallel arrays). An empty key set drops
@@ -201,11 +205,13 @@ func (s *Store) Apply(ctx context.Context, st ClusterState) error {
 				raw = json.RawMessage("{}")
 			}
 			parentKind, parentName := parentCols(c.Parent)
+			appliedByName, appliedByNamespace := appliedByCols(c.AppliedBy)
 			batch.Queue(upsertStmt,
 				st.Cluster, c.Kind, c.APIVersion, c.Namespace, c.Name,
 				c.Ready, c.Reason, c.Message, c.Revision, c.Suspended,
 				c.Generation, c.ObservedGeneration, c.LastTransition, []byte(raw), c.ContentHash,
 				c.AzureResourceID, parentKind, parentName,
+				appliedByName, appliedByNamespace,
 				c.UpdatedAt,
 			)
 		}
@@ -300,6 +306,22 @@ func parentRef(kind, name *string) *flux.ParentRef {
 		return nil
 	}
 	return &flux.ParentRef{Kind: *kind, Name: *name}
+}
+
+// appliedByCols splits an optional applied-by into its nullable column pair.
+func appliedByCols(a *flux.AppliedBy) (name, namespace *string) {
+	if a == nil {
+		return nil, nil
+	}
+	return &a.Name, &a.Namespace
+}
+
+// appliedByRef rebuilds the optional applied-by from its nullable column pair.
+func appliedByRef(name, namespace *string) *flux.AppliedBy {
+	if name == nil || namespace == nil {
+		return nil
+	}
+	return &flux.AppliedBy{Name: *name, Namespace: *namespace}
 }
 
 // clusterID strips the tenant-database prefix to get the cluster identifier
@@ -444,7 +466,8 @@ func (s *Store) Summary(ctx context.Context, cluster string) ([]store.KindCount,
 const listStmt = `
 SELECT cluster, kind, api_version, namespace, name, ready, reason, message, revision,
        suspended, generation, observed_generation, last_transition,
-       COALESCE(azure_resource_id, ''), parent_kind, parent_name
+       COALESCE(azure_resource_id, ''), parent_kind, parent_name,
+       applied_by_name, applied_by_namespace
 FROM flux_resource
 WHERE ($1 = '' OR cluster = $1)
   AND ($2 = '' OR lower(kind) = lower($2))
@@ -454,7 +477,8 @@ ORDER BY cluster, kind, namespace, name`
 
 // List returns matching resources (without the raw payload) across the fleet,
 // or for one cluster when cluster is non-empty. An empty kind/namespace/ready
-// means "any".
+// means "any". appliedBy rides in the list payload so the UI can group child
+// HelmReleases under their parent Kustomization without fetching detail.
 func (s *Store) List(ctx context.Context, cluster, kind, namespace, ready string) ([]Resource, error) {
 	rows, err := s.pool.Query(ctx, listStmt, cluster, kind, namespace, ready)
 	if err != nil {
@@ -466,15 +490,18 @@ func (s *Store) List(ctx context.Context, cluster, kind, namespace, ready string
 	for rows.Next() {
 		var r Resource
 		var parentKind, parentName *string
+		var appliedByName, appliedByNamespace *string
 		if err := rows.Scan(
 			&r.Cluster, &r.Kind, &r.APIVersion, &r.Namespace, &r.Name, &r.Ready, &r.Reason,
 			&r.Message, &r.Revision, &r.Suspended, &r.Generation,
 			&r.ObservedGeneration, &r.LastTransition,
 			&r.AzureResourceID, &parentKind, &parentName,
+			&appliedByName, &appliedByNamespace,
 		); err != nil {
 			return nil, fmt.Errorf("scan row: %w", err)
 		}
 		r.Parent = parentRef(parentKind, parentName)
+		r.AppliedBy = appliedByRef(appliedByName, appliedByNamespace)
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -483,7 +510,8 @@ func (s *Store) List(ctx context.Context, cluster, kind, namespace, ready string
 const getStmt = `
 SELECT cluster, kind, api_version, namespace, name, ready, reason, message, revision,
        suspended, generation, observed_generation, last_transition, raw,
-       COALESCE(azure_resource_id, ''), parent_kind, parent_name
+       COALESCE(azure_resource_id, ''), parent_kind, parent_name,
+       applied_by_name, applied_by_namespace
 FROM flux_resource
 WHERE cluster = $1 AND lower(kind) = lower($2) AND namespace = $3 AND name = $4`
 
@@ -493,11 +521,13 @@ func (s *Store) Get(ctx context.Context, cluster, kind, namespace, name string) 
 	var r Resource
 	var raw []byte
 	var parentKind, parentName *string
+	var appliedByName, appliedByNamespace *string
 	err := s.pool.QueryRow(ctx, getStmt, cluster, kind, namespace, name).Scan(
 		&r.Cluster, &r.Kind, &r.APIVersion, &r.Namespace, &r.Name, &r.Ready, &r.Reason,
 		&r.Message, &r.Revision, &r.Suspended, &r.Generation,
 		&r.ObservedGeneration, &r.LastTransition, &raw,
 		&r.AzureResourceID, &parentKind, &parentName,
+		&appliedByName, &appliedByNamespace,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -507,6 +537,7 @@ func (s *Store) Get(ctx context.Context, cluster, kind, namespace, name string) 
 	}
 	r.Raw = raw
 	r.Parent = parentRef(parentKind, parentName)
+	r.AppliedBy = appliedByRef(appliedByName, appliedByNamespace)
 	return &r, nil
 }
 

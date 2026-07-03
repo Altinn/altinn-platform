@@ -110,8 +110,8 @@ func (e *Engine) syncCluster(ctx context.Context, dbName string) error {
 	if err != nil {
 		return err
 	}
-	// The pull is keyed on the tenant's schema version: a version-1 tenant
-	// (agent not yet migrated) lacks the DIS projection columns, so selecting
+	// The pull is keyed on the tenant's schema version: a version-2 tenant
+	// (agent not yet migrated) lacks the applied-by columns, so selecting
 	// them would fail the cluster's sync until its agent rolls out.
 	changed, err := ts.ChangedSince(ctx, cursor, meta.SchemaVersion)
 	if err != nil {

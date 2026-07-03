@@ -262,6 +262,67 @@ func TestCentralReads(t *testing.T) {
 	}
 }
 
+// TestCentralAppliedByRoundTrip checks the projected owning Kustomization is
+// carried end-to-end into the central read model: List (no raw) and Get both
+// surface appliedBy, while an unowned root stays nil. The list carrying it is
+// what lets the UI group child HelmReleases under their app without detail
+// fetches.
+func TestCentralAppliedByRoundTrip(t *testing.T) {
+	cs, _ := newCentral(t)
+	ctx := context.Background()
+
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	child := changed("grafana-operator", "HelmRelease", flux.ReadyTrue, "h1", now)
+	child.AppliedBy = &flux.AppliedBy{Name: "grafana-operator-grafana-operator", Namespace: "flux-system"}
+	root := changed("apps", "Kustomization", flux.ReadyTrue, "h2", now)
+	if err := cs.Apply(ctx, central.ClusterState{
+		Cluster:     "ttd_at23",
+		Environment: "at23",
+		Changed:     []store.ChangedResource{child, root},
+		Keys: []store.ResourceKey{
+			{Kind: "HelmRelease", Namespace: "flux-system", Name: "grafana-operator"},
+			{Kind: "Kustomization", Namespace: "flux-system", Name: "apps"},
+		},
+		Cursor:        now,
+		SchemaVersion: store.SchemaVersion,
+		AgentVersion:  "test",
+		LastSweepAt:   now,
+	}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	rows, err := cs.List(ctx, "ttd_at23", "", "", "")
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	var seenChild, seenRoot bool
+	for _, r := range rows {
+		switch r.Name {
+		case "grafana-operator":
+			seenChild = true
+			if r.AppliedBy == nil || r.AppliedBy.Name != "grafana-operator-grafana-operator" || r.AppliedBy.Namespace != "flux-system" {
+				t.Fatalf("child HelmRelease List should carry AppliedBy: %+v", r.AppliedBy)
+			}
+		case "apps":
+			seenRoot = true
+			if r.AppliedBy != nil {
+				t.Fatalf("root Kustomization List should have nil AppliedBy: %+v", r.AppliedBy)
+			}
+		}
+	}
+	if !seenChild || !seenRoot {
+		t.Fatalf("list missing rows: child=%v root=%v rows=%+v", seenChild, seenRoot, rows)
+	}
+
+	got, err := cs.Get(ctx, "ttd_at23", "HelmRelease", "flux-system", "grafana-operator")
+	if err != nil {
+		t.Fatalf("get child: %v", err)
+	}
+	if got.AppliedBy == nil || got.AppliedBy.Name != "grafana-operator-grafana-operator" {
+		t.Fatalf("child Get should carry AppliedBy: %+v", got.AppliedBy)
+	}
+}
+
 // TestCentralDISFieldsEndToEnd walks a DIS resource through the full pipeline
 // against real PostgreSQL: agent Sync into the tenant database, server pull
 // (ChangedSince at the current schema) and Apply, then the fleet-API reads —
@@ -324,12 +385,12 @@ func TestCentralDISFieldsEndToEnd(t *testing.T) {
 	}
 }
 
-// TestCentralSyncSchemaV1Tenant proves the rollout order the schema gate
-// promises: a server at schema 2 can still pull a tenant whose agent is at
-// schema 1 (its database lacks the DIS columns entirely). The tenant is built
-// by hand — migrate, then drop the v2 columns and stamp schema_version 1 —
-// because a v2 agent binary can no longer write the v1 shape.
-func TestCentralSyncSchemaV1Tenant(t *testing.T) {
+// TestCentralSyncSchemaV2Tenant proves the rollout order the schema gate
+// promises: a server at schema 3 can still pull a tenant whose agent is at
+// schema 2 (its database lacks the applied-by columns entirely). The tenant is
+// built by hand — migrate, then drop the v3 columns and stamp schema_version 2
+// — because a v3 agent binary can no longer write the v2 shape.
+func TestCentralSyncSchemaV2Tenant(t *testing.T) {
 	cs, _ := newCentral(t)
 	ctx := context.Background()
 	uri := os.Getenv("DISCONSOLE_TEST_DB_URI")
@@ -344,35 +405,36 @@ func TestCentralSyncSchemaV1Tenant(t *testing.T) {
 		t.Fatalf("migrate tenant: %v", err)
 	}
 	if _, err := tpool.Exec(ctx, `ALTER TABLE flux_resource
-		DROP COLUMN azure_resource_id, DROP COLUMN parent_kind, DROP COLUMN parent_name`); err != nil {
-		t.Fatalf("shape tenant as v1: %v", err)
+		DROP COLUMN applied_by_name, DROP COLUMN applied_by_namespace`); err != nil {
+		t.Fatalf("shape tenant as v2: %v", err)
 	}
 	if _, err := tpool.Exec(ctx,
-		"INSERT INTO meta (id, schema_version, agent_version) VALUES (true, 1, 'v1-agent')"); err != nil {
-		t.Fatalf("stamp v1 meta: %v", err)
+		"INSERT INTO meta (id, schema_version, agent_version) VALUES (true, 2, 'v2-agent')"); err != nil {
+		t.Fatalf("stamp v2 meta: %v", err)
 	}
-	// The full column set a v1 agent writes: its upsert always passes the Go
-	// zero values, so reason/message/revision land as '' (never NULL).
+	// The full column set a v2 agent writes: its upsert always passes the Go
+	// zero values, so reason/message/revision land as '' (never NULL) and the
+	// DIS pair as NULL for a plain Flux object.
 	if _, err := tpool.Exec(ctx, `INSERT INTO flux_resource
 		(kind, api_version, namespace, name, ready, reason, message, revision,
-		 suspended, generation, observed_generation, raw, content_hash)
+		 azure_resource_id, suspended, generation, observed_generation, raw, content_hash)
 		VALUES ('Kustomization', 'kustomize.toolkit.fluxcd.io/v1', 'flux-system', 'apps', 'True', '', '', '',
-		 false, 0, 0, '{}', 'h1')`); err != nil {
-		t.Fatalf("insert v1 row: %v", err)
+		 '', false, 0, 0, '{}', 'h1')`); err != nil {
+		t.Fatalf("insert v2 row: %v", err)
 	}
 
 	meta, err := ts.GetMeta(ctx)
-	if err != nil || meta.SchemaVersion != 1 {
+	if err != nil || meta.SchemaVersion != 2 {
 		t.Fatalf("tenant meta: %+v err=%v", meta, err)
 	}
 
 	// The version-keyed pull must succeed against the columnless table.
 	changed, err := ts.ChangedSince(ctx, time.Time{}, meta.SchemaVersion)
 	if err != nil {
-		t.Fatalf("changed-since on a v1 tenant: %v", err)
+		t.Fatalf("changed-since on a v2 tenant: %v", err)
 	}
-	if len(changed) != 1 || changed[0].AzureResourceID != "" || changed[0].Parent != nil {
-		t.Fatalf("unexpected v1 pull: %+v", changed)
+	if len(changed) != 1 || changed[0].AppliedBy != nil {
+		t.Fatalf("unexpected v2 pull: %+v", changed)
 	}
 	keys, err := ts.Keys(ctx)
 	if err != nil {
@@ -388,15 +450,15 @@ func TestCentralSyncSchemaV1Tenant(t *testing.T) {
 		SchemaVersion: meta.SchemaVersion,
 		AgentVersion:  meta.AgentVersion,
 	}); err != nil {
-		t.Fatalf("apply v1 tenant: %v", err)
+		t.Fatalf("apply v2 tenant: %v", err)
 	}
 
 	rows, err := cs.List(ctx, "ttd_at23", "", "", "")
 	if err != nil || len(rows) != 1 {
-		t.Fatalf("central list after v1 sync: %+v err=%v", rows, err)
+		t.Fatalf("central list after v2 sync: %+v err=%v", rows, err)
 	}
-	if rows[0].AzureResourceID != "" || rows[0].Parent != nil {
-		t.Fatalf("v1 row should have empty DIS fields, got %+v", rows[0])
+	if rows[0].AppliedBy != nil {
+		t.Fatalf("v2 row should have nil appliedBy, got %+v", rows[0])
 	}
 }
 

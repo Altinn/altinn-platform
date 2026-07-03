@@ -42,7 +42,13 @@ type Resource struct {
 	AzureResourceID string `json:"azureResourceId,omitempty"`
 	// Parent names the same-namespace resource this one nests under in the UI
 	// (a Database under its DatabaseServer, an ApiVersion under its Api).
-	Parent             *ParentRef      `json:"parent,omitempty"`
+	Parent *ParentRef `json:"parent,omitempty"`
+	// AppliedBy is the Kustomization that applied this object, projected from
+	// the kustomize.toolkit.fluxcd.io/{name,namespace} labels the kustomize
+	// controller stamps on everything it applies, so the list endpoint (which
+	// omits Raw) can group child resources under their parent app. Empty for
+	// roots and Arc-managed objects, which carry no such labels.
+	AppliedBy          *AppliedBy      `json:"appliedBy,omitempty"`
 	Suspended          bool            `json:"suspended"`
 	Generation         int64           `json:"generation,omitempty"`
 	ObservedGeneration int64           `json:"observedGeneration,omitempty"`
@@ -62,6 +68,21 @@ type ParentRef struct {
 	Name string `json:"name"`
 }
 
+// Labels the kustomize controller stamps on every object it applies, naming
+// the owning Kustomization. HelmReleases applied by a Kustomization carry
+// them too, which is how the UI groups child HelmReleases under their app.
+const (
+	LabelAppliedByName      = "kustomize.toolkit.fluxcd.io/name"
+	LabelAppliedByNamespace = "kustomize.toolkit.fluxcd.io/namespace"
+)
+
+// AppliedBy identifies the Kustomization that applied a resource. The JSON
+// shape (name/namespace) is part of the UI contract.
+type AppliedBy struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+}
+
 // normalize projects an unstructured Flux object into a Resource. The fetch
 // stays dynamic (discovery-resolved, version-agnostic) and the full object is
 // preserved for Raw; only the projected status fields are decoded into the
@@ -74,6 +95,7 @@ func normalize(u *unstructured.Unstructured) (Resource, error) {
 		Name:       u.GetName(),
 		Generation: u.GetGeneration(),
 		Ready:      ReadyUnknown,
+		AppliedBy:  appliedByFrom(u.GetLabels()),
 	}
 
 	if err := r.applyTypedStatus(u); err != nil {
@@ -179,6 +201,17 @@ func artifactRevision(a *fluxmeta.Artifact) string {
 		return ""
 	}
 	return a.Revision
+}
+
+// appliedByFrom projects the kustomize-controller ownership labels into an
+// AppliedBy. Returns nil when the labels are absent (roots, Arc-managed
+// objects) so the JSON field is omitted.
+func appliedByFrom(labels map[string]string) *AppliedBy {
+	name, ns := labels[LabelAppliedByName], labels[LabelAppliedByNamespace]
+	if name == "" && ns == "" {
+		return nil
+	}
+	return &AppliedBy{Name: name, Namespace: ns}
 }
 
 // disObject is the minimal projection of a DIS custom resource — just the
