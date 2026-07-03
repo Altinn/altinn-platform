@@ -124,6 +124,7 @@ var _ = Describe("ApplicationIdentity Controller", func() {
 			}
 			uaID.Status.ClientId = utils.ToPointer("325e4fc8-5e58-4942-be61-11b8ee679ff2")
 			uaID.Status.PrincipalId = utils.ToPointer("3fb69913-169d-4c23-8ab7-39278f71d314")
+			uaID.Status.Id = utils.ToPointer("/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/test-identity")
 			Eventually(func(g Gomega) {
 				err := k8sClient.Status().Update(ctx, uaID)
 				g.Expect(err).NotTo(HaveOccurred())
@@ -134,6 +135,7 @@ var _ = Describe("ApplicationIdentity Controller", func() {
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(appIdentity.Status.PrincipalID).To(Equal(uaID.Status.PrincipalId))
 				g.Expect(appIdentity.Status.ClientID).To(Equal(uaID.Status.ClientId))
+				g.Expect(appIdentity.Status.ResourceID).To(Equal(uaID.Status.Id))
 			}, timeout, interval).Should(Succeed())
 			// Verify that the FederatedIdentityCredential is created
 			federatedCredential := &managedidentity.FederatedIdentityCredential{}
