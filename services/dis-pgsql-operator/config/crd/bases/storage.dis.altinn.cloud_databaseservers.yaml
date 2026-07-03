@@ -425,6 +425,12 @@ spec:
                   has provisioned the server. Consumers should read this instead of
                   deriving "<metadata.name>.postgres.database.azure.com".
                 type: string
+              resourceId:
+                description: |-
+                  resourceId is the ARM resource id of the PostgreSQL Flexible Server
+                  (server.Status.Id). It is populated once Azure has provisioned the
+                  server.
+                type: string
               serverName:
                 description: |-
                   serverName is the Azure PostgreSQL Flexible Server name (the AzureName
