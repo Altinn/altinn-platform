@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.9](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.4.8...dis-vault-v1.4.9) (2026-07-03)
+
+
+### Bug Fixes
+
+* **dis-vault-operator:** bump golang.org/x/net to v0.55.0 to clear HIGH CVEs ([#3788](https://github.com/Altinn/altinn-platform/issues/3788)) ([3e23d59](https://github.com/Altinn/altinn-platform/commit/3e23d59a0c146e4ba5ff0926e744b1a96211ce48))
+
 ## [1.4.8](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.4.7...dis-vault-v1.4.8) (2026-07-03)
 
 
