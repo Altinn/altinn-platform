@@ -54,7 +54,11 @@ func (s *Store) Migrate(ctx context.Context) error {
 // SchemaVersion is the version of this tenant database's schema, stamped into
 // the meta row at startup. The central console reads it to stay tolerant of
 // agents rolling out across the fleet at different times.
-const SchemaVersion = 1
+//
+// Version 2 added the DIS projection columns (azure_resource_id, parent_kind,
+// parent_name); ChangedSince selects per version so the server can still pull
+// version-1 tenants whose agents have not migrated yet.
+const SchemaVersion = 2
 
 // Meta is the single bookkeeping row each agent maintains in its tenant DB.
 type Meta struct {
@@ -108,6 +112,22 @@ type SyncStats struct {
 	Pruned   int64 // rows deleted because their object disappeared from the cluster
 }
 
+// parentCols splits an optional parent into its nullable column pair.
+func parentCols(p *flux.ParentRef) (kind, name *string) {
+	if p == nil {
+		return nil, nil
+	}
+	return &p.Kind, &p.Name
+}
+
+// parentRef rebuilds the optional parent from its nullable column pair.
+func parentRef(kind, name *string) *flux.ParentRef {
+	if kind == nil || name == nil {
+		return nil
+	}
+	return &flux.ParentRef{Kind: *kind, Name: *name}
+}
+
 // upsertStmt upserts one resource and, in the same statement, writes a history
 // event when the row is new or its ready/reason/revision changed. The `prev`
 // CTE reads the pre-upsert row (CTEs see the snapshot from the start of the
@@ -132,11 +152,13 @@ up AS (
         kind, api_version, namespace, name,
         ready, reason, message, revision, suspended,
         generation, observed_generation, last_transition, raw, content_hash,
+        azure_resource_id, parent_kind, parent_name,
         first_seen, last_seen, updated_at
     ) VALUES (
         $1, $2, $3, $4,
         $5, $6, $7, $8, $9,
         $10, $11, $12, $13, $14,
+        $15, $16, $17,
         now(), now(), now()
     )
     ON CONFLICT (kind, namespace, name) DO UPDATE SET
@@ -145,6 +167,9 @@ up AS (
         reason              = EXCLUDED.reason,
         message             = EXCLUDED.message,
         revision            = EXCLUDED.revision,
+        azure_resource_id   = EXCLUDED.azure_resource_id,
+        parent_kind         = EXCLUDED.parent_kind,
+        parent_name         = EXCLUDED.parent_name,
         suspended           = EXCLUDED.suspended,
         generation          = EXCLUDED.generation,
         observed_generation = EXCLUDED.observed_generation,
@@ -193,10 +218,12 @@ func (s *Store) Sync(ctx context.Context, resources []flux.Resource) (SyncStats,
 			if len(raw) == 0 {
 				raw = json.RawMessage("{}")
 			}
+			parentKind, parentName := parentCols(r.Parent)
 			batch.Queue(upsertStmt,
 				r.Kind, r.APIVersion, r.Namespace, r.Name,
 				r.Ready, r.Reason, r.Message, r.Revision, r.Suspended,
 				r.Generation, r.ObservedGeneration, r.LastTransition, []byte(raw), r.ContentHash,
+				r.AzureResourceID, parentKind, parentName,
 			)
 		}
 		br := tx.SendBatch(ctx, batch)
@@ -311,7 +338,8 @@ func (s *Store) Summary(ctx context.Context) ([]KindCount, error) {
 
 const listStmt = `
 SELECT kind, api_version, namespace, name, ready, reason, message, revision,
-       suspended, generation, observed_generation, last_transition
+       suspended, generation, observed_generation, last_transition,
+       COALESCE(azure_resource_id, ''), parent_kind, parent_name
 FROM flux_resource
 WHERE ($1 = '' OR lower(kind) = lower($1))
   AND ($2 = '' OR namespace = $2)
@@ -330,13 +358,16 @@ func (s *Store) List(ctx context.Context, kind, namespace, ready string) ([]flux
 	out := []flux.Resource{}
 	for rows.Next() {
 		var r flux.Resource
+		var parentKind, parentName *string
 		if err := rows.Scan(
 			&r.Kind, &r.APIVersion, &r.Namespace, &r.Name, &r.Ready, &r.Reason,
 			&r.Message, &r.Revision, &r.Suspended, &r.Generation,
 			&r.ObservedGeneration, &r.LastTransition,
+			&r.AzureResourceID, &parentKind, &parentName,
 		); err != nil {
 			return nil, fmt.Errorf("scan row: %w", err)
 		}
+		r.Parent = parentRef(parentKind, parentName)
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -344,7 +375,8 @@ func (s *Store) List(ctx context.Context, kind, namespace, ready string) ([]flux
 
 const getStmt = `
 SELECT kind, api_version, namespace, name, ready, reason, message, revision,
-       suspended, generation, observed_generation, last_transition, raw
+       suspended, generation, observed_generation, last_transition, raw,
+       COALESCE(azure_resource_id, ''), parent_kind, parent_name
 FROM flux_resource
 WHERE lower(kind) = lower($1) AND namespace = $2 AND name = $3`
 
@@ -368,10 +400,12 @@ type Event struct {
 func (s *Store) Get(ctx context.Context, kind, namespace, name string) (*flux.Resource, []Event, error) {
 	var r flux.Resource
 	var raw []byte
+	var parentKind, parentName *string
 	err := s.pool.QueryRow(ctx, getStmt, kind, namespace, name).Scan(
 		&r.Kind, &r.APIVersion, &r.Namespace, &r.Name, &r.Ready, &r.Reason,
 		&r.Message, &r.Revision, &r.Suspended, &r.Generation,
 		&r.ObservedGeneration, &r.LastTransition, &raw,
+		&r.AzureResourceID, &parentKind, &parentName,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, ErrNotFound
@@ -380,6 +414,7 @@ func (s *Store) Get(ctx context.Context, kind, namespace, name string) (*flux.Re
 		return nil, nil, fmt.Errorf("get query: %w", err)
 	}
 	r.Raw = raw
+	r.Parent = parentRef(parentKind, parentName)
 
 	rows, err := s.pool.Query(ctx, historyStmt, r.Kind, r.Namespace, r.Name, historyLimit)
 	if err != nil {
@@ -419,6 +454,16 @@ type ChangedResource struct {
 
 const changedSinceStmt = `
 SELECT kind, api_version, namespace, name, ready, reason, message, revision,
+       suspended, generation, observed_generation, last_transition, raw, content_hash, updated_at,
+       COALESCE(azure_resource_id, ''), parent_kind, parent_name
+FROM flux_resource
+WHERE updated_at > $1
+ORDER BY updated_at`
+
+// changedSinceStmtV1 is the pull for tenants still at schema version 1, whose
+// databases predate the DIS projection columns; those fields stay zero.
+const changedSinceStmtV1 = `
+SELECT kind, api_version, namespace, name, ready, reason, message, revision,
        suspended, generation, observed_generation, last_transition, raw, content_hash, updated_at
 FROM flux_resource
 WHERE updated_at > $1
@@ -428,8 +473,17 @@ ORDER BY updated_at`
 // server's per-cluster high-water), including the raw payload. Because the
 // agent only advances updated_at on a real content change, an idle cluster
 // returns no rows and transfers no payloads.
-func (s *Store) ChangedSince(ctx context.Context, cursor time.Time) ([]ChangedResource, error) {
-	rows, err := s.pool.Query(ctx, changedSinceStmt, cursor)
+//
+// schemaVersion is the tenant's meta.schema_version: the SELECT is keyed on it
+// so the server can pull tenants whose agents have not migrated to the current
+// schema yet (the server rolls out first, then the agents).
+func (s *Store) ChangedSince(ctx context.Context, cursor time.Time, schemaVersion int) ([]ChangedResource, error) {
+	stmt := changedSinceStmt
+	withDIS := schemaVersion >= 2
+	if !withDIS {
+		stmt = changedSinceStmtV1
+	}
+	rows, err := s.pool.Query(ctx, stmt, cursor)
 	if err != nil {
 		return nil, fmt.Errorf("changed-since query: %w", err)
 	}
@@ -440,17 +494,23 @@ func (s *Store) ChangedSince(ctx context.Context, cursor time.Time) ([]ChangedRe
 		var c ChangedResource
 		var raw []byte
 		var hash *string
-		if err := rows.Scan(
+		var parentKind, parentName *string
+		dest := []any{
 			&c.Kind, &c.APIVersion, &c.Namespace, &c.Name, &c.Ready, &c.Reason,
 			&c.Message, &c.Revision, &c.Suspended, &c.Generation,
 			&c.ObservedGeneration, &c.LastTransition, &raw, &hash, &c.UpdatedAt,
-		); err != nil {
+		}
+		if withDIS {
+			dest = append(dest, &c.AzureResourceID, &parentKind, &parentName)
+		}
+		if err := rows.Scan(dest...); err != nil {
 			return nil, fmt.Errorf("scan changed row: %w", err)
 		}
 		c.Raw = raw
 		if hash != nil {
 			c.ContentHash = *hash
 		}
+		c.Parent = parentRef(parentKind, parentName)
 		out = append(out, c)
 	}
 	return out, rows.Err()

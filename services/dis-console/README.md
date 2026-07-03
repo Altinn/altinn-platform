@@ -1,14 +1,11 @@
 # dis-console
 
-**dis-console** is a small Go service that surfaces DIS deployment state. Its
-first job is Flux: it reads the live Flux custom resources across **all
-namespaces** and serves their deployment status as a read-only JSON API, so the
-question *"is everything deployed and healthy, and if not, what failed and
-why?"* can be answered without squinting at `flux get` or raw `kubectl ... -o
-yaml`.
-
-The name is deliberately product-level (not `flux-*`) so the Console can grow
-to cover other DIS state later.
+**dis-console** is a small Go service that surfaces DIS deployment state. It
+reads the live Flux custom resources and the DIS platform custom resources
+(databases, vaults, identities, APIM) across **all namespaces** and serves
+their deployment status as a read-only JSON API, so the question *"is
+everything deployed and healthy, and if not, what failed and why?"* can be
+answered without squinting at `flux get` or raw `kubectl ... -o yaml`.
 
 > Status: moving to a fleet model. The binary has two subcommands:
 > - `dis-console agent` runs in each cluster, sweeps its Flux CRs every interval,
@@ -32,10 +29,25 @@ via a discovery `RESTMapper` (robust to Azure Flux version bumps):
 | `kustomize.toolkit.fluxcd.io` | Kustomization |
 | `helm.toolkit.fluxcd.io` | HelmRelease |
 | `source.toolkit.fluxcd.io` | OCIRepository, HelmRepository, HelmChart |
+| `storage.dis.altinn.cloud` | DatabaseServer, Database |
+| `vault.dis.altinn.cloud` | Vault |
+| `application.dis.altinn.cloud` | ApplicationIdentity |
+| `apim.dis.altinn.cloud` | Api, ApiVersion, Backend |
+
+A DIS kind whose CRD is not installed on a cluster is simply skipped by the
+sweep, so mixed fleets keep working.
 
 For each object it extracts a small normalized shape (`ready`/`reason`/
 `message`/`revision`/`suspended`/`generation`/`observedGeneration`) from the
 `Ready` condition and keeps the full object under `raw` for the detail endpoint.
+The DIS kinds add two fields the UI builds on: `azureResourceId` (the ARM id of
+the provisioned Azure resource, for Portal links — from `status.resourceId`, or
+the APIM ids `status.apiVersionSetID`/`status.backendID`) and `parent`
+(`{kind,name}` — a Database nests under its `spec.server.name` DatabaseServer,
+an ApiVersion under the Api named by its controller owner reference). The DIS
+operators publish the same `Ready` condition; the APIM kinds publish only
+`status.provisioningState`, which is mapped onto ready
+(Succeeded→True, Failed→False, transitional→Unknown).
 
 Each kind is listed from the apiserver watch cache (`resourceVersion=0`, not a
 quorum read from etcd) and the discovery cache is refreshed only periodically,
@@ -51,7 +63,10 @@ the **typed Flux api structs** (`kustomize-controller/api`, `helm-controller/api
 version-pinned typed client, and without giving up the verbatim `raw`. Trade-off:
 those api packages pull `sigs.k8s.io/controller-runtime` in as an *indirect*
 dependency (their scheme builders import it); dis-console uses only the status
-structs, never the framework.
+structs, never the framework. The DIS kinds are decoded the same way but into a
+minimal local struct instead of the operator api packages, which would drag the
+Azure Service Operator dependency tree into this service for a handful of
+fields.
 
 ## Endpoints
 

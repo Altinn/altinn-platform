@@ -29,6 +29,41 @@ rules:
       - get
       - list
       - watch
+  - apiGroups:
+      - storage.dis.altinn.cloud
+    resources:
+      - databaseservers
+      - databases
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - vault.dis.altinn.cloud
+    resources:
+      - vaults
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - application.dis.altinn.cloud
+    resources:
+      - applicationidentities
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - apim.dis.altinn.cloud
+    resources:
+      - apis
+      - apiversions
+      - backends
+    verbs:
+      - get
+      - list
+      - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

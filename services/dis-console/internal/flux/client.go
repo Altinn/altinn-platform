@@ -1,12 +1,14 @@
-// Package flux reads Flux custom resources across all namespaces using the
-// dynamic client and a discovery-backed RESTMapper, and normalizes their
+// Package flux reads Flux and DIS custom resources across all namespaces using
+// the dynamic client and a discovery-backed RESTMapper, and normalizes their
 // deployment status into a small, stable shape the API serves.
 //
 // The fetch stays dynamic on purpose (the discovery RESTMapper resolves
 // whichever served version Azure Flux exposes, and the full object is kept
 // verbatim for the raw payload); the projected status fields are then decoded
 // into the typed Flux api structs via runtime conversion — typed access without
-// a version-pinned typed client. See normalize.go and the README.
+// a version-pinned typed client. The DIS kinds are decoded the same way into
+// minimal local structs so the operator modules stay out of the dependency
+// graph. See normalize.go and the README.
 package flux
 
 import (
@@ -38,15 +40,51 @@ const (
 	KindHelmChart      = "HelmChart"
 )
 
-// TargetKinds are the Flux custom resource kinds the Console reads. The served
-// API version of each is resolved at runtime via the discovery RESTMapper, so
-// the same binary keeps working if Azure Flux bumps a version.
+// DIS platform API groups (one per operator) and their kinds. The kind names
+// mirror the CRD spellings (Api, ApiVersion), not Go initialism style.
+const (
+	GroupDISStorage     = "storage.dis.altinn.cloud"
+	GroupDISVault       = "vault.dis.altinn.cloud"
+	GroupDISApplication = "application.dis.altinn.cloud"
+	GroupDISApim        = "apim.dis.altinn.cloud"
+
+	KindDatabaseServer      = "DatabaseServer"
+	KindDatabase            = "Database"
+	KindVault               = "Vault"
+	KindApplicationIdentity = "ApplicationIdentity"
+	KindApi                 = "Api"
+	KindApiVersion          = "ApiVersion"
+	KindBackend             = "Backend"
+)
+
+// isDISGroup reports whether group is one of the DIS platform API groups, which
+// normalize projects via the DIS status shape instead of the typed Flux structs.
+func isDISGroup(group string) bool {
+	switch group {
+	case GroupDISStorage, GroupDISVault, GroupDISApplication, GroupDISApim:
+		return true
+	}
+	return false
+}
+
+// TargetKinds are the custom resource kinds the Console reads: the Flux
+// deployment machinery plus the DIS platform resources. The served API version
+// of each is resolved at runtime via the discovery RESTMapper, so the same
+// binary keeps working if Azure Flux bumps a version; kinds whose CRD is not
+// installed on a cluster are skipped by Sweep.
 var TargetKinds = []schema.GroupKind{
 	{Group: GroupKustomize, Kind: KindKustomization},
 	{Group: GroupHelm, Kind: KindHelmRelease},
 	{Group: GroupSource, Kind: KindOCIRepository},
 	{Group: GroupSource, Kind: KindHelmRepository},
 	{Group: GroupSource, Kind: KindHelmChart},
+	{Group: GroupDISStorage, Kind: KindDatabaseServer},
+	{Group: GroupDISStorage, Kind: KindDatabase},
+	{Group: GroupDISVault, Kind: KindVault},
+	{Group: GroupDISApplication, Kind: KindApplicationIdentity},
+	{Group: GroupDISApim, Kind: KindApi},
+	{Group: GroupDISApim, Kind: KindApiVersion},
+	{Group: GroupDISApim, Kind: KindBackend},
 }
 
 // discoveryTTL bounds how often Sweep refreshes the discovery cache. It is long
@@ -112,7 +150,8 @@ func restConfig(local bool) (*rest.Config, error) {
 // Sweep lists every instance of each target kind across all namespaces and
 // returns them as normalized resources. Kinds that are not installed are
 // skipped (reported as warnings) so the sweep still succeeds when only a
-// subset of Flux controllers is present. Any other discovery/list failure
+// subset of the Flux controllers and DIS operators is present. Any other
+// discovery/list failure
 // (RBAC, auth, apiserver outage) aborts the sweep with an error so the caller
 // keeps the previous snapshot instead of publishing a partial one.
 //
@@ -132,9 +171,10 @@ func (c *Client) Sweep(ctx context.Context) ([]Resource, []error, error) {
 	for _, gk := range TargetKinds {
 		mapping, err := c.mapper.RESTMapping(gk)
 		if err != nil {
-			// A kind that isn't installed is expected (optional source kinds);
-			// skip it. Any other mapping error is a discovery/access failure and
-			// must abort the sweep.
+			// A kind that isn't installed is expected (optional source kinds,
+			// DIS operators not deployed on this cluster); skip it. Any other
+			// mapping error is a discovery/access failure and must abort the
+			// sweep.
 			if apimeta.IsNoMatchError(err) {
 				warnings = append(warnings, fmt.Errorf("skip %s: not installed", gk))
 				continue

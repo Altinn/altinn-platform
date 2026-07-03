@@ -2,9 +2,10 @@
 
 ## What this is
 dis-console is a small Go service (plain `net/http`) with two subcommands:
-- `dis-console agent` — runs per cluster: reads Flux custom resources across all
-  namespaces and persists a normalized snapshot into that cluster's own tenant
-  PostgreSQL database. Exposes only `/healthz` and `/readyz` (no JSON API).
+- `dis-console agent` — runs per cluster: reads Flux and DIS custom resources
+  across all namespaces and persists a normalized snapshot into that cluster's
+  own tenant PostgreSQL database. Exposes only `/healthz` and `/readyz` (no
+  JSON API).
 - `dis-console server` — runs centrally: migrates the central read model,
   incrementally syncs every tenant database on the shared server into it, and
   serves the fleet JSON API over it (`/api/clusters`, `?cluster=` filters,
@@ -67,11 +68,14 @@ Do not claim checks passed unless you actually ran them.
 - `cmd/main.go` — subcommand dispatch. `agent` runs the per-cluster sweep loop
   (health probes only); `server` migrates the central schema, runs the tenant
   sync loop, and serves the fleet API. Each wires its own DB pool and flags.
-- `internal/flux` — version-agnostic dynamic-client reader; `normalize.go`
-  decodes the projected status into the typed Flux `api` structs (kustomize/helm/
-  source `api` + `pkg/apis/meta`) via runtime conversion, while keeping the full
-  object for `raw`. `hygiene.go` strips volatile metadata (`managedFields`,
-  `resourceVersion`), computes the `content_hash`, and caps `raw` at `MaxRawBytes`.
+- `internal/flux` — version-agnostic dynamic-client reader for the Flux and DIS
+  kinds; `normalize.go` decodes the projected status into the typed Flux `api`
+  structs (kustomize/helm/source `api` + `pkg/apis/meta`) via runtime
+  conversion — and, for the DIS kinds, into a minimal local struct (never the
+  operator modules) that also projects `azureResourceId` and `parent` — while
+  keeping the full object for `raw`. `hygiene.go` strips volatile metadata
+  (`managedFields`, `resourceVersion`), computes the `content_hash`, and caps
+  `raw` at `MaxRawBytes`.
 - `internal/dbauth` — pgxpool builder; Entra-token `BeforeConnect` hook in the
   cluster, PGPASSWORD/trust fallback when Entra is disabled (Kind/CI/local).
 - `internal/store` — tenant pgxpool store: embedded `schema.sql`, `Migrate`,
