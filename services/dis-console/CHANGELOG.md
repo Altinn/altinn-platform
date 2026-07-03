@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.4.0...dis-console-v1.5.0) (2026-07-03)
+
+
+### Features
+
+* **dis-console:** project the owning Kustomization (appliedBy) into normalized resources ([#3793](https://github.com/Altinn/altinn-platform/issues/3793)) ([fdddca1](https://github.com/Altinn/altinn-platform/commit/fdddca15c257fd2cb68473d95306276fe1652d83))
+
 ## [1.4.0](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.3.1...dis-console-v1.4.0) (2026-07-03)
 
 
