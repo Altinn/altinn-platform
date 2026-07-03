@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.3.1...dis-console-v1.4.0) (2026-07-03)
+
+
+### Features
+
+* **dis-console:** sweep DIS custom resources and project azureResourceId + parent ([#3785](https://github.com/Altinn/altinn-platform/issues/3785)) ([39f674d](https://github.com/Altinn/altinn-platform/commit/39f674db9670d9724983ede1fb724bbbcfbee978))
+
 ## [1.3.1](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.3.0...dis-console-v1.3.1) (2026-06-24)
 
 
