@@ -40,6 +40,10 @@ sweep, so mixed fleets keep working.
 For each object it extracts a small normalized shape (`ready`/`reason`/
 `message`/`revision`/`suspended`/`generation`/`observedGeneration`) from the
 `Ready` condition and keeps the full object under `raw` for the detail endpoint.
+Every object also projects `appliedBy` (`{name,namespace}`) from the
+`kustomize.toolkit.fluxcd.io/{name,namespace}` labels — the Kustomization that
+applied it — so the list endpoint can group child HelmReleases under their
+parent app without fetching detail; roots and Arc-managed objects have none.
 The DIS kinds add two fields the UI builds on: `azureResourceId` (the ARM id of
 the provisioned Azure resource, for Portal links — from `status.resourceId`, or
 the APIM ids `status.apiVersionSetID`/`status.backendID`) and `parent`

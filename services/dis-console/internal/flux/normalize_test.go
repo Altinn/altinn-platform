@@ -262,6 +262,53 @@ func TestNormalizeApimProvisioningState(t *testing.T) {
 	}
 }
 
+// HelmReleases applied by a Kustomization carry the kustomize-controller
+// ownership labels; the projected AppliedBy is what lets the list endpoint
+// group child HelmReleases under their parent app (raw is detail-only).
+func TestNormalizeHelmReleaseAppliedByFromLabels(t *testing.T) {
+	u := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "helm.toolkit.fluxcd.io/v2",
+		"kind":       "HelmRelease",
+		"metadata": map[string]any{
+			"namespace": "grafana",
+			"name":      "grafana-operator",
+			"labels": map[string]any{
+				"kustomize.toolkit.fluxcd.io/name":      "grafana-operator-grafana-operator",
+				"kustomize.toolkit.fluxcd.io/namespace": "flux-system",
+			},
+		},
+	}}
+
+	r, err := normalize(u)
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if r.AppliedBy == nil {
+		t.Fatalf("expected AppliedBy populated from labels")
+	}
+	if r.AppliedBy.Name != "grafana-operator-grafana-operator" || r.AppliedBy.Namespace != "flux-system" {
+		t.Fatalf("unexpected AppliedBy: %+v", r.AppliedBy)
+	}
+}
+
+// A root Kustomization (or an Arc-managed object) carries no kustomize-controller
+// labels; AppliedBy must stay nil so the JSON omits the field.
+func TestNormalizeAppliedByEmptyWithoutLabels(t *testing.T) {
+	u := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
+		"kind":       "Kustomization",
+		"metadata":   map[string]any{"namespace": "flux-system", "name": "root"},
+	}}
+
+	r, err := normalize(u)
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if r.AppliedBy != nil {
+		t.Fatalf("expected nil AppliedBy without labels, got %+v", r.AppliedBy)
+	}
+}
+
 func TestNormalizeOCIRepositoryRevisionFromArtifact(t *testing.T) {
 	u := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "source.toolkit.fluxcd.io/v1",

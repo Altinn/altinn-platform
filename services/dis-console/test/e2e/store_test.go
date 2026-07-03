@@ -245,6 +245,71 @@ func TestSyncRoundTripsDISColumns(t *testing.T) {
 	}
 }
 
+// TestSyncAppliedByRoundTrip checks the schema-v3 columns against real
+// PostgreSQL: a HelmRelease's projected owning Kustomization survives Sync and
+// comes back out of Get and ChangedSince (the path the server mirrors it on),
+// while an unowned root stays nil.
+func TestSyncAppliedByRoundTrip(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+
+	child := flux.Resource{
+		Kind:        "HelmRelease",
+		APIVersion:  "helm.toolkit.fluxcd.io/v2",
+		Namespace:   "grafana",
+		Name:        "grafana-operator",
+		Ready:       flux.ReadyTrue,
+		AppliedBy:   &flux.AppliedBy{Name: "grafana-operator-grafana-operator", Namespace: "flux-system"},
+		Raw:         json.RawMessage(`{"kind":"HelmRelease"}`),
+		ContentHash: "child-1",
+	}
+	root := flux.Resource{
+		Kind:        "Kustomization",
+		APIVersion:  "kustomize.toolkit.fluxcd.io/v1",
+		Namespace:   "flux-system",
+		Name:        "root",
+		Ready:       flux.ReadyTrue,
+		Raw:         json.RawMessage(`{"kind":"Kustomization"}`),
+		ContentHash: "root-1",
+	}
+	if _, err := s.Sync(ctx, []flux.Resource{child, root}); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+
+	got, _, err := s.Get(ctx, "HelmRelease", "grafana", "grafana-operator")
+	if err != nil {
+		t.Fatalf("get child: %v", err)
+	}
+	if got.AppliedBy == nil || got.AppliedBy.Name != "grafana-operator-grafana-operator" || got.AppliedBy.Namespace != "flux-system" {
+		t.Fatalf("child Get AppliedBy: %+v", got.AppliedBy)
+	}
+
+	gotRoot, _, err := s.Get(ctx, "Kustomization", "flux-system", "root")
+	if err != nil {
+		t.Fatalf("get root: %v", err)
+	}
+	if gotRoot.AppliedBy != nil {
+		t.Fatalf("root Get AppliedBy should be nil: %+v", gotRoot.AppliedBy)
+	}
+
+	changed, err := s.ChangedSince(ctx, time.Time{}, store.SchemaVersion)
+	if err != nil {
+		t.Fatalf("changed-since: %v", err)
+	}
+	var seenChild bool
+	for _, c := range changed {
+		if c.Name == "grafana-operator" {
+			seenChild = true
+			if c.AppliedBy == nil || c.AppliedBy.Name != "grafana-operator-grafana-operator" {
+				t.Fatalf("ChangedSince child AppliedBy: %+v", c.AppliedBy)
+			}
+		}
+	}
+	if !seenChild {
+		t.Fatalf("ChangedSince did not return child row: %+v", changed)
+	}
+}
+
 // TestSyncContentHashSkipsUnchangedRewrite asserts the write-hygiene contract:
 // an unchanged sweep leaves updated_at alone (no row/raw rewrite), while a
 // content change advances it. The central sync loop pulls on updated_at, so

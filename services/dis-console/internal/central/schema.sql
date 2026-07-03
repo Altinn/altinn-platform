@@ -1,24 +1,26 @@
 CREATE TABLE IF NOT EXISTS flux_resource (
-    cluster             text        NOT NULL,
-    kind                text        NOT NULL,
-    api_version         text        NOT NULL,
-    namespace           text        NOT NULL,
-    name                text        NOT NULL,
-    ready               text        NOT NULL DEFAULT 'Unknown',
-    reason              text,
-    message             text,
-    revision            text,
-    azure_resource_id   text,
-    parent_kind         text,
-    parent_name         text,
-    suspended           boolean     NOT NULL DEFAULT false,
-    generation          bigint,
-    observed_generation bigint,
-    last_transition     timestamptz,
-    raw                 jsonb       NOT NULL,
-    content_hash        text,
-    updated_at          timestamptz NOT NULL,
-    synced_at           timestamptz NOT NULL DEFAULT now(),
+    cluster              text        NOT NULL,
+    kind                 text        NOT NULL,
+    api_version          text        NOT NULL,
+    namespace            text        NOT NULL,
+    name                 text        NOT NULL,
+    ready                text        NOT NULL DEFAULT 'Unknown',
+    reason               text,
+    message              text,
+    revision             text,
+    azure_resource_id    text,
+    parent_kind          text,
+    parent_name          text,
+    applied_by_name      text,
+    applied_by_namespace text,
+    suspended            boolean     NOT NULL DEFAULT false,
+    generation           bigint,
+    observed_generation  bigint,
+    last_transition      timestamptz,
+    raw                  jsonb       NOT NULL,
+    content_hash         text,
+    updated_at           timestamptz NOT NULL,
+    synced_at            timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (cluster, kind, namespace, name)
 );
 
@@ -59,3 +61,5 @@ ALTER TABLE cluster_report ADD COLUMN IF NOT EXISTS event_cursor bigint NOT NULL
 ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS azure_resource_id text;
 ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS parent_kind text;
 ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS parent_name text;
+ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS applied_by_name text;
+ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS applied_by_namespace text;
