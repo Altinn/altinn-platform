@@ -163,6 +163,11 @@ variable "k8s_rbac" {
       dev_group = "dcf337f1-f1ba-428e-b101-642d9d619c73"
       sp_group  = "447482ce-de4b-4081-b611-e510252c3120"
     },
+    register = {
+      namespace = "register"
+      dev_group = "cd36f41f-fc41-4f07-92f3-ce7f4db7caee"
+      sp_group  = "3f5467cf-ad70-430e-888e-83d2f6ed8ffe"
+    },
     platform = {
       namespace = "platform"
       dev_group = "975d2ed6-f3dc-48a3-b014-8d876cb96e25"
