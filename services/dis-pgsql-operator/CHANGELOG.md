@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.2](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.12.1...dis-pgsql-v0.12.2) (2026-07-07)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** preserve legacy FQDN-named private DNS zone CRs ([#3798](https://github.com/Altinn/altinn-platform/issues/3798)) ([b44d944](https://github.com/Altinn/altinn-platform/commit/b44d9444d82e2b31817052ea037320652277264a))
+
 ## [0.12.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.12.0...dis-pgsql-v0.12.1) (2026-07-03)
 
 
