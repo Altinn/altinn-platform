@@ -160,6 +160,16 @@ func appliedByRef(name, namespace *string) *flux.AppliedBy {
 // sweep across the whole fleet. Keeping r.raw on the unchanged branch reuses the
 // existing TOAST datum. last_seen is always bumped so prune can tell which rows
 // were seen this sweep.
+//
+// updated_at additionally advances when the applied-by pair differs from the
+// stored value. The hash covers the object, not the agent's projection of it:
+// when a projection change (like adding appliedBy) starts deriving new columns
+// from labels that were already in the hashed object, every pre-existing row
+// gets the new columns with an unchanged hash — and the server's incremental
+// pull (updated_at > cursor) would never mirror them. The extra comparison
+// backfills each such row exactly once and is quiet steady-state (a real label
+// change also changes the hash). Any future projection derived from existing
+// object content must extend this CASE the same way.
 const upsertStmt = `
 WITH prev AS (
     SELECT ready, reason, revision
@@ -204,6 +214,8 @@ up AS (
         last_seen            = now(),
         updated_at           = CASE
             WHEN r.content_hash IS DISTINCT FROM EXCLUDED.content_hash
+              OR r.applied_by_name IS DISTINCT FROM EXCLUDED.applied_by_name
+              OR r.applied_by_namespace IS DISTINCT FROM EXCLUDED.applied_by_namespace
             THEN now() ELSE r.updated_at END
     RETURNING ready, reason, message, revision
 )
