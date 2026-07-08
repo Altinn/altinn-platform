@@ -349,6 +349,69 @@ func TestSyncContentHashSkipsUnchangedRewrite(t *testing.T) {
 	}
 }
 
+// TestSyncAppliedByBackfillAdvancesUpdatedAt reproduces the v1.4.0→v1.5.0
+// upgrade: rows written before the appliedBy projection have it NULL with an
+// unchanged content hash (the labels were already in the hashed object). The
+// first sweep that projects appliedBy must advance updated_at so the central
+// pull (updated_at > cursor) mirrors the backfilled row — and later identical
+// sweeps must not churn it.
+func TestSyncAppliedByBackfillAdvancesUpdatedAt(t *testing.T) {
+	s, pool := newStore(t)
+	ctx := context.Background()
+
+	updatedAt := func() time.Time {
+		var ts time.Time
+		if err := pool.QueryRow(ctx,
+			"SELECT updated_at FROM flux_resource WHERE name = $1", "grafana-operator").Scan(&ts); err != nil {
+			t.Fatalf("query updated_at: %v", err)
+		}
+		return ts
+	}
+
+	// Sweep 1: the pre-appliedBy shape (same object, projection not derived yet).
+	pre := flux.Resource{
+		Kind:        "HelmRelease",
+		APIVersion:  "helm.toolkit.fluxcd.io/v2",
+		Namespace:   "grafana",
+		Name:        "grafana-operator",
+		Ready:       flux.ReadyTrue,
+		Raw:         json.RawMessage(`{"kind":"HelmRelease"}`),
+		ContentHash: "same-object",
+	}
+	if _, err := s.Sync(ctx, []flux.Resource{pre}); err != nil {
+		t.Fatalf("sync 1: %v", err)
+	}
+	first := updatedAt()
+
+	// Sweep 2: identical object + hash, but the agent now projects appliedBy.
+	post := pre
+	post.AppliedBy = &flux.AppliedBy{Name: "grafana-operator-grafana-operator", Namespace: "flux-system"}
+	if _, err := s.Sync(ctx, []flux.Resource{post}); err != nil {
+		t.Fatalf("sync 2: %v", err)
+	}
+	second := updatedAt()
+	if !second.After(first) {
+		t.Fatalf("updated_at must advance when appliedBy is backfilled: %v -> %v", first, second)
+	}
+
+	// The advanced updated_at is what makes the row visible to the central pull.
+	changed, err := s.ChangedSince(ctx, first, store.SchemaVersion)
+	if err != nil {
+		t.Fatalf("changed-since: %v", err)
+	}
+	if len(changed) != 1 || changed[0].AppliedBy == nil || changed[0].AppliedBy.Name != "grafana-operator-grafana-operator" {
+		t.Fatalf("backfilled row not pulled: %+v", changed)
+	}
+
+	// Sweep 3: identical again (appliedBy unchanged) => no churn.
+	if _, err := s.Sync(ctx, []flux.Resource{post}); err != nil {
+		t.Fatalf("sync 3: %v", err)
+	}
+	if got := updatedAt(); !got.Equal(second) {
+		t.Fatalf("updated_at churned on an unchanged appliedBy sweep: %v -> %v", second, got)
+	}
+}
+
 // TestMetaRecordedOnSync checks the meta row: InitMeta stamps schema/agent
 // version with no sweep time yet, and a sweep records last_sweep_at.
 func TestMetaRecordedOnSync(t *testing.T) {
