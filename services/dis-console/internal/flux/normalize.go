@@ -48,12 +48,33 @@ type Resource struct {
 	// controller stamps on everything it applies, so the list endpoint (which
 	// omits Raw) can group child resources under their parent app. Empty for
 	// roots and Arc-managed objects, which carry no such labels.
-	AppliedBy          *AppliedBy      `json:"appliedBy,omitempty"`
-	Suspended          bool            `json:"suspended"`
-	Generation         int64           `json:"generation,omitempty"`
-	ObservedGeneration int64           `json:"observedGeneration,omitempty"`
-	LastTransition     *time.Time      `json:"lastTransition,omitempty"`
-	Raw                json.RawMessage `json:"raw,omitempty"`
+	AppliedBy *AppliedBy `json:"appliedBy,omitempty"`
+	// SourceRef is the Flux source a Kustomization builds from — the join key
+	// from a Kustomization row to the OCIRepository row holding the base-layer
+	// artifact it deploys. Nil for every other kind.
+	SourceRef *SourceRef `json:"sourceRef,omitempty"`
+	// SourceURL is a source kind's artifact URL (OCIRepository/HelmRepository
+	// spec.url). It is the only identity a base-layer artifact carries — the
+	// CRs have no product/team labels — so the artifacts view classifies on it.
+	SourceURL string `json:"sourceUrl,omitempty"`
+	// OriginRevision/OriginSource are the artifact's org.opencontainers.image
+	// revision/source annotations (stamped by `flux push artifact --revision
+	// --source`), surfaced by source-controller in status.artifact.metadata:
+	// the git branch/SHA and repository behind the artifact digest. Empty when
+	// the pusher did not annotate.
+	OriginRevision     string     `json:"originRevision,omitempty"`
+	OriginSource       string     `json:"originSource,omitempty"`
+	Suspended          bool       `json:"suspended"`
+	Generation         int64      `json:"generation,omitempty"`
+	ObservedGeneration int64      `json:"observedGeneration,omitempty"`
+	LastTransition     *time.Time `json:"lastTransition,omitempty"`
+	// Inventory is a Kustomization's applied-object set (status.inventory) —
+	// the parent→children edge of the deployment tree, covering kinds the agent
+	// does not sweep. Like Raw it is served on detail endpoints only; list
+	// payloads omit it. Kept in Flux's compact entry shape (the source object
+	// is bounded by etcd, so the projection needs no cap of its own).
+	Inventory []InventoryEntry `json:"inventory,omitempty"`
+	Raw       json.RawMessage  `json:"raw,omitempty"`
 	// ContentHash is a stable digest of the full object (after volatile
 	// metadata is stripped). The store rewrites a row's raw payload only when
 	// this changes, so unchanged objects don't churn the database every sweep.
@@ -82,6 +103,33 @@ type AppliedBy struct {
 	Name      string `json:"name"`
 	Namespace string `json:"namespace"`
 }
+
+// SourceRef identifies the Flux source a Kustomization builds from
+// (spec.sourceRef). Namespace is resolved to the Kustomization's own namespace
+// when the reference omits it, so consumers can join without knowing the
+// defaulting rule. The JSON shape is part of the UI contract.
+type SourceRef struct {
+	Kind      string `json:"kind"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+}
+
+// InventoryEntry is one applied-object reference from a Kustomization's
+// status.inventory, in Flux's compact wire shape: ID is
+// `<namespace>_<name>_<group>_<kind>` (namespace empty for cluster-scoped
+// objects) and Version the object's API version. The API expands it when
+// serving; the store keeps the compact form.
+type InventoryEntry struct {
+	ID      string `json:"id"`
+	Version string `json:"v"`
+}
+
+// Annotation keys `flux push artifact` stamps on an artifact and
+// source-controller copies into status.artifact.metadata.
+const (
+	annotationOriginRevision = "org.opencontainers.image.revision"
+	annotationOriginSource   = "org.opencontainers.image.source"
+)
 
 // normalize projects an unstructured Flux object into a Resource. The fetch
 // stays dynamic (discovery-resolved, version-agnostic) and the full object is
@@ -138,6 +186,8 @@ func (r *Resource) applyTypedStatus(u *unstructured.Unstructured) error {
 			revision = o.Status.LastAttemptedRevision
 		}
 		r.applyStatus(o.Spec.Suspend, o.Status.ObservedGeneration, o.Status.Conditions, revision)
+		r.SourceRef = kustomizationSourceRef(&o)
+		r.Inventory = inventoryEntries(o.Status.Inventory)
 	case KindHelmRelease:
 		var o helmv2.HelmRelease
 		if err := fromUnstructured(u, &o); err != nil {
@@ -157,12 +207,15 @@ func (r *Resource) applyTypedStatus(u *unstructured.Unstructured) error {
 			return err
 		}
 		r.applyStatus(o.Spec.Suspend, o.Status.ObservedGeneration, o.Status.Conditions, artifactRevision(o.Status.Artifact))
+		r.SourceURL = o.Spec.URL
+		r.OriginRevision, r.OriginSource = artifactOrigin(o.Status.Artifact)
 	case KindHelmRepository:
 		var o sourcev1.HelmRepository
 		if err := fromUnstructured(u, &o); err != nil {
 			return err
 		}
 		r.applyStatus(o.Spec.Suspend, o.Status.ObservedGeneration, o.Status.Conditions, artifactRevision(o.Status.Artifact))
+		r.SourceURL = o.Spec.URL
 	case KindHelmChart:
 		var o sourcev1.HelmChart
 		if err := fromUnstructured(u, &o); err != nil {
@@ -201,6 +254,44 @@ func artifactRevision(a *fluxmeta.Artifact) string {
 		return ""
 	}
 	return a.Revision
+}
+
+// artifactOrigin extracts the artifact's origin annotations — the git
+// branch/SHA and repository the artifact was pushed from. Empty when the
+// pusher did not annotate (only `flux push artifact --revision --source`
+// stamps them).
+func artifactOrigin(a *fluxmeta.Artifact) (revision, source string) {
+	if a == nil {
+		return "", ""
+	}
+	return a.Metadata[annotationOriginRevision], a.Metadata[annotationOriginSource]
+}
+
+// kustomizationSourceRef projects spec.sourceRef with the namespace default
+// resolved (an omitted namespace means the Kustomization's own).
+func kustomizationSourceRef(o *kustomizev1.Kustomization) *SourceRef {
+	ref := o.Spec.SourceRef
+	if ref.Name == "" {
+		return nil
+	}
+	ns := ref.Namespace
+	if ns == "" {
+		ns = o.Namespace
+	}
+	return &SourceRef{Kind: ref.Kind, Name: ref.Name, Namespace: ns}
+}
+
+// inventoryEntries projects status.inventory into the stored entry shape; nil
+// when the Kustomization has not recorded an inventory (never reconciled).
+func inventoryEntries(inv *kustomizev1.ResourceInventory) []InventoryEntry {
+	if inv == nil || len(inv.Entries) == 0 {
+		return nil
+	}
+	out := make([]InventoryEntry, len(inv.Entries))
+	for i, e := range inv.Entries {
+		out[i] = InventoryEntry{ID: e.ID, Version: e.Version}
+	}
+	return out
 }
 
 // appliedByFrom projects the kustomize-controller ownership labels into an

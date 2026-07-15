@@ -114,6 +114,8 @@ INSERT INTO flux_resource (
     generation, observed_generation, last_transition, raw, content_hash,
     azure_resource_id, parent_kind, parent_name,
     applied_by_name, applied_by_namespace,
+    source_ref_kind, source_ref_name, source_ref_namespace,
+    source_url, origin_revision, origin_source, inventory,
     updated_at, synced_at
 ) VALUES (
     $1, $2, $3, $4, $5,
@@ -121,7 +123,9 @@ INSERT INTO flux_resource (
     $11, $12, $13, $14, $15,
     $16, $17, $18,
     $19, $20,
-    $21, now()
+    $21, $22, $23,
+    $24, $25, $26, $27,
+    $28, now()
 )
 ON CONFLICT (cluster, kind, namespace, name) DO UPDATE SET
     api_version          = EXCLUDED.api_version,
@@ -134,6 +138,13 @@ ON CONFLICT (cluster, kind, namespace, name) DO UPDATE SET
     parent_name          = EXCLUDED.parent_name,
     applied_by_name      = EXCLUDED.applied_by_name,
     applied_by_namespace = EXCLUDED.applied_by_namespace,
+    source_ref_kind      = EXCLUDED.source_ref_kind,
+    source_ref_name      = EXCLUDED.source_ref_name,
+    source_ref_namespace = EXCLUDED.source_ref_namespace,
+    source_url           = EXCLUDED.source_url,
+    origin_revision      = EXCLUDED.origin_revision,
+    origin_source        = EXCLUDED.origin_source,
+    inventory            = EXCLUDED.inventory,
     suspended            = EXCLUDED.suspended,
     generation           = EXCLUDED.generation,
     observed_generation  = EXCLUDED.observed_generation,
@@ -206,12 +217,19 @@ func (s *Store) Apply(ctx context.Context, st ClusterState) error {
 			}
 			parentKind, parentName := parentCols(c.Parent)
 			appliedByName, appliedByNamespace := appliedByCols(c.AppliedBy)
+			sourceRefKind, sourceRefName, sourceRefNamespace := sourceRefCols(c.SourceRef)
+			inventory, err := inventoryParam(c.Inventory)
+			if err != nil {
+				return fmt.Errorf("%s %s/%s: %w", c.Kind, c.Namespace, c.Name, err)
+			}
 			batch.Queue(upsertStmt,
 				st.Cluster, c.Kind, c.APIVersion, c.Namespace, c.Name,
 				c.Ready, c.Reason, c.Message, c.Revision, c.Suspended,
 				c.Generation, c.ObservedGeneration, c.LastTransition, []byte(raw), c.ContentHash,
 				c.AzureResourceID, parentKind, parentName,
 				appliedByName, appliedByNamespace,
+				sourceRefKind, sourceRefName, sourceRefNamespace,
+				nullable(c.SourceURL), nullable(c.OriginRevision), nullable(c.OriginSource), inventory,
 				c.UpdatedAt,
 			)
 		}
@@ -322,6 +340,56 @@ func appliedByRef(name, namespace *string) *flux.AppliedBy {
 		return nil
 	}
 	return &flux.AppliedBy{Name: *name, Namespace: *namespace}
+}
+
+// sourceRefCols splits an optional source ref into its nullable column triple.
+func sourceRefCols(sr *flux.SourceRef) (kind, name, namespace *string) {
+	if sr == nil {
+		return nil, nil, nil
+	}
+	return &sr.Kind, &sr.Name, &sr.Namespace
+}
+
+// sourceRefFrom rebuilds the optional source ref from its nullable columns.
+func sourceRefFrom(kind, name, namespace *string) *flux.SourceRef {
+	if kind == nil || name == nil || namespace == nil {
+		return nil
+	}
+	return &flux.SourceRef{Kind: *kind, Name: *name, Namespace: *namespace}
+}
+
+// nullable maps "" to NULL, mirroring the tenant store's storage of the
+// base-layer string columns.
+func nullable(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// inventoryParam marshals the inventory for its jsonb column; SQL NULL when
+// the resource has none.
+func inventoryParam(entries []flux.InventoryEntry) (any, error) {
+	if len(entries) == 0 {
+		return nil, nil
+	}
+	b, err := json.Marshal(entries)
+	if err != nil {
+		return nil, fmt.Errorf("marshal inventory: %w", err)
+	}
+	return b, nil
+}
+
+// inventoryFrom rebuilds the inventory from its jsonb column; nil when NULL.
+func inventoryFrom(raw []byte) ([]flux.InventoryEntry, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var entries []flux.InventoryEntry
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		return nil, fmt.Errorf("unmarshal inventory: %w", err)
+	}
+	return entries, nil
 }
 
 // clusterID strips the tenant-database prefix to get the cluster identifier
@@ -467,7 +535,9 @@ const listStmt = `
 SELECT cluster, kind, api_version, namespace, name, ready, reason, message, revision,
        suspended, generation, observed_generation, last_transition,
        COALESCE(azure_resource_id, ''), parent_kind, parent_name,
-       applied_by_name, applied_by_namespace
+       applied_by_name, applied_by_namespace,
+       source_ref_kind, source_ref_name, source_ref_namespace,
+       COALESCE(source_url, ''), COALESCE(origin_revision, ''), COALESCE(origin_source, '')
 FROM flux_resource
 WHERE ($1 = '' OR cluster = $1)
   AND ($2 = '' OR lower(kind) = lower($2))
@@ -475,10 +545,11 @@ WHERE ($1 = '' OR cluster = $1)
   AND ($4 = '' OR lower(ready) = lower($4))
 ORDER BY cluster, kind, namespace, name`
 
-// List returns matching resources (without the raw payload) across the fleet,
-// or for one cluster when cluster is non-empty. An empty kind/namespace/ready
-// means "any". appliedBy rides in the list payload so the UI can group child
-// HelmReleases under their parent Kustomization without fetching detail.
+// List returns matching resources (without the raw and inventory payloads)
+// across the fleet, or for one cluster when cluster is non-empty. An empty
+// kind/namespace/ready means "any". appliedBy rides in the list payload so the
+// UI can group child HelmReleases under their parent Kustomization without
+// fetching detail; sourceRef/sourceUrl/origin ride for the artifacts view.
 func (s *Store) List(ctx context.Context, cluster, kind, namespace, ready string) ([]Resource, error) {
 	rows, err := s.pool.Query(ctx, listStmt, cluster, kind, namespace, ready)
 	if err != nil {
@@ -491,17 +562,21 @@ func (s *Store) List(ctx context.Context, cluster, kind, namespace, ready string
 		var r Resource
 		var parentKind, parentName *string
 		var appliedByName, appliedByNamespace *string
+		var sourceRefKind, sourceRefName, sourceRefNamespace *string
 		if err := rows.Scan(
 			&r.Cluster, &r.Kind, &r.APIVersion, &r.Namespace, &r.Name, &r.Ready, &r.Reason,
 			&r.Message, &r.Revision, &r.Suspended, &r.Generation,
 			&r.ObservedGeneration, &r.LastTransition,
 			&r.AzureResourceID, &parentKind, &parentName,
 			&appliedByName, &appliedByNamespace,
+			&sourceRefKind, &sourceRefName, &sourceRefNamespace,
+			&r.SourceURL, &r.OriginRevision, &r.OriginSource,
 		); err != nil {
 			return nil, fmt.Errorf("scan row: %w", err)
 		}
 		r.Parent = parentRef(parentKind, parentName)
 		r.AppliedBy = appliedByRef(appliedByName, appliedByNamespace)
+		r.SourceRef = sourceRefFrom(sourceRefKind, sourceRefName, sourceRefNamespace)
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -511,23 +586,30 @@ const getStmt = `
 SELECT cluster, kind, api_version, namespace, name, ready, reason, message, revision,
        suspended, generation, observed_generation, last_transition, raw,
        COALESCE(azure_resource_id, ''), parent_kind, parent_name,
-       applied_by_name, applied_by_namespace
+       applied_by_name, applied_by_namespace,
+       source_ref_kind, source_ref_name, source_ref_namespace,
+       COALESCE(source_url, ''), COALESCE(origin_revision, ''), COALESCE(origin_source, ''),
+       inventory
 FROM flux_resource
 WHERE cluster = $1 AND lower(kind) = lower($2) AND namespace = $3 AND name = $4`
 
-// Get returns one resource (including its raw payload) in a cluster, or
-// ErrNotFound when no row matches.
+// Get returns one resource (including its raw and inventory payloads) in a
+// cluster, or ErrNotFound when no row matches.
 func (s *Store) Get(ctx context.Context, cluster, kind, namespace, name string) (*Resource, error) {
 	var r Resource
-	var raw []byte
+	var raw, inventory []byte
 	var parentKind, parentName *string
 	var appliedByName, appliedByNamespace *string
+	var sourceRefKind, sourceRefName, sourceRefNamespace *string
 	err := s.pool.QueryRow(ctx, getStmt, cluster, kind, namespace, name).Scan(
 		&r.Cluster, &r.Kind, &r.APIVersion, &r.Namespace, &r.Name, &r.Ready, &r.Reason,
 		&r.Message, &r.Revision, &r.Suspended, &r.Generation,
 		&r.ObservedGeneration, &r.LastTransition, &raw,
 		&r.AzureResourceID, &parentKind, &parentName,
 		&appliedByName, &appliedByNamespace,
+		&sourceRefKind, &sourceRefName, &sourceRefNamespace,
+		&r.SourceURL, &r.OriginRevision, &r.OriginSource,
+		&inventory,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -538,6 +620,10 @@ func (s *Store) Get(ctx context.Context, cluster, kind, namespace, name string) 
 	r.Raw = raw
 	r.Parent = parentRef(parentKind, parentName)
 	r.AppliedBy = appliedByRef(appliedByName, appliedByNamespace)
+	r.SourceRef = sourceRefFrom(sourceRefKind, sourceRefName, sourceRefNamespace)
+	if r.Inventory, err = inventoryFrom(inventory); err != nil {
+		return nil, err
+	}
 	return &r, nil
 }
 

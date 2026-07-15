@@ -59,7 +59,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/resources", s.handleResources)
 	mux.HandleFunc("GET /api/resources/{cluster}/{kind}/{namespace}/{name}", s.handleResourceDetail)
 	mux.HandleFunc("GET /api/kustomizations", s.handleKustomizations)
+	mux.HandleFunc("GET /api/kustomizations/{cluster}/{namespace}/{name}/inventory", s.handleKustomizationInventory)
 	mux.HandleFunc("GET /api/helmreleases", s.handleHelmReleases)
+	mux.HandleFunc("GET /api/artifacts", s.handleArtifacts)
 	return mux
 }
 

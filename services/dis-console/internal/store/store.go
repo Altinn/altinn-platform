@@ -57,11 +57,14 @@ func (s *Store) Migrate(ctx context.Context) error {
 //
 // Version 2 added the DIS projection columns (azure_resource_id, parent_kind,
 // parent_name). Version 3 added the applied-by columns (applied_by_name,
-// applied_by_namespace — the owning Kustomization). ChangedSince selects per
-// version so the server can still pull version-2 tenants whose agents have not
-// migrated yet; version 1 fell out of the supported window (schemaSupported
-// covers the current version and the previous one).
-const SchemaVersion = 3
+// applied_by_namespace — the owning Kustomization). Version 4 added the
+// base-layer columns (source_ref_*, source_url, origin_revision,
+// origin_source, inventory — the artifact identity and applied-object set
+// behind the artifacts view). ChangedSince selects per version so the server
+// can still pull version-3 tenants whose agents have not migrated yet;
+// version 2 fell out of the supported window (schemaSupported covers the
+// current version and the previous one).
+const SchemaVersion = 4
 
 // Meta is the single bookkeeping row each agent maintains in its tenant DB.
 type Meta struct {
@@ -147,6 +150,58 @@ func appliedByRef(name, namespace *string) *flux.AppliedBy {
 	return &flux.AppliedBy{Name: *name, Namespace: *namespace}
 }
 
+// sourceRefCols splits an optional source ref into its nullable column triple.
+func sourceRefCols(sr *flux.SourceRef) (kind, name, namespace *string) {
+	if sr == nil {
+		return nil, nil, nil
+	}
+	return &sr.Kind, &sr.Name, &sr.Namespace
+}
+
+// sourceRefFrom rebuilds the optional source ref from its nullable columns.
+func sourceRefFrom(kind, name, namespace *string) *flux.SourceRef {
+	if kind == nil || name == nil || namespace == nil {
+		return nil
+	}
+	return &flux.SourceRef{Kind: *kind, Name: *name, Namespace: *namespace}
+}
+
+// nullable maps "" to NULL. The base-layer string columns are stored NULL when
+// the projection is absent so the upsert's updated_at backfill comparison stays
+// quiet for the many rows that never carry them (NULL = NULL), instead of
+// re-mirroring the whole fleet once over ” vs NULL.
+func nullable(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// inventoryParam marshals the inventory for its jsonb column; SQL NULL when the
+// resource has none.
+func inventoryParam(entries []flux.InventoryEntry) (any, error) {
+	if len(entries) == 0 {
+		return nil, nil
+	}
+	b, err := json.Marshal(entries)
+	if err != nil {
+		return nil, fmt.Errorf("marshal inventory: %w", err)
+	}
+	return b, nil
+}
+
+// inventoryFrom rebuilds the inventory from its jsonb column; nil when NULL.
+func inventoryFrom(raw []byte) ([]flux.InventoryEntry, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var entries []flux.InventoryEntry
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		return nil, fmt.Errorf("unmarshal inventory: %w", err)
+	}
+	return entries, nil
+}
+
 // upsertStmt upserts one resource and, in the same statement, writes a history
 // event when the row is new or its ready/reason/revision changed. The `prev`
 // CTE reads the pre-upsert row (CTEs see the snapshot from the start of the
@@ -161,15 +216,17 @@ func appliedByRef(name, namespace *string) *flux.AppliedBy {
 // existing TOAST datum. last_seen is always bumped so prune can tell which rows
 // were seen this sweep.
 //
-// updated_at additionally advances when the applied-by pair differs from the
-// stored value. The hash covers the object, not the agent's projection of it:
-// when a projection change (like adding appliedBy) starts deriving new columns
-// from labels that were already in the hashed object, every pre-existing row
-// gets the new columns with an unchanged hash — and the server's incremental
-// pull (updated_at > cursor) would never mirror them. The extra comparison
-// backfills each such row exactly once and is quiet steady-state (a real label
-// change also changes the hash). Any future projection derived from existing
-// object content must extend this CASE the same way.
+// updated_at additionally advances when a projection-only column (the
+// applied-by pair and the base-layer columns) differs from the stored value.
+// The hash covers the object, not the agent's projection of it: when a
+// projection change (like adding appliedBy, or the v4 base-layer fields)
+// starts deriving new columns from content that was already in the hashed
+// object, every pre-existing row gets the new columns with an unchanged hash —
+// and the server's incremental pull (updated_at > cursor) would never mirror
+// them. The extra comparisons backfill each such row exactly once and are
+// quiet steady-state (a real content change also changes the hash). Any future
+// projection derived from existing object content must extend this CASE the
+// same way.
 const upsertStmt = `
 WITH prev AS (
     SELECT ready, reason, revision
@@ -183,6 +240,8 @@ up AS (
         generation, observed_generation, last_transition, raw, content_hash,
         azure_resource_id, parent_kind, parent_name,
         applied_by_name, applied_by_namespace,
+        source_ref_kind, source_ref_name, source_ref_namespace,
+        source_url, origin_revision, origin_source, inventory,
         first_seen, last_seen, updated_at
     ) VALUES (
         $1, $2, $3, $4,
@@ -190,6 +249,8 @@ up AS (
         $10, $11, $12, $13, $14,
         $15, $16, $17,
         $18, $19,
+        $20, $21, $22,
+        $23, $24, $25, $26,
         now(), now(), now()
     )
     ON CONFLICT (kind, namespace, name) DO UPDATE SET
@@ -203,6 +264,13 @@ up AS (
         parent_name          = EXCLUDED.parent_name,
         applied_by_name      = EXCLUDED.applied_by_name,
         applied_by_namespace = EXCLUDED.applied_by_namespace,
+        source_ref_kind      = EXCLUDED.source_ref_kind,
+        source_ref_name      = EXCLUDED.source_ref_name,
+        source_ref_namespace = EXCLUDED.source_ref_namespace,
+        source_url           = EXCLUDED.source_url,
+        origin_revision      = EXCLUDED.origin_revision,
+        origin_source        = EXCLUDED.origin_source,
+        inventory            = EXCLUDED.inventory,
         suspended            = EXCLUDED.suspended,
         generation           = EXCLUDED.generation,
         observed_generation  = EXCLUDED.observed_generation,
@@ -216,6 +284,13 @@ up AS (
             WHEN r.content_hash IS DISTINCT FROM EXCLUDED.content_hash
               OR r.applied_by_name IS DISTINCT FROM EXCLUDED.applied_by_name
               OR r.applied_by_namespace IS DISTINCT FROM EXCLUDED.applied_by_namespace
+              OR r.source_ref_kind IS DISTINCT FROM EXCLUDED.source_ref_kind
+              OR r.source_ref_name IS DISTINCT FROM EXCLUDED.source_ref_name
+              OR r.source_ref_namespace IS DISTINCT FROM EXCLUDED.source_ref_namespace
+              OR r.source_url IS DISTINCT FROM EXCLUDED.source_url
+              OR r.origin_revision IS DISTINCT FROM EXCLUDED.origin_revision
+              OR r.origin_source IS DISTINCT FROM EXCLUDED.origin_source
+              OR r.inventory IS DISTINCT FROM EXCLUDED.inventory
             THEN now() ELSE r.updated_at END
     RETURNING ready, reason, message, revision
 )
@@ -255,12 +330,19 @@ func (s *Store) Sync(ctx context.Context, resources []flux.Resource) (SyncStats,
 			}
 			parentKind, parentName := parentCols(r.Parent)
 			appliedByName, appliedByNamespace := appliedByCols(r.AppliedBy)
+			sourceRefKind, sourceRefName, sourceRefNamespace := sourceRefCols(r.SourceRef)
+			inventory, err := inventoryParam(r.Inventory)
+			if err != nil {
+				return stats, fmt.Errorf("%s %s/%s: %w", r.Kind, r.Namespace, r.Name, err)
+			}
 			batch.Queue(upsertStmt,
 				r.Kind, r.APIVersion, r.Namespace, r.Name,
 				r.Ready, r.Reason, r.Message, r.Revision, r.Suspended,
 				r.Generation, r.ObservedGeneration, r.LastTransition, []byte(raw), r.ContentHash,
 				r.AzureResourceID, parentKind, parentName,
 				appliedByName, appliedByNamespace,
+				sourceRefKind, sourceRefName, sourceRefNamespace,
+				nullable(r.SourceURL), nullable(r.OriginRevision), nullable(r.OriginSource), inventory,
 			)
 		}
 		br := tx.SendBatch(ctx, batch)
@@ -377,15 +459,18 @@ const listStmt = `
 SELECT kind, api_version, namespace, name, ready, reason, message, revision,
        suspended, generation, observed_generation, last_transition,
        COALESCE(azure_resource_id, ''), parent_kind, parent_name,
-       applied_by_name, applied_by_namespace
+       applied_by_name, applied_by_namespace,
+       source_ref_kind, source_ref_name, source_ref_namespace,
+       COALESCE(source_url, ''), COALESCE(origin_revision, ''), COALESCE(origin_source, '')
 FROM flux_resource
 WHERE ($1 = '' OR lower(kind) = lower($1))
   AND ($2 = '' OR namespace = $2)
   AND ($3 = '' OR lower(ready) = lower($3))
 ORDER BY kind, namespace, name`
 
-// List returns normalized rows (without the raw payload) filtered by the
-// optional kind/namespace/ready arguments; an empty argument means "any".
+// List returns normalized rows (without the raw and inventory payloads)
+// filtered by the optional kind/namespace/ready arguments; an empty argument
+// means "any".
 func (s *Store) List(ctx context.Context, kind, namespace, ready string) ([]flux.Resource, error) {
 	rows, err := s.pool.Query(ctx, listStmt, kind, namespace, ready)
 	if err != nil {
@@ -398,17 +483,21 @@ func (s *Store) List(ctx context.Context, kind, namespace, ready string) ([]flux
 		var r flux.Resource
 		var parentKind, parentName *string
 		var appliedByName, appliedByNamespace *string
+		var sourceRefKind, sourceRefName, sourceRefNamespace *string
 		if err := rows.Scan(
 			&r.Kind, &r.APIVersion, &r.Namespace, &r.Name, &r.Ready, &r.Reason,
 			&r.Message, &r.Revision, &r.Suspended, &r.Generation,
 			&r.ObservedGeneration, &r.LastTransition,
 			&r.AzureResourceID, &parentKind, &parentName,
 			&appliedByName, &appliedByNamespace,
+			&sourceRefKind, &sourceRefName, &sourceRefNamespace,
+			&r.SourceURL, &r.OriginRevision, &r.OriginSource,
 		); err != nil {
 			return nil, fmt.Errorf("scan row: %w", err)
 		}
 		r.Parent = parentRef(parentKind, parentName)
 		r.AppliedBy = appliedByRef(appliedByName, appliedByNamespace)
+		r.SourceRef = sourceRefFrom(sourceRefKind, sourceRefName, sourceRefNamespace)
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -418,7 +507,10 @@ const getStmt = `
 SELECT kind, api_version, namespace, name, ready, reason, message, revision,
        suspended, generation, observed_generation, last_transition, raw,
        COALESCE(azure_resource_id, ''), parent_kind, parent_name,
-       applied_by_name, applied_by_namespace
+       applied_by_name, applied_by_namespace,
+       source_ref_kind, source_ref_name, source_ref_namespace,
+       COALESCE(source_url, ''), COALESCE(origin_revision, ''), COALESCE(origin_source, ''),
+       inventory
 FROM flux_resource
 WHERE lower(kind) = lower($1) AND namespace = $2 AND name = $3`
 
@@ -441,15 +533,19 @@ type Event struct {
 // history, newest first. It returns ErrNotFound when no row matches.
 func (s *Store) Get(ctx context.Context, kind, namespace, name string) (*flux.Resource, []Event, error) {
 	var r flux.Resource
-	var raw []byte
+	var raw, inventory []byte
 	var parentKind, parentName *string
 	var appliedByName, appliedByNamespace *string
+	var sourceRefKind, sourceRefName, sourceRefNamespace *string
 	err := s.pool.QueryRow(ctx, getStmt, kind, namespace, name).Scan(
 		&r.Kind, &r.APIVersion, &r.Namespace, &r.Name, &r.Ready, &r.Reason,
 		&r.Message, &r.Revision, &r.Suspended, &r.Generation,
 		&r.ObservedGeneration, &r.LastTransition, &raw,
 		&r.AzureResourceID, &parentKind, &parentName,
 		&appliedByName, &appliedByNamespace,
+		&sourceRefKind, &sourceRefName, &sourceRefNamespace,
+		&r.SourceURL, &r.OriginRevision, &r.OriginSource,
+		&inventory,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, ErrNotFound
@@ -460,6 +556,10 @@ func (s *Store) Get(ctx context.Context, kind, namespace, name string) (*flux.Re
 	r.Raw = raw
 	r.Parent = parentRef(parentKind, parentName)
 	r.AppliedBy = appliedByRef(appliedByName, appliedByNamespace)
+	r.SourceRef = sourceRefFrom(sourceRefKind, sourceRefName, sourceRefNamespace)
+	if r.Inventory, err = inventoryFrom(inventory); err != nil {
+		return nil, nil, err
+	}
 
 	rows, err := s.pool.Query(ctx, historyStmt, r.Kind, r.Namespace, r.Name, historyLimit)
 	if err != nil {
@@ -501,17 +601,21 @@ const changedSinceStmt = `
 SELECT kind, api_version, namespace, name, ready, reason, message, revision,
        suspended, generation, observed_generation, last_transition, raw, content_hash, updated_at,
        COALESCE(azure_resource_id, ''), parent_kind, parent_name,
-       applied_by_name, applied_by_namespace
+       applied_by_name, applied_by_namespace,
+       source_ref_kind, source_ref_name, source_ref_namespace,
+       COALESCE(source_url, ''), COALESCE(origin_revision, ''), COALESCE(origin_source, ''),
+       inventory
 FROM flux_resource
 WHERE updated_at > $1
 ORDER BY updated_at`
 
-// changedSinceStmtV2 is the pull for tenants still at schema version 2, whose
-// databases predate the applied-by columns; that field stays nil.
-const changedSinceStmtV2 = `
+// changedSinceStmtV3 is the pull for tenants still at schema version 3, whose
+// databases predate the base-layer columns; those fields stay empty.
+const changedSinceStmtV3 = `
 SELECT kind, api_version, namespace, name, ready, reason, message, revision,
        suspended, generation, observed_generation, last_transition, raw, content_hash, updated_at,
-       COALESCE(azure_resource_id, ''), parent_kind, parent_name
+       COALESCE(azure_resource_id, ''), parent_kind, parent_name,
+       applied_by_name, applied_by_namespace
 FROM flux_resource
 WHERE updated_at > $1
 ORDER BY updated_at`
@@ -527,9 +631,9 @@ ORDER BY updated_at`
 // the schemaSupported window are the caller's job to skip.
 func (s *Store) ChangedSince(ctx context.Context, cursor time.Time, schemaVersion int) ([]ChangedResource, error) {
 	stmt := changedSinceStmt
-	withAppliedBy := schemaVersion >= 3
-	if !withAppliedBy {
-		stmt = changedSinceStmtV2
+	withBaseLayer := schemaVersion >= 4
+	if !withBaseLayer {
+		stmt = changedSinceStmtV3
 	}
 	rows, err := s.pool.Query(ctx, stmt, cursor)
 	if err != nil {
@@ -540,18 +644,24 @@ func (s *Store) ChangedSince(ctx context.Context, cursor time.Time, schemaVersio
 	out := []ChangedResource{}
 	for rows.Next() {
 		var c ChangedResource
-		var raw []byte
+		var raw, inventory []byte
 		var hash *string
 		var parentKind, parentName *string
 		var appliedByName, appliedByNamespace *string
+		var sourceRefKind, sourceRefName, sourceRefNamespace *string
 		dest := []any{
 			&c.Kind, &c.APIVersion, &c.Namespace, &c.Name, &c.Ready, &c.Reason,
 			&c.Message, &c.Revision, &c.Suspended, &c.Generation,
 			&c.ObservedGeneration, &c.LastTransition, &raw, &hash, &c.UpdatedAt,
 			&c.AzureResourceID, &parentKind, &parentName,
+			&appliedByName, &appliedByNamespace,
 		}
-		if withAppliedBy {
-			dest = append(dest, &appliedByName, &appliedByNamespace)
+		if withBaseLayer {
+			dest = append(dest,
+				&sourceRefKind, &sourceRefName, &sourceRefNamespace,
+				&c.SourceURL, &c.OriginRevision, &c.OriginSource,
+				&inventory,
+			)
 		}
 		if err := rows.Scan(dest...); err != nil {
 			return nil, fmt.Errorf("scan changed row: %w", err)
@@ -562,6 +672,10 @@ func (s *Store) ChangedSince(ctx context.Context, cursor time.Time, schemaVersio
 		}
 		c.Parent = parentRef(parentKind, parentName)
 		c.AppliedBy = appliedByRef(appliedByName, appliedByNamespace)
+		c.SourceRef = sourceRefFrom(sourceRefKind, sourceRefName, sourceRefNamespace)
+		if c.Inventory, err = inventoryFrom(inventory); err != nil {
+			return nil, err
+		}
 		out = append(out, c)
 	}
 	return out, rows.Err()

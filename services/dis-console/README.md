@@ -89,6 +89,8 @@ the detail endpoint is not populated yet.)
 | GET | `/api/kustomizations?cluster=` | server | alias for `?kind=Kustomization` |
 | GET | `/api/helmreleases?cluster=` | server | alias for `?kind=HelmRelease` |
 | GET | `/api/resources/{cluster}/{kind}/{namespace}/{name}` | server | single row incl. the full `raw` object (status `history` pending) |
+| GET | `/api/artifacts?cluster=&class=` | server | base-layer OCI artifacts: every OCIRepository classified by URL (`product-syncroot`, `admin-syncroot`, `infra`, `operator`, `other`) with fetched revision (`tag@sha256:…`), pushed git origin, and the deploying Kustomizations |
+| GET | `/api/kustomizations/{cluster}/{namespace}/{name}/inventory` | server | a Kustomization's applied-object set (Flux `status.inventory`) expanded, each entry enriched with the mirrored row when it is a swept kind |
 
 ## Database & auth
 

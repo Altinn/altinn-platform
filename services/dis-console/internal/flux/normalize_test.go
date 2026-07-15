@@ -309,6 +309,133 @@ func TestNormalizeAppliedByEmptyWithoutLabels(t *testing.T) {
 	}
 }
 
+// The base-layer projections: a Kustomization's sourceRef (namespace
+// defaulted to its own) and its applied-object inventory, kept in Flux's
+// compact entry shape.
+func TestNormalizeKustomizationSourceRefAndInventory(t *testing.T) {
+	u := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
+		"kind":       "Kustomization",
+		"metadata":   map[string]any{"namespace": "product-team-a", "name": "team-a-ab12-team-a"},
+		"spec": map[string]any{
+			"sourceRef": map[string]any{"kind": "OCIRepository", "name": "team-a-ab12"},
+		},
+		"status": map[string]any{
+			"inventory": map[string]any{
+				"entries": []any{
+					map[string]any{"id": "product-team-a_appdb_storage.dis.altinn.cloud_Database", "v": "v1alpha1"},
+					map[string]any{"id": "product-team-a_app_apps_Deployment", "v": "v1"},
+				},
+			},
+		},
+	}}
+
+	r, err := normalize(u)
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if r.SourceRef == nil || r.SourceRef.Kind != KindOCIRepository || r.SourceRef.Name != "team-a-ab12" {
+		t.Fatalf("unexpected sourceRef: %+v", r.SourceRef)
+	}
+	if r.SourceRef.Namespace != "product-team-a" {
+		t.Fatalf("sourceRef namespace should default to the Kustomization's own, got %q", r.SourceRef.Namespace)
+	}
+	if len(r.Inventory) != 2 ||
+		r.Inventory[0].ID != "product-team-a_appdb_storage.dis.altinn.cloud_Database" ||
+		r.Inventory[0].Version != "v1alpha1" ||
+		r.Inventory[1].ID != "product-team-a_app_apps_Deployment" {
+		t.Fatalf("unexpected inventory: %+v", r.Inventory)
+	}
+}
+
+// An explicit cross-namespace sourceRef is kept as-is; a Kustomization without
+// an inventory (never reconciled) projects nil so the JSON omits the field.
+func TestNormalizeKustomizationSourceRefExplicitNamespace(t *testing.T) {
+	u := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
+		"kind":       "Kustomization",
+		"metadata":   map[string]any{"namespace": "platform-system", "name": "example-operator"},
+		"spec": map[string]any{
+			"sourceRef": map[string]any{"kind": "OCIRepository", "name": "example-operator", "namespace": "flux-system"},
+		},
+	}}
+
+	r, err := normalize(u)
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if r.SourceRef == nil || r.SourceRef.Namespace != "flux-system" {
+		t.Fatalf("explicit sourceRef namespace should be kept, got %+v", r.SourceRef)
+	}
+	if r.Inventory != nil {
+		t.Fatalf("expected nil inventory without status.inventory, got %+v", r.Inventory)
+	}
+}
+
+// A source kind's url and the artifact's origin annotations (git revision and
+// repository, stamped by `flux push artifact`) — the identity + provenance of
+// a base-layer artifact. The mutable tag rides in revision; the digest there
+// is the real version.
+func TestNormalizeOCIRepositoryURLAndOrigin(t *testing.T) {
+	u := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "source.toolkit.fluxcd.io/v1",
+		"kind":       "OCIRepository",
+		"metadata":   map[string]any{"namespace": "product-team-a", "name": "team-a-ab12"},
+		"spec":       map[string]any{"url": "oci://registry.example.com/team-a/syncroot"},
+		"status": map[string]any{
+			"artifact": map[string]any{
+				"revision": "at23@sha256:abc123",
+				"metadata": map[string]any{
+					"org.opencontainers.image.revision": "main/0c2a3b4",
+					"org.opencontainers.image.source":   "https://git.example.com/team-a/syncroot",
+				},
+			},
+		},
+	}}
+
+	r, err := normalize(u)
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if r.SourceURL != "oci://registry.example.com/team-a/syncroot" {
+		t.Fatalf("unexpected sourceUrl: %q", r.SourceURL)
+	}
+	if r.Revision != "at23@sha256:abc123" {
+		t.Fatalf("unexpected revision: %q", r.Revision)
+	}
+	if r.OriginRevision != "main/0c2a3b4" || r.OriginSource != "https://git.example.com/team-a/syncroot" {
+		t.Fatalf("unexpected origin: %q %q", r.OriginRevision, r.OriginSource)
+	}
+	if r.SourceRef != nil {
+		t.Fatalf("sourceRef is a Kustomization projection, got %+v", r.SourceRef)
+	}
+}
+
+// A HelmRepository projects its url too; an artifact without the origin
+// annotations (not pushed by flux push) stays empty.
+func TestNormalizeHelmRepositoryURLWithoutOrigin(t *testing.T) {
+	u := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "source.toolkit.fluxcd.io/v1",
+		"kind":       "HelmRepository",
+		"metadata":   map[string]any{"namespace": "platform-system", "name": "example-charts"},
+		"spec":       map[string]any{"url": "https://charts.example.com"},
+		"status": map[string]any{
+			"artifact": map[string]any{"revision": "sha256:abc"},
+		},
+	}}
+
+	r, err := normalize(u)
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if r.SourceURL != "https://charts.example.com" {
+		t.Fatalf("unexpected sourceUrl: %q", r.SourceURL)
+	}
+	if r.OriginRevision != "" || r.OriginSource != "" {
+		t.Fatalf("expected empty origin without annotations, got %q %q", r.OriginRevision, r.OriginSource)
+	}
+}
+
 func TestNormalizeOCIRepositoryRevisionFromArtifact(t *testing.T) {
 	u := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "source.toolkit.fluxcd.io/v1",
