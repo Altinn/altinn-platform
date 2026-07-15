@@ -78,7 +78,9 @@ func (f *fakeStore) List(_ context.Context, cluster, kind, namespace, ready stri
 		if ready != "" && !strings.EqualFold(r.Ready, ready) {
 			continue
 		}
+		// The SQL list omits the detail-only payloads.
 		r.Raw = nil
+		r.Inventory = nil
 		out = append(out, r)
 	}
 	return out, nil

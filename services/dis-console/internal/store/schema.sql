@@ -12,6 +12,13 @@ CREATE TABLE IF NOT EXISTS flux_resource (
     parent_name          text,
     applied_by_name      text,
     applied_by_namespace text,
+    source_ref_kind      text,
+    source_ref_name      text,
+    source_ref_namespace text,
+    source_url           text,
+    origin_revision      text,
+    origin_source        text,
+    inventory            jsonb,
     suspended            boolean     NOT NULL DEFAULT false,
     generation           bigint,
     observed_generation  bigint,
@@ -30,6 +37,13 @@ ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS parent_kind text;
 ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS parent_name text;
 ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS applied_by_name text;
 ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS applied_by_namespace text;
+ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS source_ref_kind text;
+ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS source_ref_name text;
+ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS source_ref_namespace text;
+ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS source_url text;
+ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS origin_revision text;
+ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS origin_source text;
+ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS inventory jsonb;
 
 CREATE INDEX IF NOT EXISTS idx_flux_resource_ready ON flux_resource (lower(ready));
 CREATE INDEX IF NOT EXISTS idx_flux_resource_kind  ON flux_resource (lower(kind));

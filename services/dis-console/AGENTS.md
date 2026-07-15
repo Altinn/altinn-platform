@@ -90,6 +90,11 @@ Do not claim checks passed unless you actually ran them.
 - `internal/health` — `/healthz` + `/readyz` handlers used by the agent.
 - `internal/api` — the fleet API: `net/http` mux + JSON handlers reading the
   central store (`/api/clusters`, `?cluster=` filters, detail by cluster), wired
-  by `server`.
+  by `server`. Also the base-layer views: `/api/artifacts` classifies every
+  OCIRepository by its URL (product syncroot / admin syncroot / infra /
+  operator — the URL is the only identity these artifacts carry) with the
+  deploying Kustomizations attached, and
+  `/api/kustomizations/{cluster}/{ns}/{name}/inventory` expands a
+  Kustomization's applied-object set enriched with mirrored status.
 - `test/e2e` — `e2e`-tagged store + central tests run against Kind Postgres.
 - `config/kind/postgres.yaml` — trust-auth Postgres for the e2e.

@@ -310,6 +310,162 @@ func TestSyncAppliedByRoundTrip(t *testing.T) {
 	}
 }
 
+// TestSyncBaseLayerRoundTrip checks the schema-v4 columns against real
+// PostgreSQL: an OCIRepository's url/origin and a Kustomization's sourceRef +
+// inventory survive Sync and come back out of Get and ChangedSince, while List
+// carries everything except the inventory payload (detail-only, like raw), and
+// a version-3 pull omits the base-layer fields entirely.
+func TestSyncBaseLayerRoundTrip(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+
+	repo := flux.Resource{
+		Kind: "OCIRepository", APIVersion: "source.toolkit.fluxcd.io/v1",
+		Namespace: "product-team-a", Name: "team-a-ab12",
+		Ready: flux.ReadyTrue, Revision: "at23@sha256:abc",
+		SourceURL:      "oci://registry.example.com/team-a/syncroot",
+		OriginRevision: "main/0c2a3b4", OriginSource: "https://git.example.com/team-a/syncroot",
+		Raw: json.RawMessage(`{"kind":"OCIRepository"}`), ContentHash: "repo-1",
+	}
+	kust := flux.Resource{
+		Kind: "Kustomization", APIVersion: "kustomize.toolkit.fluxcd.io/v1",
+		Namespace: "product-team-a", Name: "team-a-ab12-team-a",
+		Ready: flux.ReadyTrue, Revision: "at23@sha256:abc",
+		SourceRef: &flux.SourceRef{Kind: "OCIRepository", Name: "team-a-ab12", Namespace: "product-team-a"},
+		Inventory: []flux.InventoryEntry{
+			{ID: "product-team-a_appdb_storage.dis.altinn.cloud_Database", Version: "v1alpha1"},
+			{ID: "product-team-a_app_apps_Deployment", Version: "v1"},
+		},
+		Raw: json.RawMessage(`{"kind":"Kustomization"}`), ContentHash: "kust-1",
+	}
+	if _, err := s.Sync(ctx, []flux.Resource{repo, kust}); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+
+	gotKust, _, err := s.Get(ctx, "Kustomization", "product-team-a", "team-a-ab12-team-a")
+	if err != nil {
+		t.Fatalf("get kustomization: %v", err)
+	}
+	if gotKust.SourceRef == nil || gotKust.SourceRef.Kind != "OCIRepository" ||
+		gotKust.SourceRef.Name != "team-a-ab12" || gotKust.SourceRef.Namespace != "product-team-a" {
+		t.Fatalf("kustomization Get sourceRef: %+v", gotKust.SourceRef)
+	}
+	if len(gotKust.Inventory) != 2 ||
+		gotKust.Inventory[0].ID != "product-team-a_appdb_storage.dis.altinn.cloud_Database" ||
+		gotKust.Inventory[0].Version != "v1alpha1" {
+		t.Fatalf("kustomization Get inventory: %+v", gotKust.Inventory)
+	}
+
+	gotRepo, _, err := s.Get(ctx, "OCIRepository", "product-team-a", "team-a-ab12")
+	if err != nil {
+		t.Fatalf("get repository: %v", err)
+	}
+	if gotRepo.SourceURL != "oci://registry.example.com/team-a/syncroot" ||
+		gotRepo.OriginRevision != "main/0c2a3b4" || gotRepo.OriginSource != "https://git.example.com/team-a/syncroot" {
+		t.Fatalf("repository Get base-layer fields: %+v", gotRepo)
+	}
+
+	rows, err := s.List(ctx, "Kustomization", "", "")
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("list kustomizations: %+v err=%v", rows, err)
+	}
+	if rows[0].SourceRef == nil || rows[0].SourceRef.Name != "team-a-ab12" {
+		t.Fatalf("list should carry sourceRef: %+v", rows[0])
+	}
+	if rows[0].Inventory != nil {
+		t.Fatalf("list must omit the inventory payload, got %+v", rows[0].Inventory)
+	}
+
+	changed, err := s.ChangedSince(ctx, time.Time{}, store.SchemaVersion)
+	if err != nil || len(changed) != 2 {
+		t.Fatalf("changed-since: %d rows err=%v", len(changed), err)
+	}
+	for _, c := range changed {
+		switch c.Kind {
+		case "Kustomization":
+			if c.SourceRef == nil || len(c.Inventory) != 2 {
+				t.Fatalf("changed kustomization lost base-layer fields: %+v", c.Resource)
+			}
+		case "OCIRepository":
+			if c.SourceURL == "" || c.OriginRevision == "" {
+				t.Fatalf("changed repository lost base-layer fields: %+v", c.Resource)
+			}
+		}
+	}
+
+	// The version-3 SELECT (what the server uses against tenants whose agents
+	// have not migrated yet) must omit the base-layer fields but still succeed.
+	v3, err := s.ChangedSince(ctx, time.Time{}, store.SchemaVersion-1)
+	if err != nil {
+		t.Fatalf("v3 changed-since: %v", err)
+	}
+	for _, c := range v3 {
+		if c.SourceRef != nil || c.Inventory != nil || c.SourceURL != "" {
+			t.Fatalf("v3 pull must not select base-layer fields: %+v", c.Resource)
+		}
+	}
+}
+
+// TestSyncBaseLayerBackfillAdvancesUpdatedAt reproduces the v3→v4 upgrade:
+// rows written before the base-layer projection have the columns NULL with an
+// unchanged content hash (sourceRef, url and inventory were already inside the
+// hashed object). The first sweep that projects them must advance updated_at
+// so the central pull mirrors the backfilled row — and later identical sweeps
+// must not churn it. Same contract the appliedBy backfill established.
+func TestSyncBaseLayerBackfillAdvancesUpdatedAt(t *testing.T) {
+	s, pool := newStore(t)
+	ctx := context.Background()
+
+	updatedAt := func() time.Time {
+		var ts time.Time
+		if err := pool.QueryRow(ctx,
+			"SELECT updated_at FROM flux_resource WHERE name = $1", "team-a-ab12-team-a").Scan(&ts); err != nil {
+			t.Fatalf("query updated_at: %v", err)
+		}
+		return ts
+	}
+
+	// Sweep 1: the pre-v4 shape (same object, projections not derived yet).
+	pre := flux.Resource{
+		Kind: "Kustomization", APIVersion: "kustomize.toolkit.fluxcd.io/v1",
+		Namespace: "product-team-a", Name: "team-a-ab12-team-a",
+		Ready: flux.ReadyTrue,
+		Raw:   json.RawMessage(`{"kind":"Kustomization"}`), ContentHash: "same-object",
+	}
+	if _, err := s.Sync(ctx, []flux.Resource{pre}); err != nil {
+		t.Fatalf("sync 1: %v", err)
+	}
+	first := updatedAt()
+
+	// Sweep 2: identical object + hash, but the agent now projects the fields.
+	post := pre
+	post.SourceRef = &flux.SourceRef{Kind: "OCIRepository", Name: "team-a-ab12", Namespace: "product-team-a"}
+	post.Inventory = []flux.InventoryEntry{{ID: "product-team-a_app_apps_Deployment", Version: "v1"}}
+	if _, err := s.Sync(ctx, []flux.Resource{post}); err != nil {
+		t.Fatalf("sync 2: %v", err)
+	}
+	second := updatedAt()
+	if !second.After(first) {
+		t.Fatalf("updated_at must advance when base-layer fields are backfilled: %v -> %v", first, second)
+	}
+
+	changed, err := s.ChangedSince(ctx, first, store.SchemaVersion)
+	if err != nil {
+		t.Fatalf("changed-since: %v", err)
+	}
+	if len(changed) != 1 || changed[0].SourceRef == nil || len(changed[0].Inventory) != 1 {
+		t.Fatalf("backfilled row not pulled: %+v", changed)
+	}
+
+	// Sweep 3: identical again (projections unchanged) => no churn.
+	if _, err := s.Sync(ctx, []flux.Resource{post}); err != nil {
+		t.Fatalf("sync 3: %v", err)
+	}
+	if got := updatedAt(); !got.Equal(second) {
+		t.Fatalf("updated_at churned on an unchanged base-layer sweep: %v -> %v", second, got)
+	}
+}
+
 // TestSyncContentHashSkipsUnchangedRewrite asserts the write-hygiene contract:
 // an unchanged sweep leaves updated_at alone (no row/raw rewrite), while a
 // content change advances it. The central sync loop pulls on updated_at, so

@@ -385,12 +385,12 @@ func TestCentralDISFieldsEndToEnd(t *testing.T) {
 	}
 }
 
-// TestCentralSyncSchemaV2Tenant proves the rollout order the schema gate
-// promises: a server at schema 3 can still pull a tenant whose agent is at
-// schema 2 (its database lacks the applied-by columns entirely). The tenant is
-// built by hand — migrate, then drop the v3 columns and stamp schema_version 2
-// — because a v3 agent binary can no longer write the v2 shape.
-func TestCentralSyncSchemaV2Tenant(t *testing.T) {
+// TestCentralSyncSchemaV3Tenant proves the rollout order the schema gate
+// promises: a server at schema 4 can still pull a tenant whose agent is at
+// schema 3 (its database lacks the base-layer columns entirely). The tenant is
+// built by hand — migrate, then drop the v4 columns and stamp schema_version 3
+// — because a v4 agent binary can no longer write the v3 shape.
+func TestCentralSyncSchemaV3Tenant(t *testing.T) {
 	cs, _ := newCentral(t)
 	ctx := context.Background()
 	uri := os.Getenv("DISCONSOLE_TEST_DB_URI")
@@ -405,36 +405,38 @@ func TestCentralSyncSchemaV2Tenant(t *testing.T) {
 		t.Fatalf("migrate tenant: %v", err)
 	}
 	if _, err := tpool.Exec(ctx, `ALTER TABLE flux_resource
-		DROP COLUMN applied_by_name, DROP COLUMN applied_by_namespace`); err != nil {
-		t.Fatalf("shape tenant as v2: %v", err)
+		DROP COLUMN source_ref_kind, DROP COLUMN source_ref_name, DROP COLUMN source_ref_namespace,
+		DROP COLUMN source_url, DROP COLUMN origin_revision, DROP COLUMN origin_source,
+		DROP COLUMN inventory`); err != nil {
+		t.Fatalf("shape tenant as v3: %v", err)
 	}
 	if _, err := tpool.Exec(ctx,
-		"INSERT INTO meta (id, schema_version, agent_version) VALUES (true, 2, 'v2-agent')"); err != nil {
-		t.Fatalf("stamp v2 meta: %v", err)
+		"INSERT INTO meta (id, schema_version, agent_version) VALUES (true, 3, 'v3-agent')"); err != nil {
+		t.Fatalf("stamp v3 meta: %v", err)
 	}
-	// The full column set a v2 agent writes: its upsert always passes the Go
+	// The full column set a v3 agent writes: its upsert always passes the Go
 	// zero values, so reason/message/revision land as '' (never NULL) and the
-	// DIS pair as NULL for a plain Flux object.
+	// DIS/applied-by pairs as NULL for a plain root Flux object.
 	if _, err := tpool.Exec(ctx, `INSERT INTO flux_resource
 		(kind, api_version, namespace, name, ready, reason, message, revision,
 		 azure_resource_id, suspended, generation, observed_generation, raw, content_hash)
 		VALUES ('Kustomization', 'kustomize.toolkit.fluxcd.io/v1', 'flux-system', 'apps', 'True', '', '', '',
 		 '', false, 0, 0, '{}', 'h1')`); err != nil {
-		t.Fatalf("insert v2 row: %v", err)
+		t.Fatalf("insert v3 row: %v", err)
 	}
 
 	meta, err := ts.GetMeta(ctx)
-	if err != nil || meta.SchemaVersion != 2 {
+	if err != nil || meta.SchemaVersion != 3 {
 		t.Fatalf("tenant meta: %+v err=%v", meta, err)
 	}
 
 	// The version-keyed pull must succeed against the columnless table.
 	changed, err := ts.ChangedSince(ctx, time.Time{}, meta.SchemaVersion)
 	if err != nil {
-		t.Fatalf("changed-since on a v2 tenant: %v", err)
+		t.Fatalf("changed-since on a v3 tenant: %v", err)
 	}
-	if len(changed) != 1 || changed[0].AppliedBy != nil {
-		t.Fatalf("unexpected v2 pull: %+v", changed)
+	if len(changed) != 1 || changed[0].SourceRef != nil || changed[0].Inventory != nil || changed[0].SourceURL != "" {
+		t.Fatalf("unexpected v3 pull: %+v", changed)
 	}
 	keys, err := ts.Keys(ctx)
 	if err != nil {
@@ -450,15 +452,79 @@ func TestCentralSyncSchemaV2Tenant(t *testing.T) {
 		SchemaVersion: meta.SchemaVersion,
 		AgentVersion:  meta.AgentVersion,
 	}); err != nil {
-		t.Fatalf("apply v2 tenant: %v", err)
+		t.Fatalf("apply v3 tenant: %v", err)
 	}
 
 	rows, err := cs.List(ctx, "ttd_at23", "", "", "")
 	if err != nil || len(rows) != 1 {
-		t.Fatalf("central list after v2 sync: %+v err=%v", rows, err)
+		t.Fatalf("central list after v3 sync: %+v err=%v", rows, err)
 	}
-	if rows[0].AppliedBy != nil {
-		t.Fatalf("v2 row should have nil appliedBy, got %+v", rows[0])
+	if rows[0].SourceRef != nil || rows[0].SourceURL != "" {
+		t.Fatalf("v3 row should have empty base-layer fields, got %+v", rows[0])
+	}
+}
+
+// TestCentralBaseLayerRoundTrip checks the base-layer projections are carried
+// end-to-end into the central read model: List (no inventory) surfaces
+// sourceRef/url/origin for the artifacts view, and Get returns the full
+// inventory for the tree expansion.
+func TestCentralBaseLayerRoundTrip(t *testing.T) {
+	cs, _ := newCentral(t)
+	ctx := context.Background()
+
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	repo := changed("team-a-ab12", "OCIRepository", flux.ReadyTrue, "h1", now)
+	repo.SourceURL = "oci://registry.example.com/team-a/syncroot"
+	repo.OriginRevision = "main/0c2a3b4"
+	repo.OriginSource = "https://git.example.com/team-a/syncroot"
+	kust := changed("team-a-ab12-team-a", "Kustomization", flux.ReadyTrue, "h2", now)
+	kust.SourceRef = &flux.SourceRef{Kind: "OCIRepository", Name: "team-a-ab12", Namespace: "flux-system"}
+	kust.Inventory = []flux.InventoryEntry{
+		{ID: "product-team-a_appdb_storage.dis.altinn.cloud_Database", Version: "v1alpha1"},
+	}
+	if err := cs.Apply(ctx, central.ClusterState{
+		Cluster:     "ttd_at23",
+		Environment: "at23",
+		Changed:     []store.ChangedResource{repo, kust},
+		Keys: []store.ResourceKey{
+			{Kind: "OCIRepository", Namespace: "flux-system", Name: "team-a-ab12"},
+			{Kind: "Kustomization", Namespace: "flux-system", Name: "team-a-ab12-team-a"},
+		},
+		Cursor:        now,
+		SchemaVersion: store.SchemaVersion,
+		AgentVersion:  "e2e",
+		LastSweepAt:   now,
+	}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	rows, err := cs.List(ctx, "ttd_at23", "", "", "")
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	for _, r := range rows {
+		switch r.Kind {
+		case "OCIRepository":
+			if r.SourceURL != "oci://registry.example.com/team-a/syncroot" ||
+				r.OriginRevision != "main/0c2a3b4" || r.OriginSource != "https://git.example.com/team-a/syncroot" {
+				t.Fatalf("repository List lost base-layer fields: %+v", r)
+			}
+		case "Kustomization":
+			if r.SourceRef == nil || r.SourceRef.Name != "team-a-ab12" {
+				t.Fatalf("kustomization List lost sourceRef: %+v", r)
+			}
+			if r.Inventory != nil {
+				t.Fatalf("List must omit the inventory payload: %+v", r.Inventory)
+			}
+		}
+	}
+
+	got, err := cs.Get(ctx, "ttd_at23", "Kustomization", "flux-system", "team-a-ab12-team-a")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if len(got.Inventory) != 1 || got.Inventory[0].ID != "product-team-a_appdb_storage.dis.altinn.cloud_Database" {
+		t.Fatalf("kustomization Get inventory: %+v", got.Inventory)
 	}
 }
 
