@@ -77,6 +77,8 @@ func runAgent(args []string) {
 	fs := flag.NewFlagSet("agent", flag.ExitOnError)
 	httpAddr := fs.String("http-address", ":8080", "Address for the health probes (/healthz, /readyz)")
 	pollInterval := fs.Duration("poll-interval", 30*time.Second, "Flux resource poll interval (e.g. 30s, 1m)")
+	eventRetention := fs.Duration("event-retention", 720*time.Hour,
+		"Delete status-history events older than this from the tenant database (0 keeps them forever)")
 	local := fs.Bool("local", false, "Use the local kubeconfig instead of in-cluster config (laptop dev)")
 	dbURI := fs.String("db-uri", os.Getenv("DB_URI"),
 		"PostgreSQL connection URI without password (default from DB_URI env)")
@@ -87,6 +89,9 @@ func runAgent(args []string) {
 
 	if *pollInterval <= 0 {
 		log.Fatalf("--poll-interval must be greater than 0, got %s", *pollInterval)
+	}
+	if *eventRetention < 0 {
+		log.Fatalf("--event-retention must be zero (disabled) or positive, got %s", *eventRetention)
 	}
 	if *dbURI == "" {
 		log.Fatalf("--db-uri (or DB_URI env) must be set")
@@ -116,6 +121,7 @@ func runAgent(args []string) {
 		log.Fatalf("db pool: %v", err)
 	}
 	st := store.New(pool)
+	st.SetEventRetention(*eventRetention)
 	defer st.Close()
 
 	migrateCtx, cancel := context.WithTimeout(ctx, migrateTimeout)
@@ -173,6 +179,8 @@ func runServer(args []string) {
 	syncInterval := fs.Duration("sync-interval", 30*time.Second, "Tenant database sync interval (e.g. 30s, 1m)")
 	staleAfter := fs.Duration("stale-after", 2*time.Minute,
 		"Mark a cluster stale when its agent sweep / console sync is older than this")
+	eventRetention := fs.Duration("event-retention", 720*time.Hour,
+		"Delete status-history events older than this from the central database (0 keeps them forever)")
 	dbURI := fs.String("db-uri", os.Getenv("DB_URI"),
 		"Central PostgreSQL connection URI without password (default from DB_URI env). "+
 			"Tenant databases are discovered on the same server.")
@@ -186,6 +194,9 @@ func runServer(args []string) {
 	}
 	if *staleAfter <= 0 {
 		log.Fatalf("--stale-after must be greater than 0, got %s", *staleAfter)
+	}
+	if *eventRetention < 0 {
+		log.Fatalf("--event-retention must be zero (disabled) or positive, got %s", *eventRetention)
 	}
 	if *dbURI == "" {
 		log.Fatalf("--db-uri (or DB_URI env) must be set")
@@ -233,6 +244,7 @@ func runServer(args []string) {
 
 	// Run the sync loop until shutdown; readiness flips after the first cycle.
 	engine := central.NewEngine(cs, *dbURI, cred, *syncInterval)
+	engine.SetEventRetention(*eventRetention)
 	engine.Run(ctx, srv.MarkSynced)
 
 	gracefulShutdown(httpServer)
@@ -260,7 +272,8 @@ func poll(ctx context.Context, client *flux.Client, st *store.Store, h *health.S
 	}
 
 	h.MarkReady()
-	log.Printf("swept %d resources (%d changed, %d pruned)", stats.Upserted, stats.Changed, stats.Pruned)
+	log.Printf("swept %d resources (%d changed, %d pruned, %d events expired)",
+		stats.Upserted, stats.Changed, stats.Pruned, stats.EventsExpired)
 }
 
 func gracefulShutdown(srv *http.Server) {

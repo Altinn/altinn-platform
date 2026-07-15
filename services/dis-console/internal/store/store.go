@@ -1,7 +1,9 @@
 // Package store persists normalized Flux resource snapshots in PostgreSQL and
 // serves the read queries behind the JSON API. Each sweep upserts the current
 // rows, records a history event whenever a resource's ready/reason/revision
-// changes, and prunes rows for objects that have disappeared from the cluster.
+// changes, prunes rows for objects that have disappeared from the cluster,
+// and — when event retention is enabled — ages out history events past the
+// retention window.
 package store
 
 import (
@@ -29,6 +31,9 @@ var ErrNotFound = errors.New("resource not found")
 // Store reads and writes Flux resource state in PostgreSQL.
 type Store struct {
 	pool *pgxpool.Pool
+	// eventRetention > 0 makes every Sync delete flux_status_event rows older
+	// than the window; zero keeps events forever.
+	eventRetention time.Duration
 }
 
 // New wraps an existing pgxpool. The store does not own the pool's lifecycle
@@ -36,6 +41,12 @@ type Store struct {
 func New(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool}
 }
+
+// SetEventRetention enables time-based purging of status history: each Sync
+// deletes flux_status_event rows observed more than d before the database's
+// now(). Zero (the default) disables the purge. Set once at startup, before
+// the sweep loop; the field is not synchronized.
+func (s *Store) SetEventRetention(d time.Duration) { s.eventRetention = d }
 
 // Close releases the underlying connection pool.
 func (s *Store) Close() { s.pool.Close() }
@@ -113,9 +124,10 @@ func (s *Store) GetMeta(ctx context.Context) (Meta, error) {
 
 // SyncStats reports what a Sync did.
 type SyncStats struct {
-	Upserted int   // rows seen this sweep
-	Changed  int   // rows whose ready/reason/revision changed (history events written)
-	Pruned   int64 // rows deleted because their object disappeared from the cluster
+	Upserted      int   // rows seen this sweep
+	Changed       int   // rows whose ready/reason/revision changed (history events written)
+	Pruned        int64 // rows deleted because their object disappeared from the cluster
+	EventsExpired int64 // history rows deleted for aging past the event retention window
 }
 
 // parentCols splits an optional parent into its nullable column pair.
@@ -376,6 +388,16 @@ func (s *Store) Sync(ctx context.Context, resources []flux.Resource) (SyncStats,
 		}
 	}
 
+	// Age out history events past the retention window, in the same
+	// transaction so a sweep and its retention purge commit together.
+	if s.eventRetention > 0 {
+		tag, err := tx.Exec(ctx, expireEventsStmt, s.eventRetention.Seconds())
+		if err != nil {
+			return stats, fmt.Errorf("expire events: %w", err)
+		}
+		stats.EventsExpired = tag.RowsAffected()
+	}
+
 	// Record the sweep time atomically with its data. No-op until InitMeta has
 	// seeded the singleton row (the agent does so at startup, before sweeping).
 	if _, err := tx.Exec(ctx, touchMetaStmt); err != nil {
@@ -396,6 +418,19 @@ WHERE NOT EXISTS (
     SELECT 1 FROM flux_resource r
     WHERE r.kind = e.kind AND r.namespace = e.namespace AND r.name = e.name
 )`
+
+// expireEventsStmt ages out history rows older than the retention window,
+// using the DB clock like pruneStmt (the seconds ride in as a parameter, so
+// the statement stays cacheable). Aged events are dead weight: the History
+// endpoints return at most historyLimit recent rows per resource, so anything
+// past a sane window is unreachable through the API. The server's event copy
+// cursor lives in the central database (cluster_report.event_cursor), not in
+// this table, so deleting rows here never disturbs the incremental copy. The
+// one caveat: should central sync lag for longer than the retention window,
+// events can expire before the server copied them and are lost — accepted,
+// the console is a live mirror, not an audit log.
+const expireEventsStmt = `
+DELETE FROM flux_status_event WHERE observed_at < now() - make_interval(secs => $1)`
 
 const lastSweepStmt = `SELECT max(last_seen) FROM flux_resource`
 

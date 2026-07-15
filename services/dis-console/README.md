@@ -142,7 +142,10 @@ psql "postgres://postgres@localhost:5432/postgres?sslmode=disable" -c 'SELECT ki
 
 Agent flags: `--http-address` (default `:8080`), `--poll-interval` (default
 `30s`), `--local` (kubeconfig instead of in-cluster config), `--db-uri` (default
-`DB_URI`), `--db-disable-entra` (default `DB_DISABLE_ENTRA`).
+`DB_URI`), `--db-disable-entra` (default `DB_DISABLE_ENTRA`),
+`--event-retention` (default `720h` — delete status-history events older than
+this; `0` keeps them forever). The server takes the same `--event-retention`
+for the central database.
 
 ## Develop
 

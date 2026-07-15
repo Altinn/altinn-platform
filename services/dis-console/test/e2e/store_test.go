@@ -568,6 +568,83 @@ func TestSyncAppliedByBackfillAdvancesUpdatedAt(t *testing.T) {
 	}
 }
 
+// TestSyncEventRetention drives the time-based event purge against real
+// PostgreSQL: with a retention window set, Sync deletes history events older
+// than the window inside the sweep's transaction, fresh events and the
+// resource rows themselves survive, and with retention unset (the default)
+// nothing is ever purged.
+func TestSyncEventRetention(t *testing.T) {
+	s, pool := newStore(t)
+	ctx := context.Background()
+
+	countEvents := func() int {
+		t.Helper()
+		var n int
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM flux_status_event").Scan(&n); err != nil {
+			t.Fatalf("count events: %v", err)
+		}
+		return n
+	}
+
+	// Two sweeps: initial upsert, then a status change => two history events.
+	if _, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyTrue, "OK", "sha-1")}); err != nil {
+		t.Fatalf("sync 1: %v", err)
+	}
+	if _, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyFalse, "Boom", "sha-2")}); err != nil {
+		t.Fatalf("sync 2: %v", err)
+	}
+	if n := countEvents(); n != 2 {
+		t.Fatalf("expected 2 events after two sweeps, got %d", n)
+	}
+
+	// Age the first event past the window configured below.
+	if _, err := pool.Exec(ctx,
+		"UPDATE flux_status_event SET observed_at = now() - interval '48 hours' WHERE ready = $1",
+		flux.ReadyTrue); err != nil {
+		t.Fatalf("backdate event: %v", err)
+	}
+
+	// Retention disabled (the default): a sweep must not purge anything.
+	stats, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyFalse, "Boom", "sha-2")})
+	if err != nil {
+		t.Fatalf("sync 3: %v", err)
+	}
+	if stats.EventsExpired != 0 || countEvents() != 2 {
+		t.Fatalf("disabled retention purged events: stats=%+v events=%d", stats, countEvents())
+	}
+
+	// 24h retention: the next sweep drops the aged event and keeps the fresh one.
+	s.SetEventRetention(24 * time.Hour)
+	stats, err = s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyFalse, "Boom", "sha-2")})
+	if err != nil {
+		t.Fatalf("sync 4: %v", err)
+	}
+	if stats.EventsExpired != 1 || countEvents() != 1 {
+		t.Fatalf("expected exactly the aged event purged: stats=%+v events=%d", stats, countEvents())
+	}
+
+	// The resource row is untouched and the surviving history is the fresh event.
+	row, history, err := s.Get(ctx, "Kustomization", "flux-system", "apps")
+	if err != nil {
+		t.Fatalf("get apps: %v", err)
+	}
+	if row.Ready != flux.ReadyFalse {
+		t.Fatalf("purge disturbed the resource row: %+v", row)
+	}
+	if len(history) != 1 || history[0].Ready != flux.ReadyFalse {
+		t.Fatalf("unexpected history after purge: %+v", history)
+	}
+
+	// Steady state: nothing is old enough anymore, so the next sweep purges nothing.
+	stats, err = s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyFalse, "Boom", "sha-2")})
+	if err != nil {
+		t.Fatalf("sync 5: %v", err)
+	}
+	if stats.EventsExpired != 0 || countEvents() != 1 {
+		t.Fatalf("steady-state sweep must purge nothing: stats=%+v events=%d", stats, countEvents())
+	}
+}
+
 // TestMetaRecordedOnSync checks the meta row: InitMeta stamps schema/agent
 // version with no sweep time yet, and a sweep records last_sweep_at.
 func TestMetaRecordedOnSync(t *testing.T) {

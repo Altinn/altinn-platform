@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS flux_status_event (
 );
 
 CREATE INDEX IF NOT EXISTS idx_flux_event_obj ON flux_status_event (kind, namespace, name, observed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_flux_event_observed_at ON flux_status_event (observed_at);
 
 CREATE TABLE IF NOT EXISTS meta (
     id             boolean     PRIMARY KEY DEFAULT true,

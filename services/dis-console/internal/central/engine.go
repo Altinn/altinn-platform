@@ -21,6 +21,9 @@ type Engine struct {
 	baseURI  string
 	cred     azcore.TokenCredential
 	interval time.Duration
+	// eventRetention > 0 purges central status events older than the window
+	// once per sync cycle; zero keeps them forever.
+	eventRetention time.Duration
 }
 
 // NewEngine builds a sync engine. baseURI is the central database URI; tenant
@@ -29,6 +32,11 @@ type Engine struct {
 func NewEngine(central *Store, baseURI string, cred azcore.TokenCredential, interval time.Duration) *Engine {
 	return &Engine{central: central, baseURI: baseURI, cred: cred, interval: interval}
 }
+
+// SetEventRetention enables time-based purging of the central event log: each
+// sync cycle deletes flux_status_event rows older than d. Zero (the default)
+// disables it. Set once, before Run; the field is not synchronized.
+func (e *Engine) SetEventRetention(d time.Duration) { e.eventRetention = d }
 
 // Run syncs all tenant databases on an interval until ctx is cancelled. It calls
 // ready (flipping /readyz) after the first cycle whose discovery succeeds — a
@@ -76,6 +84,16 @@ func (e *Engine) syncOnce(ctx context.Context) bool {
 		synced++
 	}
 	log.Printf("synced %d/%d tenant databases (%d failed)", synced, len(dbs), failed)
+
+	// Age out central history once per cycle. A failure is logged, not fatal:
+	// the next cycle retries, and syncing/serving must not depend on it.
+	if e.eventRetention > 0 {
+		if purged, err := e.central.PurgeExpiredEvents(ctx, e.eventRetention); err != nil {
+			log.Printf("expire central events failed: %v", err)
+		} else if purged > 0 {
+			log.Printf("expired %d central status events older than %s", purged, e.eventRetention)
+		}
+	}
 	return true
 }
 

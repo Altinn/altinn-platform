@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS flux_status_event (
 );
 
 CREATE INDEX IF NOT EXISTS idx_central_event_obj ON flux_status_event (cluster, lower(kind), namespace, name, observed_at DESC, tenant_id DESC);
+CREATE INDEX IF NOT EXISTS idx_central_event_observed_at ON flux_status_event (observed_at);
 
 CREATE TABLE IF NOT EXISTS cluster_report (
     cluster        text        PRIMARY KEY,
