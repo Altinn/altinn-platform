@@ -197,6 +197,30 @@ WHERE e.cluster = $1
       AND r.namespace = e.namespace AND r.name = e.name
   )`
 
+// expireEventsStmt ages out central history rows older than the retention
+// window — the same predicate as the tenant store's purge, on the
+// cluster-keyed table. Aged rows are unreachable through the API (History
+// caps at historyLimit recent rows per resource). The per-cluster copy cursor
+// is cluster_report.event_cursor, independent of this table, so the purge can
+// neither regress the incremental event copy nor resurrect deleted rows.
+const expireEventsStmt = `
+DELETE FROM flux_status_event WHERE observed_at < now() - make_interval(secs => $1)`
+
+// PurgeExpiredEvents deletes status events older than retention from the
+// central event log across all clusters, returning how many rows went.
+// retention <= 0 disables the purge: the method returns without touching the
+// database.
+func (s *Store) PurgeExpiredEvents(ctx context.Context, retention time.Duration) (int64, error) {
+	if retention <= 0 {
+		return 0, nil
+	}
+	tag, err := s.pool.Exec(ctx, expireEventsStmt, retention.Seconds())
+	if err != nil {
+		return 0, fmt.Errorf("expire events: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
 // Apply mirrors one cluster's state into the central DB in a single transaction
 // — upsert the changed rows, prune the ones that disappeared, and record the
 // cluster_report — so readers never observe a half-synced cluster.

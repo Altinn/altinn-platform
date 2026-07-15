@@ -79,13 +79,15 @@ Do not claim checks passed unless you actually ran them.
 - `internal/dbauth` — pgxpool builder; Entra-token `BeforeConnect` hook in the
   cluster, PGPASSWORD/trust fallback when Entra is disabled (Kind/CI/local).
 - `internal/store` — tenant pgxpool store: embedded `schema.sql`, `Migrate`,
-  `Sync` (content-hash-gated upsert + `flux_status_event` history + prune,
-  touches the `meta` row), the `meta` bookkeeping table (`InitMeta`/`GetMeta`,
-  `SchemaVersion`), and the server-side tenant readers (`ChangedSince`/`Keys`).
+  `Sync` (content-hash-gated upsert + `flux_status_event` history + prune +
+  optional event-retention purge, touches the `meta` row), the `meta`
+  bookkeeping table (`InitMeta`/`GetMeta`, `SchemaVersion`), and the
+  server-side tenant readers (`ChangedSince`/`Keys`).
 - `internal/central` — the server's central read model: cluster-keyed
   `schema.sql`, `Apply` (per-cluster upsert + prune + `cluster_report` in one
   tx), tenant `Discover`, the sync `Engine` (pulls each tenant incrementally via
-  `updated_at > cursor`), and the fleet-API read methods (`Clusters` with
+  `updated_at > cursor`, ages out central events once per cycle when
+  `--event-retention` is set), and the fleet-API read methods (`Clusters` with
   staleness, `Summary`/`List`/`Get`).
 - `internal/health` — `/healthz` + `/readyz` handlers used by the agent.
 - `internal/api` — the fleet API: `net/http` mux + JSON handlers reading the

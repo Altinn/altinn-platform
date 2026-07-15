@@ -603,6 +603,85 @@ func TestCentralEventCopyAndHistory(t *testing.T) {
 	}
 }
 
+// TestCentralEventRetention proves the safety contract behind the central
+// purge: the per-cluster event copy cursor lives in cluster_report
+// (event_cursor), not in the event table itself, so purging aged central
+// events must not regress the cursor, must not resurrect the purged rows on
+// the next sync, and must not stop newer tenant events from flowing.
+func TestCentralEventRetention(t *testing.T) {
+	cs, cpool := newCentral(t)
+	ctx := context.Background()
+	uri := os.Getenv("DISCONSOLE_TEST_DB_URI")
+
+	tpool, err := dbauth.NewPoolForDatabase(ctx, uri, "dis_console_ttd_at23", nil)
+	if err != nil {
+		t.Fatalf("tenant pool: %v", err)
+	}
+	defer tpool.Close()
+	ts := store.New(tpool)
+	if err := ts.Migrate(ctx); err != nil {
+		t.Fatalf("migrate tenant: %v", err)
+	}
+	if err := ts.InitMeta(ctx, "e2e"); err != nil {
+		t.Fatalf("init tenant meta: %v", err)
+	}
+
+	// One tenant event, copied into the central log.
+	if _, err := ts.Sync(ctx, []flux.Resource{res("infra", flux.ReadyFalse, "BuildFailed", "sha-1")}); err != nil {
+		t.Fatalf("tenant sync 1: %v", err)
+	}
+	pullAndApply(t, cs, ts, "ttd_at23")
+
+	cursorBefore, err := cs.EventCursor(ctx, "ttd_at23")
+	if err != nil || cursorBefore == 0 {
+		t.Fatalf("event cursor after first sync: %d err=%v", cursorBefore, err)
+	}
+
+	// Age every central event past the window, then purge.
+	if _, err := cpool.Exec(ctx,
+		"UPDATE flux_status_event SET observed_at = now() - interval '48 hours'"); err != nil {
+		t.Fatalf("backdate central events: %v", err)
+	}
+	purged, err := cs.PurgeExpiredEvents(ctx, 24*time.Hour)
+	if err != nil || purged != 1 {
+		t.Fatalf("purge: purged=%d err=%v, want 1", purged, err)
+	}
+	if h, err := cs.History(ctx, "ttd_at23", "Kustomization", "flux-system", "infra"); err != nil || len(h) != 0 {
+		t.Fatalf("history should be empty after purge: %+v err=%v", h, err)
+	}
+
+	// The copy cursor is untouched: it lives in cluster_report, not in the
+	// purged table.
+	if c, err := cs.EventCursor(ctx, "ttd_at23"); err != nil || c != cursorBefore {
+		t.Fatalf("purge disturbed the event cursor: %d -> %d err=%v", cursorBefore, c, err)
+	}
+
+	// A redundant sync must not resurrect the purged event: the tenant still
+	// has it, but the cursor records it as already copied.
+	pullAndApply(t, cs, ts, "ttd_at23")
+	if h, err := cs.History(ctx, "ttd_at23", "Kustomization", "flux-system", "infra"); err != nil || len(h) != 0 {
+		t.Fatalf("redundant sync resurrected purged events: %+v err=%v", h, err)
+	}
+
+	// Newer tenant events still flow after a purge.
+	if _, err := ts.Sync(ctx, []flux.Resource{res("infra", flux.ReadyTrue, "ReconciliationSucceeded", "sha-2")}); err != nil {
+		t.Fatalf("tenant sync 2: %v", err)
+	}
+	pullAndApply(t, cs, ts, "ttd_at23")
+	h, err := cs.History(ctx, "ttd_at23", "Kustomization", "flux-system", "infra")
+	if err != nil || len(h) != 1 || h[0].Ready != flux.ReadyTrue {
+		t.Fatalf("new event after purge: %+v err=%v", h, err)
+	}
+	if c, err := cs.EventCursor(ctx, "ttd_at23"); err != nil || c <= cursorBefore {
+		t.Fatalf("cursor should advance past %d for the new event, got %d err=%v", cursorBefore, c, err)
+	}
+
+	// Rows inside the window survive a purge.
+	if purged, err := cs.PurgeExpiredEvents(ctx, 24*time.Hour); err != nil || purged != 0 {
+		t.Fatalf("fresh event must survive the purge: purged=%d err=%v", purged, err)
+	}
+}
+
 // pullAndApply mirrors the engine's per-cluster sync against a tenant store: pull
 // the rows + events newer than the central cursors, then apply both (with the
 // advanced cursors) to the central store in one transaction.

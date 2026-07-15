@@ -1,6 +1,7 @@
 package central
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -85,6 +86,18 @@ func TestAdvanceEventCursor(t *testing.T) {
 	// All ids at/below the cursor: must never regress.
 	if got := advanceEventCursor(20, events); got != 20 {
 		t.Fatalf("advanceEventCursor must not regress, got %d", got)
+	}
+}
+
+func TestPurgeExpiredEventsDisabled(t *testing.T) {
+	// retention <= 0 disables the purge entirely: the method must return
+	// before running any SQL — the nil pool would panic if it did.
+	s := New(nil)
+	for _, d := range []time.Duration{0, -time.Hour} {
+		n, err := s.PurgeExpiredEvents(context.Background(), d)
+		if err != nil || n != 0 {
+			t.Fatalf("PurgeExpiredEvents(%s): n=%d err=%v, want a no-op", d, n, err)
+		}
 	}
 }
 
