@@ -169,7 +169,7 @@ func sourceRefFrom(kind, name, namespace *string) *flux.SourceRef {
 // nullable maps "" to NULL. The base-layer string columns are stored NULL when
 // the projection is absent so the upsert's updated_at backfill comparison stays
 // quiet for the many rows that never carry them (NULL = NULL), instead of
-// re-mirroring the whole fleet once over '' vs NULL.
+// re-mirroring the whole fleet once over empty-string vs NULL.
 func nullable(s string) *string {
 	if s == "" {
 		return nil
