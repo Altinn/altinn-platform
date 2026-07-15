@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.0](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.5.0...dis-console-v1.6.0) (2026-07-15)
+
+
+### Features
+
+* **dis-console:** add --event-retention to purge aged status events ([#3822](https://github.com/Altinn/altinn-platform/issues/3822)) ([312d067](https://github.com/Altinn/altinn-platform/commit/312d067566a1d72a16c3507bf252354ea8a0a054))
+* **dis-console:** track base-layer OCI artifacts and their applied-object inventory ([#3820](https://github.com/Altinn/altinn-platform/issues/3820)) ([b9c7c0e](https://github.com/Altinn/altinn-platform/commit/b9c7c0e44163a12104353015cb355937ef5b2fe5))
+
+
+### Bug Fixes
+
+* **dis-console:** backfill appliedBy into the central mirror for pre-existing rows ([#3812](https://github.com/Altinn/altinn-platform/issues/3812)) ([f7db0d0](https://github.com/Altinn/altinn-platform/commit/f7db0d0d104fc6380a4bd9f2fe47742a67a42ca0))
+
 ## [1.5.0](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.4.0...dis-console-v1.5.0) (2026-07-03)
 
 
