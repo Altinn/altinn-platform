@@ -114,6 +114,15 @@ func TestSweepListsFromWatchCache(t *testing.T) {
 			t.Errorf("list[%d] ResourceVersion = %q, want %q (served from the watch cache)",
 				i, opts.ResourceVersion, "0")
 		}
+		// The apps kinds are filtered to GitOps-applied objects server-side;
+		// every other kind lists unfiltered.
+		wantSelector := ""
+		if TargetKinds[i].Group == GroupApps {
+			wantSelector = LabelAppliedByName
+		}
+		if opts.LabelSelector != wantSelector {
+			t.Errorf("list[%d] LabelSelector = %q, want %q", i, opts.LabelSelector, wantSelector)
+		}
 	}
 }
 

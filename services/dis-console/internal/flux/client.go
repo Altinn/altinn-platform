@@ -210,7 +210,15 @@ func (c *Client) Sweep(ctx context.Context) ([]Resource, []error, error) {
 		// allows is irrelevant to a status poller (the agent re-lists every poll
 		// interval and the Console marks clusters stale only after minutes), and
 		// it keeps the repeated fleet-wide lists off etcd.
-		list, err := nri.List(ctx, metav1.ListOptions{ResourceVersion: "0"})
+		opts := metav1.ListOptions{ResourceVersion: "0"}
+		if gk.Group == GroupApps {
+			// Existence selector: the apiserver drops unlabeled workloads
+			// (kube-system, Azure add-ons) before they ride the response. The
+			// in-loop guard below owns the semantics — it also drops a
+			// present-but-empty label, which a bare selector matches.
+			opts.LabelSelector = LabelAppliedByName
+		}
+		list, err := nri.List(ctx, opts)
 		if err != nil {
 			return nil, warnings, fmt.Errorf("list %s: %w", gk, err)
 		}
