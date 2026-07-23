@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.6.0...dis-console-v1.7.0) (2026-07-23)
+
+
+### Features
+
+* **dis-console:** sweep GitOps-applied workloads and surface container images ([#3836](https://github.com/Altinn/altinn-platform/issues/3836)) ([33d21f2](https://github.com/Altinn/altinn-platform/commit/33d21f2f8fc8e0f29388e1f87a5a3383e8d13785))
+
 ## [1.6.0](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.5.0...dis-console-v1.6.0) (2026-07-15)
 
 
