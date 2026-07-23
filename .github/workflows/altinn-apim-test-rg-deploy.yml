@@ -54,7 +54,7 @@ jobs:
     runs-on: self-hosted
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Terraform Plan
         uses: Altinn/altinn-platform/actions/terraform/plan@e095eaa67ba630897e9b488a933c8ebb82b36732 # main
@@ -75,7 +75,7 @@ jobs:
     runs-on: self-hosted
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Terraform Apply
         uses: Altinn/altinn-platform/actions/terraform/apply@e095eaa67ba630897e9b488a933c8ebb82b36732 # main
