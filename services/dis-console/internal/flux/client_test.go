@@ -39,28 +39,32 @@ func (m *fakeMapper) RESTMapping(gk schema.GroupKind, _ ...string) (*apimeta.RES
 }
 
 // fakeDynamic is a dynamic.Interface that records the ListOptions of every
-// List and returns an empty list. We capture the options here rather than via
-// dynamic/fake because the fake client drops ResourceVersion when building its
-// recorded action, which is exactly the field these tests assert on.
+// List and returns the items seeded for the resource (empty when none). We
+// capture the options here rather than via dynamic/fake because the fake
+// client drops ResourceVersion when building its recorded action, which is
+// exactly the field these tests assert on.
 type fakeDynamic struct {
 	dynamic.Interface
 	listOpts []metav1.ListOptions
+	// items are the objects List returns, keyed by resource (e.g. "deployments").
+	items map[string][]unstructured.Unstructured
 }
 
-func (d *fakeDynamic) Resource(schema.GroupVersionResource) dynamic.NamespaceableResourceInterface {
-	return &fakeResource{parent: d}
+func (d *fakeDynamic) Resource(gvr schema.GroupVersionResource) dynamic.NamespaceableResourceInterface {
+	return &fakeResource{parent: d, resource: gvr.Resource}
 }
 
 type fakeResource struct {
 	dynamic.NamespaceableResourceInterface
-	parent *fakeDynamic
+	parent   *fakeDynamic
+	resource string
 }
 
 func (r *fakeResource) Namespace(string) dynamic.ResourceInterface { return r }
 
 func (r *fakeResource) List(_ context.Context, opts metav1.ListOptions) (*unstructured.UnstructuredList, error) {
 	r.parent.listOpts = append(r.parent.listOpts, opts)
-	return &unstructured.UnstructuredList{}, nil
+	return &unstructured.UnstructuredList{Items: r.parent.items[r.resource]}, nil
 }
 
 func TestSweepResetsDiscoveryOnTTL(t *testing.T) {
@@ -110,6 +114,64 @@ func TestSweepListsFromWatchCache(t *testing.T) {
 			t.Errorf("list[%d] ResourceVersion = %q, want %q (served from the watch cache)",
 				i, opts.ResourceVersion, "0")
 		}
+		// The apps kinds are filtered to GitOps-applied objects server-side;
+		// every other kind lists unfiltered.
+		wantSelector := ""
+		if TargetKinds[i].Group == GroupApps {
+			wantSelector = LabelAppliedByName
+		}
+		if opts.LabelSelector != wantSelector {
+			t.Errorf("list[%d] LabelSelector = %q, want %q", i, opts.LabelSelector, wantSelector)
+		}
+	}
+}
+
+// TestSweepMirrorsOnlyGitOpsAppliedWorkloads pins the workload filter: an apps
+// object without the kustomize-controller ownership label (kube-system,
+// Azure-managed add-ons) is dropped before normalize, while the labeled one is
+// mirrored — and non-workload kinds are never filtered, labeled or not.
+func TestSweepMirrorsOnlyGitOpsAppliedWorkloads(t *testing.T) {
+	workload := func(name string, labels map[string]any) unstructured.Unstructured {
+		meta := map[string]any{"namespace": "ns", "name": name}
+		if labels != nil {
+			meta["labels"] = labels
+		}
+		return unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata":   meta,
+		}}
+	}
+	d := &fakeDynamic{items: map[string][]unstructured.Unstructured{
+		"deployments": {
+			workload("gitops-app", map[string]any{LabelAppliedByName: "app", LabelAppliedByNamespace: "ns"}),
+			workload("azure-managed", nil),
+		},
+		// An unlabeled non-workload kind must not be filtered.
+		"kustomizations": {{Object: map[string]any{
+			"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
+			"kind":       "Kustomization",
+			"metadata":   map[string]any{"namespace": "flux-system", "name": "root"},
+		}}},
+	}}
+	c := &Client{dyn: d, mapper: &fakeMapper{}}
+
+	resources, warnings, err := c.Sweep(context.Background())
+	if err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+	names := make([]string, len(resources))
+	for i, r := range resources {
+		names[i] = r.Name
+	}
+	if len(resources) != 2 || resources[0].Name != "root" || resources[1].Name != "gitops-app" {
+		t.Fatalf("expected the root Kustomization and the labeled workload only, got %v", names)
+	}
+	if resources[1].AppliedBy == nil || resources[1].AppliedBy.Name != "app" {
+		t.Fatalf("mirrored workload lost appliedBy: %+v", resources[1].AppliedBy)
 	}
 }
 

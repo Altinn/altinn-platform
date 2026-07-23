@@ -385,12 +385,12 @@ func TestCentralDISFieldsEndToEnd(t *testing.T) {
 	}
 }
 
-// TestCentralSyncSchemaV3Tenant proves the rollout order the schema gate
-// promises: a server at schema 4 can still pull a tenant whose agent is at
-// schema 3 (its database lacks the base-layer columns entirely). The tenant is
-// built by hand — migrate, then drop the v4 columns and stamp schema_version 3
-// — because a v4 agent binary can no longer write the v3 shape.
-func TestCentralSyncSchemaV3Tenant(t *testing.T) {
+// TestCentralSyncSchemaV4Tenant proves the rollout order the schema gate
+// promises: a server at schema 5 can still pull a tenant whose agent is at
+// schema 4 (its database lacks the images column entirely). The tenant is
+// built by hand — migrate, then drop the v5 column and stamp schema_version 4
+// — because a v5 agent binary can no longer write the v4 shape.
+func TestCentralSyncSchemaV4Tenant(t *testing.T) {
 	cs, _ := newCentral(t)
 	ctx := context.Background()
 	uri := os.Getenv("DISCONSOLE_TEST_DB_URI")
@@ -404,39 +404,36 @@ func TestCentralSyncSchemaV3Tenant(t *testing.T) {
 	if err := ts.Migrate(ctx); err != nil {
 		t.Fatalf("migrate tenant: %v", err)
 	}
-	if _, err := tpool.Exec(ctx, `ALTER TABLE flux_resource
-		DROP COLUMN source_ref_kind, DROP COLUMN source_ref_name, DROP COLUMN source_ref_namespace,
-		DROP COLUMN source_url, DROP COLUMN origin_revision, DROP COLUMN origin_source,
-		DROP COLUMN inventory`); err != nil {
-		t.Fatalf("shape tenant as v3: %v", err)
+	if _, err := tpool.Exec(ctx, "ALTER TABLE flux_resource DROP COLUMN images"); err != nil {
+		t.Fatalf("shape tenant as v4: %v", err)
 	}
 	if _, err := tpool.Exec(ctx,
-		"INSERT INTO meta (id, schema_version, agent_version) VALUES (true, 3, 'v3-agent')"); err != nil {
-		t.Fatalf("stamp v3 meta: %v", err)
+		"INSERT INTO meta (id, schema_version, agent_version) VALUES (true, 4, 'v4-agent')"); err != nil {
+		t.Fatalf("stamp v4 meta: %v", err)
 	}
-	// The full column set a v3 agent writes: its upsert always passes the Go
+	// The full column set a v4 agent writes: its upsert always passes the Go
 	// zero values, so reason/message/revision land as '' (never NULL) and the
-	// DIS/applied-by pairs as NULL for a plain root Flux object.
+	// DIS/applied-by/base-layer columns as NULL for a plain root Flux object.
 	if _, err := tpool.Exec(ctx, `INSERT INTO flux_resource
 		(kind, api_version, namespace, name, ready, reason, message, revision,
 		 azure_resource_id, suspended, generation, observed_generation, raw, content_hash)
 		VALUES ('Kustomization', 'kustomize.toolkit.fluxcd.io/v1', 'flux-system', 'apps', 'True', '', '', '',
 		 '', false, 0, 0, '{}', 'h1')`); err != nil {
-		t.Fatalf("insert v3 row: %v", err)
+		t.Fatalf("insert v4 row: %v", err)
 	}
 
 	meta, err := ts.GetMeta(ctx)
-	if err != nil || meta.SchemaVersion != 3 {
+	if err != nil || meta.SchemaVersion != 4 {
 		t.Fatalf("tenant meta: %+v err=%v", meta, err)
 	}
 
 	// The version-keyed pull must succeed against the columnless table.
 	changed, err := ts.ChangedSince(ctx, time.Time{}, meta.SchemaVersion)
 	if err != nil {
-		t.Fatalf("changed-since on a v3 tenant: %v", err)
+		t.Fatalf("changed-since on a v4 tenant: %v", err)
 	}
-	if len(changed) != 1 || changed[0].SourceRef != nil || changed[0].Inventory != nil || changed[0].SourceURL != "" {
-		t.Fatalf("unexpected v3 pull: %+v", changed)
+	if len(changed) != 1 || changed[0].Images != nil {
+		t.Fatalf("unexpected v4 pull: %+v", changed)
 	}
 	keys, err := ts.Keys(ctx)
 	if err != nil {
@@ -452,15 +449,15 @@ func TestCentralSyncSchemaV3Tenant(t *testing.T) {
 		SchemaVersion: meta.SchemaVersion,
 		AgentVersion:  meta.AgentVersion,
 	}); err != nil {
-		t.Fatalf("apply v3 tenant: %v", err)
+		t.Fatalf("apply v4 tenant: %v", err)
 	}
 
 	rows, err := cs.List(ctx, "ttd_at23", "", "", "")
 	if err != nil || len(rows) != 1 {
-		t.Fatalf("central list after v3 sync: %+v err=%v", rows, err)
+		t.Fatalf("central list after v4 sync: %+v err=%v", rows, err)
 	}
-	if rows[0].SourceRef != nil || rows[0].SourceURL != "" {
-		t.Fatalf("v3 row should have empty base-layer fields, got %+v", rows[0])
+	if rows[0].Images != nil {
+		t.Fatalf("v4 row should have nil images, got %+v", rows[0].Images)
 	}
 }
 
@@ -525,6 +522,65 @@ func TestCentralBaseLayerRoundTrip(t *testing.T) {
 	}
 	if len(got.Inventory) != 1 || got.Inventory[0].ID != "product-team-a_appdb_storage.dis.altinn.cloud_Database" {
 		t.Fatalf("kustomization Get inventory: %+v", got.Inventory)
+	}
+}
+
+// TestCentralImagesEndToEnd walks a GitOps-applied Deployment through the full
+// pipeline against real PostgreSQL: agent Sync into the tenant database,
+// server pull (ChangedSince at the current schema) and Apply, then the
+// fleet-API reads — asserting the container images survive every hop and ride
+// the list payload (the UI's "which image runs where" needs no detail fetch).
+func TestCentralImagesEndToEnd(t *testing.T) {
+	cs, _ := newCentral(t)
+	ctx := context.Background()
+	uri := os.Getenv("DISCONSOLE_TEST_DB_URI")
+
+	tpool, err := dbauth.NewPoolForDatabase(ctx, uri, "dis_console_ttd_at23", nil)
+	if err != nil {
+		t.Fatalf("tenant pool: %v", err)
+	}
+	defer tpool.Close()
+	ts := store.New(tpool)
+	if err := ts.Migrate(ctx); err != nil {
+		t.Fatalf("migrate tenant: %v", err)
+	}
+	if err := ts.InitMeta(ctx, "e2e"); err != nil {
+		t.Fatalf("init tenant meta: %v", err)
+	}
+
+	if _, err := ts.Sync(ctx, []flux.Resource{{
+		Kind: "Deployment", APIVersion: "apps/v1",
+		Namespace: "product-team-a", Name: "app",
+		Ready: flux.ReadyTrue, Reason: "MinimumReplicasAvailable",
+		AppliedBy: &flux.AppliedBy{Name: "team-a-ab12-team-a", Namespace: "product-team-a"},
+		Images: []flux.ContainerImage{
+			{Container: "app", Image: "registry.example.com/team-a/app:v42"},
+		},
+		Raw: json.RawMessage(`{"kind":"Deployment"}`), ContentHash: "deploy-1",
+	}}); err != nil {
+		t.Fatalf("tenant sync: %v", err)
+	}
+
+	pullAndApply(t, cs, ts, "ttd_at23")
+
+	rows, err := cs.List(ctx, "ttd_at23", "Deployment", "", "")
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("central list deployments: %+v err=%v", rows, err)
+	}
+	if len(rows[0].Images) != 1 ||
+		rows[0].Images[0] != (flux.ContainerImage{Container: "app", Image: "registry.example.com/team-a/app:v42"}) {
+		t.Fatalf("deployment lost its images in the central list: %+v", rows[0].Images)
+	}
+	if rows[0].AppliedBy == nil || rows[0].AppliedBy.Name != "team-a-ab12-team-a" {
+		t.Fatalf("deployment lost appliedBy in central: %+v", rows[0].AppliedBy)
+	}
+
+	got, err := cs.Get(ctx, "ttd_at23", "Deployment", "product-team-a", "app")
+	if err != nil {
+		t.Fatalf("central get deployment: %v", err)
+	}
+	if len(got.Images) != 1 || got.Images[0].Container != "app" {
+		t.Fatalf("deployment lost its images in central Get: %+v", got.Images)
 	}
 }
 

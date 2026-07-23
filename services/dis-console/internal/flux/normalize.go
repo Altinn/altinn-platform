@@ -10,6 +10,8 @@ import (
 	kustomizev1 "github.com/fluxcd/kustomize-controller/api/v1"
 	fluxmeta "github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -62,12 +64,19 @@ type Resource struct {
 	// --source`), surfaced by source-controller in status.artifact.metadata:
 	// the git branch/SHA and repository behind the artifact digest. Empty when
 	// the pusher did not annotate.
-	OriginRevision     string     `json:"originRevision,omitempty"`
-	OriginSource       string     `json:"originSource,omitempty"`
-	Suspended          bool       `json:"suspended"`
-	Generation         int64      `json:"generation,omitempty"`
-	ObservedGeneration int64      `json:"observedGeneration,omitempty"`
-	LastTransition     *time.Time `json:"lastTransition,omitempty"`
+	OriginRevision string `json:"originRevision,omitempty"`
+	OriginSource   string `json:"originSource,omitempty"`
+	// Images are a workload's container images from its pod template
+	// (spec.template.spec.containers; init containers are skipped) — the
+	// app's effective version, which the manifest revision cannot show when
+	// the tag is resolved per cluster via postBuild substitution. Rides in
+	// list payloads (unlike Raw/Inventory) so the UI needs no detail fetch.
+	// Nil for every non-workload kind.
+	Images             []ContainerImage `json:"images,omitempty"`
+	Suspended          bool             `json:"suspended"`
+	Generation         int64            `json:"generation,omitempty"`
+	ObservedGeneration int64            `json:"observedGeneration,omitempty"`
+	LastTransition     *time.Time       `json:"lastTransition,omitempty"`
 	// Inventory is a Kustomization's applied-object set (status.inventory) —
 	// the parent→children edge of the deployment tree, covering kinds the agent
 	// does not sweep. Like Raw it is served on detail endpoints only; list
@@ -112,6 +121,13 @@ type SourceRef struct {
 	Kind      string `json:"kind"`
 	Name      string `json:"name"`
 	Namespace string `json:"namespace"`
+}
+
+// ContainerImage is one container of a workload's pod template and the image
+// it runs. The JSON shape (container/image) is part of the UI contract.
+type ContainerImage struct {
+	Container string `json:"container"`
+	Image     string `json:"image"`
 }
 
 // InventoryEntry is one applied-object reference from a Kustomization's
@@ -170,10 +186,14 @@ func normalize(u *unstructured.Unstructured) (Resource, error) {
 // applyTypedStatus decodes the object into its typed Flux struct and fills the
 // projected status fields. The Ready condition is shared by every Flux kind
 // (meta.fluxcd.io semantics); the revision source differs per kind. DIS kinds
-// take their own projection path (see applyDISStatus).
+// and the apps workloads take their own projection paths (applyDISStatus,
+// applyWorkloadStatus).
 func (r *Resource) applyTypedStatus(u *unstructured.Unstructured) error {
-	if isDISGroup(u.GroupVersionKind().Group) {
+	switch group := u.GroupVersionKind().Group; {
+	case isDISGroup(group):
 		return r.applyDISStatus(u)
+	case group == GroupApps:
+		return r.applyWorkloadStatus(u)
 	}
 	switch u.GetKind() {
 	case KindKustomization:
@@ -392,6 +412,91 @@ func readyFromProvisioningState(state string) string {
 	default:
 		return ReadyUnknown
 	}
+}
+
+// applyWorkloadStatus fills the projected fields for an apps workload, decoded
+// into the typed k8s.io/api structs the same runtime-conversion way as the
+// Flux kinds. All three kinds project their pod template's container images;
+// readiness is per kind because they share no condition semantics: Deployment
+// publishes an Available condition, StatefulSet and DaemonSet publish only
+// replica counts, which are synthesized into a short reason/message.
+func (r *Resource) applyWorkloadStatus(u *unstructured.Unstructured) error {
+	switch u.GetKind() {
+	case KindDeployment:
+		var o appsv1.Deployment
+		if err := fromUnstructured(u, &o); err != nil {
+			return err
+		}
+		// paused is the workload analogue of a suspended Flux object:
+		// intentionally not being reconciled.
+		r.Suspended = o.Spec.Paused
+		r.ObservedGeneration = o.Status.ObservedGeneration
+		r.Images = containerImages(o.Spec.Template.Spec.Containers)
+		for _, c := range o.Status.Conditions {
+			if c.Type != appsv1.DeploymentAvailable {
+				continue
+			}
+			r.Ready = string(c.Status)
+			r.Reason = c.Reason
+			r.Message = c.Message
+			if !c.LastTransitionTime.Time.IsZero() {
+				t := c.LastTransitionTime.Time
+				r.LastTransition = &t
+			}
+		}
+	case KindStatefulSet:
+		var o appsv1.StatefulSet
+		if err := fromUnstructured(u, &o); err != nil {
+			return err
+		}
+		r.ObservedGeneration = o.Status.ObservedGeneration
+		r.Images = containerImages(o.Spec.Template.Spec.Containers)
+		desired := int32(1) // nil spec.replicas defaults to 1
+		if o.Spec.Replicas != nil {
+			desired = *o.Spec.Replicas
+		}
+		r.applyReadyReplicas(o.Status.ReadyReplicas, desired)
+	case KindDaemonSet:
+		var o appsv1.DaemonSet
+		if err := fromUnstructured(u, &o); err != nil {
+			return err
+		}
+		r.ObservedGeneration = o.Status.ObservedGeneration
+		r.Images = containerImages(o.Spec.Template.Spec.Containers)
+		r.applyReadyReplicas(o.Status.NumberReady, o.Status.DesiredNumberScheduled)
+	}
+	return nil
+}
+
+// applyReadyReplicas derives readiness from a workload's replica counts (the
+// kinds without a usable condition): every desired replica ready is healthy —
+// including a scaled-to-zero 0/0. An object its controller has never observed
+// (observedGeneration 0) stays Unknown rather than claiming 0/0 ready; a stale
+// True is downgraded by the generic observedGeneration check in normalize.
+func (r *Resource) applyReadyReplicas(ready, desired int32) {
+	if r.ObservedGeneration == 0 {
+		return
+	}
+	r.Ready = ReadyFalse
+	if ready == desired {
+		r.Ready = ReadyTrue
+	}
+	r.Reason = "ReadyReplicas"
+	r.Message = fmt.Sprintf("%d/%d ready", ready, desired)
+}
+
+// containerImages projects a pod template's containers into the images list;
+// nil when there are none. Init containers are deliberately skipped: the
+// long-running containers are what carries the app's version.
+func containerImages(containers []corev1.Container) []ContainerImage {
+	if len(containers) == 0 {
+		return nil
+	}
+	out := make([]ContainerImage, len(containers))
+	for i, c := range containers {
+		out[i] = ContainerImage{Container: c.Name, Image: c.Image}
+	}
+	return out
 }
 
 // fromUnstructured decodes the (version-agnostically fetched) object into a
