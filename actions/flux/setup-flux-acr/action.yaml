@@ -28,7 +28,7 @@ runs:
   using: composite
   steps:
     - name: Setup flux
-      uses: fluxcd/flux2/action@1fd61a06264d71cf445ed55c4f14d401d26a1c64 # v2.8.8
+      uses: fluxcd/flux2/action@6a650dba1b4ae9945185c4bb3cc3f386aaf71b3d # v2.9.2
       with:
         version: ${{ inputs.flux_version }}
     - name: az login
