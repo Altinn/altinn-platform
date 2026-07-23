@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS flux_resource (
     origin_revision      text,
     origin_source        text,
     inventory            jsonb,
+    images               jsonb,
     suspended            boolean     NOT NULL DEFAULT false,
     generation           bigint,
     observed_generation  bigint,
@@ -78,3 +79,4 @@ ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS source_url text;
 ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS origin_revision text;
 ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS origin_source text;
 ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS inventory jsonb;
+ALTER TABLE flux_resource ADD COLUMN IF NOT EXISTS images jsonb;

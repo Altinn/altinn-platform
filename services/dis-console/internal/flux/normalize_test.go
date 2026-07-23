@@ -436,6 +436,237 @@ func TestNormalizeHelmRepositoryURLWithoutOrigin(t *testing.T) {
 	}
 }
 
+// A GitOps-applied Deployment projects its pod template's container images
+// (init containers skipped), takes readiness from the Available condition, and
+// joins the app closure through the same kustomize-controller labels as every
+// other kind.
+func TestNormalizeDeploymentImagesAndAvailable(t *testing.T) {
+	u := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata": map[string]any{
+			"namespace":  "product-team-a",
+			"name":       "app",
+			"generation": int64(7),
+			"labels": map[string]any{
+				"kustomize.toolkit.fluxcd.io/name":      "team-a-ab12-team-a",
+				"kustomize.toolkit.fluxcd.io/namespace": "product-team-a",
+			},
+		},
+		"spec": map[string]any{
+			"template": map[string]any{
+				"spec": map[string]any{
+					"initContainers": []any{
+						map[string]any{"name": "migrate", "image": "registry.example.com/team-a/migrate:v9"},
+					},
+					"containers": []any{
+						map[string]any{"name": "app", "image": "registry.example.com/team-a/app:v42"},
+						map[string]any{"name": "sidecar", "image": "registry.example.com/team-a/sidecar:v1"},
+					},
+				},
+			},
+		},
+		"status": map[string]any{
+			"observedGeneration": int64(7),
+			"conditions": []any{
+				map[string]any{
+					"type":               "Progressing",
+					"status":             "True",
+					"reason":             "NewReplicaSetAvailable",
+					"message":            "ReplicaSet has successfully progressed.",
+					"lastTransitionTime": "2026-07-01T10:00:00Z",
+				},
+				map[string]any{
+					"type":               "Available",
+					"status":             "True",
+					"reason":             "MinimumReplicasAvailable",
+					"message":            "Deployment has minimum availability.",
+					"lastTransitionTime": "2026-07-01T10:05:00Z",
+				},
+			},
+		},
+	}}
+
+	r, err := normalize(u)
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if len(r.Images) != 2 ||
+		r.Images[0] != (ContainerImage{Container: "app", Image: "registry.example.com/team-a/app:v42"}) ||
+		r.Images[1] != (ContainerImage{Container: "sidecar", Image: "registry.example.com/team-a/sidecar:v1"}) {
+		t.Fatalf("unexpected images (init containers must be skipped): %+v", r.Images)
+	}
+	if r.Ready != ReadyTrue || r.Reason != "MinimumReplicasAvailable" {
+		t.Fatalf("expected ready from the Available condition, got %+v", r)
+	}
+	if r.LastTransition == nil {
+		t.Fatalf("expected lastTransition from the Available condition")
+	}
+	if r.Suspended {
+		t.Fatalf("unpaused deployment must not be suspended")
+	}
+	if r.AppliedBy == nil || r.AppliedBy.Name != "team-a-ab12-team-a" {
+		t.Fatalf("workloads must join the app closure via appliedBy: %+v", r.AppliedBy)
+	}
+}
+
+// A paused Deployment maps onto the console's suspended flag (intentionally
+// not reconciling); one that lost minimum availability surfaces the Available
+// condition's False verbatim.
+func TestNormalizeDeploymentPausedAndUnavailable(t *testing.T) {
+	u := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata":   map[string]any{"namespace": "product-team-a", "name": "app"},
+		"spec":       map[string]any{"paused": true},
+		"status": map[string]any{
+			"observedGeneration": int64(1),
+			"conditions": []any{
+				map[string]any{
+					"type":    "Available",
+					"status":  "False",
+					"reason":  "MinimumReplicasUnavailable",
+					"message": "Deployment does not have minimum availability.",
+				},
+			},
+		},
+	}}
+
+	r, err := normalize(u)
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if !r.Suspended {
+		t.Fatalf("paused deployment should project suspended")
+	}
+	if r.Ready != ReadyFalse || r.Reason != "MinimumReplicasUnavailable" {
+		t.Fatalf("unexpected ready condition: %+v", r)
+	}
+	if r.Images != nil {
+		t.Fatalf("no containers => nil images, got %+v", r.Images)
+	}
+}
+
+// StatefulSet readiness is replica math (there is no usable condition): every
+// desired replica ready is healthy, a shortfall is not, and an object its
+// controller never observed stays Unknown instead of claiming 0/0 ready.
+func TestNormalizeStatefulSetReadyFromReplicas(t *testing.T) {
+	sts := func(replicas any, status map[string]any) *unstructured.Unstructured {
+		spec := map[string]any{
+			"template": map[string]any{
+				"spec": map[string]any{
+					"containers": []any{
+						map[string]any{"name": "db", "image": "registry.example.com/team-a/db:16.4"},
+					},
+				},
+			},
+		}
+		if replicas != nil {
+			spec["replicas"] = replicas
+		}
+		return &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "apps/v1",
+			"kind":       "StatefulSet",
+			"metadata":   map[string]any{"namespace": "product-team-a", "name": "db"},
+			"spec":       spec,
+			"status":     status,
+		}}
+	}
+
+	cases := []struct {
+		name        string
+		u           *unstructured.Unstructured
+		wantReady   string
+		wantMessage string
+	}{
+		{
+			name:        "all replicas ready",
+			u:           sts(int64(3), map[string]any{"observedGeneration": int64(2), "readyReplicas": int64(3)}),
+			wantReady:   ReadyTrue,
+			wantMessage: "3/3 ready",
+		},
+		{
+			name:        "shortfall",
+			u:           sts(int64(3), map[string]any{"observedGeneration": int64(2), "readyReplicas": int64(2)}),
+			wantReady:   ReadyFalse,
+			wantMessage: "2/3 ready",
+		},
+		{
+			name:        "nil replicas defaults to one",
+			u:           sts(nil, map[string]any{"observedGeneration": int64(1), "readyReplicas": int64(1)}),
+			wantReady:   ReadyTrue,
+			wantMessage: "1/1 ready",
+		},
+		{
+			name:      "never observed stays unknown",
+			u:         sts(int64(3), map[string]any{}),
+			wantReady: ReadyUnknown,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := normalize(tc.u)
+			if err != nil {
+				t.Fatalf("normalize: %v", err)
+			}
+			if r.Ready != tc.wantReady {
+				t.Fatalf("ready: got %q, want %q", r.Ready, tc.wantReady)
+			}
+			if r.Message != tc.wantMessage {
+				t.Fatalf("message: got %q, want %q", r.Message, tc.wantMessage)
+			}
+			if len(r.Images) != 1 || r.Images[0].Image != "registry.example.com/team-a/db:16.4" {
+				t.Fatalf("unexpected images: %+v", r.Images)
+			}
+		})
+	}
+}
+
+// DaemonSet readiness compares ready pods against the nodes that should run
+// one; a scheduling shortfall is False with the counts in the message.
+func TestNormalizeDaemonSetReadyFromCounts(t *testing.T) {
+	ds := func(status map[string]any) *unstructured.Unstructured {
+		return &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "apps/v1",
+			"kind":       "DaemonSet",
+			"metadata":   map[string]any{"namespace": "platform-system", "name": "node-agent"},
+			"spec": map[string]any{
+				"template": map[string]any{
+					"spec": map[string]any{
+						"containers": []any{
+							map[string]any{"name": "agent", "image": "registry.example.com/platform/agent:v3"},
+						},
+					},
+				},
+			},
+			"status": status,
+		}}
+	}
+
+	r, err := normalize(ds(map[string]any{
+		"observedGeneration": int64(1), "desiredNumberScheduled": int64(4), "numberReady": int64(4),
+	}))
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if r.Ready != ReadyTrue || r.Message != "4/4 ready" {
+		t.Fatalf("unexpected healthy daemonset: %+v", r)
+	}
+	if len(r.Images) != 1 || r.Images[0].Container != "agent" {
+		t.Fatalf("unexpected images: %+v", r.Images)
+	}
+
+	r, err = normalize(ds(map[string]any{
+		"observedGeneration": int64(1), "desiredNumberScheduled": int64(4), "numberReady": int64(2),
+	}))
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if r.Ready != ReadyFalse || r.Reason != "ReadyReplicas" || r.Message != "2/4 ready" {
+		t.Fatalf("unexpected degraded daemonset: %+v", r)
+	}
+}
+
 func TestNormalizeOCIRepositoryRevisionFromArtifact(t *testing.T) {
 	u := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "source.toolkit.fluxcd.io/v1",

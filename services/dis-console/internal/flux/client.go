@@ -1,6 +1,7 @@
-// Package flux reads Flux and DIS custom resources across all namespaces using
-// the dynamic client and a discovery-backed RESTMapper, and normalizes their
-// deployment status into a small, stable shape the API serves.
+// Package flux reads Flux and DIS custom resources — plus the GitOps-applied
+// apps workloads — across all namespaces using the dynamic client and a
+// discovery-backed RESTMapper, and normalizes their deployment status into a
+// small, stable shape the API serves.
 //
 // The fetch stays dynamic on purpose (the discovery RESTMapper resolves
 // whichever served version Azure Flux exposes, and the full object is kept
@@ -57,6 +58,19 @@ const (
 	KindBackend             = "Backend"
 )
 
+// The built-in apps group and its workload kinds. An app's effective version
+// is its container image, which manifest revisions cannot show (postBuild
+// substitution can resolve a tag per cluster), so the sweep mirrors the
+// long-running workloads too. Jobs/CronJobs/Pods are deliberately out: the
+// console models what should be running, not runs.
+const (
+	GroupApps = "apps"
+
+	KindDeployment  = "Deployment"
+	KindStatefulSet = "StatefulSet"
+	KindDaemonSet   = "DaemonSet"
+)
+
 // isDISGroup reports whether group is one of the DIS platform API groups, which
 // normalize projects via the DIS status shape instead of the typed Flux structs.
 func isDISGroup(group string) bool {
@@ -67,11 +81,12 @@ func isDISGroup(group string) bool {
 	return false
 }
 
-// TargetKinds are the custom resource kinds the Console reads: the Flux
-// deployment machinery plus the DIS platform resources. The served API version
-// of each is resolved at runtime via the discovery RESTMapper, so the same
-// binary keeps working if Azure Flux bumps a version; kinds whose CRD is not
-// installed on a cluster are skipped by Sweep.
+// TargetKinds are the kinds the Console reads: the Flux deployment machinery,
+// the DIS platform resources, and the apps workload kinds (GitOps-applied
+// only — see Sweep). The served API version of each is resolved at runtime via
+// the discovery RESTMapper, so the same binary keeps working if Azure Flux
+// bumps a version; kinds whose CRD is not installed on a cluster are skipped
+// by Sweep (the apps kinds are built-in and always served).
 var TargetKinds = []schema.GroupKind{
 	{Group: GroupKustomize, Kind: KindKustomization},
 	{Group: GroupHelm, Kind: KindHelmRelease},
@@ -85,6 +100,9 @@ var TargetKinds = []schema.GroupKind{
 	{Group: GroupDISApim, Kind: KindApi},
 	{Group: GroupDISApim, Kind: KindApiVersion},
 	{Group: GroupDISApim, Kind: KindBackend},
+	{Group: GroupApps, Kind: KindDeployment},
+	{Group: GroupApps, Kind: KindStatefulSet},
+	{Group: GroupApps, Kind: KindDaemonSet},
 }
 
 // discoveryTTL bounds how often Sweep refreshes the discovery cache. It is long
@@ -155,6 +173,11 @@ func restConfig(local bool) (*rest.Config, error) {
 // (RBAC, auth, apiserver outage) aborts the sweep with an error so the caller
 // keeps the previous snapshot instead of publishing a partial one.
 //
+// Workloads (the apps kinds) are mirrored only when GitOps-applied — carrying
+// the kustomize-controller ownership label — which keeps kube-system and
+// Azure-managed add-ons out and matches the console's app model (everything
+// it shows joins a Kustomization's appliedBy closure).
+//
 // The discovery cache is reset at most once per discoveryTTL rather than on
 // every sweep, so a newly installed Flux CRD is detected only on the next reset
 // — up to discoveryTTL (~10 min) after it appears. Sweep is not safe for
@@ -192,6 +215,9 @@ func (c *Client) Sweep(ctx context.Context) ([]Resource, []error, error) {
 			return nil, warnings, fmt.Errorf("list %s: %w", gk, err)
 		}
 		for i := range list.Items {
+			if gk.Group == GroupApps && list.Items[i].GetLabels()[LabelAppliedByName] == "" {
+				continue
+			}
 			r, err := normalize(&list.Items[i])
 			if err != nil {
 				warnings = append(warnings, fmt.Errorf("normalize %s: %w", gk, err))

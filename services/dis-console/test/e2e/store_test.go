@@ -314,7 +314,7 @@ func TestSyncAppliedByRoundTrip(t *testing.T) {
 // PostgreSQL: an OCIRepository's url/origin and a Kustomization's sourceRef +
 // inventory survive Sync and come back out of Get and ChangedSince, while List
 // carries everything except the inventory payload (detail-only, like raw), and
-// a version-3 pull omits the base-layer fields entirely.
+// the previous-version (v4) pull still selects them — they predate v5.
 func TestSyncBaseLayerRoundTrip(t *testing.T) {
 	s, _ := newStore(t)
 	ctx := context.Background()
@@ -393,15 +393,24 @@ func TestSyncBaseLayerRoundTrip(t *testing.T) {
 		}
 	}
 
-	// The version-3 SELECT (what the server uses against tenants whose agents
-	// have not migrated yet) must omit the base-layer fields but still succeed.
-	v3, err := s.ChangedSince(ctx, time.Time{}, store.SchemaVersion-1)
+	// The previous-version SELECT (schema 4 — what the server uses against
+	// tenants whose agents have not migrated to v5 yet) still carries the
+	// base-layer fields: they predate v5, only images are gated on it (see
+	// TestSyncImagesRoundTrip).
+	v4, err := s.ChangedSince(ctx, time.Time{}, store.SchemaVersion-1)
 	if err != nil {
-		t.Fatalf("v3 changed-since: %v", err)
+		t.Fatalf("v4 changed-since: %v", err)
 	}
-	for _, c := range v3 {
-		if c.SourceRef != nil || c.Inventory != nil || c.SourceURL != "" {
-			t.Fatalf("v3 pull must not select base-layer fields: %+v", c.Resource)
+	for _, c := range v4 {
+		switch c.Kind {
+		case "Kustomization":
+			if c.SourceRef == nil || len(c.Inventory) != 2 {
+				t.Fatalf("v4 pull lost base-layer fields: %+v", c.Resource)
+			}
+		case "OCIRepository":
+			if c.SourceURL == "" || c.OriginRevision == "" {
+				t.Fatalf("v4 pull lost base-layer fields: %+v", c.Resource)
+			}
 		}
 	}
 }
@@ -463,6 +472,143 @@ func TestSyncBaseLayerBackfillAdvancesUpdatedAt(t *testing.T) {
 	}
 	if got := updatedAt(); !got.Equal(second) {
 		t.Fatalf("updated_at churned on an unchanged base-layer sweep: %v -> %v", second, got)
+	}
+}
+
+// TestSyncImagesRoundTrip checks the schema-v5 column against real PostgreSQL:
+// a mirrored workload's container images survive Sync and come back out of
+// List (the UI reads the list — no detail fetch), Get and ChangedSince, while
+// a version-4 pull (agent not yet migrated) omits them entirely.
+func TestSyncImagesRoundTrip(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+
+	deploy := flux.Resource{
+		Kind: "Deployment", APIVersion: "apps/v1",
+		Namespace: "product-team-a", Name: "app",
+		Ready: flux.ReadyTrue, Reason: "MinimumReplicasAvailable",
+		AppliedBy: &flux.AppliedBy{Name: "team-a-ab12-team-a", Namespace: "product-team-a"},
+		Images: []flux.ContainerImage{
+			{Container: "app", Image: "registry.example.com/team-a/app:v42"},
+			{Container: "sidecar", Image: "registry.example.com/team-a/sidecar:v1"},
+		},
+		Raw: json.RawMessage(`{"kind":"Deployment"}`), ContentHash: "deploy-1",
+	}
+	kust := flux.Resource{
+		Kind: "Kustomization", APIVersion: "kustomize.toolkit.fluxcd.io/v1",
+		Namespace: "product-team-a", Name: "team-a-ab12-team-a",
+		Ready: flux.ReadyTrue,
+		Raw:   json.RawMessage(`{"kind":"Kustomization"}`), ContentHash: "kust-1",
+	}
+	if _, err := s.Sync(ctx, []flux.Resource{deploy, kust}); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+
+	rows, err := s.List(ctx, "Deployment", "", "")
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("list deployments: %+v err=%v", rows, err)
+	}
+	if len(rows[0].Images) != 2 ||
+		rows[0].Images[0] != (flux.ContainerImage{Container: "app", Image: "registry.example.com/team-a/app:v42"}) ||
+		rows[0].Images[1] != (flux.ContainerImage{Container: "sidecar", Image: "registry.example.com/team-a/sidecar:v1"}) {
+		t.Fatalf("list must carry images: %+v", rows[0].Images)
+	}
+
+	got, _, err := s.Get(ctx, "Deployment", "product-team-a", "app")
+	if err != nil {
+		t.Fatalf("get deployment: %v", err)
+	}
+	if len(got.Images) != 2 || got.Images[0].Container != "app" {
+		t.Fatalf("get lost images: %+v", got.Images)
+	}
+
+	gotKust, _, err := s.Get(ctx, "Kustomization", "product-team-a", "team-a-ab12-team-a")
+	if err != nil {
+		t.Fatalf("get kustomization: %v", err)
+	}
+	if gotKust.Images != nil {
+		t.Fatalf("non-workload rows must keep nil images, got %+v", gotKust.Images)
+	}
+
+	changed, err := s.ChangedSince(ctx, time.Time{}, store.SchemaVersion)
+	if err != nil || len(changed) != 2 {
+		t.Fatalf("changed-since: %d rows err=%v", len(changed), err)
+	}
+	for _, c := range changed {
+		if c.Kind == "Deployment" && len(c.Images) != 2 {
+			t.Fatalf("changed deployment lost images: %+v", c.Resource)
+		}
+	}
+
+	// The version-4 SELECT (what the server uses against tenants whose agents
+	// have not migrated yet) must omit images but still succeed.
+	v4, err := s.ChangedSince(ctx, time.Time{}, store.SchemaVersion-1)
+	if err != nil {
+		t.Fatalf("v4 changed-since: %v", err)
+	}
+	for _, c := range v4 {
+		if c.Images != nil {
+			t.Fatalf("v4 pull must not select images: %+v", c.Resource)
+		}
+	}
+}
+
+// TestSyncImagesBackfillAdvancesUpdatedAt reproduces the v4→v5 upgrade for a
+// projection derived from already-hashed content: a workload row written
+// before the images projection has the column NULL with an unchanged content
+// hash. The first sweep that projects images must advance updated_at so the
+// central pull mirrors the backfilled row — and later identical sweeps must
+// not churn it. Same contract as the appliedBy and base-layer backfills.
+func TestSyncImagesBackfillAdvancesUpdatedAt(t *testing.T) {
+	s, pool := newStore(t)
+	ctx := context.Background()
+
+	updatedAt := func() time.Time {
+		var ts time.Time
+		if err := pool.QueryRow(ctx,
+			"SELECT updated_at FROM flux_resource WHERE name = $1", "app").Scan(&ts); err != nil {
+			t.Fatalf("query updated_at: %v", err)
+		}
+		return ts
+	}
+
+	// Sweep 1: the pre-v5 shape (same object, images not projected yet).
+	pre := flux.Resource{
+		Kind: "Deployment", APIVersion: "apps/v1",
+		Namespace: "product-team-a", Name: "app",
+		Ready: flux.ReadyTrue,
+		Raw:   json.RawMessage(`{"kind":"Deployment"}`), ContentHash: "same-object",
+	}
+	if _, err := s.Sync(ctx, []flux.Resource{pre}); err != nil {
+		t.Fatalf("sync 1: %v", err)
+	}
+	first := updatedAt()
+
+	// Sweep 2: identical object + hash, but the agent now projects images.
+	post := pre
+	post.Images = []flux.ContainerImage{{Container: "app", Image: "registry.example.com/team-a/app:v42"}}
+	if _, err := s.Sync(ctx, []flux.Resource{post}); err != nil {
+		t.Fatalf("sync 2: %v", err)
+	}
+	second := updatedAt()
+	if !second.After(first) {
+		t.Fatalf("updated_at must advance when images are backfilled: %v -> %v", first, second)
+	}
+
+	changed, err := s.ChangedSince(ctx, first, store.SchemaVersion)
+	if err != nil {
+		t.Fatalf("changed-since: %v", err)
+	}
+	if len(changed) != 1 || len(changed[0].Images) != 1 {
+		t.Fatalf("backfilled row not pulled: %+v", changed)
+	}
+
+	// Sweep 3: identical again (images unchanged) => no churn.
+	if _, err := s.Sync(ctx, []flux.Resource{post}); err != nil {
+		t.Fatalf("sync 3: %v", err)
+	}
+	if got := updatedAt(); !got.Equal(second) {
+		t.Fatalf("updated_at churned on an unchanged images sweep: %v -> %v", second, got)
 	}
 }
 

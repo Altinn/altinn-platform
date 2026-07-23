@@ -115,7 +115,7 @@ INSERT INTO flux_resource (
     azure_resource_id, parent_kind, parent_name,
     applied_by_name, applied_by_namespace,
     source_ref_kind, source_ref_name, source_ref_namespace,
-    source_url, origin_revision, origin_source, inventory,
+    source_url, origin_revision, origin_source, inventory, images,
     updated_at, synced_at
 ) VALUES (
     $1, $2, $3, $4, $5,
@@ -124,8 +124,8 @@ INSERT INTO flux_resource (
     $16, $17, $18,
     $19, $20,
     $21, $22, $23,
-    $24, $25, $26, $27,
-    $28, now()
+    $24, $25, $26, $27, $28,
+    $29, now()
 )
 ON CONFLICT (cluster, kind, namespace, name) DO UPDATE SET
     api_version          = EXCLUDED.api_version,
@@ -145,6 +145,7 @@ ON CONFLICT (cluster, kind, namespace, name) DO UPDATE SET
     origin_revision      = EXCLUDED.origin_revision,
     origin_source        = EXCLUDED.origin_source,
     inventory            = EXCLUDED.inventory,
+    images               = EXCLUDED.images,
     suspended            = EXCLUDED.suspended,
     generation           = EXCLUDED.generation,
     observed_generation  = EXCLUDED.observed_generation,
@@ -246,6 +247,10 @@ func (s *Store) Apply(ctx context.Context, st ClusterState) error {
 			if err != nil {
 				return fmt.Errorf("%s %s/%s: %w", c.Kind, c.Namespace, c.Name, err)
 			}
+			images, err := imagesParam(c.Images)
+			if err != nil {
+				return fmt.Errorf("%s %s/%s: %w", c.Kind, c.Namespace, c.Name, err)
+			}
 			batch.Queue(upsertStmt,
 				st.Cluster, c.Kind, c.APIVersion, c.Namespace, c.Name,
 				c.Ready, c.Reason, c.Message, c.Revision, c.Suspended,
@@ -253,7 +258,7 @@ func (s *Store) Apply(ctx context.Context, st ClusterState) error {
 				c.AzureResourceID, parentKind, parentName,
 				appliedByName, appliedByNamespace,
 				sourceRefKind, sourceRefName, sourceRefNamespace,
-				nullable(c.SourceURL), nullable(c.OriginRevision), nullable(c.OriginSource), inventory,
+				nullable(c.SourceURL), nullable(c.OriginRevision), nullable(c.OriginSource), inventory, images,
 				c.UpdatedAt,
 			)
 		}
@@ -416,6 +421,31 @@ func inventoryFrom(raw []byte) ([]flux.InventoryEntry, error) {
 	return entries, nil
 }
 
+// imagesParam marshals a workload's images for their jsonb column; SQL NULL
+// when the resource has none.
+func imagesParam(images []flux.ContainerImage) (any, error) {
+	if len(images) == 0 {
+		return nil, nil
+	}
+	b, err := json.Marshal(images)
+	if err != nil {
+		return nil, fmt.Errorf("marshal images: %w", err)
+	}
+	return b, nil
+}
+
+// imagesFrom rebuilds the images from their jsonb column; nil when NULL.
+func imagesFrom(raw []byte) ([]flux.ContainerImage, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var images []flux.ContainerImage
+	if err := json.Unmarshal(raw, &images); err != nil {
+		return nil, fmt.Errorf("unmarshal images: %w", err)
+	}
+	return images, nil
+}
+
 // clusterID strips the tenant-database prefix to get the cluster identifier
 // (e.g. "dis_console_ttd_at23" -> "ttd_at23").
 func clusterID(dbName string) string { return strings.TrimPrefix(dbName, dbPrefix) }
@@ -561,7 +591,8 @@ SELECT cluster, kind, api_version, namespace, name, ready, reason, message, revi
        COALESCE(azure_resource_id, ''), parent_kind, parent_name,
        applied_by_name, applied_by_namespace,
        source_ref_kind, source_ref_name, source_ref_namespace,
-       COALESCE(source_url, ''), COALESCE(origin_revision, ''), COALESCE(origin_source, '')
+       COALESCE(source_url, ''), COALESCE(origin_revision, ''), COALESCE(origin_source, ''),
+       images
 FROM flux_resource
 WHERE ($1 = '' OR cluster = $1)
   AND ($2 = '' OR lower(kind) = lower($2))
@@ -573,7 +604,8 @@ ORDER BY cluster, kind, namespace, name`
 // across the fleet, or for one cluster when cluster is non-empty. An empty
 // kind/namespace/ready means "any". appliedBy rides in the list payload so the
 // UI can group child HelmReleases under their parent Kustomization without
-// fetching detail; sourceRef/sourceUrl/origin ride for the artifacts view.
+// fetching detail; sourceRef/sourceUrl/origin ride for the artifacts view, and
+// images ride so "which image runs where" is a plain ?kind=Deployment list.
 func (s *Store) List(ctx context.Context, cluster, kind, namespace, ready string) ([]Resource, error) {
 	rows, err := s.pool.Query(ctx, listStmt, cluster, kind, namespace, ready)
 	if err != nil {
@@ -587,6 +619,7 @@ func (s *Store) List(ctx context.Context, cluster, kind, namespace, ready string
 		var parentKind, parentName *string
 		var appliedByName, appliedByNamespace *string
 		var sourceRefKind, sourceRefName, sourceRefNamespace *string
+		var images []byte
 		if err := rows.Scan(
 			&r.Cluster, &r.Kind, &r.APIVersion, &r.Namespace, &r.Name, &r.Ready, &r.Reason,
 			&r.Message, &r.Revision, &r.Suspended, &r.Generation,
@@ -595,12 +628,16 @@ func (s *Store) List(ctx context.Context, cluster, kind, namespace, ready string
 			&appliedByName, &appliedByNamespace,
 			&sourceRefKind, &sourceRefName, &sourceRefNamespace,
 			&r.SourceURL, &r.OriginRevision, &r.OriginSource,
+			&images,
 		); err != nil {
 			return nil, fmt.Errorf("scan row: %w", err)
 		}
 		r.Parent = parentRef(parentKind, parentName)
 		r.AppliedBy = appliedByRef(appliedByName, appliedByNamespace)
 		r.SourceRef = sourceRefFrom(sourceRefKind, sourceRefName, sourceRefNamespace)
+		if r.Images, err = imagesFrom(images); err != nil {
+			return nil, err
+		}
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -613,7 +650,7 @@ SELECT cluster, kind, api_version, namespace, name, ready, reason, message, revi
        applied_by_name, applied_by_namespace,
        source_ref_kind, source_ref_name, source_ref_namespace,
        COALESCE(source_url, ''), COALESCE(origin_revision, ''), COALESCE(origin_source, ''),
-       inventory
+       inventory, images
 FROM flux_resource
 WHERE cluster = $1 AND lower(kind) = lower($2) AND namespace = $3 AND name = $4`
 
@@ -621,7 +658,7 @@ WHERE cluster = $1 AND lower(kind) = lower($2) AND namespace = $3 AND name = $4`
 // cluster, or ErrNotFound when no row matches.
 func (s *Store) Get(ctx context.Context, cluster, kind, namespace, name string) (*Resource, error) {
 	var r Resource
-	var raw, inventory []byte
+	var raw, inventory, images []byte
 	var parentKind, parentName *string
 	var appliedByName, appliedByNamespace *string
 	var sourceRefKind, sourceRefName, sourceRefNamespace *string
@@ -633,7 +670,7 @@ func (s *Store) Get(ctx context.Context, cluster, kind, namespace, name string) 
 		&appliedByName, &appliedByNamespace,
 		&sourceRefKind, &sourceRefName, &sourceRefNamespace,
 		&r.SourceURL, &r.OriginRevision, &r.OriginSource,
-		&inventory,
+		&inventory, &images,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -646,6 +683,9 @@ func (s *Store) Get(ctx context.Context, cluster, kind, namespace, name string) 
 	r.AppliedBy = appliedByRef(appliedByName, appliedByNamespace)
 	r.SourceRef = sourceRefFrom(sourceRefKind, sourceRefName, sourceRefNamespace)
 	if r.Inventory, err = inventoryFrom(inventory); err != nil {
+		return nil, err
+	}
+	if r.Images, err = imagesFrom(images); err != nil {
 		return nil, err
 	}
 	return &r, nil

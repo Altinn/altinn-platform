@@ -33,6 +33,7 @@ via a discovery `RESTMapper` (robust to Azure Flux version bumps):
 | `vault.dis.altinn.cloud` | Vault |
 | `application.dis.altinn.cloud` | ApplicationIdentity |
 | `apim.dis.altinn.cloud` | Api, ApiVersion, Backend |
+| `apps` | Deployment, StatefulSet, DaemonSet — GitOps-applied only (see below) |
 
 A DIS kind whose CRD is not installed on a cluster is simply skipped by the
 sweep, so mixed fleets keep working.
@@ -52,6 +53,20 @@ an ApiVersion under the Api named by its controller owner reference). The DIS
 operators publish the same `Ready` condition; the APIM kinds publish only
 `status.provisioningState`, which is mapped onto ready
 (Succeeded→True, Failed→False, transitional→Unknown).
+
+The `apps` workloads are mirrored only when GitOps-applied — carrying the
+`kustomize.toolkit.fluxcd.io/name` label — which keeps kube-system and
+Azure-managed add-ons out. They exist for one field the Flux CRs cannot
+provide: `images` (`[{container,image}]` from `spec.template.spec.containers`;
+init containers skipped) — the app's *effective* version. A manifest revision
+or digest only names what should run, and with `postBuild` substitution the
+image tag can be resolved per cluster and never exist in git. `images` rides
+the list payload (`/api/resources?kind=Deployment`), so "which image runs
+where" needs no per-row detail fetch. Readiness is per kind (they share no
+condition semantics): Deployment takes its `Available` condition (and maps
+`spec.paused` onto `suspended`); StatefulSet and DaemonSet compare
+ready/desired replica counts, synthesized into a short reason/message
+(`2/3 ready`).
 
 Each kind is listed from the apiserver watch cache (`resourceVersion=0`, not a
 quorum read from etcd) and the discovery cache is refreshed only periodically,
