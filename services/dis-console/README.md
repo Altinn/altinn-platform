@@ -33,7 +33,7 @@ via a discovery `RESTMapper` (robust to Azure Flux version bumps):
 | `vault.dis.altinn.cloud` | Vault |
 | `application.dis.altinn.cloud` | ApplicationIdentity |
 | `apim.dis.altinn.cloud` | Api, ApiVersion, Backend |
-| `apps` | Deployment, StatefulSet, DaemonSet — GitOps-applied only (see below) |
+| `apps` | Deployment, StatefulSet, DaemonSet — label-filtered (see below) |
 
 A DIS kind whose CRD is not installed on a cluster is simply skipped by the
 sweep, so mixed fleets keep working.
@@ -56,11 +56,13 @@ operators publish the same `Ready` condition; the APIM kinds publish only
 `status.provisioningState`, which is mapped onto ready
 (Succeeded→True, Failed→False, transitional→Unknown).
 
-The `apps` workloads are mirrored only when GitOps-applied — carrying the
-`kustomize.toolkit.fluxcd.io/name` label, or Helm's
-`app.kubernetes.io/managed-by=Helm` label for chart objects (helm-controller
-applies those itself and stamps no kustomize labels) — which keeps kube-system
-and Azure-managed add-ons out. The workloads exist for one field the Flux CRs
+The `apps` workloads are mirrored only when a deployer labeled them — the
+kustomize controller's `kustomize.toolkit.fluxcd.io/name`, or Helm's
+`app.kubernetes.io/managed-by=Helm` on chart objects (helm-controller applies
+those itself and stamps no kustomize labels) — which keeps kube-system and
+Azure-managed add-ons out. Almost everything that matches is GitOps-applied,
+but the Helm label is applier-agnostic: a release installed outside Flux is
+still mirrored, just without an owner (below). The workloads exist for one field the Flux CRs
 cannot provide: `images` (`[{container,image}]` from
 `spec.template.spec.containers`; init containers skipped) — the app's
 *effective* version. A manifest revision or digest only names what should run,

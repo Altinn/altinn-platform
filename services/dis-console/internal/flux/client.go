@@ -1,4 +1,4 @@
-// Package flux reads Flux and DIS custom resources — plus the GitOps-applied
+// Package flux reads Flux and DIS custom resources — plus the label-filtered
 // apps workloads — across all namespaces using the dynamic client and a
 // discovery-backed RESTMapper, and normalizes their deployment status into a
 // small, stable shape the API serves.
@@ -83,8 +83,8 @@ func isDISGroup(group string) bool {
 }
 
 // TargetKinds are the kinds the Console reads: the Flux deployment machinery,
-// the DIS platform resources, and the apps workload kinds (GitOps-applied
-// only — see Sweep). The served API version of each is resolved at runtime via
+// the DIS platform resources, and the apps workload kinds (label-filtered —
+// see Sweep). The served API version of each is resolved at runtime via
 // the discovery RESTMapper, so the same binary keeps working if Azure Flux
 // bumps a version; kinds whose CRD is not installed on a cluster are skipped
 // by Sweep (the apps kinds are built-in and always served).
@@ -181,11 +181,11 @@ const helmManagedSelector = labelManagedBy + "=" + managedByHelm
 // (RBAC, auth, apiserver outage) aborts the sweep with an error so the caller
 // keeps the previous snapshot instead of publishing a partial one.
 //
-// Workloads (the apps kinds) are mirrored only when GitOps-applied: carrying
-// the kustomize-controller ownership label, or rendered by Helm out of a
-// HelmRelease. Both filters ride the lists as server-side label selectors,
-// which keeps kube-system and Azure-managed add-ons out. A chart-created
-// workload's annotations name its Helm release — not the HelmRelease CR, whose
+// Workloads (the apps kinds) are mirrored only when a deployer labeled them:
+// the kustomize-controller ownership label, or Helm's managed-by label. Both
+// filters ride the lists as server-side label selectors, which keeps
+// kube-system and Azure-managed add-ons out. A chart-created workload's
+// annotations name its Helm release — not the HelmRelease CR, whose
 // spec.releaseName/spec.targetNamespace change the release identity — so its
 // appliedBy is resolved against the batch's HelmReleases after the loop;
 // a release no swept HelmRelease accounts for (installed outside Flux) stays
@@ -256,7 +256,7 @@ func (c *Client) Sweep(ctx context.Context) ([]Resource, []error, error) {
 				switch selector {
 				case LabelAppliedByName:
 					// The existence selector also matches a present-but-empty
-					// label; only a named applier counts as GitOps-applied.
+					// label; only a named applier counts.
 					if item.GetLabels()[LabelAppliedByName] == "" {
 						continue
 					}
