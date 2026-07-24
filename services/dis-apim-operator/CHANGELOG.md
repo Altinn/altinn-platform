@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.6](https://github.com/Altinn/altinn-platform/compare/dis-apim-v1.0.5...dis-apim-v1.0.6) (2026-07-24)
+
+
+### Bug Fixes
+
+* **dis-operators:** pin e2e to a dedicated Kind kubeconfig ([#3727](https://github.com/Altinn/altinn-platform/issues/3727)) ([20fb836](https://github.com/Altinn/altinn-platform/commit/20fb8367683bf88021897597d3d156e32ed064c5))
+* **dis-operators:** resolve goconst lint debt under golangci-lint v2.12.2 ([#3729](https://github.com/Altinn/altinn-platform/issues/3729)) ([a8b99a5](https://github.com/Altinn/altinn-platform/commit/a8b99a541e7be41f0e5e9ebcda632ba53e585562))
+
+
+### Dependency Updates
+
+* update actions/checkout digest to df4cb1c ([#3653](https://github.com/Altinn/altinn-platform/issues/3653)) ([44353b4](https://github.com/Altinn/altinn-platform/commit/44353b47ad5f9312641b244e2bb32b202c2e084b))
+
 ## [1.0.5](https://github.com/Altinn/altinn-platform/compare/dis-apim-v1.0.4...dis-apim-v1.0.5) (2026-05-26)
 
 
