@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.7.0...dis-console-v1.7.1) (2026-07-24)
+
+
+### Bug Fixes
+
+* **dis-console:** mirror Helm-managed workloads and resolve their HelmRelease owner ([#3841](https://github.com/Altinn/altinn-platform/issues/3841)) ([9336e53](https://github.com/Altinn/altinn-platform/commit/9336e53742e854b8c96bd21c401331ab9d2f1a7c))
+
 ## [1.7.0](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.6.0...dis-console-v1.7.0) (2026-07-23)
 
 
