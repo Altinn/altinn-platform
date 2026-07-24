@@ -309,6 +309,95 @@ func TestNormalizeAppliedByEmptyWithoutLabels(t *testing.T) {
 	}
 }
 
+// TestHelmReleaseIdentity pins the release-identity defaulting the typed Flux
+// helpers encode — the exact values Helm stamps into the meta.helm.sh
+// annotations of every rendered object: spec.releaseName wins outright; a bare
+// targetNamespace prefixes the name and becomes the namespace; and
+// storageNamespace moves only the release secrets, never the identity.
+func TestHelmReleaseIdentity(t *testing.T) {
+	hr := func(spec map[string]any) *unstructured.Unstructured {
+		obj := map[string]any{
+			"apiVersion": "helm.toolkit.fluxcd.io/v2",
+			"kind":       "HelmRelease",
+			"metadata":   map[string]any{"namespace": "team-a", "name": "app-one"},
+		}
+		if spec != nil {
+			obj["spec"] = spec
+		}
+		return &unstructured.Unstructured{Object: obj}
+	}
+
+	cases := []struct {
+		name          string
+		spec          map[string]any
+		wantName      string
+		wantNamespace string
+	}{
+		{
+			name:          "default: the CR's own name and namespace",
+			spec:          nil,
+			wantName:      "app-one",
+			wantNamespace: "team-a",
+		},
+		{
+			name:          "releaseName override wins",
+			spec:          map[string]any{"releaseName": "custom-release"},
+			wantName:      "custom-release",
+			wantNamespace: "team-a",
+		},
+		{
+			name:          "targetNamespace prefixes the name and becomes the namespace",
+			spec:          map[string]any{"targetNamespace": "team-a-apps"},
+			wantName:      "team-a-apps-app-one",
+			wantNamespace: "team-a-apps",
+		},
+		{
+			name:          "releaseName beats targetNamespace prefixing",
+			spec:          map[string]any{"releaseName": "custom-release", "targetNamespace": "team-a-apps"},
+			wantName:      "custom-release",
+			wantNamespace: "team-a-apps",
+		},
+		{
+			name:          "storageNamespace does not change the identity",
+			spec:          map[string]any{"storageNamespace": "storage-ns"},
+			wantName:      "app-one",
+			wantNamespace: "team-a",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			id, err := helmReleaseIdentity(hr(tc.spec))
+			if err != nil {
+				t.Fatalf("helmReleaseIdentity: %v", err)
+			}
+			if id.Name != tc.wantName || id.Namespace != tc.wantNamespace {
+				t.Fatalf("identity = %s/%s, want %s/%s", id.Namespace, id.Name, tc.wantNamespace, tc.wantName)
+			}
+		})
+	}
+}
+
+// The meta.helm.sh annotations resolve only as a pair; an object missing
+// either (a chart-hardcoded managed-by label without Helm's adoption
+// metadata) has no release to resolve.
+func TestHelmOwnerFrom(t *testing.T) {
+	if owner, ok := helmOwnerFrom(map[string]string{
+		annotationReleaseName:      "app-one",
+		annotationReleaseNamespace: "team-a",
+	}); !ok || owner.Name != "app-one" || owner.Namespace != "team-a" {
+		t.Fatalf("owner = %v ok=%v, want team-a/app-one", owner, ok)
+	}
+	for name, annotations := range map[string]map[string]string{
+		"no annotations": nil,
+		"name only":      {annotationReleaseName: "app-one"},
+		"namespace only": {annotationReleaseNamespace: "team-a"},
+	} {
+		if _, ok := helmOwnerFrom(annotations); ok {
+			t.Fatalf("%s: expected no owner", name)
+		}
+	}
+}
+
 // The base-layer projections: a Kustomization's sourceRef (namespace
 // defaulted to its own) and its applied-object inventory, kept in Flux's
 // compact entry shape.

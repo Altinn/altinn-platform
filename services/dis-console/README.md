@@ -33,7 +33,7 @@ via a discovery `RESTMapper` (robust to Azure Flux version bumps):
 | `vault.dis.altinn.cloud` | Vault |
 | `application.dis.altinn.cloud` | ApplicationIdentity |
 | `apim.dis.altinn.cloud` | Api, ApiVersion, Backend |
-| `apps` | Deployment, StatefulSet, DaemonSet — GitOps-applied only (see below) |
+| `apps` | Deployment, StatefulSet, DaemonSet — label-filtered (see below) |
 
 A DIS kind whose CRD is not installed on a cluster is simply skipped by the
 sweep, so mixed fleets keep working.
@@ -44,7 +44,9 @@ For each object it extracts a small normalized shape (`ready`/`reason`/
 Every object also projects `appliedBy` (`{name,namespace}`) from the
 `kustomize.toolkit.fluxcd.io/{name,namespace}` labels — the Kustomization that
 applied it — so the list endpoint can group child HelmReleases under their
-parent app without fetching detail; roots and Arc-managed objects have none.
+parent app without fetching detail. For chart-created workloads, which carry
+no kustomize labels, `appliedBy` names the owning HelmRelease instead (see
+below); roots and Arc-managed objects have none.
 The DIS kinds add two fields the UI builds on: `azureResourceId` (the ARM id of
 the provisioned Azure resource, for Portal links — from `status.resourceId`, or
 the APIM ids `status.apiVersionSetID`/`status.backendID`) and `parent`
@@ -54,19 +56,30 @@ operators publish the same `Ready` condition; the APIM kinds publish only
 `status.provisioningState`, which is mapped onto ready
 (Succeeded→True, Failed→False, transitional→Unknown).
 
-The `apps` workloads are mirrored only when GitOps-applied — carrying the
-`kustomize.toolkit.fluxcd.io/name` label — which keeps kube-system and
-Azure-managed add-ons out. They exist for one field the Flux CRs cannot
-provide: `images` (`[{container,image}]` from `spec.template.spec.containers`;
-init containers skipped) — the app's *effective* version. A manifest revision
-or digest only names what should run, and with `postBuild` substitution the
-image tag can be resolved per cluster and never exist in git. `images` rides
-the list payload (`/api/resources?kind=Deployment`), so "which image runs
-where" needs no per-row detail fetch. Readiness is per kind (they share no
-condition semantics): Deployment takes its `Available` condition (and maps
-`spec.paused` onto `suspended`); StatefulSet and DaemonSet compare
-ready/desired replica counts, synthesized into a short reason/message
-(`2/3 ready`).
+The `apps` workloads are mirrored only when a deployer labeled them — the
+kustomize controller's `kustomize.toolkit.fluxcd.io/name`, or Helm's
+`app.kubernetes.io/managed-by=Helm` on chart objects (helm-controller applies
+those itself and stamps no kustomize labels) — which keeps kube-system and
+Azure-managed add-ons out. Almost everything that matches is GitOps-applied,
+but the Helm label is applier-agnostic: a release installed outside Flux is
+still mirrored, just without an owner (below). The workloads exist for one field the Flux CRs
+cannot provide: `images` (`[{container,image}]` from
+`spec.template.spec.containers`; init containers skipped) — the app's
+*effective* version. A manifest revision or digest only names what should run,
+and with `postBuild` substitution the image tag can be resolved per cluster and
+never exist in git. `images` rides the list payload
+(`/api/resources?kind=Deployment`), so "which image runs where" needs no
+per-row detail fetch. Readiness is per kind (they share no condition
+semantics): Deployment takes its `Available` condition (and maps `spec.paused`
+onto `suspended`); StatefulSet and DaemonSet compare ready/desired replica
+counts, synthesized into a short reason/message (`2/3 ready`).
+A chart-created workload's `meta.helm.sh/release-{name,namespace}` annotations
+name its *Helm release*, which matches the HelmRelease CR only in the default
+case (`spec.releaseName` overrides it; `spec.targetNamespace` prefixes the name
+and moves the namespace), so the sweep resolves the release identity against
+the batch's HelmReleases and projects the owner as `appliedBy`; a release no
+HelmRelease accounts for (installed outside Flux) stays mirrored without an
+owner.
 
 Each kind is listed from the apiserver watch cache (`resourceVersion=0`, not a
 quorum read from etcd) and the discovery cache is refreshed only periodically,

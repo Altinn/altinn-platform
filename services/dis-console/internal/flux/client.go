@@ -1,4 +1,4 @@
-// Package flux reads Flux and DIS custom resources — plus the GitOps-applied
+// Package flux reads Flux and DIS custom resources — plus the label-filtered
 // apps workloads — across all namespaces using the dynamic client and a
 // discovery-backed RESTMapper, and normalizes their deployment status into a
 // small, stable shape the API serves.
@@ -20,6 +20,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
 	memory "k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/dynamic"
@@ -82,8 +83,8 @@ func isDISGroup(group string) bool {
 }
 
 // TargetKinds are the kinds the Console reads: the Flux deployment machinery,
-// the DIS platform resources, and the apps workload kinds (GitOps-applied
-// only — see Sweep). The served API version of each is resolved at runtime via
+// the DIS platform resources, and the apps workload kinds (label-filtered —
+// see Sweep). The served API version of each is resolved at runtime via
 // the discovery RESTMapper, so the same binary keeps working if Azure Flux
 // bumps a version; kinds whose CRD is not installed on a cluster are skipped
 // by Sweep (the apps kinds are built-in and always served).
@@ -165,6 +166,13 @@ func restConfig(local bool) (*rest.Config, error) {
 	return cfg, nil
 }
 
+// helmManagedSelector is the second server-side workload filter: every object
+// Helm renders carries the app.kubernetes.io/managed-by=Helm label (plus the
+// meta.helm.sh release annotations Sweep resolves ownership from), while the
+// kustomize-label selector cannot see chart objects — helm-controller applies
+// them itself and stamps no kustomize labels.
+const helmManagedSelector = labelManagedBy + "=" + managedByHelm
+
 // Sweep lists every instance of each target kind across all namespaces and
 // returns them as normalized resources. Kinds that are not installed are
 // skipped (reported as warnings) so the sweep still succeeds when only a
@@ -173,10 +181,15 @@ func restConfig(local bool) (*rest.Config, error) {
 // (RBAC, auth, apiserver outage) aborts the sweep with an error so the caller
 // keeps the previous snapshot instead of publishing a partial one.
 //
-// Workloads (the apps kinds) are mirrored only when GitOps-applied — carrying
-// the kustomize-controller ownership label — which keeps kube-system and
-// Azure-managed add-ons out and matches the console's app model (everything
-// it shows joins a Kustomization's appliedBy closure).
+// Workloads (the apps kinds) are mirrored only when a deployer labeled them:
+// the kustomize-controller ownership label, or Helm's managed-by label. Both
+// filters ride the lists as server-side label selectors, which keeps
+// kube-system and Azure-managed add-ons out. A chart-created workload's
+// annotations name its Helm release — not the HelmRelease CR, whose
+// spec.releaseName/spec.targetNamespace change the release identity — so its
+// appliedBy is resolved against the batch's HelmReleases after the loop;
+// a release no swept HelmRelease accounts for (installed outside Flux) stays
+// mirrored without an owner.
 //
 // The discovery cache is reset at most once per discoveryTTL rather than on
 // every sweep, so a newly installed Flux CRD is detected only on the next reset
@@ -190,6 +203,16 @@ func (c *Client) Sweep(ctx context.Context) ([]Resource, []error, error) {
 
 	resources := make([]Resource, 0)
 	var warnings []error
+	// releases maps each HelmRelease's effective release identity to the CR;
+	// helmOwned remembers which mirrored workloads (by index into resources)
+	// wait for which release. Ownership is resolved after the kind loop, when
+	// both sides of the join are complete regardless of TargetKinds order.
+	releases := make(map[types.NamespacedName]AppliedBy)
+	type helmRef struct {
+		index   int
+		release types.NamespacedName
+	}
+	var helmOwned []helmRef
 
 	for _, gk := range TargetKinds {
 		mapping, err := c.mapper.RESTMapping(gk)
@@ -205,33 +228,70 @@ func (c *Client) Sweep(ctx context.Context) ([]Resource, []error, error) {
 			return nil, warnings, fmt.Errorf("resolve %s: %w", gk, err)
 		}
 		nri := c.dyn.Resource(mapping.Resource).Namespace(metav1.NamespaceAll)
-		// ResourceVersion "0" serves the list from the apiserver's watch cache
-		// instead of a quorum read from etcd. The sub-second staleness that
-		// allows is irrelevant to a status poller (the agent re-lists every poll
-		// interval and the Console marks clusters stale only after minutes), and
-		// it keeps the repeated fleet-wide lists off etcd.
-		opts := metav1.ListOptions{ResourceVersion: "0"}
+
+		selectors := []string{""}
+		// seen dedups the two workload lists by object identity: some charts
+		// hardcode the managed-by label in their templates, so a
+		// kustomize-applied object can match both selectors. The kustomize
+		// pass runs first and wins — its labels name the true GitOps applier.
+		var seen map[types.NamespacedName]bool
 		if gk.Group == GroupApps {
-			// Existence selector: the apiserver drops unlabeled workloads
-			// (kube-system, Azure add-ons) before they ride the response. The
-			// in-loop guard below owns the semantics — it also drops a
-			// present-but-empty label, which a bare selector matches.
-			opts.LabelSelector = LabelAppliedByName
+			selectors = []string{LabelAppliedByName, helmManagedSelector}
+			seen = make(map[types.NamespacedName]bool)
 		}
-		list, err := nri.List(ctx, opts)
-		if err != nil {
-			return nil, warnings, fmt.Errorf("list %s: %w", gk, err)
-		}
-		for i := range list.Items {
-			if gk.Group == GroupApps && list.Items[i].GetLabels()[LabelAppliedByName] == "" {
-				continue
-			}
-			r, err := normalize(&list.Items[i])
+		for _, selector := range selectors {
+			// ResourceVersion "0" serves the list from the apiserver's watch
+			// cache instead of a quorum read from etcd. The sub-second staleness
+			// that allows is irrelevant to a status poller (the agent re-lists
+			// every poll interval and the Console marks clusters stale only
+			// after minutes), and it keeps the repeated fleet-wide lists off
+			// etcd.
+			opts := metav1.ListOptions{ResourceVersion: "0", LabelSelector: selector}
+			list, err := nri.List(ctx, opts)
 			if err != nil {
-				warnings = append(warnings, fmt.Errorf("normalize %s: %w", gk, err))
-				continue
+				return nil, warnings, fmt.Errorf("list %s: %w", gk, err)
 			}
-			resources = append(resources, r)
+			for i := range list.Items {
+				item := &list.Items[i]
+				switch selector {
+				case LabelAppliedByName:
+					// The existence selector also matches a present-but-empty
+					// label; only a named applier counts.
+					if item.GetLabels()[LabelAppliedByName] == "" {
+						continue
+					}
+					seen[types.NamespacedName{Namespace: item.GetNamespace(), Name: item.GetName()}] = true
+				case helmManagedSelector:
+					if seen[types.NamespacedName{Namespace: item.GetNamespace(), Name: item.GetName()}] {
+						continue
+					}
+				}
+				r, err := normalize(item)
+				if err != nil {
+					warnings = append(warnings, fmt.Errorf("normalize %s: %w", gk, err))
+					continue
+				}
+				if gk.Group == GroupHelm && gk.Kind == KindHelmRelease {
+					id, err := helmReleaseIdentity(item)
+					if err != nil {
+						warnings = append(warnings, fmt.Errorf("release identity %s/%s: %w", item.GetNamespace(), item.GetName(), err))
+					} else {
+						releases[id] = AppliedBy{Name: item.GetName(), Namespace: item.GetNamespace()}
+					}
+				}
+				resources = append(resources, r)
+				if selector == helmManagedSelector && r.AppliedBy == nil {
+					if owner, ok := helmOwnerFrom(item.GetAnnotations()); ok {
+						helmOwned = append(helmOwned, helmRef{index: len(resources) - 1, release: owner})
+					}
+				}
+			}
+		}
+	}
+
+	for _, w := range helmOwned {
+		if ab, ok := releases[w.release]; ok {
+			resources[w.index].AppliedBy = &ab
 		}
 	}
 	return resources, warnings, nil

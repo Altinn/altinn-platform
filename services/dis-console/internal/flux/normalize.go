@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // Ready condition status values, mirroring meta.fluxcd.io condition semantics.
@@ -47,9 +48,12 @@ type Resource struct {
 	Parent *ParentRef `json:"parent,omitempty"`
 	// AppliedBy is the Kustomization that applied this object, projected from
 	// the kustomize.toolkit.fluxcd.io/{name,namespace} labels the kustomize
-	// controller stamps on everything it applies, so the list endpoint (which
-	// omits Raw) can group child resources under their parent app. Empty for
-	// roots and Arc-managed objects, which carry no such labels.
+	// controller stamps on everything it applies — or, for chart-created
+	// workloads (which carry no kustomize labels), the owning HelmRelease,
+	// resolved by Sweep from the object's Helm release annotations. Lets the
+	// list endpoint (which omits Raw) group child resources under their parent
+	// app. Empty for roots, Arc-managed objects, and Helm releases installed
+	// outside Flux.
 	AppliedBy *AppliedBy `json:"appliedBy,omitempty"`
 	// SourceRef is the Flux source a Kustomization builds from — the join key
 	// from a Kustomization row to the OCIRepository row holding the base-layer
@@ -104,6 +108,17 @@ type ParentRef struct {
 const (
 	LabelAppliedByName      = "kustomize.toolkit.fluxcd.io/name"
 	LabelAppliedByNamespace = "kustomize.toolkit.fluxcd.io/namespace"
+)
+
+// Metadata Helm stamps on every object it renders: the managed-by label the
+// sweep's second workload list selects on, and the release annotations naming
+// the owning Helm release. Chart objects carry these instead of the kustomize
+// labels — helm-controller applies them itself, not via kustomize-controller.
+const (
+	labelManagedBy             = "app.kubernetes.io/managed-by"
+	managedByHelm              = "Helm"
+	annotationReleaseName      = "meta.helm.sh/release-name"
+	annotationReleaseNamespace = "meta.helm.sh/release-namespace"
 )
 
 // AppliedBy identifies the Kustomization that applied a resource. The JSON
@@ -323,6 +338,35 @@ func appliedByFrom(labels map[string]string) *AppliedBy {
 		return nil
 	}
 	return &AppliedBy{Name: name, Namespace: ns}
+}
+
+// helmReleaseIdentity is the effective Helm release identity a HelmRelease
+// deploys as — the exact values Helm stamps into the meta.helm.sh release
+// annotations of every object it renders. The typed helpers encode Flux's
+// defaulting: the name is spec.releaseName when set, else
+// <targetNamespace>-<name> when spec.targetNamespace is set, else the CR's
+// name; the namespace is spec.targetNamespace defaulting to the CR's own.
+// (spec.storageNamespace moves only the release secrets: helm-controller
+// hands Helm the release namespace, not the storage namespace, so the latter
+// never reaches object metadata.)
+func helmReleaseIdentity(u *unstructured.Unstructured) (types.NamespacedName, error) {
+	var o helmv2.HelmRelease
+	if err := fromUnstructured(u, &o); err != nil {
+		return types.NamespacedName{}, err
+	}
+	return types.NamespacedName{Namespace: o.GetReleaseNamespace(), Name: o.GetReleaseName()}, nil
+}
+
+// helmOwnerFrom reads the meta.helm.sh release annotations naming the Helm
+// release an object belongs to. ok is false when they are absent — an object
+// that merely carries a chart-hardcoded managed-by label but was applied by
+// something other than Helm.
+func helmOwnerFrom(annotations map[string]string) (types.NamespacedName, bool) {
+	name, ns := annotations[annotationReleaseName], annotations[annotationReleaseNamespace]
+	if name == "" || ns == "" {
+		return types.NamespacedName{}, false
+	}
+	return types.NamespacedName{Namespace: ns, Name: name}, true
 }
 
 // disObject is the minimal projection of a DIS custom resource — just the

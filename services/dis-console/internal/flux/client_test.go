@@ -9,6 +9,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 )
@@ -39,10 +40,13 @@ func (m *fakeMapper) RESTMapping(gk schema.GroupKind, _ ...string) (*apimeta.RES
 }
 
 // fakeDynamic is a dynamic.Interface that records the ListOptions of every
-// List and returns the items seeded for the resource (empty when none). We
-// capture the options here rather than via dynamic/fake because the fake
-// client drops ResourceVersion when building its recorded action, which is
-// exactly the field these tests assert on.
+// List and returns the items seeded for the resource (empty when none),
+// filtered by the request's label selector like the real apiserver — Sweep
+// leans on server-side selection for the workload kinds, so an unfiltering
+// fake would leak items into the wrong pass. We capture the options here
+// rather than via dynamic/fake because the fake client drops ResourceVersion
+// when building its recorded action, which is exactly the field these tests
+// assert on.
 type fakeDynamic struct {
 	dynamic.Interface
 	listOpts []metav1.ListOptions
@@ -64,7 +68,20 @@ func (r *fakeResource) Namespace(string) dynamic.ResourceInterface { return r }
 
 func (r *fakeResource) List(_ context.Context, opts metav1.ListOptions) (*unstructured.UnstructuredList, error) {
 	r.parent.listOpts = append(r.parent.listOpts, opts)
-	return &unstructured.UnstructuredList{Items: r.parent.items[r.resource]}, nil
+	selector := labels.Everything()
+	if opts.LabelSelector != "" {
+		var err error
+		if selector, err = labels.Parse(opts.LabelSelector); err != nil {
+			return nil, err
+		}
+	}
+	out := &unstructured.UnstructuredList{}
+	for _, item := range r.parent.items[r.resource] {
+		if selector.Matches(labels.Set(item.GetLabels())) {
+			out.Items = append(out.Items, item)
+		}
+	}
+	return out, nil
 }
 
 func TestSweepResetsDiscoveryOnTTL(t *testing.T) {
@@ -106,22 +123,28 @@ func TestSweepListsFromWatchCache(t *testing.T) {
 	if _, _, err := c.Sweep(context.Background()); err != nil {
 		t.Fatalf("sweep: %v", err)
 	}
-	if len(d.listOpts) != len(TargetKinds) {
-		t.Fatalf("list calls = %d, want %d (one per target kind)", len(d.listOpts), len(TargetKinds))
+	// The apps kinds are filtered server-side and listed twice (the
+	// kustomize-applied and the Helm-rendered populations); every other kind
+	// lists once, unfiltered.
+	var wantSelectors []string
+	for _, gk := range TargetKinds {
+		if gk.Group == GroupApps {
+			wantSelectors = append(wantSelectors, LabelAppliedByName, helmManagedSelector)
+			continue
+		}
+		wantSelectors = append(wantSelectors, "")
+	}
+	if len(d.listOpts) != len(wantSelectors) {
+		t.Fatalf("list calls = %d, want %d (one per target kind, two per apps kind)",
+			len(d.listOpts), len(wantSelectors))
 	}
 	for i, opts := range d.listOpts {
 		if opts.ResourceVersion != "0" {
 			t.Errorf("list[%d] ResourceVersion = %q, want %q (served from the watch cache)",
 				i, opts.ResourceVersion, "0")
 		}
-		// The apps kinds are filtered to GitOps-applied objects server-side;
-		// every other kind lists unfiltered.
-		wantSelector := ""
-		if TargetKinds[i].Group == GroupApps {
-			wantSelector = LabelAppliedByName
-		}
-		if opts.LabelSelector != wantSelector {
-			t.Errorf("list[%d] LabelSelector = %q, want %q", i, opts.LabelSelector, wantSelector)
+		if opts.LabelSelector != wantSelectors[i] {
+			t.Errorf("list[%d] LabelSelector = %q, want %q", i, opts.LabelSelector, wantSelectors[i])
 		}
 	}
 }
@@ -131,10 +154,10 @@ func TestSweepListsFromWatchCache(t *testing.T) {
 // Azure-managed add-ons) is dropped before normalize, while the labeled one is
 // mirrored — and non-workload kinds are never filtered, labeled or not.
 func TestSweepMirrorsOnlyGitOpsAppliedWorkloads(t *testing.T) {
-	workload := func(name string, labels map[string]any) unstructured.Unstructured {
+	workload := func(name string, objLabels map[string]any) unstructured.Unstructured {
 		meta := map[string]any{"namespace": "ns", "name": name}
-		if labels != nil {
-			meta["labels"] = labels
+		if objLabels != nil {
+			meta["labels"] = objLabels
 		}
 		return unstructured.Unstructured{Object: map[string]any{
 			"apiVersion": "apps/v1",
@@ -175,6 +198,131 @@ func TestSweepMirrorsOnlyGitOpsAppliedWorkloads(t *testing.T) {
 	}
 }
 
+// TestSweepResolvesHelmWorkloadOwnership pins the Helm side of the workload
+// sweep: chart-created workloads (managed-by label + release annotations, no
+// kustomize labels) are mirrored with appliedBy resolved to the HelmRelease
+// deploying that release — through the default identity, a releaseName
+// override, and targetNamespace prefix defaulting. A kustomize-applied object
+// whose chart hardcodes the managed-by label is mirrored exactly once and
+// keeps the kustomize appliedBy; a release no HelmRelease accounts for stays
+// mirrored without an owner.
+func TestSweepResolvesHelmWorkloadOwnership(t *testing.T) {
+	deployment := func(ns, name string, objLabels, annotations map[string]any) unstructured.Unstructured {
+		meta := map[string]any{"namespace": ns, "name": name}
+		if objLabels != nil {
+			meta["labels"] = objLabels
+		}
+		if annotations != nil {
+			meta["annotations"] = annotations
+		}
+		return unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata":   meta,
+		}}
+	}
+	helmRelease := func(ns, name string, spec map[string]any) unstructured.Unstructured {
+		obj := map[string]any{
+			"apiVersion": "helm.toolkit.fluxcd.io/v2",
+			"kind":       "HelmRelease",
+			"metadata":   map[string]any{"namespace": ns, "name": name},
+		}
+		if spec != nil {
+			obj["spec"] = spec
+		}
+		return unstructured.Unstructured{Object: obj}
+	}
+	helmLabel := map[string]any{labelManagedBy: managedByHelm}
+
+	d := &fakeDynamic{items: map[string][]unstructured.Unstructured{
+		"helmreleases": {
+			helmRelease("team-one", "app-default", nil),
+			helmRelease("team-two", "app-target", map[string]any{"targetNamespace": "team-two-apps"}),
+			helmRelease("team-three", "app-renamed", map[string]any{"releaseName": "custom-release"}),
+		},
+		"deployments": {
+			// Default identity: release name = CR name, namespace = CR's own.
+			deployment("team-one", "worker-default", helmLabel, map[string]any{
+				annotationReleaseName:      "app-default",
+				annotationReleaseNamespace: "team-one",
+			}),
+			// targetNamespace defaulting: the release is named
+			// <targetNamespace>-<name> and lives in the target namespace, but
+			// appliedBy must name the CR (app-target in team-two).
+			deployment("team-two-apps", "worker-target", helmLabel, map[string]any{
+				annotationReleaseName:      "team-two-apps-app-target",
+				annotationReleaseNamespace: "team-two-apps",
+			}),
+			// spec.releaseName overrides the release name outright.
+			deployment("team-three", "worker-renamed", helmLabel, map[string]any{
+				annotationReleaseName:      "custom-release",
+				annotationReleaseNamespace: "team-three",
+			}),
+			// Matches both selectors (chart-hardcoded managed-by label on a
+			// kustomize-applied object): mirrored once, kustomize wins.
+			deployment("product-team-a", "both", map[string]any{
+				LabelAppliedByName:      "team-a-app",
+				LabelAppliedByNamespace: "product-team-a",
+				labelManagedBy:          managedByHelm,
+			}, nil),
+			// A release no HelmRelease accounts for (helm install by hand).
+			deployment("tools", "hand-rolled", helmLabel, map[string]any{
+				annotationReleaseName:      "toolbox",
+				annotationReleaseNamespace: "tools",
+			}),
+			// Hardcoded label, no release annotations: nothing to resolve.
+			deployment("misc", "label-only", helmLabel, nil),
+		},
+	}}
+	c := &Client{dyn: d, mapper: &fakeMapper{}}
+
+	resources, warnings, err := c.Sweep(context.Background())
+	if err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+	byName := make(map[string]Resource, len(resources))
+	for _, r := range resources {
+		if prev, dup := byName[r.Name]; dup {
+			t.Fatalf("resource %q mirrored twice: %+v and %+v", r.Name, prev, r)
+		}
+		byName[r.Name] = r
+	}
+	if len(resources) != 9 {
+		t.Fatalf("resources = %d, want 9 (3 HelmReleases + 6 deployments, each once)", len(resources))
+	}
+
+	// Every appliedBy names the HelmRelease CR, never the helm release —
+	// worker-renamed's release is custom-release but its owner is the
+	// app-renamed CR.
+	wantOwner := map[string]*AppliedBy{
+		"worker-default": {Name: "app-default", Namespace: "team-one"},
+		"worker-target":  {Name: "app-target", Namespace: "team-two"},
+		"worker-renamed": {Name: "app-renamed", Namespace: "team-three"},
+		"both":           {Name: "team-a-app", Namespace: "product-team-a"},
+		"hand-rolled":    nil,
+		"label-only":     nil,
+	}
+	for name, want := range wantOwner {
+		got, ok := byName[name]
+		if !ok {
+			t.Fatalf("workload %q not mirrored", name)
+		}
+		switch {
+		case want == nil:
+			if got.AppliedBy != nil {
+				t.Errorf("%s appliedBy = %+v, want none", name, got.AppliedBy)
+			}
+		case got.AppliedBy == nil:
+			t.Errorf("%s appliedBy = nil, want %+v", name, want)
+		case *got.AppliedBy != *want:
+			t.Errorf("%s appliedBy = %+v, want %+v", name, got.AppliedBy, want)
+		}
+	}
+}
+
 func TestSweepSkipsUninstalledKinds(t *testing.T) {
 	// Mark one optional source kind as not installed.
 	missing := schema.GroupKind{Group: GroupSource, Kind: KindHelmChart}
@@ -188,7 +336,10 @@ func TestSweepSkipsUninstalledKinds(t *testing.T) {
 	if len(warnings) != 1 {
 		t.Fatalf("warnings = %d, want 1 (the skipped kind)", len(warnings))
 	}
-	if len(d.listOpts) != len(TargetKinds)-1 {
-		t.Fatalf("list calls = %d, want %d (skipped kind is not listed)", len(d.listOpts), len(TargetKinds)-1)
+	// One list per kind minus the skipped one, plus a second list for each of
+	// the three apps kinds.
+	want := len(TargetKinds) - 1 + 3
+	if len(d.listOpts) != want {
+		t.Fatalf("list calls = %d, want %d (skipped kind is not listed)", len(d.listOpts), want)
 	}
 }
