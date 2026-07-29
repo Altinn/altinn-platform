@@ -183,6 +183,16 @@ variable "k8s_rbac" {
       dev_group = "d3ed431d-bd25-46dd-a539-48d716f47b1d"
       sp_group  = "76b9c1c2-30e5-4338-88d6-63932a26251a"
     }
+    shared = {
+      namespace = "shared",
+      dev_group = "975d2ed6-f3dc-48a3-b014-8d876cb96e25" # TODO: Create dedicated groups
+      sp_group  = "122986e4-eb3d-4d9e-ab7d-8aec6174f332"
+    }
+    "sanity-checks" = {
+      namespace = "sanity-checks",
+      dev_group = "975d2ed6-f3dc-48a3-b014-8d876cb96e25" # TODO: Create dedicated groups
+      sp_group  = "122986e4-eb3d-4d9e-ab7d-8aec6174f332"
+    }
   }
 }
 
