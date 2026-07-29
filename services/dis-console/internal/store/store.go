@@ -253,17 +253,18 @@ func imagesFrom(raw []byte) ([]flux.ContainerImage, error) {
 // existing TOAST datum. last_seen is always bumped so prune can tell which rows
 // were seen this sweep.
 //
-// updated_at additionally advances when a projection-only column (the
-// applied-by pair, the base-layer columns and images) differs from the stored
-// value. The hash covers the object, not the agent's projection of it: when a
-// projection change (like adding appliedBy, or the v4 base-layer fields)
-// starts deriving new columns from content that was already in the hashed
-// object, every pre-existing row gets the new columns with an unchanged hash —
-// and the server's incremental pull (updated_at > cursor) would never mirror
-// them. The extra comparisons backfill each such row exactly once and are
-// quiet steady-state (a real content change also changes the hash). Any future
-// projection derived from existing object content must extend this CASE the
-// same way.
+// updated_at additionally advances when a projected column (the applied-by
+// pair, the base-layer columns, images — and revision, a core column whose
+// workload value the agent began deriving from the already-hashed pod
+// template) differs from the stored value. The hash covers the object, not
+// the agent's projection of it: when a projection change (like adding
+// appliedBy, or the v4 base-layer fields) starts deriving new column values
+// from content that was already in the hashed object, every pre-existing row
+// gets the new values with an unchanged hash — and the server's incremental
+// pull (updated_at > cursor) would never mirror them. The extra comparisons
+// backfill each such row exactly once and are quiet steady-state (a real
+// content change also changes the hash). Any future projection derived from
+// existing object content must extend this CASE the same way.
 const upsertStmt = `
 WITH prev AS (
     SELECT ready, reason, revision
@@ -320,6 +321,7 @@ up AS (
         last_seen            = now(),
         updated_at           = CASE
             WHEN r.content_hash IS DISTINCT FROM EXCLUDED.content_hash
+              OR r.revision IS DISTINCT FROM EXCLUDED.revision
               OR r.applied_by_name IS DISTINCT FROM EXCLUDED.applied_by_name
               OR r.applied_by_namespace IS DISTINCT FROM EXCLUDED.applied_by_namespace
               OR r.source_ref_kind IS DISTINCT FROM EXCLUDED.source_ref_kind

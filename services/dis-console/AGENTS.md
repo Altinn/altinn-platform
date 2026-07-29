@@ -77,8 +77,9 @@ Do not claim checks passed unless you actually ran them.
   structs (kustomize/helm/source `api` + `pkg/apis/meta`) via runtime
   conversion — for the DIS kinds into a minimal local struct (never the
   operator modules) that also projects `azureResourceId` and `parent`, and for
-  the workloads into `k8s.io/api/apps/v1` structs projecting `images` and
-  per-kind readiness — while keeping the full object for `raw`. `hygiene.go`
+  the workloads into `k8s.io/api/apps/v1` structs projecting `images`, the
+  primary container's image tag as `revision`, and per-kind readiness — while
+  keeping the full object for `raw`. `hygiene.go`
   strips volatile metadata (`managedFields`, `resourceVersion`), computes the
   `content_hash`, and caps `raw` at `MaxRawBytes`.
 - `internal/dbauth` — pgxpool builder; Entra-token `BeforeConnect` hook in the

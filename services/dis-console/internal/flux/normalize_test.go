@@ -3,6 +3,7 @@ package flux
 import (
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -585,6 +586,9 @@ func TestNormalizeDeploymentImagesAndAvailable(t *testing.T) {
 		r.Images[1] != (ContainerImage{Container: "sidecar", Image: "registry.example.com/team-a/sidecar:v1"}) {
 		t.Fatalf("unexpected images (init containers must be skipped): %+v", r.Images)
 	}
+	if r.Revision != "v42" {
+		t.Fatalf("expected the primary container's image tag as revision, got %q", r.Revision)
+	}
 	if r.Ready != ReadyTrue || r.Reason != "MinimumReplicasAvailable" {
 		t.Fatalf("expected ready from the Available condition, got %+v", r)
 	}
@@ -707,6 +711,9 @@ func TestNormalizeStatefulSetReadyFromReplicas(t *testing.T) {
 			if len(r.Images) != 1 || r.Images[0].Image != "registry.example.com/team-a/db:16.4" {
 				t.Fatalf("unexpected images: %+v", r.Images)
 			}
+			if r.Revision != "16.4" {
+				t.Fatalf("revision: got %q, want the image tag %q", r.Revision, "16.4")
+			}
 		})
 	}
 }
@@ -744,6 +751,9 @@ func TestNormalizeDaemonSetReadyFromCounts(t *testing.T) {
 	if len(r.Images) != 1 || r.Images[0].Container != "agent" {
 		t.Fatalf("unexpected images: %+v", r.Images)
 	}
+	if r.Revision != "v3" {
+		t.Fatalf("revision should fall back to the first container's tag, got %q", r.Revision)
+	}
 
 	r, err = normalize(ds(map[string]any{
 		"observedGeneration": int64(1), "desiredNumberScheduled": int64(4), "numberReady": int64(2),
@@ -753,6 +763,81 @@ func TestNormalizeDaemonSetReadyFromCounts(t *testing.T) {
 	}
 	if r.Ready != ReadyFalse || r.Reason != "ReadyReplicas" || r.Message != "2/4 ready" {
 		t.Fatalf("unexpected degraded daemonset: %+v", r)
+	}
+}
+
+// A workload's revision is its primary container's image tag — the container
+// named like the workload itself (a sidecar never claims the app's version),
+// else the first. The ref is parsed with the canonical distribution grammar:
+// a digest-only ref keeps a short digest, a bare ref reads latest, and a ref
+// the grammar rejects (a pod kubelet would refuse to run) projects empty.
+func TestWorkloadRevision(t *testing.T) {
+	cases := []struct {
+		name       string
+		workload   string
+		containers []corev1.Container
+		want       string
+	}{
+		{
+			name:     "container named like the workload wins over the first",
+			workload: "app-one",
+			containers: []corev1.Container{
+				{Name: "proxy", Image: "registry.example.com/team-a/proxy:v9"},
+				{Name: "app-one", Image: "registry.example.com/team-a/app-one:v42"},
+			},
+			want: "v42",
+		},
+		{
+			name:     "no name match falls back to the first container",
+			workload: "app-one-worker",
+			containers: []corev1.Container{
+				{Name: "worker", Image: "registry.example.com/team-a/app-one:v42"},
+				{Name: "proxy", Image: "registry.example.com/team-a/proxy:v9"},
+			},
+			want: "v42",
+		},
+		{
+			name:       "registry port colon is not a tag",
+			workload:   "app-one",
+			containers: []corev1.Container{{Name: "app-one", Image: "registry.example.com:5000/team-a/app-one"}},
+			want:       "latest",
+		},
+		{
+			name:       "digest-only ref keeps a short digest",
+			workload:   "app-one",
+			containers: []corev1.Container{{Name: "app-one", Image: "registry.example.com/team-a/app-one@sha256:0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0"}},
+			want:       "0f1e2d3c4b5a",
+		},
+		{
+			name:       "tag wins when a digest rides along",
+			workload:   "app-one",
+			containers: []corev1.Container{{Name: "app-one", Image: "registry.example.com/team-a/app-one:v42@sha256:0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0"}},
+			want:       "v42",
+		},
+		{
+			name:       "bare ref reads latest",
+			workload:   "app-one",
+			containers: []corev1.Container{{Name: "app-one", Image: "app-one"}},
+			want:       "latest",
+		},
+		{
+			name:       "unparseable ref projects empty",
+			workload:   "app-one",
+			containers: []corev1.Container{{Name: "app-one", Image: "registry.example.com/Team-A/app-one:v42"}},
+			want:       "",
+		},
+		{
+			name:     "no containers",
+			workload: "app-one",
+			want:     "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := workloadRevision(tc.workload, tc.containers); got != tc.want {
+				t.Fatalf("workloadRevision: got %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
