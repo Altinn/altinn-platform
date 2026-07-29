@@ -56,8 +56,9 @@ type Resource struct {
 	// the kustomize.toolkit.fluxcd.io/{name,namespace} labels the kustomize
 	// controller stamps on everything it applies — or, for chart-created
 	// workloads (which carry no kustomize labels), the owning HelmRelease,
-	// resolved by Sweep from the object's Helm release annotations. Lets the
-	// list endpoint (which omits Raw) group child resources under their parent
+	// taken by Sweep from helm-controller's origin labels when present, else
+	// resolved from the object's Helm release annotations. Lets the list
+	// endpoint (which omits Raw) group child resources under their parent
 	// app. Empty for roots, Arc-managed objects, and Helm releases installed
 	// outside Flux.
 	AppliedBy *AppliedBy `json:"appliedBy,omitempty"`
@@ -125,6 +126,18 @@ const (
 	managedByHelm              = "Helm"
 	annotationReleaseName      = "meta.helm.sh/release-name"
 	annotationReleaseNamespace = "meta.helm.sh/release-namespace"
+)
+
+// Labels helm-controller's builtin post-renderer stamps on every object it
+// applies, naming the HelmRelease CR itself (name and the CR's own namespace).
+// Unlike the meta.helm.sh annotations — which name the Helm release, an
+// identity any CR can claim via spec.releaseName/spec.targetNamespace — these
+// identify the CR exactly, and only the CR that actually installed the release
+// stamps them. Absent on releases installed outside Flux and on objects not
+// re-applied since the controller gained the post-renderer.
+const (
+	labelHelmOriginName      = GroupHelm + "/name"
+	labelHelmOriginNamespace = GroupHelm + "/namespace"
 )
 
 // AppliedBy identifies the Kustomization that applied a resource. The JSON
@@ -361,6 +374,18 @@ func helmReleaseIdentity(u *unstructured.Unstructured) (types.NamespacedName, er
 		return types.NamespacedName{}, err
 	}
 	return types.NamespacedName{Namespace: o.GetReleaseNamespace(), Name: o.GetReleaseName()}, nil
+}
+
+// helmAppliedByFrom projects helm-controller's origin labels into an
+// AppliedBy naming the HelmRelease CR directly. Nil when either label is
+// missing; the caller then falls back to resolving the meta.helm.sh release
+// annotations against the swept HelmReleases.
+func helmAppliedByFrom(labels map[string]string) *AppliedBy {
+	name, ns := labels[labelHelmOriginName], labels[labelHelmOriginNamespace]
+	if name == "" || ns == "" {
+		return nil
+	}
+	return &AppliedBy{Name: name, Namespace: ns}
 }
 
 // helmOwnerFrom reads the meta.helm.sh release annotations naming the Helm

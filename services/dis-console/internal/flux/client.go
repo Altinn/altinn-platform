@@ -168,9 +168,9 @@ func restConfig(local bool) (*rest.Config, error) {
 
 // helmManagedSelector is the second server-side workload filter: every object
 // Helm renders carries the app.kubernetes.io/managed-by=Helm label (plus the
-// meta.helm.sh release annotations Sweep resolves ownership from), while the
-// kustomize-label selector cannot see chart objects — helm-controller applies
-// them itself and stamps no kustomize labels.
+// origin labels and meta.helm.sh release annotations Sweep resolves ownership
+// from), while the kustomize-label selector cannot see chart objects —
+// helm-controller applies them itself and stamps no kustomize labels.
 const helmManagedSelector = labelManagedBy + "=" + managedByHelm
 
 // Sweep lists every instance of each target kind across all namespaces and
@@ -185,10 +185,14 @@ const helmManagedSelector = labelManagedBy + "=" + managedByHelm
 // the kustomize-controller ownership label, or Helm's managed-by label. Both
 // filters ride the lists as server-side label selectors, which keeps
 // kube-system and Azure-managed add-ons out. A chart-created workload's
-// annotations name its Helm release — not the HelmRelease CR, whose
-// spec.releaseName/spec.targetNamespace change the release identity — so its
-// appliedBy is resolved against the batch's HelmReleases after the loop;
-// a release no swept HelmRelease accounts for (installed outside Flux) stays
+// appliedBy is taken from helm-controller's origin labels when present — they
+// name the HelmRelease CR exactly. Without them the workload's annotations
+// name only its Helm release — not the CR, whose spec.releaseName/
+// spec.targetNamespace change the release identity — so appliedBy is resolved
+// against the batch's HelmReleases after the loop. Two HelmReleases can claim
+// the same release identity (a duplicate CR pointing at another CR's
+// release); resolveClaim decides which one owns the release's objects. A
+// release no swept HelmRelease accounts for (installed outside Flux) stays
 // mirrored without an owner.
 //
 // The discovery cache is reset at most once per discoveryTTL rather than on
@@ -203,11 +207,12 @@ func (c *Client) Sweep(ctx context.Context) ([]Resource, []error, error) {
 
 	resources := make([]Resource, 0)
 	var warnings []error
-	// releases maps each HelmRelease's effective release identity to the CR;
+	// releases maps each HelmRelease's effective release identity to the
+	// winning claim on it (duplicates are tie-broken by resolveClaim);
 	// helmOwned remembers which mirrored workloads (by index into resources)
 	// wait for which release. Ownership is resolved after the kind loop, when
 	// both sides of the join are complete regardless of TargetKinds order.
-	releases := make(map[types.NamespacedName]AppliedBy)
+	releases := make(map[types.NamespacedName]releaseClaim)
 	type helmRef struct {
 		index   int
 		release types.NamespacedName
@@ -276,12 +281,25 @@ func (c *Client) Sweep(ctx context.Context) ([]Resource, []error, error) {
 					if err != nil {
 						warnings = append(warnings, fmt.Errorf("release identity %s/%s: %w", item.GetNamespace(), item.GetName(), err))
 					} else {
-						releases[id] = AppliedBy{Name: item.GetName(), Namespace: item.GetNamespace()}
+						claim := releaseClaim{
+							cr:    AppliedBy{Name: item.GetName(), Namespace: item.GetNamespace()},
+							ready: r.Ready == ReadyTrue,
+						}
+						if cur, contested := releases[id]; contested {
+							winner, warn := resolveClaim(id, cur, claim)
+							if warn != nil {
+								warnings = append(warnings, warn)
+							}
+							claim = winner
+						}
+						releases[id] = claim
 					}
 				}
 				resources = append(resources, r)
 				if selector == helmManagedSelector && r.AppliedBy == nil {
-					if owner, ok := helmOwnerFrom(item.GetAnnotations()); ok {
+					if ab := helmAppliedByFrom(item.GetLabels()); ab != nil {
+						resources[len(resources)-1].AppliedBy = ab
+					} else if owner, ok := helmOwnerFrom(item.GetAnnotations()); ok {
 						helmOwned = append(helmOwned, helmRef{index: len(resources) - 1, release: owner})
 					}
 				}
@@ -290,9 +308,41 @@ func (c *Client) Sweep(ctx context.Context) ([]Resource, []error, error) {
 	}
 
 	for _, w := range helmOwned {
-		if ab, ok := releases[w.release]; ok {
+		if claim, ok := releases[w.release]; ok {
+			ab := claim.cr
 			resources[w.index].AppliedBy = &ab
 		}
 	}
 	return resources, warnings, nil
+}
+
+// releaseClaim is one HelmRelease CR's claim on an effective release identity:
+// the CR ownership resolves to, and whether the CR was Ready at sweep time —
+// the tie-breaker between duplicate claims.
+type releaseClaim struct {
+	cr    AppliedBy
+	ready bool
+}
+
+// resolveClaim decides which of two HelmRelease CRs claiming the same
+// effective release identity owns the release's objects. Helm storage holds
+// one release per identity, so only one claimant can have installed it: a
+// Ready claimant beats one that is not (a CR that never installed the release
+// cannot own its live objects). Claims of equal readiness cannot be separated
+// safely — the default-layout CR (own namespace equal to the release
+// namespace) is preferred, the incumbent kept otherwise, and the contest is
+// reported as a warning either way.
+func resolveClaim(id types.NamespacedName, cur, next releaseClaim) (releaseClaim, error) {
+	if cur.ready != next.ready {
+		if next.ready {
+			return next, nil
+		}
+		return cur, nil
+	}
+	winner := cur
+	if next.cr.Namespace == id.Namespace && cur.cr.Namespace != id.Namespace {
+		winner = next
+	}
+	return winner, fmt.Errorf("release %s claimed by HelmRelease %s/%s and %s/%s: attributing to %s/%s",
+		id, cur.cr.Namespace, cur.cr.Name, next.cr.Namespace, next.cr.Name, winner.cr.Namespace, winner.cr.Name)
 }
