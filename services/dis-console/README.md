@@ -62,12 +62,17 @@ kustomize controller's `kustomize.toolkit.fluxcd.io/name`, or Helm's
 those itself and stamps no kustomize labels) — which keeps kube-system and
 Azure-managed add-ons out. Almost everything that matches is GitOps-applied,
 but the Helm label is applier-agnostic: a release installed outside Flux is
-still mirrored, just without an owner (below). The workloads exist for one field the Flux CRs
+still mirrored, just without an owner (below). The workloads exist for what the Flux CRs
 cannot provide: `images` (`[{container,image}]` from
 `spec.template.spec.containers`; init containers skipped) — the app's
 *effective* version. A manifest revision or digest only names what should run,
 and with `postBuild` substitution the image tag can be resolved per cluster and
-never exist in git. `images` rides the list payload
+never exist in git. `revision` distills the same thing into one value: the
+primary container's image tag — the container named like the workload, else
+the first (a digest-only ref keeps a short digest, an untagged one reads
+`latest`). The status-event history snapshots revision transitions, so image
+bumps land there as releases: a root-applied workload gets the same release
+history a HelmRelease gets from chart versions. `images` rides the list payload
 (`/api/resources?kind=Deployment`), so "which image runs where" needs no
 per-row detail fetch. Readiness is per kind (they share no condition
 semantics): Deployment takes its `Available` condition (and maps `spec.paused`

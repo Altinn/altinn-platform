@@ -612,6 +612,129 @@ func TestSyncImagesBackfillAdvancesUpdatedAt(t *testing.T) {
 	}
 }
 
+// TestSyncWorkloadRevisionBackfillAdvancesUpdatedAt reproduces the v1.7.0→next
+// upgrade: workload rows written before the revision projection carry an empty
+// revision with an unchanged content hash (the image tag was already inside
+// the hashed pod template). The first sweep that projects it must advance
+// updated_at so the central pull mirrors the backfilled row — and must record
+// the transition as a status event — while later identical sweeps must not
+// churn it. Same contract as the appliedBy, base-layer and images backfills.
+func TestSyncWorkloadRevisionBackfillAdvancesUpdatedAt(t *testing.T) {
+	s, pool := newStore(t)
+	ctx := context.Background()
+
+	updatedAt := func() time.Time {
+		var ts time.Time
+		if err := pool.QueryRow(ctx,
+			"SELECT updated_at FROM flux_resource WHERE name = $1", "app").Scan(&ts); err != nil {
+			t.Fatalf("query updated_at: %v", err)
+		}
+		return ts
+	}
+
+	// Sweep 1: the v1.7.0 shape (images projected, revision not derived yet).
+	pre := flux.Resource{
+		Kind: "Deployment", APIVersion: "apps/v1",
+		Namespace: "product-team-a", Name: "app",
+		Ready:  flux.ReadyTrue,
+		Images: []flux.ContainerImage{{Container: "app", Image: "registry.example.com/team-a/app:v42"}},
+		Raw:    json.RawMessage(`{"kind":"Deployment"}`), ContentHash: "same-object",
+	}
+	if _, err := s.Sync(ctx, []flux.Resource{pre}); err != nil {
+		t.Fatalf("sync 1: %v", err)
+	}
+	first := updatedAt()
+
+	// Sweep 2: identical object + hash, but the agent now projects the tag.
+	post := pre
+	post.Revision = "v42"
+	stats, err := s.Sync(ctx, []flux.Resource{post})
+	if err != nil {
+		t.Fatalf("sync 2: %v", err)
+	}
+	if stats.Changed != 1 {
+		t.Fatalf("revision backfill must record a status event: %+v", stats)
+	}
+	second := updatedAt()
+	if !second.After(first) {
+		t.Fatalf("updated_at must advance when the revision is backfilled: %v -> %v", first, second)
+	}
+
+	changed, err := s.ChangedSince(ctx, first, store.SchemaVersion)
+	if err != nil {
+		t.Fatalf("changed-since: %v", err)
+	}
+	if len(changed) != 1 || changed[0].Revision != "v42" {
+		t.Fatalf("backfilled row not pulled: %+v", changed)
+	}
+
+	// Sweep 3: identical again (revision unchanged) => no churn, no event.
+	stats, err = s.Sync(ctx, []flux.Resource{post})
+	if err != nil {
+		t.Fatalf("sync 3: %v", err)
+	}
+	if stats.Changed != 0 {
+		t.Fatalf("unchanged revision sweep must not write events: %+v", stats)
+	}
+	if got := updatedAt(); !got.Equal(second) {
+		t.Fatalf("updated_at churned on an unchanged revision sweep: %v -> %v", second, got)
+	}
+}
+
+// TestSyncWorkloadImageBumpRecordsEvent drives a release through a mirrored
+// workload: an image bump arrives as a new revision (the new tag) plus a new
+// content hash, with readiness unchanged. The sweep must write a history
+// event for the revision transition — the release history the console shows
+// for root-applied workload apps — and the event must reach the server's copy
+// path (EventsSince) with the tag on it.
+func TestSyncWorkloadImageBumpRecordsEvent(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+
+	deploy := func(tag, hash string) flux.Resource {
+		return flux.Resource{
+			Kind: "Deployment", APIVersion: "apps/v1",
+			Namespace: "product-team-a", Name: "app",
+			Ready: flux.ReadyTrue, Reason: "MinimumReplicasAvailable",
+			Revision: tag,
+			Images:   []flux.ContainerImage{{Container: "app", Image: "registry.example.com/team-a/app:" + tag}},
+			Raw:      json.RawMessage(`{"kind":"Deployment"}`), ContentHash: hash,
+		}
+	}
+
+	if _, err := s.Sync(ctx, []flux.Resource{deploy("v41", "deploy-1")}); err != nil {
+		t.Fatalf("sync 1: %v", err)
+	}
+	stats, err := s.Sync(ctx, []flux.Resource{deploy("v42", "deploy-2")})
+	if err != nil {
+		t.Fatalf("sync 2: %v", err)
+	}
+	if stats.Changed != 1 {
+		t.Fatalf("image bump must record a status event: %+v", stats)
+	}
+
+	row, history, err := s.Get(ctx, "Deployment", "product-team-a", "app")
+	if err != nil {
+		t.Fatalf("get deployment: %v", err)
+	}
+	if row.Revision != "v42" {
+		t.Fatalf("row revision: got %q, want %q", row.Revision, "v42")
+	}
+	if len(history) != 2 ||
+		history[0].Revision != "v42" || history[1].Revision != "v41" ||
+		history[0].Ready != flux.ReadyTrue {
+		t.Fatalf("unexpected release history: %+v", history)
+	}
+
+	events, err := s.EventsSince(ctx, 0)
+	if err != nil {
+		t.Fatalf("events-since: %v", err)
+	}
+	if len(events) != 2 || events[len(events)-1].Revision != "v42" {
+		t.Fatalf("server copy path must see the bump event: %+v", events)
+	}
+}
+
 // TestSyncContentHashSkipsUnchangedRewrite asserts the write-hygiene contract:
 // an unchanged sweep leaves updated_at alone (no row/raw rewrite), while a
 // content change advances it. The central sync loop pulls on updated_at, so

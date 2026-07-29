@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/distribution/reference"
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
 	kustomizev1 "github.com/fluxcd/kustomize-controller/api/v1"
 	fluxmeta "github.com/fluxcd/pkg/apis/meta"
@@ -38,7 +39,12 @@ type Resource struct {
 	Ready      string `json:"ready"` // True | False | Unknown
 	Reason     string `json:"reason,omitempty"`
 	Message    string `json:"message,omitempty"`
-	Revision   string `json:"revision,omitempty"`
+	// Revision is the version a resource is at: the applied source revision
+	// for the Flux kinds, the chart version for a HelmRelease — and for
+	// workloads the primary container's image tag, the app's effective
+	// version (see workloadRevision). The status-event history snapshots its
+	// transitions, so this is what release history is built from.
+	Revision string `json:"revision,omitempty"`
 	// AzureResourceID is the ARM id of the Azure resource a DIS object
 	// provisions (the UI builds Portal links from it). Empty for Flux kinds and
 	// for DIS kinds whose operator has not published it yet.
@@ -460,10 +466,11 @@ func readyFromProvisioningState(state string) string {
 
 // applyWorkloadStatus fills the projected fields for an apps workload, decoded
 // into the typed k8s.io/api structs the same runtime-conversion way as the
-// Flux kinds. All three kinds project their pod template's container images;
-// readiness is per kind because they share no condition semantics: Deployment
-// publishes an Available condition, StatefulSet and DaemonSet publish only
-// replica counts, which are synthesized into a short reason/message.
+// Flux kinds. All three kinds project their pod template's container images
+// and, as the revision, the primary container's image tag; readiness is per
+// kind because they share no condition semantics: Deployment publishes an
+// Available condition, StatefulSet and DaemonSet publish only replica counts,
+// which are synthesized into a short reason/message.
 func (r *Resource) applyWorkloadStatus(u *unstructured.Unstructured) error {
 	switch u.GetKind() {
 	case KindDeployment:
@@ -476,6 +483,7 @@ func (r *Resource) applyWorkloadStatus(u *unstructured.Unstructured) error {
 		r.Suspended = o.Spec.Paused
 		r.ObservedGeneration = o.Status.ObservedGeneration
 		r.Images = containerImages(o.Spec.Template.Spec.Containers)
+		r.Revision = workloadRevision(o.Name, o.Spec.Template.Spec.Containers)
 		for _, c := range o.Status.Conditions {
 			if c.Type != appsv1.DeploymentAvailable {
 				continue
@@ -495,6 +503,7 @@ func (r *Resource) applyWorkloadStatus(u *unstructured.Unstructured) error {
 		}
 		r.ObservedGeneration = o.Status.ObservedGeneration
 		r.Images = containerImages(o.Spec.Template.Spec.Containers)
+		r.Revision = workloadRevision(o.Name, o.Spec.Template.Spec.Containers)
 		desired := int32(1) // nil spec.replicas defaults to 1
 		if o.Spec.Replicas != nil {
 			desired = *o.Spec.Replicas
@@ -507,6 +516,7 @@ func (r *Resource) applyWorkloadStatus(u *unstructured.Unstructured) error {
 		}
 		r.ObservedGeneration = o.Status.ObservedGeneration
 		r.Images = containerImages(o.Spec.Template.Spec.Containers)
+		r.Revision = workloadRevision(o.Name, o.Spec.Template.Spec.Containers)
 		r.applyReadyReplicas(o.Status.NumberReady, o.Status.DesiredNumberScheduled)
 	}
 	return nil
@@ -541,6 +551,49 @@ func containerImages(containers []corev1.Container) []ContainerImage {
 		out[i] = ContainerImage{Container: c.Name, Image: c.Image}
 	}
 	return out
+}
+
+// workloadRevision is a workload's release identity: the image tag of its
+// primary container — the one named like the workload itself, else the first.
+// The Flux revision fields name manifest versions; for a bare workload only
+// the running image tag says which app version it is at, and projecting it as
+// the revision makes the status-event history record image bumps as releases.
+func workloadRevision(name string, containers []corev1.Container) string {
+	if len(containers) == 0 {
+		return ""
+	}
+	primary := containers[0]
+	for _, c := range containers {
+		if c.Name == name {
+			primary = c
+			break
+		}
+	}
+	return imageTag(primary.Image)
+}
+
+// imageTag extracts the version part of an image reference, parsed with the
+// canonical distribution grammar (the same parser kubelet admits the ref
+// with): the tag when one is present, the short digest for a digest-only
+// reference, and "latest" for a bare one (what an untagged ref resolves to).
+// Empty when the ref does not parse — kubelet rejects such a pod as
+// InvalidImageName, but the object still exists and gets swept.
+func imageTag(ref string) string {
+	named, err := reference.ParseNormalizedNamed(ref)
+	if err != nil {
+		return ""
+	}
+	if tagged, ok := named.(reference.Tagged); ok {
+		return tagged.Tag()
+	}
+	if digested, ok := named.(reference.Digested); ok {
+		enc := digested.Digest().Encoded()
+		if len(enc) > 12 {
+			enc = enc[:12]
+		}
+		return enc
+	}
+	return "latest"
 }
 
 // fromUnstructured decodes the (version-agnostically fetched) object into a
