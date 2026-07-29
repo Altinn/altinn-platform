@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.2](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.7.1...dis-console-v1.7.2) (2026-07-29)
+
+
+### Bug Fixes
+
+* **dis-console:** project workload revision from the primary container's image tag ([#3845](https://github.com/Altinn/altinn-platform/issues/3845)) ([9dd0a8f](https://github.com/Altinn/altinn-platform/commit/9dd0a8fc16c3ec0c53d17c5081d151e958c878d9))
+
 ## [1.7.1](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.7.0...dis-console-v1.7.1) (2026-07-24)
 
 
