@@ -28,7 +28,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: dis-console
-          image: ghcr.io/altinn/altinn-platform/dis-console:v1.7.1
+          image: ghcr.io/altinn/altinn-platform/dis-console:v1.7.2
           args:
             - agent
           ports:
