@@ -3,6 +3,7 @@ module github.com/Altinn/altinn-platform/services/dis-identity-operator
 go 1.26.0
 
 require (
+	github.com/Altinn/altinn-platform/services/dis-common v0.0.0-20260730112802-a76c47449171
 	github.com/Azure/azure-service-operator/v2 v2.19.0
 	github.com/knadh/koanf/parsers/toml/v2 v2.2.1
 	github.com/knadh/koanf/providers/env/v2 v2.0.0

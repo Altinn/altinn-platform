@@ -21,6 +21,7 @@ import (
 	"flag"
 	"os"
 
+	"github.com/Altinn/altinn-platform/services/dis-common/platformtags"
 	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	vaultv1alpha1 "github.com/Altinn/altinn-platform/services/dis-vault-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-vault-operator/internal/config"
@@ -77,6 +78,7 @@ func main() {
 	var environment string
 	var aksSubnetIDs string
 	var vpnExitNodeSubnetID string
+	var rawBaseTags string
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -136,6 +138,12 @@ func main() {
 		"vpn-exit-node-subnet-id",
 		os.Getenv("DISVAULT_VPN_EXIT_NODE_SUBNET_ID"),
 		"Optional Azure subnet ARM ID to add to the Key Vault firewall allowlist",
+	)
+	flag.StringVar(
+		&rawBaseTags,
+		"base-tags",
+		os.Getenv("DISVAULT_BASE_TAGS"),
+		"JSON object of platform base tags applied to every Azure resource this operator creates (optional)",
 	)
 	opts := zap.Options{
 		Development: true,
@@ -249,6 +257,12 @@ func main() {
 		setupLog.Error(err, "invalid operator configuration")
 		os.Exit(1)
 	}
+
+	baseTags, err := platformtags.ParseBase(rawBaseTags)
+	if err != nil {
+		setupLog.Error(err, "ignoring invalid base-tags value; Azure resources will not receive platform tags")
+	}
+	opCfg.BaseTags = baseTags
 
 	if err = (&controller.VaultReconciler{
 		Client: mgr.GetClient(),

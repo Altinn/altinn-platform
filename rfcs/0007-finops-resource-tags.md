@@ -24,7 +24,7 @@ Required in base:
 - finops_product: product name (studio, dialogporten, formidling, autorisasjon, varsling, melding, altinn2)
 - finops_serviceownercode: short owner code
 - finops_serviceownerorgnr: legal org number (9 digits)
-- repository: source repository URL (ex: https://github.com/Altinn/altinn-platform)
+- repository: source repository URL of the code that creates the tags (ex: https://github.com/Altinn/altinn-platform)
 - env: duplicate of finops_environment (legacy)
 - product: duplicate of finops_product (legacy)
 - org: duplicate of finops_serviceownercode (legacy)

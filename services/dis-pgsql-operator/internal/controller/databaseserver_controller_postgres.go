@@ -343,9 +343,7 @@ func (r *DatabaseServerReconciler) ensurePostgresServer(
 			Tier: to.Ptr(profile.SkuTier),
 		},
 
-		Tags: map[string]string{
-			disDatabaseNamePrefix: db.Name,
-		},
+		Tags: r.resourceTags(db),
 
 		AuthConfig: authConfig,
 	}

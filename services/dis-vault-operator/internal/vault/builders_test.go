@@ -1,8 +1,10 @@
 package vault
 
 import (
+	"maps"
 	"testing"
 
+	"github.com/Altinn/altinn-platform/services/dis-common/platformtags"
 	vaultv1alpha1 "github.com/Altinn/altinn-platform/services/dis-vault-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-vault-operator/internal/config"
 	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
@@ -338,4 +340,78 @@ func testKeyVaultWithAzureName(azureName string) *keyvaultv1.Vault {
 	keyVault.Namespace = testNamespace
 	keyVault.Spec.AzureName = azureName
 	return keyVault
+}
+
+func TestBuildASOKeyVaultResourcePlatformTags(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.OperatorConfig{
+		SubscriptionID: "sub-123",
+		ResourceGroup:  "rg-dis-dev",
+		TenantID:       "00000000-0000-0000-0000-000000000000",
+		Location:       "norwayeast",
+		Environment:    "at22",
+		BaseTags: map[string]string{
+			"finops_environment": "at22",
+			"finops_product":     "dis-core",
+			"env":                "at22",
+			"product":            "dis-core",
+			"org":                "dis",
+		},
+	}
+
+	v := &vaultv1alpha1.Vault{}
+	v.Name = testVaultName
+	v.Namespace = "product-dialogporten"
+	v.Spec.IdentityRef = &vaultv1alpha1.ApplicationIdentityRef{Name: testIdentityName}
+	v.Spec.Tags = map[string]string{
+		"team":           "dp-backend",
+		"finops_product": "not-my-product",
+		"env":            "prod",
+	}
+
+	resource, err := BuildASOKeyVaultResource(v, cfg, "myappat22abc123")
+	if err != nil {
+		t.Fatalf("expected key vault builder to succeed, got error: %v", err)
+	}
+
+	want := map[string]string{
+		"team":               "dp-backend",
+		"finops_environment": "at22",
+		"finops_product":     "dialogporten",
+		"env":                "at22",
+		"product":            "dialogporten",
+		"org":                "dis",
+		"repository":         platformtags.RepositoryURL,
+	}
+	if !maps.Equal(resource.Spec.Tags, want) {
+		t.Fatalf("expected platform tags to win over tenant tags: want %#v, got %#v", want, resource.Spec.Tags)
+	}
+}
+
+func TestBuildASOKeyVaultResourceTenantTagsOnlyWithoutBaseTags(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.OperatorConfig{
+		SubscriptionID: "sub-123",
+		ResourceGroup:  "rg-dis-dev",
+		TenantID:       "00000000-0000-0000-0000-000000000000",
+		Location:       "norwayeast",
+		Environment:    "dev",
+	}
+
+	v := &vaultv1alpha1.Vault{}
+	v.Name = testVaultName
+	v.Namespace = "product-dialogporten"
+	v.Spec.IdentityRef = &vaultv1alpha1.ApplicationIdentityRef{Name: testIdentityName}
+	v.Spec.Tags = map[string]string{"team": "dp-backend"}
+
+	resource, err := BuildASOKeyVaultResource(v, cfg, "myappdevabc123")
+	if err != nil {
+		t.Fatalf("expected key vault builder to succeed, got error: %v", err)
+	}
+
+	if !maps.Equal(resource.Spec.Tags, v.Spec.Tags) {
+		t.Fatalf("expected unchanged tenant tags without base tags, got %#v", resource.Spec.Tags)
+	}
 }

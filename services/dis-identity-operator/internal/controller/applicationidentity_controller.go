@@ -46,6 +46,11 @@ type ApplicationIdentityReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 	Config *config.DisIdentityConfig
+
+	// BaseTags are the parsed platform-owned Azure tags (the RFC 0007 finops
+	// base tag set) applied to identities created by this operator. Empty
+	// disables platform tagging.
+	BaseTags map[string]string
 }
 
 // +kubebuilder:rbac:groups=application.dis.altinn.cloud,resources=applicationidentities,verbs=get;list;watch;create;update;patch;delete

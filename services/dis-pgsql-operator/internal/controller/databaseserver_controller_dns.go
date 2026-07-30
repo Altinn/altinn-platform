@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"maps"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -89,6 +90,23 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSZone(
 	var existing networkv1.PrivateDnsZone
 	err := r.Get(ctx, key, &existing)
 	if err == nil {
+		if !existing.GetDeletionTimestamp().IsZero() {
+			return nil
+		}
+		// The zone spec is otherwise create-only; tags are synced so zones
+		// created before platform tagging still receive the current tag set.
+		desiredTags := r.resourceTags(db)
+		if !maps.Equal(existing.Spec.Tags, desiredTags) {
+			existing.Spec.Tags = desiredTags
+			logger.Info("updating private DNS zone tags",
+				"zoneCRName", zoneCRName,
+				"azureName", zoneAzureName,
+				"asoNamespace", ns)
+			if err := r.Update(ctx, &existing); err != nil {
+				return fmt.Errorf("update PrivateDnsZone %s/%s tags: %w", key.Namespace, key.Name, err)
+			}
+			return nil
+		}
 		logger.Info("private DNS zone already exists for database server",
 			"zoneCRName", zoneCRName,
 			"azureName", zoneAzureName,
@@ -124,9 +142,7 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSZone(
 					r.Config.ResourceGroup,
 				),
 			},
-			Tags: map[string]string{
-				disDatabaseNamePrefix: db.Name,
-			},
+			Tags: r.resourceTags(db),
 		},
 	}
 
@@ -182,9 +198,7 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSVNetLink(
 			},
 		},
 
-		Tags: map[string]string{
-			disDatabaseNamePrefix: db.Name,
-		},
+		Tags: r.resourceTags(db),
 	}
 
 	key := types.NamespacedName{

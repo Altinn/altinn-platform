@@ -44,6 +44,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	"github.com/Altinn/altinn-platform/services/dis-common/platformtags"
 	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
@@ -96,6 +97,7 @@ func main() {
 	var tenantID string
 	var userProvisionImage string
 	var clusterID string
+	var rawBaseTags string
 	var provisionUser bool
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -165,6 +167,12 @@ func main() {
 		"Stable, human-readable cluster identifier (e.g. 'admin-test'); appended to new "+
 			"Flexible Server AzureNames to keep them globally unique across clusters and "+
 			"derivable by out-of-cluster consumers (required)",
+	)
+	flag.StringVar(
+		&rawBaseTags,
+		"base-tags",
+		os.Getenv("DISPG_BASE_TAGS"),
+		"JSON object of platform base tags applied to every Azure resource this operator creates (optional)",
 	)
 
 	opts := zap.Options{
@@ -310,6 +318,12 @@ func main() {
 		setupLog.Error(err, "invalid operator configuration")
 		os.Exit(1)
 	}
+
+	baseTags, err := platformtags.ParseBase(rawBaseTags)
+	if err != nil {
+		setupLog.Error(err, "ignoring invalid base-tags value; Azure resources will not receive platform tags")
+	}
+	opCfg.BaseTags = baseTags
 
 	// Startup context just for fetching the subnet catalog
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
