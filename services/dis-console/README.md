@@ -78,13 +78,21 @@ per-row detail fetch. Readiness is per kind (they share no condition
 semantics): Deployment takes its `Available` condition (and maps `spec.paused`
 onto `suspended`); StatefulSet and DaemonSet compare ready/desired replica
 counts, synthesized into a short reason/message (`2/3 ready`).
-A chart-created workload's `meta.helm.sh/release-{name,namespace}` annotations
-name its *Helm release*, which matches the HelmRelease CR only in the default
-case (`spec.releaseName` overrides it; `spec.targetNamespace` prefixes the name
-and moves the namespace), so the sweep resolves the release identity against
-the batch's HelmReleases and projects the owner as `appliedBy`; a release no
-HelmRelease accounts for (installed outside Flux) stays mirrored without an
-owner.
+A chart-created workload's `appliedBy` is taken from helm-controller's origin
+labels (`helm.toolkit.fluxcd.io/{name,namespace}`) when present — the
+controller's builtin post-renderer stamps them on everything it applies, and
+they name the HelmRelease CR exactly. Without them the workload's
+`meta.helm.sh/release-{name,namespace}` annotations name only its *Helm
+release*, which matches the HelmRelease CR in the default case
+(`spec.releaseName` overrides it; `spec.targetNamespace` prefixes the name and
+moves the namespace), so the sweep resolves the release identity against the
+batch's HelmReleases instead. Two HelmReleases can declare the same release
+identity (a duplicate CR pointing at another CR's release); the sweep then
+attributes to the Ready claimant — a CR that never installed the release
+cannot own its live objects — and reports claims of equal readiness as a
+warning, preferring the CR whose own namespace is the release namespace. A
+release no HelmRelease accounts for (installed outside Flux) stays mirrored
+without an owner.
 
 Each kind is listed from the apiserver watch cache (`resourceVersion=0`, not a
 quorum read from etcd) and the discovery cache is refreshed only periodically,

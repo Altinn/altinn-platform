@@ -198,14 +198,14 @@ func TestSweepMirrorsOnlyGitOpsAppliedWorkloads(t *testing.T) {
 	}
 }
 
-// TestSweepResolvesHelmWorkloadOwnership pins the Helm side of the workload
-// sweep: chart-created workloads (managed-by label + release annotations, no
-// kustomize labels) are mirrored with appliedBy resolved to the HelmRelease
-// deploying that release — through the default identity, a releaseName
-// override, and targetNamespace prefix defaulting. A kustomize-applied object
-// whose chart hardcodes the managed-by label is mirrored exactly once and
-// keeps the kustomize appliedBy; a release no HelmRelease accounts for stays
-// mirrored without an owner.
+// TestSweepResolvesHelmWorkloadOwnership pins the annotation-fallback side of
+// the Helm join: chart-created workloads without origin labels (managed-by
+// label + release annotations, no kustomize labels) are mirrored with
+// appliedBy resolved to the HelmRelease deploying that release — through the
+// default identity, a releaseName override, and targetNamespace prefix
+// defaulting. A kustomize-applied object whose chart hardcodes the managed-by
+// label is mirrored exactly once and keeps the kustomize appliedBy; a release
+// no HelmRelease accounts for stays mirrored without an owner.
 func TestSweepResolvesHelmWorkloadOwnership(t *testing.T) {
 	deployment := func(ns, name string, objLabels, annotations map[string]any) unstructured.Unstructured {
 		meta := map[string]any{"namespace": ns, "name": name}
@@ -320,6 +320,207 @@ func TestSweepResolvesHelmWorkloadOwnership(t *testing.T) {
 		case *got.AppliedBy != *want:
 			t.Errorf("%s appliedBy = %+v, want %+v", name, got.AppliedBy, want)
 		}
+	}
+}
+
+// TestSweepPrefersHelmOriginLabels pins the label-first ownership path: when
+// a chart-created workload carries helm-controller's origin labels, appliedBy
+// comes straight from them — they name the CR exactly, and only the CR that
+// actually installed the release stamps them — even when the release
+// annotations would resolve to a different CR, and even when no swept
+// HelmRelease matches (the labels are trusted like the kustomize ones). An
+// object carrying only one of the two labels falls back to the annotation
+// join.
+func TestSweepPrefersHelmOriginLabels(t *testing.T) {
+	deployment := func(ns, name string, objLabels, annotations map[string]any) unstructured.Unstructured {
+		meta := map[string]any{"namespace": ns, "name": name, "labels": objLabels}
+		if annotations != nil {
+			meta["annotations"] = annotations
+		}
+		return unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata":   meta,
+		}}
+	}
+	originLabels := map[string]any{
+		labelManagedBy:           managedByHelm,
+		labelHelmOriginName:      "app-one",
+		labelHelmOriginNamespace: "team-one",
+	}
+	otherRelease := map[string]any{
+		annotationReleaseName:      "other-app",
+		annotationReleaseNamespace: "team-two",
+	}
+
+	d := &fakeDynamic{items: map[string][]unstructured.Unstructured{
+		"helmreleases": {{Object: map[string]any{
+			"apiVersion": "helm.toolkit.fluxcd.io/v2",
+			"kind":       "HelmRelease",
+			"metadata":   map[string]any{"namespace": "team-two", "name": "other-app"},
+		}}},
+		"deployments": {
+			// Full origin labels, no annotations, and no swept HelmRelease
+			// named app-one: the labels are trusted as-is.
+			deployment("team-one", "labeled-direct", originLabels, nil),
+			// Origin labels beat the annotation join — the annotations resolve
+			// to the swept other-app CR, but the labels name the installer.
+			deployment("team-two", "labeled-wins", originLabels, otherRelease),
+			// One label without the other: fall back to the annotation join.
+			deployment("team-two", "half-labeled", map[string]any{
+				labelManagedBy:      managedByHelm,
+				labelHelmOriginName: "app-one",
+			}, otherRelease),
+		},
+	}}
+	c := &Client{dyn: d, mapper: &fakeMapper{}}
+
+	resources, warnings, err := c.Sweep(context.Background())
+	if err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+	wantOwner := map[string]AppliedBy{
+		"labeled-direct": {Name: "app-one", Namespace: "team-one"},
+		"labeled-wins":   {Name: "app-one", Namespace: "team-one"},
+		"half-labeled":   {Name: "other-app", Namespace: "team-two"},
+	}
+	for _, r := range resources {
+		want, ok := wantOwner[r.Name]
+		if !ok {
+			continue
+		}
+		delete(wantOwner, r.Name)
+		if r.AppliedBy == nil || *r.AppliedBy != want {
+			t.Errorf("%s appliedBy = %+v, want %+v", r.Name, r.AppliedBy, want)
+		}
+	}
+	for name := range wantOwner {
+		t.Errorf("workload %q not mirrored", name)
+	}
+}
+
+// TestSweepTieBreaksDuplicateReleaseClaims pins resolveClaim through Sweep:
+// when two HelmReleases declare the same effective release identity, the
+// Ready claimant owns the release's workloads regardless of list order and
+// without a warning; claims of equal readiness are warned about, with the
+// default-layout CR (own namespace == release namespace) preferred and the
+// first-listed claim kept when neither matches.
+func TestSweepTieBreaksDuplicateReleaseClaims(t *testing.T) {
+	helmRelease := func(ns, name, ready string, spec map[string]any) unstructured.Unstructured {
+		obj := map[string]any{
+			"apiVersion": "helm.toolkit.fluxcd.io/v2",
+			"kind":       "HelmRelease",
+			"metadata":   map[string]any{"namespace": ns, "name": name},
+			"status": map[string]any{
+				"conditions": []any{map[string]any{
+					"type":               "Ready",
+					"status":             ready,
+					"reason":             "TestSeed",
+					"lastTransitionTime": "2026-07-01T10:00:00Z",
+				}},
+			},
+		}
+		if spec != nil {
+			obj["spec"] = spec
+		}
+		return unstructured.Unstructured{Object: obj}
+	}
+	// Every HelmRelease below claims the identity app-system/app-one, which
+	// the workload's release annotations name.
+	claimSpec := map[string]any{"releaseName": "app-one", "targetNamespace": "app-system"}
+	healthy := helmRelease("app-system", "app-one", "True", nil)
+	blocked := helmRelease("platform-system", "app-one", "False", claimSpec)
+	duplicate := helmRelease("platform-system", "app-one", "True", claimSpec)
+	remoteOne := helmRelease("team-one", "claim-one", "True", claimSpec)
+	remoteTwo := helmRelease("team-two", "claim-two", "True", claimSpec)
+	workload := unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata": map[string]any{
+			"namespace": "app-system",
+			"name":      "app-one-worker",
+			"labels":    map[string]any{labelManagedBy: managedByHelm},
+			"annotations": map[string]any{
+				annotationReleaseName:      "app-one",
+				annotationReleaseNamespace: "app-system",
+			},
+		},
+	}}
+
+	cases := []struct {
+		name      string
+		hrs       []unstructured.Unstructured
+		wantOwner AppliedBy
+		wantWarn  string // "" means no warning at all
+	}{
+		{
+			name:      "ready beats blocked, blocked listed last",
+			hrs:       []unstructured.Unstructured{healthy, blocked},
+			wantOwner: AppliedBy{Name: "app-one", Namespace: "app-system"},
+		},
+		{
+			name:      "ready beats blocked, blocked listed first",
+			hrs:       []unstructured.Unstructured{blocked, healthy},
+			wantOwner: AppliedBy{Name: "app-one", Namespace: "app-system"},
+		},
+		{
+			name:      "both ready: default layout wins, listed first",
+			hrs:       []unstructured.Unstructured{healthy, duplicate},
+			wantOwner: AppliedBy{Name: "app-one", Namespace: "app-system"},
+			wantWarn:  "attributing to app-system/app-one",
+		},
+		{
+			name:      "both ready: default layout wins, listed last",
+			hrs:       []unstructured.Unstructured{duplicate, healthy},
+			wantOwner: AppliedBy{Name: "app-one", Namespace: "app-system"},
+			wantWarn:  "attributing to app-system/app-one",
+		},
+		{
+			name:      "neither separable: first claim kept",
+			hrs:       []unstructured.Unstructured{remoteOne, remoteTwo},
+			wantOwner: AppliedBy{Name: "claim-one", Namespace: "team-one"},
+			wantWarn:  "attributing to team-one/claim-one",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := &fakeDynamic{items: map[string][]unstructured.Unstructured{
+				"helmreleases": tc.hrs,
+				"deployments":  {workload},
+			}}
+			c := &Client{dyn: d, mapper: &fakeMapper{}}
+
+			resources, warnings, err := c.Sweep(context.Background())
+			if err != nil {
+				t.Fatalf("sweep: %v", err)
+			}
+			switch {
+			case tc.wantWarn == "":
+				if len(warnings) != 0 {
+					t.Errorf("unexpected warnings: %v", warnings)
+				}
+			case len(warnings) != 1:
+				t.Errorf("warnings = %v, want exactly one naming the contested release", warnings)
+			default:
+				got := warnings[0].Error()
+				if !strings.Contains(got, "release app-system/app-one") || !strings.Contains(got, tc.wantWarn) {
+					t.Errorf("warning = %q, want the contested identity and %q", got, tc.wantWarn)
+				}
+			}
+			for _, r := range resources {
+				if r.Name != "app-one-worker" {
+					continue
+				}
+				if r.AppliedBy == nil || *r.AppliedBy != tc.wantOwner {
+					t.Errorf("appliedBy = %+v, want %+v", r.AppliedBy, tc.wantOwner)
+				}
+				return
+			}
+			t.Fatal("workload app-one-worker not mirrored")
+		})
 	}
 }
 

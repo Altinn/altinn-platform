@@ -71,8 +71,10 @@ Do not claim checks passed unless you actually ran them.
 - `internal/flux` — version-agnostic dynamic-client reader for the Flux and DIS
   kinds plus the label-filtered `apps` workloads (Deployment/StatefulSet/
   DaemonSet, filtered in Sweep on the kustomize-controller label or Helm's
-  managed-by label, the latter resolved to the owning HelmRelease via the
-  `meta.helm.sh` release annotations — or kept unowned when none matches);
+  managed-by label, the latter resolved to the owning HelmRelease via
+  helm-controller's origin labels, falling back to the `meta.helm.sh` release
+  annotations with duplicate release claims tie-broken on Ready state — or
+  kept unowned when none matches);
   `normalize.go` decodes the projected status into the typed Flux `api`
   structs (kustomize/helm/source `api` + `pkg/apis/meta`) via runtime
   conversion — for the DIS kinds into a minimal local struct (never the
