@@ -37,6 +37,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	"github.com/Altinn/altinn-platform/services/dis-common/platformtags"
 	applicationv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-identity-operator/internal/config"
 	"github.com/Altinn/altinn-platform/services/dis-identity-operator/internal/controller"
@@ -101,6 +102,11 @@ func main() {
 
 	setupLog.Info("loading config from file", "config-file", configFile)
 	operatorConfig := config.LoadConfigOrDie(configFile, f)
+
+	baseTags, err := platformtags.ParseBase(operatorConfig.BaseTags)
+	if err != nil {
+		setupLog.Error(err, "ignoring invalid baseTags value; Azure resources will not receive platform tags")
+	}
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -194,9 +200,10 @@ func main() {
 	}
 
 	if err := (&controller.ApplicationIdentityReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Config: operatorConfig,
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Config:   operatorConfig,
+		BaseTags: baseTags,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ApplicationIdentity")
 		os.Exit(1)

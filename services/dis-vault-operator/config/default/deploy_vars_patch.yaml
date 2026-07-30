@@ -15,3 +15,5 @@
       value: "${DISVAULT_AKS_SUBNET_IDS}"
     - name: DISVAULT_VPN_EXIT_NODE_SUBNET_ID
       value: "${DISVAULT_VPN_EXIT_NODE_SUBNET_ID}"
+    - name: DISVAULT_BASE_TAGS
+      value: "${DISVAULT_BASE_TAGS}"

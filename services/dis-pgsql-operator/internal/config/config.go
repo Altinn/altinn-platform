@@ -28,6 +28,11 @@ type OperatorConfig struct {
 
 	// UseAzFakes toggles Azure fake servers (used for kind/local).
 	UseAzFakes bool
+
+	// BaseTags are the platform-owned Azure tags (the RFC 0007 finops base
+	// tag set) applied to every Azure resource this operator creates. It is
+	// optional and set after construction: empty disables platform tagging.
+	BaseTags map[string]string
 }
 
 // NewOperatorConfig builds and validates the OperatorConfig from already-parsed

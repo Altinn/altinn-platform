@@ -4,9 +4,9 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
-	"maps"
 	"strings"
 
+	"github.com/Altinn/altinn-platform/services/dis-common/platformtags"
 	vaultv1alpha1 "github.com/Altinn/altinn-platform/services/dis-vault-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-vault-operator/internal/config"
 	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
@@ -93,10 +93,7 @@ func BuildASOKeyVaultResource(v *vaultv1alpha1.Vault, cfg config.OperatorConfig,
 		purgeProtection = *v.Spec.PurgeProtectionEnabled
 	}
 	properties.EnablePurgeProtection = &purgeProtection
-	tags := maps.Clone(v.Spec.Tags)
-	if len(tags) == 0 {
-		tags = nil
-	}
+	tags := platformtags.Merge(v.Spec.Tags, platformtags.ForNamespace(cfg.BaseTags, v.Namespace))
 
 	keyVault := &keyvaultv1.Vault{
 		ObjectMeta: metav1.ObjectMeta{

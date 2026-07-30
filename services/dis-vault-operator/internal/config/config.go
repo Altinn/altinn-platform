@@ -18,6 +18,11 @@ type OperatorConfig struct {
 	Location       string
 	Environment    string
 	AKSSubnetIDs   []string
+
+	// BaseTags are the platform-owned Azure tags (the RFC 0007 finops base
+	// tag set) applied to every Azure resource this operator creates. It is
+	// optional and set after construction: empty disables platform tagging.
+	BaseTags map[string]string
 }
 
 // ParseSubnetIDs parses and validates comma-separated subnet ARM IDs.
