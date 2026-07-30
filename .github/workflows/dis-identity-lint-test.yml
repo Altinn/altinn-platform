@@ -8,12 +8,14 @@ on:
     paths:
       - services/dis-identity-operator/**
       - .github/workflows/dis-identity-lint-test.yml
+      - Makefile.common
   pull_request:
     branches:
       - main
     paths:
       - services/dis-identity-operator/**
       - .github/workflows/dis-identity-lint-test.yml
+      - Makefile.common
 
 permissions:
   contents: read
