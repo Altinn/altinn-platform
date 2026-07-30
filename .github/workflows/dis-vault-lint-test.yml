@@ -7,12 +7,14 @@ on:
     paths:
       - services/dis-vault-operator/**
       - .github/workflows/dis-vault-lint-test.yml
+      - Makefile.common
   pull_request:
     branches:
       - main
     paths:
       - services/dis-vault-operator/**
       - .github/workflows/dis-vault-lint-test.yml
+      - Makefile.common
 
 permissions:
   contents: read
