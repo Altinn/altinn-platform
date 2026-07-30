@@ -7,12 +7,14 @@ on:
     paths:
       - services/dis-apim-operator/**
       - .github/workflows/dis-apim-lint-test.yml
+      - Makefile.common
   pull_request:
     branches:
       - main
     paths:
       - services/dis-apim-operator/**
       - .github/workflows/dis-apim-lint-test.yml
+      - Makefile.common
 
 permissions:
   contents: read
