@@ -129,9 +129,14 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 	@mkdir -p "$(LOCALBIN)"
 	@$(KIND) export kubeconfig --name "$(KIND_CLUSTER)" --kubeconfig "$(KIND_KUBECONFIG)"
 
+# Extra env and go-test flags for the e2e run; projects override before the
+# include (e.g. E2E_ENV := CERT_MANAGER_INSTALL_SKIP=true, E2E_GOTEST_FLAGS := -timeout=10m).
+E2E_ENV ?=
+E2E_GOTEST_FLAGS ?=
+
 .PHONY: test-e2e
 test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
-	@rc=0; KUBECONFIG="$(KIND_KUBECONFIG)" KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v || rc=$$?; \
+	@rc=0; $(E2E_ENV) KUBECONFIG="$(KIND_KUBECONFIG)" KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v $(E2E_GOTEST_FLAGS) || rc=$$?; \
 	$(MAKE) cleanup-test-e2e; \
 	exit $$rc
 
@@ -214,7 +219,12 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
+	@set -e; \
+	kustomize_file="config/manager/kustomization.yaml"; \
+	kustomize_backup="$$(mktemp)"; \
+	cp "$$kustomize_file" "$$kustomize_backup"; \
+	trap 'cp "$$kustomize_backup" "$$kustomize_file"; rm -f "$$kustomize_backup"' EXIT; \
+	( cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG} ); \
 	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" apply -f -
 
 .PHONY: undeploy
