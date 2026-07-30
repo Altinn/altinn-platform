@@ -7,12 +7,14 @@ on:
     paths:
       - services/dis-pgsql-operator/**
       - .github/workflows/dis-pgsql-lint-test.yml
+      - Makefile.common
   pull_request:
     branches:
       - main
     paths:
       - services/dis-pgsql-operator/**
       - .github/workflows/dis-pgsql-lint-test.yml
+      - Makefile.common
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
