@@ -24,6 +24,10 @@
       "release-type": "simple",
       "component": "dis-console"
     },
+    "services/dis-console-ui": {
+      "release-type": "node",
+      "component": "dis-console-ui"
+    },
     "infrastructure/images/azure-devops-agent": {
       "release-type": "simple",
       "component": "azdevops-agent",

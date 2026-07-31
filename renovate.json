@@ -48,7 +48,8 @@
     {
       "matchManagers": [
         "terraform",
-        "gomod"
+        "gomod",
+        "npm"
       ],
       "groupName": "{{manager}} non-major dependencies",
       "matchUpdateTypes": [
