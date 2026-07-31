@@ -61,7 +61,9 @@ export function buildSyncrootReleases(row: ArtifactRow, envs: string[]): Release
         (k) => shortDigest(k.revision) === release.digest,
       );
       if (applied) {
-        release.chips[env] = artifactStatus(cell.artifact) === 'failed' ? 'failed' : 'current';
+        const status = artifactStatus(cell.artifact);
+        release.chips[env] =
+          status === 'failed' ? 'failed' : status === 'suspended' ? 'suspended' : 'current';
       } else if (fetched === release.digest) {
         release.chips[env] = 'rolling';
       } else {

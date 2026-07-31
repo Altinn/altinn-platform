@@ -170,6 +170,7 @@ export function buildMatrix(resources: Resource[], opts: BuildOptions = {}): Mat
     for (const cell of cells) {
       let status: DeployStatus = cell.resource ? statusOf(cell.resource) : 'absent';
       for (const child of cell.children ?? []) status = worstOf(status, statusOf(child));
+      for (const dup of cell.conflict ?? []) status = worstOf(status, statusOf(dup));
       cell.status = status;
     }
     row.anyFailed = cells.some((c) => c.status === 'failed');

@@ -1,5 +1,6 @@
 import { Table, Tag } from '@digdir/designsystemet-react';
 import { envLabel } from '../lib/flux';
+import { imageTagStyle } from '../lib/statusColor';
 import { imageLabel, type AppWorkloadRow } from '../lib/workloads';
 
 /** Workloads × environments of declared container images: one row per
@@ -60,20 +61,13 @@ export function WorkloadsTable({
                         </Table.Cell>
                       );
                     }
-                    const color =
-                      cell.status === 'failed'
-                        ? 'danger'
-                        : w.driftContainers.has(c)
-                          ? 'warning'
-                          : cell.status === 'reconciling'
-                            ? 'info'
-                            : 'neutral';
+                    const style = imageTagStyle(cell.status, w.driftContainers.has(c));
                     return (
                       <Table.Cell key={e}>
                         <Tag
-                          data-color={color}
+                          data-color={style.color}
                           data-size="sm"
-                          variant={color === 'neutral' ? 'outline' : 'default'}
+                          variant={style.variant}
                           className="stage-chip"
                           title={image}
                         >

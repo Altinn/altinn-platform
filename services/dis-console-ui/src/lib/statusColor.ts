@@ -24,3 +24,14 @@ const STATUS_STYLE: Record<DeployStatus, StatusStyle> = {
 export function statusStyle(status: DeployStatus): StatusStyle {
   return STATUS_STYLE[status];
 }
+
+/** Tag style for a workload's container-image cell: a failed workload trumps
+ *  cross-environment image drift, drift trumps reconciling, else neutral. */
+export function imageTagStyle(
+  status: DeployStatus,
+  drifting: boolean,
+): Pick<StatusStyle, 'color' | 'variant'> {
+  const color: TagColor =
+    status === 'failed' ? 'danger' : drifting ? 'warning' : status === 'reconciling' ? 'info' : 'neutral';
+  return { color, variant: color === 'neutral' ? 'outline' : 'default' };
+}

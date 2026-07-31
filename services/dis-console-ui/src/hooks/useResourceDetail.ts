@@ -21,6 +21,7 @@ export function useResourceDetail(ref: ResourceRef | null) {
     if (!cluster || !kind || !namespace || !name) {
       setResource(null);
       setError(null);
+      setLoading(false);
       return;
     }
     let cancelled = false;

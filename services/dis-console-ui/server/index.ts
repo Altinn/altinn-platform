@@ -41,12 +41,20 @@ const server = Bun.serve({
         method: req.method,
         headers,
         redirect: 'manual',
+        signal: AbortSignal.timeout(30_000),
       };
       if (req.body) {
         init.body = req.body;
         init.duplex = 'half';
       }
-      return fetch(`${apiTarget}${url.pathname}${url.search}`, init);
+      try {
+        return await fetch(`${apiTarget}${url.pathname}${url.search}`, init);
+      } catch (err) {
+        const timedOut = err instanceof DOMException && err.name === 'TimeoutError';
+        return new Response(timedOut ? 'Upstream API timed out' : 'Upstream API unreachable', {
+          status: timedOut ? 504 : 502,
+        });
+      }
     }
 
     // Static assets from the Vite build.

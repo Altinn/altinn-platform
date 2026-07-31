@@ -250,33 +250,29 @@ function MapNodeBox({
           {expanded ? '−' : childCount}
         </span>
       )}
-      {onDetails && (
-        <span
-          role="button"
-          tabIndex={0}
-          className="map-node__info"
-          aria-label="Details"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDetails();
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.stopPropagation();
-              onDetails();
-            }
-          }}
-        >
-          ⓘ
-        </span>
-      )}
     </>
   );
-  return clickable ? (
-    <button type="button" className={cls} onClick={onClick}>
-      {inner}
-    </button>
-  ) : (
-    <div className={cls}>{inner}</div>
+  // The details affordance is a sibling button layered over the node, not a
+  // child of it — interactive elements must not nest.
+  return (
+    <span className="map-node-wrap">
+      {clickable ? (
+        <button type="button" className={cls} onClick={onClick}>
+          {inner}
+        </button>
+      ) : (
+        <div className={cls}>{inner}</div>
+      )}
+      {onDetails && (
+        <button
+          type="button"
+          className="map-node__info"
+          aria-label={`Details for ${node.name}`}
+          onClick={onDetails}
+        >
+          ⓘ
+        </button>
+      )}
+    </span>
   );
 }

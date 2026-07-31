@@ -19,11 +19,16 @@ export type Route =
   | { view: 'kustomization'; cluster: string; namespace: string; name: string };
 
 export function parseRoute(hash: string): Route {
-  const parts = hash
-    .replace(/^#\/?/, '')
-    .split('/')
-    .filter(Boolean)
-    .map(decodeURIComponent);
+  let parts: string[];
+  try {
+    parts = hash
+      .replace(/^#\/?/, '')
+      .split('/')
+      .filter(Boolean)
+      .map(decodeURIComponent);
+  } catch {
+    return { view: 'home' };
+  }
   if (parts.length === 0) return { view: 'home' };
   const [head, ...rest] = parts;
   if (head === 'syncroots' && rest.length >= 1) {

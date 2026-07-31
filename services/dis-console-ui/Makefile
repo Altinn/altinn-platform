@@ -58,7 +58,7 @@ dev-podman: ## Start the Vite dev server in a Bun container (no host toolchain n
 		-v "$(CURDIR):/app" -v $(NM_VOLUME):/app/node_modules -w /app \
 		-p 5173:5173 -e CHOKIDAR_USEPOLLING=true \
 		$(BUN_IMAGE) \
-		sh -lc "bun install && bun run dev -- --host 0.0.0.0"
+		sh -lc "bun install --frozen-lockfile && bun run dev -- --host 0.0.0.0"
 
 .PHONY: dev-live
 dev-live: ## Like dev-podman but against a live fleet API (BACKEND=a port-forwarded server). Proxies /api, so no CORS.
@@ -67,7 +67,7 @@ dev-live: ## Like dev-podman but against a live fleet API (BACKEND=a port-forwar
 		-p 5173:5173 -e CHOKIDAR_USEPOLLING=true \
 		-e VITE_USE_MOCK=false -e DIS_CONSOLE_API="$(BACKEND)" \
 		$(BUN_IMAGE) \
-		sh -lc "bun install && bun run dev -- --host 0.0.0.0"
+		sh -lc "bun install --frozen-lockfile && bun run dev -- --host 0.0.0.0"
 
 .PHONY: dev-cluster
 dev-cluster: ## One command: port-forward a dis-console server (set KUBE_CONTEXT=<ctx>, e.g. admin-test) and run the UI against it.
@@ -135,7 +135,8 @@ kind-create: ## Create the Kind cluster if it does not exist (writes a dedicated
 		echo "Kind cluster '$(KIND_CLUSTER)' already exists."; \
 	else \
 		echo "Creating Kind cluster '$(KIND_CLUSTER)'..."; \
-		$(KIND) create cluster --name "$(KIND_CLUSTER)"; \
+		$(KIND) create cluster --name "$(KIND_CLUSTER)" \
+			$(if $(KIND_KUBECONFIG),--kubeconfig "$(KIND_KUBECONFIG)"); \
 	fi
 	@$(KIND) export kubeconfig --name "$(KIND_CLUSTER)" --kubeconfig "$(KIND_KUBECONFIG)"
 

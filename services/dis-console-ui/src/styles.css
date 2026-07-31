@@ -1,7 +1,7 @@
 body {
   margin: 0;
   background: var(--ds-color-neutral-background-default, #fff);
-  font-family: var(--ds-font-family, 'Inter'), 'Inter', system-ui, sans-serif;
+  font-family: var(--ds-font-family, Inter), Inter, system-ui, sans-serif;
 }
 
 /* App shell: a sticky top bar, a
@@ -666,17 +666,33 @@ button.map-node:hover {
   font-variant-numeric: tabular-nums;
 }
 
+.map-node-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .map-node__info {
+  all: unset;
   position: absolute;
   bottom: 4px;
   right: 6px;
+  padding: 2px;
   font-size: 0.6875rem;
+  line-height: 1;
   color: var(--ds-color-neutral-text-subtle, #5e5e5e);
   cursor: pointer;
 }
 
 .map-node__info:hover {
   color: var(--ds-color-accent-base-default, #0a5db8);
+}
+
+.map-node__info:focus-visible {
+  outline: 2px solid var(--ds-color-focus-outer, #0a5db8);
+  outline-offset: 1px;
+  border-radius: 4px;
 }
 
 .map-node__kind {
@@ -925,7 +941,7 @@ button.map-node:hover {
   padding: 0;
   margin: -1px;
   overflow: hidden;
-  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
 }

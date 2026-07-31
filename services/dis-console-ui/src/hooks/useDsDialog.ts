@@ -6,8 +6,9 @@ import { useDialogBackClose } from './useDialogBackClose';
  * native dialog from React state, traps browser Back while open
  * (useDialogBackClose), and syncs the dialog's own close paths (X, esc,
  * backdrop) back into React. Designsystemet closes via the dialog *toggle*
- * machinery — no `close` event fires — so both events are listened to.
- * Returns the ref to attach to `<Dialog>`.
+ * machinery — `toggle newState === 'closed'` is the single close signal, so
+ * only that event is listened to (a `close` listener would fire a second
+ * `onClose` for the same close). Returns the ref to attach to `<Dialog>`.
  */
 export function useDsDialog(open: boolean, onClose: () => void) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -25,14 +26,11 @@ export function useDsDialog(open: boolean, onClose: () => void) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const handleClose = () => onCloseRef.current();
     const handleToggle = (e: Event) => {
       if ((e as ToggleEvent).newState === 'closed') onCloseRef.current();
     };
-    el.addEventListener('close', handleClose);
     el.addEventListener('toggle', handleToggle);
     return () => {
-      el.removeEventListener('close', handleClose);
       el.removeEventListener('toggle', handleToggle);
     };
   }, []);

@@ -617,7 +617,7 @@ function buildClusters(resources: Resource[]): Cluster[] {
       lastSweepAt: iso(stale ? 50 : 0.05),
       lastSyncedAt: iso(stale ? 50 : 0.03),
       agentVersion: '1.1.0',
-      schemaVersion: 2,
+      schemaVersion: 5,
       resourceCount: counts.get(cluster) ?? 0,
       stale,
     };

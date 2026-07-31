@@ -15,6 +15,7 @@ export function useSourceLink(resource: Resource | null) {
 
   useEffect(() => {
     setLink(null);
+    setLoading(false);
     if (!resource?.raw) return;
 
     const direct = sourceLinkFromRaw(resource.raw);

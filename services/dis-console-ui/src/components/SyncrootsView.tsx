@@ -181,11 +181,9 @@ export function SyncrootsView({ artifacts, resources, onSelectResource, onSelect
                     return (
                       <Table.Cell key={e}>
                         {cell ? (
-                          <button
-                            type="button"
+                          <RouteLink
+                            route={{ view: 'syncroot', key: row.key, env: e }}
                             className="cell-button"
-                            aria-label={`${row.name} in ${e}`}
-                            onClick={() => navigate({ view: 'syncroot', key: row.key, env: e })}
                           >
                             <span className="cell">
                               <Tag
@@ -197,7 +195,7 @@ export function SyncrootsView({ artifacts, resources, onSelectResource, onSelect
                               </Tag>
                               {cell.inFlight ? <span className="cell__rev">rolling…</span> : null}
                             </span>
-                          </button>
+                          </RouteLink>
                         ) : (
                           <StatusTag status="absent" />
                         )}
@@ -708,7 +706,7 @@ function SyncrootPage({
                                       <button
                                         type="button"
                                         className="cell-button"
-                                        aria-label={`${rel.digest} in ${envLabel(e)}: ${rel.chips[e]}`}
+                                        aria-label={`${rel.digest} in ${envLabel(e)}: ${rel.chips[e] ?? 'absent'}`}
                                         onClick={() => onEnv(e)}
                                       >
                                         <StageChip state={rel.chips[e] ?? 'absent'} label={envLabel(e)} />

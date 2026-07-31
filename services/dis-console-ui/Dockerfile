@@ -19,7 +19,7 @@ RUN apk --no-cache upgrade
 WORKDIR /app
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server ./server
-USER bun
+USER 1000:1000
 ENV PORT=8080
 EXPOSE 8080
 CMD ["bun", "server/index.ts"]

@@ -4,8 +4,9 @@ export function MockBanner() {
   return (
     <Alert data-color="info">
       <Paragraph>
-        Showing bundled <strong>mock</strong> fleet data. Set <code>VITE_USE_MOCK=false</code> and{' '}
-        <code>VITE_API_BASE_URL</code> to read a live dis-console server.
+        Showing bundled <strong>mock</strong> fleet data. Run the server with{' '}
+        <code>DIS_CONSOLE_API</code> set (or the dev server with <code>VITE_USE_MOCK=false</code>)
+        to read a live dis-console server.
       </Paragraph>
     </Alert>
   );

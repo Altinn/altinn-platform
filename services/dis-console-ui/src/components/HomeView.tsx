@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Spinner, Table, Tabs, Tag } from '@digdir/designsystemet-react';
+import { Alert, Paragraph, Spinner, Table, Tabs, Tag } from '@digdir/designsystemet-react';
 import type { Cluster, Resource } from '../api/types';
 import { useArtifacts } from '../hooks/useArtifacts';
 import { syncrootSummaries } from '../lib/artifacts';
@@ -17,7 +17,7 @@ interface Props {
  *  and its syncroots ("projects" — each groups the namespaces it deploys
  *  into). Tables, not cards: they hold up at fleet scale. */
 export function HomeView({ clusters, resources }: Props) {
-  const { artifacts, loading } = useArtifacts();
+  const { artifacts, loading, error } = useArtifacts();
   const summaries = useMemo(() => syncrootSummaries(artifacts, resources), [artifacts, resources]);
 
   return (
@@ -29,6 +29,10 @@ export function HomeView({ clusters, resources }: Props) {
       <Tabs.Panel value="syncroots">
         {loading ? (
           <Spinner aria-label="Loading syncroots" data-size="sm" />
+        ) : error ? (
+          <Alert data-color="danger">
+            <Paragraph>Failed to load syncroots: {error}</Paragraph>
+          </Alert>
         ) : (
           <div className="matrix__scroll">
             <Table hover data-size="sm">
