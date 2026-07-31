@@ -8,6 +8,11 @@ describe('routes', () => {
     expect(parseRoute('#/nonsense')).toEqual({ view: 'home' });
   });
 
+  it('falls back to home on a malformed percent-encoding instead of throwing', () => {
+    expect(parseRoute('#/%')).toEqual({ view: 'home' });
+    expect(parseRoute('#/syncroots/%E0%A4%A')).toEqual({ view: 'home' });
+  });
+
   it('round-trips section views', () => {
     for (const view of ['deployments', 'syncroots', 'databases', 'vaults'] as const) {
       expect(parseRoute(routeHash({ view }))).toEqual({ view });
