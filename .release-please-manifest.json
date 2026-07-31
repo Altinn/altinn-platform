@@ -5,6 +5,7 @@
   "services/dis-vault-operator": "1.4.9",
   "services/lakmus": "1.1.6",
   "services/dis-console": "1.7.2",
+  "services/dis-console-ui": "0.1.0",
   "infrastructure/images/azure-devops-agent": "1.2.9",
   "infrastructure/images/gh-runner": "0.9.1",
   "infrastructure/images/k6-action": "0.1.2",

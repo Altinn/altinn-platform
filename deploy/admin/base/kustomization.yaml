@@ -11,3 +11,4 @@ resources:
   - dis-console-agent-database.yaml
   - dis-console-agent-rbac.yaml
   - dis-console-agent-deployment.yaml
+  - dis-console-ui-deployment.yaml

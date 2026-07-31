@@ -1,0 +1,931 @@
+body {
+  margin: 0;
+  background: var(--ds-color-neutral-background-default, #fff);
+  font-family: var(--ds-font-family, 'Inter'), 'Inter', system-ui, sans-serif;
+}
+
+/* App shell: a sticky top bar, a
+   full-height (optionally collapsed) nav rail, and a scrolling content area. */
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.appbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-size-2, 0.5rem);
+  padding: var(--ds-size-2, 0.5rem) var(--ds-size-4, 1rem);
+  background: var(--ds-color-neutral-background-default, #fff);
+  border-bottom: 1px solid var(--ds-color-neutral-border-subtle, #e2e2e2);
+}
+
+.appbar__toggle {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  padding: var(--ds-size-2, 0.5rem);
+  border-radius: 50%;
+  color: var(--ds-color-neutral-text-default, #1e2b3c);
+}
+
+.appbar__toggle:hover {
+  background: var(--ds-color-neutral-surface-hover, #eeeeee);
+}
+
+.appbar__toggle:focus-visible {
+  outline: 2px solid var(--ds-color-focus-outer, #0a5db8);
+  outline-offset: 2px;
+}
+
+/* The brand lockup: "Console" shares the wordmark's baseline (the logo PNG is
+   tightly cropped, so the image's bottom edge is the "is" baseline) and is
+   sized so its x-height matches the logo's. */
+.appbar__brand {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--ds-size-2, 0.5rem);
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.appbar__brand picture {
+  display: contents;
+}
+
+.appbar__logo {
+  height: 1.75rem;
+  width: auto;
+}
+
+/* The logo's blue bars extend below the "is" baseline (measured: baseline at
+   row 277 of 339, ink to 317) — nudge the text up by (339-277)/339 of the
+   rendered logo height so both words share the true baseline. */
+.appbar__brand-text {
+  display: inline-block;
+  transform: translateY(calc(1.75rem * -0.183));
+}
+
+
+.app__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.app__content {
+  flex: 1;
+  min-width: 0;
+  padding: var(--ds-size-6, 1.5rem);
+}
+
+/* Fluid content: the views are tables and
+   master-detail layouts that earn their width on large displays. */
+.app__content-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-size-5, 1.25rem);
+}
+
+.leftnav {
+  flex: 0 0 auto;
+  width: 15rem;
+  padding: var(--ds-size-2, 0.5rem) 0;
+  border-right: 1px solid var(--ds-color-neutral-border-subtle, #e2e2e2);
+  transition: width 0.15s ease;
+}
+
+.leftnav--collapsed {
+  width: 3.5rem;
+}
+
+.leftnav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--ds-size-2, 0.5rem) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.leftnav--collapsed ul {
+  padding: 0;
+}
+
+.leftnav__item {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-size-3, 0.75rem);
+  width: 100%;
+  padding: var(--ds-size-3, 0.75rem) var(--ds-size-4, 1rem);
+  color: var(--ds-color-neutral-text-default, #1e2b3c);
+  border-radius: 0 999px 999px 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.leftnav__item:hover {
+  background: var(--ds-color-neutral-surface-hover, #eeeeee);
+}
+
+.leftnav__item[aria-current='page'] {
+  background: var(--ds-color-accent-surface-tinted, #eaf0fb);
+  color: var(--ds-color-accent-base-default, #0a5db8);
+  font-weight: 600;
+}
+
+.leftnav__item:focus-visible {
+  outline: 2px solid var(--ds-color-focus-outer, #0a5db8);
+  outline-offset: -2px;
+}
+
+.leftnav__icon {
+  flex: 0 0 auto;
+}
+
+.leftnav--collapsed .leftnav__item {
+  gap: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin: 0 auto;
+  padding: 0;
+  justify-content: center;
+  border-radius: var(--ds-border-radius-md, 8px);
+}
+
+.leftnav--collapsed .leftnav__label {
+  display: none;
+}
+
+.leftnav__group + .leftnav__group {
+  margin-top: var(--ds-size-3, 0.75rem);
+  padding-top: var(--ds-size-3, 0.75rem);
+  border-top: 1px solid var(--ds-color-neutral-border-subtle, #e2e2e2);
+}
+
+.leftnav__section {
+  padding: var(--ds-size-1, 0.25rem) var(--ds-size-4, 1rem);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ds-color-neutral-text-subtle, #5e5e5e);
+}
+
+.leftnav--collapsed .leftnav__section {
+  display: none;
+}
+
+/* DIS scope selector (tenant + environment) shared by Home + product views. */
+.disscope {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-size-3, 0.75rem);
+}
+
+.dis__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ds-size-3, 0.75rem);
+}
+
+.home__card-tags {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-size-2, 0.5rem);
+}
+
+.dis {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-size-4, 1rem);
+}
+
+.dis__empty {
+  color: var(--ds-color-neutral-text-subtle, #5e5e5e);
+}
+
+.dis__ns-title {
+  margin: 0 0 var(--ds-size-2, 0.5rem);
+  font-size: 0.9375rem;
+}
+
+.dis__list,
+.dis__children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dis__children {
+  margin-left: var(--ds-size-5, 1.25rem);
+  border-left: 1px solid var(--ds-color-neutral-border-subtle, #e2e2e2);
+}
+
+.dis__row {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-size-3, 0.75rem);
+  padding: var(--ds-size-2, 0.5rem) 0;
+  border-bottom: 1px solid var(--ds-color-neutral-border-subtle, #f0f0f0);
+}
+
+.dis__row--child {
+  padding-left: var(--ds-size-3, 0.75rem);
+}
+
+.dis__kind {
+  min-width: 9rem;
+  font-size: 0.75rem;
+  color: var(--ds-color-neutral-text-subtle, #5e5e5e);
+}
+
+.dis__rg {
+  font-size: 0.8125rem;
+  color: var(--ds-color-neutral-text-subtle, #5e5e5e);
+}
+
+.dis__portal {
+  margin-left: auto;
+}
+
+.dis__norsrc {
+  margin-left: auto;
+  font-size: 0.8125rem;
+  color: var(--ds-color-neutral-text-subtle, #9e9e9e);
+}
+
+/* Tables can outgrow the viewport (6 stage columns + app); scroll horizontally
+   and keep the header + first column pinned. */
+.matrix {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-size-3, 0.75rem);
+}
+
+.matrix__scroll {
+  overflow-x: auto;
+}
+
+.matrix__tenants {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-size-1, 0.25rem);
+}
+
+.matrix__tenants-label {
+  color: var(--ds-color-neutral-text-subtle, #5e5e5e);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.matrix__filters {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--ds-size-3, 0.75rem);
+}
+
+.matrix__count {
+  color: var(--ds-color-neutral-text-subtle, #5e5e5e);
+  font-size: 0.8125rem;
+  padding-bottom: 0.4rem;
+}
+
+.matrix__app {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 11rem;
+}
+
+.matrix__app-name {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-size-2, 0.5rem);
+}
+
+.matrix__app-meta {
+  color: var(--ds-color-neutral-text-subtle, #5e5e5e);
+  font-size: 0.8125rem;
+}
+
+/* The app column stays visible while the stage columns scroll. */
+.matrix__scroll thead th:first-child,
+.matrix__scroll tbody th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--ds-color-neutral-background-default, #fff);
+}
+
+.cell-button {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  border-radius: var(--ds-border-radius-md, 6px);
+}
+
+.cell-button:focus-visible {
+  outline: 2px solid var(--ds-color-focus-outer, #0a5db8);
+  outline-offset: 2px;
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.cell__rev {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  color: var(--ds-color-neutral-text-subtle, #5e5e5e);
+}
+
+.skeleton-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-size-2, 0.5rem);
+  margin-top: var(--ds-size-3, 0.75rem);
+}
+
+.detail dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--ds-size-2, 0.5rem) var(--ds-size-4, 1rem);
+  margin: 0;
+}
+
+.detail dt {
+  color: var(--ds-color-neutral-text-subtle, #5e5e5e);
+}
+
+.detail dd {
+  margin: 0;
+}
+
+.detail__applies {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.detail__applies-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-size-2, 0.5rem);
+  padding: var(--ds-size-1, 0.25rem) 0;
+}
+
+.detail__applies-kind {
+  min-width: 7rem;
+  font-size: 0.75rem;
+  color: var(--ds-color-neutral-text-subtle, #5e5e5e);
+}
+
+.syncroots {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-size-4, 1rem);
+  padding-top: var(--ds-size-3, 0.75rem);
+}
+
+.syncroot-page__head {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-size-3, 0.75rem);
+}
+
+.syncroot-page__env {
+  margin-left: auto;
+}
+
+/* Overview cards on the syncroot page. */
+.overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--ds-size-4, 1rem);
+  padding-top: var(--ds-size-3, 0.75rem);
+}
+
+.overview__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-size-2, 0.5rem);
+  padding: var(--ds-size-4, 1rem);
+  border: 1px solid var(--ds-color-neutral-border-subtle, #e2e2e2);
+  border-radius: var(--ds-border-radius-md, 8px);
+}
+
+.overview__card h3 {
+  margin: 0 0 var(--ds-size-1, 0.25rem);
+}
+
+.overview__row {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-size-2, 0.5rem);
+}
+
+.overview__row--split {
+  justify-content: space-between;
+}
+
+.overview__count {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.overview__facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--ds-size-1, 0.25rem) var(--ds-size-3, 0.75rem);
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.overview__facts dt {
+  color: var(--ds-color-neutral-text-subtle, #5e5e5e);
+}
+
+.overview__facts dd {
+  margin: 0;
+}
+
+.overview__total {
+  margin-top: var(--ds-size-1, 0.25rem);
+  font-size: 0.8125rem;
+  color: var(--ds-color-neutral-text-subtle, #5e5e5e);
+}
+
+.overview__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-size-2, 0.5rem);
+}
+
+.syncroot-page__head h2 {
+  margin: 0;
+}
+
+.syncroot-page__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-size-3, 0.75rem);
+  flex-wrap: wrap;
+  padding: var(--ds-size-3, 0.75rem);
+  border: 1px solid var(--ds-color-neutral-border-subtle, #e2e2e2);
+  border-radius: var(--ds-border-radius-md, 8px);
+}
+
+.tree,
+.tree__children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tree__children {
+  margin-left: var(--ds-size-5, 1.25rem);
+  border-left: 1px solid var(--ds-color-neutral-border-subtle, #e2e2e2);
+  padding-left: var(--ds-size-2, 0.5rem);
+}
+
+.tree__row {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-size-2, 0.5rem);
+  padding: var(--ds-size-1, 0.25rem) 0;
+}
+
+.tree__toggle {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  width: 1.25rem;
+  height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--ds-border-radius-sm, 4px);
+  color: var(--ds-color-neutral-text-subtle, #5e5e5e);
+}
+
+.tree__toggle:hover {
+  background: var(--ds-color-neutral-surface-hover, #eeeeee);
+}
+
+.tree__toggle:focus-visible {
+  outline: 2px solid var(--ds-color-focus-outer, #0a5db8);
+}
+
+.tree__spacer {
+  display: inline-block;
+  width: 1.25rem;
+}
+
+.tree__kind {
+  min-width: 8.5rem;
+  font-size: 0.75rem;
+  color: var(--ds-color-neutral-text-subtle, #5e5e5e);
+}
+
+.tree__name {
+  all: unset;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.tree__name:hover {
+  text-decoration: underline;
+}
+
+.tree__name:focus-visible {
+  outline: 2px solid var(--ds-color-focus-outer, #0a5db8);
+  outline-offset: 2px;
+}
+
+.tree__leaf {
+  color: var(--ds-color-neutral-text-default, #1e2b3c);
+}
+
+.tree__muted {
+  font-size: 0.8125rem;
+  color: var(--ds-color-neutral-text-subtle, #9e9e9e);
+}
+
+/* The syncroot deployment map: a pannable/zoomable SVG node graph. */
+.map {
+  position: relative;
+  height: 32rem;
+  border: 1px solid var(--ds-color-neutral-border-subtle, #e2e2e2);
+  border-radius: var(--ds-border-radius-md, 8px);
+  background:
+    radial-gradient(var(--ds-color-neutral-border-subtle, #e8e8e8) 1px, transparent 1px) 0 0 / 18px 18px,
+    var(--ds-color-neutral-background-default, #fff);
+  overflow: hidden;
+}
+
+.map svg {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.map svg:active {
+  cursor: grabbing;
+}
+
+.map__edge {
+  fill: none;
+  stroke: var(--ds-color-neutral-border-default, #c3c3c3);
+  stroke-width: 1.5;
+}
+
+.map__controls {
+  position: absolute;
+  left: var(--ds-size-3, 0.75rem);
+  bottom: var(--ds-size-3, 0.75rem);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.map__controls button {
+  all: unset;
+  cursor: pointer;
+  width: 1.75rem;
+  height: 1.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ds-color-neutral-border-subtle, #e2e2e2);
+  border-radius: var(--ds-border-radius-sm, 4px);
+  background: var(--ds-color-neutral-background-default, #fff);
+  font-weight: 600;
+}
+
+.map__controls button:hover {
+  background: var(--ds-color-neutral-surface-hover, #eeeeee);
+}
+
+.map-node {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  width: 100%;
+  height: 100%;
+  padding: 0 0.6rem;
+  border: 1.5px solid var(--ds-color-neutral-border-default, #c3c3c3);
+  border-radius: 8px;
+  background: var(--ds-color-neutral-background-default, #fff);
+  overflow: hidden;
+}
+
+button.map-node {
+  cursor: pointer;
+}
+
+button.map-node:hover {
+  border-color: var(--ds-color-accent-base-default, #0a5db8);
+}
+
+.map-node {
+  position: relative;
+}
+
+.map-node__badge {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--ds-color-neutral-border-default, #c3c3c3);
+  background: var(--ds-color-neutral-surface-tinted, #f3f4f5);
+  font-size: 0.625rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-node__info {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  font-size: 0.6875rem;
+  color: var(--ds-color-neutral-text-subtle, #5e5e5e);
+  cursor: pointer;
+}
+
+.map-node__info:hover {
+  color: var(--ds-color-accent-base-default, #0a5db8);
+}
+
+.map-node__kind {
+  font-size: 0.625rem;
+  line-height: 1.2;
+  color: var(--ds-color-neutral-text-subtle, #5e5e5e);
+}
+
+.map-node__name {
+  font-size: 0.75rem;
+  line-height: 1.2;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map-node--healthy {
+  border-color: var(--ds-color-success-border-default, #2f9e63);
+}
+
+.map-node--failed {
+  border-color: var(--ds-color-danger-border-default, #c01b1b);
+  background: var(--ds-color-danger-surface-tinted, #fbeaea);
+}
+
+.map-node--reconciling {
+  border-color: var(--ds-color-info-border-default, #0a5db8);
+}
+
+.map-node--suspended {
+  border-color: var(--ds-color-warning-border-default, #b8581d);
+}
+
+.map-node--unswept,
+.map-node--unknown {
+  border-style: dashed;
+}
+
+.stage-chip {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Releases browser: app list on the left, the selected
+   app's releases on the right. */
+.relbrowser__overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-size-4, 1rem);
+}
+
+.relbrowser {
+  display: grid;
+  grid-template-columns: 17rem minmax(0, 1fr);
+  gap: var(--ds-size-6, 1.5rem);
+  align-items: start;
+}
+
+@media (max-width: 56rem) {
+  .relbrowser {
+    grid-template-columns: 1fr;
+  }
+}
+
+.relbrowser__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-size-2, 0.5rem);
+  border-right: 1px solid var(--ds-color-neutral-border-subtle, #e2e2e2);
+  padding-right: var(--ds-size-4, 1rem);
+}
+
+@media (max-width: 56rem) {
+  .relbrowser__list {
+    border-right: none;
+    padding-right: 0;
+  }
+}
+
+.relbrowser__items {
+  display: flex;
+  flex-direction: column;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.relbrowser__item {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  width: 100%;
+  padding: var(--ds-size-2, 0.5rem) var(--ds-size-3, 0.75rem);
+  border-radius: var(--ds-border-radius-md, 6px);
+  border-left: 3px solid transparent;
+  cursor: pointer;
+}
+
+.relbrowser__item:hover {
+  background: var(--ds-color-neutral-surface-hover, #f0f1f2);
+}
+
+.relbrowser__item:focus-visible {
+  outline: 2px solid var(--ds-color-focus-outer, #0a5db8);
+  outline-offset: -2px;
+}
+
+.relbrowser__item[aria-current='true'] {
+  background: var(--ds-color-accent-surface-tinted, #e6f0fa);
+  border-left-color: var(--ds-color-accent-base-default, #0a5db8);
+}
+
+.relbrowser__item-name {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.relbrowser__meta {
+  color: var(--ds-color-neutral-text-subtle, #58595c);
+  font-size: 0.8125rem;
+}
+
+.relbrowser__dot {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--ds-color-neutral-border-default, #9ea0a4);
+}
+
+.relbrowser__dot[data-status='healthy'] {
+  background: var(--ds-color-success-base-default, #077a4b);
+}
+
+.relbrowser__dot[data-status='reconciling'] {
+  background: var(--ds-color-info-base-default, #0a5db8);
+}
+
+.relbrowser__dot[data-status='failed'] {
+  background: var(--ds-color-danger-base-default, #c01b28);
+}
+
+.relbrowser__dot[data-status='suspended'] {
+  background: var(--ds-color-warning-base-default, #b8581d);
+}
+
+.relbrowser__empty {
+  padding: var(--ds-size-2, 0.5rem) var(--ds-size-3, 0.75rem);
+}
+
+.relbrowser__detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-size-3, 0.75rem);
+  min-width: 0;
+}
+
+/* Release rows are short identifiers, dates, and chips — never wrap them;
+   the surrounding .matrix__scroll scrolls horizontally instead. */
+.relbrowser__detail table {
+  white-space: nowrap;
+}
+
+.relbrowser__detail-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ds-size-3, 0.75rem);
+  flex-wrap: wrap;
+}
+
+.release-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.release-cell__commit {
+  display: inline-flex;
+  align-items: center;
+}
+
+.release-dialog__images {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.release-dialog__image {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.375rem;
+}
+
+.release-dialog__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: var(--ds-size-2, 0.5rem);
+}
+
+.sort-th {
+  all: unset;
+  cursor: pointer;
+  font: inherit;
+  font-weight: inherit;
+}
+
+.sort-th:hover {
+  text-decoration: underline;
+}
+
+.sort-th:focus-visible {
+  outline: 2px solid var(--ds-color-focus-outer, #0a5db8);
+  outline-offset: 2px;
+}
+
+.sort-th__dir {
+  font-size: 0.6875rem;
+}
+
+.detail__inventory {
+  list-style: none;
+  margin: 0 0 var(--ds-size-2, 0.5rem);
+  padding: 0 0 0 var(--ds-size-4, 1rem);
+  border-left: 1px solid var(--ds-color-neutral-border-subtle, #e2e2e2);
+}
+
+.detail pre {
+  overflow: auto;
+  max-height: 40vh;
+  padding: var(--ds-size-3, 0.75rem);
+  border-radius: var(--ds-border-radius-md, 6px);
+  background: var(--ds-color-neutral-surface-tinted, #f3f4f5);
+  font-size: 0.8125rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

@@ -1,0 +1,36 @@
+name: Scan/Release dis-console-ui Image
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/dis-console-ui-release.yml
+      - services/dis-console-ui/**
+      - .github/workflows/reusable-image-scan-and-release-ghcr.yml
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/dis-console-ui-release.yml
+      - services/dis-console-ui/**
+      - .github/workflows/reusable-image-scan-and-release-ghcr.yml
+    tags:
+      - "dis-console-ui-v*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  build-and-release-image:
+    name: Build, scan and release
+    uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yml
+    with:
+      release_latest: true
+      image_name: dis-console-ui
+      tag_prefix: dis-console-ui-v
+      platforms: "linux/amd64"
+      workdir: ./services/dis-console-ui
