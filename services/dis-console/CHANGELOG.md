@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.3](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.7.2...dis-console-v1.7.3) (2026-07-31)
+
+
+### Bug Fixes
+
+* **dis-console:** attribute helm workloads via origin labels with release-claim tie-break ([#3848](https://github.com/Altinn/altinn-platform/issues/3848)) ([be0b05f](https://github.com/Altinn/altinn-platform/commit/be0b05f0b4813985d9d99b8a568b78e43eaedfd7))
+
 ## [1.7.2](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.7.1...dis-console-v1.7.2) (2026-07-29)
 
 
