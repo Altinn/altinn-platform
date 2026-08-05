@@ -1,7 +1,7 @@
 - Feature Name: flux_reconcile_webhooks
 - Start Date: 2026-03-06
-- RFC PR: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/pull/0000)
-- Github Issue: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/issues/0000)
+- RFC PR: [altinn/altinn-platform#3220](https://github.com/altinn/altinn-platform/pull/3220)
+- Github Issue: N/A
 - Product/Category: CI/CD
 - State: **REVIEW**
 
