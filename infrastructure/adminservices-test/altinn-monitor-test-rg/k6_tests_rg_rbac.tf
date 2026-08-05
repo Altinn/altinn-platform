@@ -163,6 +163,17 @@ variable "k8s_rbac" {
       dev_group = "dcf337f1-f1ba-428e-b101-642d9d619c73"
       sp_group  = "447482ce-de4b-4081-b611-e510252c3120"
     },
+    "access-management-bff" = { # TODO: Create dedicated groups
+      namespace = "access-management-bff"
+      dev_group = "5c42ac79-86e2-46d0-85d3-ae751dd5f057"
+      sp_group  = "328cbe61-aeb1-4782-bb36-d288c69b4f15"
+    },
+    "access-management" = { # TODO: Create dedicated groups
+      namespace = "access-management"
+      dev_group = "5c42ac79-86e2-46d0-85d3-ae751dd5f057"
+      sp_group  = "328cbe61-aeb1-4782-bb36-d288c69b4f15"
+    },
+
     register = {
       namespace = "register"
       dev_group = "cd36f41f-fc41-4f07-92f3-ce7f4db7caee"
