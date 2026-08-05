@@ -13,6 +13,7 @@
 |------|---------|
 | <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | >= 4.0.0 |
 | <a name="provider_grafana"></a> [grafana](#provider\_grafana) | >= 3.0.0 |
+| <a name="provider_time"></a> [time](#provider\_time) | n/a |
 
 ## Modules
 
@@ -31,6 +32,7 @@ No modules.
 | [azurerm_role_assignment.grafana_permission](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment) | resource |
 | [grafana_service_account.admin](https://registry.terraform.io/providers/grafana/grafana/latest/docs/resources/service_account) | resource |
 | [grafana_service_account_token.grafana_operator](https://registry.terraform.io/providers/grafana/grafana/latest/docs/resources/service_account_token) | resource |
+| [time_rotating.grafana_operator_token](https://registry.terraform.io/providers/hashicorp/time/latest/docs/resources/rotating) | resource |
 
 ## Inputs
 
@@ -42,8 +44,10 @@ No modules.
 | <a name="input_environment"></a> [environment](#input\_environment) | Environment for resources | `string` | n/a | yes |
 | <a name="input_grafana_admin_access"></a> [grafana\_admin\_access](#input\_grafana\_admin\_access) | List of user groups to grant admin access to grafana. | `list(string)` | `[]` | no |
 | <a name="input_grafana_editor_access"></a> [grafana\_editor\_access](#input\_grafana\_editor\_access) | List of user groups to grant editor access to grafana. | `list(string)` | `[]` | no |
-| <a name="input_grafana_major_version"></a> [grafana\_major\_version](#input\_grafana\_major\_version) | Managed Grafana major version. | `number` | `11` | no |
+| <a name="input_grafana_major_version"></a> [grafana\_major\_version](#input\_grafana\_major\_version) | Managed Grafana major version. | `number` | `12` | no |
 | <a name="input_grafana_monitor_reader_subscription_id"></a> [grafana\_monitor\_reader\_subscription\_id](#input\_grafana\_monitor\_reader\_subscription\_id) | List of subscription ids to grant reader access to grafana. | `list(string)` | `[]` | no |
+| <a name="input_grafana_operator_token_expiration_days"></a> [grafana\_operator\_token\_expiration\_days](#input\_grafana\_operator\_token\_expiration\_days) | Lifetime in days for the grafana-operator service account token. Must be less than or equal to the Grafana instance's service\_accounts.token\_expiration\_day\_limit. | `number` | `360` | no |
+| <a name="input_grafana_operator_token_rotation_days"></a> [grafana\_operator\_token\_rotation\_days](#input\_grafana\_operator\_token\_rotation\_days) | Number of days after which the grafana-operator service account token is rotated. Must be less than grafana\_operator\_token\_expiration\_days so the token is recreated before it expires. | `number` | `180` | no |
 | <a name="input_localtags"></a> [localtags](#input\_localtags) | A map of tags to assign to the created resources. | `map(string)` | `{}` | no |
 | <a name="input_location"></a> [location](#input\_location) | Default region for resources | `string` | `"norwayeast"` | no |
 | <a name="input_monitor_workspace_ids"></a> [monitor\_workspace\_ids](#input\_monitor\_workspace\_ids) | List of azure monitor workspaces to connect grafana. | `map(string)` | `{}` | no |

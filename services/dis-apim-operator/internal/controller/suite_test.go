@@ -53,7 +53,7 @@ var k8sManager manager.Manager
 var testEnv *envtest.Environment
 var ctx context.Context
 var cancel context.CancelFunc
-var fakeApim testutils.AzureApimFake
+var fakeApim *testutils.AzureApimFake
 
 func TestControllers(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -110,7 +110,7 @@ var _ = BeforeSuite(func() {
 			SubscriptionId:  "fake-subscription-id",
 			ResourceGroup:   "fake-resource-group",
 			ApimServiceName: "fake-apim-service",
-			NamespaceSuffix: "test",
+			NamespaceSuffix: nsTest,
 		},
 		FactoryOptions: &arm.ClientOptions{
 			ClientOptions: azcore.ClientOptions{

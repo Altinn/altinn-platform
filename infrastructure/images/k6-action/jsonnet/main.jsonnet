@@ -119,7 +119,7 @@ local testrun = {
     },
 
     spec: {
-      cleanup: 'post',
+      // cleanup: 'post', // Seems to be a bit too aggressive sometimes. Some metrics don't have time to be fully flushed out.
       arguments: std.stripChars(
         std.format('--tag testid=%s --tag namespace=%s --tag deploy_env=%s --tag test_name=%s --tag test_scope=%s --out experimental-prometheus-rw %s',
                    [testid, namespace, deploy_env, test_name, test_scope, extra_cli_args]), ' '

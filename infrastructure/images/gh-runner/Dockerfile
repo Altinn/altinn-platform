@@ -1,10 +1,10 @@
-FROM ghcr.io/actions/actions-runner:2.331.0@sha256:dced476aa42703ebd9aafc295ce52f160989c4528e831fc3be2aef83a1b3f6da
+FROM ghcr.io/actions/actions-runner:2.334.0@sha256:b6614fce332517f74d0a76e7c762fb08e4f2ff13dcf333183397c8a5725b6e8e
 # for latest release, see https://github.com/actions/runner/releases
 
 USER root
 
 # install additional utilities (curl, jq, unzip, git already in base image)
-RUN apt-get update && apt-get install -y --no-install-recommends wget uuid-runtime
+RUN apt-get update && apt-get install -y --no-install-recommends wget uuid-runtime make xz-utils
 
 # Install Azure CLI
 RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
@@ -14,7 +14,8 @@ RUN mkdir -p /etc/apt/keyrings && \
     curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
     echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_24.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list && \
     apt-get update && \
-    apt-get install -y nodejs
+    apt-get install -y nodejs && \
+    corepack enable
 
 # Install GitHub CLI
 RUN mkdir -p -m 755 /etc/apt/keyrings && \

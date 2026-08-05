@@ -128,7 +128,6 @@ func chooseCorrectSlackChannel(deploy_env string) string {
 		aux := map[string]string{
 			"at22": "slack-dev",
 			"at23": "slack-dev",
-			"at24": "slack-dev",
 			"yt01": "slack-dev",
 
 			"tt02": "slack-prod",

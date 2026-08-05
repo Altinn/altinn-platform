@@ -8,12 +8,17 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/connection"
 	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
+	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
+	"github.com/Azure/azure-service-operator/v2/pkg/common/annotations"
 	"github.com/Azure/azure-service-operator/v2/pkg/genruntime"
 	asoconditions "github.com/Azure/azure-service-operator/v2/pkg/genruntime/conditions"
 	batchv1 "k8s.io/api/batch/v1"
@@ -25,16 +30,33 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-var _ = Describe("Database controller", func() {
+var _ = Describe("DatabaseServer controller", func() {
 	var (
 		ctx    context.Context
 		cancel context.CancelFunc
 	)
 
 	const ns = "default"
+	const sharedDelegatedSubnetResourceID = "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-dev-001/subnets/shared-postgres"
+	const sharedPrivateDNSZoneResourceID = "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/privateDnsZones/shared.private.postgres.database.azure.com"
+	const databaseAppIdentityRef = "myproduct-router-dev"
+	const databaseAppManagedIdentity = "myproduct-router-dev-mi"
+	const databaseAppPrincipalID = "00000000-0000-0000-0000-000000000001"
+	const databaseOwnerGroup = "my-team-db-owners"
+	const databaseOwnerPrincipalID = "11111111-1111-1111-1111-111111111111"
+	const databaseExternalServicePrincipal = "myapp-workflow-at23"
+	const databaseExternalServicePrincipalID = "22222222-2222-2222-2222-222222222222"
+	const (
+		serverTypeDev          = "dev"
+		serverTypeProd         = "prod"
+		adminManagedIdentity   = "admin-mi"
+		adminManagedIdentityID = "admin-mi-id"
+		skuP15                 = "P15"
+		paramAutovacuumNaptime = "autovacuum_naptime"
+	)
 
-	directAuth := func(adminName, adminPrincipalID, adminServiceAccount, userName, userPrincipalID string) storagev1alpha1.DatabaseAuth {
-		return storagev1alpha1.DatabaseAuth{
+	adminAuth := func(adminName, adminPrincipalID, adminServiceAccount string) storagev1alpha1.DatabaseServerAuth {
+		return storagev1alpha1.DatabaseServerAuth{
 			Admin: storagev1alpha1.AdminIdentitySpec{
 				Identity: storagev1alpha1.IdentitySource{
 					Name:        adminName,
@@ -42,53 +64,140 @@ var _ = Describe("Database controller", func() {
 				},
 				ServiceAccountName: adminServiceAccount,
 			},
-			User: storagev1alpha1.UserIdentitySpec{
-				Identity: storagev1alpha1.IdentitySource{
-					Name:        userName,
-					PrincipalId: userPrincipalID,
-				},
-			},
 		}
 	}
 
-	identityRefAuth := func(adminRefName, userRefName string) storagev1alpha1.DatabaseAuth {
-		return storagev1alpha1.DatabaseAuth{
+	directAuth := func(adminName, adminPrincipalID, adminServiceAccount, userName, userPrincipalID string) storagev1alpha1.DatabaseServerAuth {
+		auth := adminAuth(adminName, adminPrincipalID, adminServiceAccount)
+		auth.User = &storagev1alpha1.UserIdentitySpec{
+			Identity: storagev1alpha1.IdentitySource{
+				Name:        userName,
+				PrincipalId: userPrincipalID,
+			},
+		}
+		return auth
+	}
+
+	adminIdentityRefAuth := func(adminRefName string) storagev1alpha1.DatabaseServerAuth {
+		return storagev1alpha1.DatabaseServerAuth{
 			Admin: storagev1alpha1.AdminIdentitySpec{
 				Identity: storagev1alpha1.IdentitySource{
 					IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: adminRefName},
 				},
 			},
-			User: storagev1alpha1.UserIdentitySpec{
-				Identity: storagev1alpha1.IdentitySource{
-					IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: userRefName},
+		}
+	}
+
+	newDedicatedDatabaseServer := func(name string, auth storagev1alpha1.DatabaseServerAuth) *storagev1alpha1.DatabaseServer {
+		return &storagev1alpha1.DatabaseServer{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: ns,
+			},
+			Spec: storagev1alpha1.DatabaseServerSpec{
+				Version:    17,
+				ServerType: serverTypeDev,
+				Auth:       auth,
+			},
+		}
+	}
+
+	sharedNetwork := func() *storagev1alpha1.DatabaseServerNetworkSpec {
+		return &storagev1alpha1.DatabaseServerNetworkSpec{
+			DelegatedSubnetResourceID: sharedDelegatedSubnetResourceID,
+			PrivateDNSZoneResourceID:  sharedPrivateDNSZoneResourceID,
+		}
+	}
+
+	newSharedDatabaseServer := func(name string) *storagev1alpha1.DatabaseServer {
+		return &storagev1alpha1.DatabaseServer{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: ns,
+			},
+			Spec: storagev1alpha1.DatabaseServerSpec{
+				Mode:       storagev1alpha1.DatabaseServerModeShared,
+				Version:    17,
+				ServerType: serverTypeDev,
+				Network:    sharedNetwork(),
+				Auth: storagev1alpha1.DatabaseServerAuth{
+					Admin: storagev1alpha1.AdminIdentitySpec{
+						Identity: storagev1alpha1.IdentitySource{
+							Name:        adminManagedIdentity,
+							PrincipalId: adminManagedIdentityID,
+						},
+						ServiceAccountName: adminManagedIdentity,
+					},
 				},
 			},
 		}
 	}
 
-	newDatabaseForJob := func(name string, auth storagev1alpha1.DatabaseAuth) *storagev1alpha1.Database {
+	newDatabase := func(name, serverName string) *storagev1alpha1.Database {
 		return &storagev1alpha1.Database{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
 				Namespace: ns,
 			},
 			Spec: storagev1alpha1.DatabaseSpec{
-				Version:    17,
-				ServerType: "dev",
-				Auth:       auth,
+				Name: name,
+				Server: storagev1alpha1.DatabaseServerReference{
+					Name: serverName,
+				},
+				Access: storagev1alpha1.DatabaseAccessSpec{
+					Principals: []storagev1alpha1.DatabaseAccessPrincipalSpec{
+						{
+							Role: storagev1alpha1.DatabaseAccessRoleWriter,
+							IdentityRef: &storagev1alpha1.ApplicationIdentityRef{
+								Name: databaseAppIdentityRef,
+							},
+						},
+						{
+							Role: storagev1alpha1.DatabaseAccessRoleOwner,
+							Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+								Name:        databaseOwnerGroup,
+								PrincipalId: databaseOwnerPrincipalID,
+							},
+						},
+					},
+				},
 			},
 		}
 	}
 
-	waitForProvisionJob := func(ctx context.Context, dbName, namespace string) batchv1.Job {
+	expectedPostgresDatabaseName := func(database *storagev1alpha1.Database) string {
+		return database.Spec.Name
+	}
+
+	expectedFlexibleServerResourceID := func(serverName string) string {
+		return fmt.Sprintf(
+			"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test-rg/providers/Microsoft.DBforPostgreSQL/flexibleServers/%s",
+			serverName,
+		)
+	}
+
+	ensureNamespace := func(ctx context.Context, namespace string) {
+		nsObject := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespace,
+			},
+		}
+		if err := k8sClient.Create(ctx, nsObject); apierrors.IsAlreadyExists(err) {
+			return
+		} else {
+			Expect(err).NotTo(HaveOccurred())
+		}
+	}
+
+	waitForDatabaseAccessJob := func(ctx context.Context, databaseName, namespace string) batchv1.Job {
 		var job batchv1.Job
 		Eventually(func(g Gomega) string {
 			var jobs batchv1.JobList
 			g.Expect(k8sClient.List(ctx, &jobs,
 				client.InNamespace(namespace),
 				client.MatchingLabels(map[string]string{
-					"dis.altinn.cloud/database-name":  dbName,
-					"dis.altinn.cloud/user-provision": "true",
+					databaseNameLabelKey:  databaseName,
+					userProvisionLabelKey: labelValueTrue,
 				}),
 			)).To(Succeed())
 			if len(jobs.Items) != 1 {
@@ -101,11 +210,43 @@ var _ = Describe("Database controller", func() {
 		return job
 	}
 
-	createApplicationIdentity := func(ctx context.Context, name, namespace, managedName, principalID string) {
+	completeDatabaseAccessJob := func(ctx context.Context, job batchv1.Job) {
+		Eventually(func() error {
+			var accessJob batchv1.Job
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      job.Name,
+				Namespace: job.Namespace,
+			}, &accessJob); err != nil {
+				return err
+			}
+			now := metav1.Now()
+			accessJob.Status.StartTime = &now
+			accessJob.Status.CompletionTime = &now
+			accessJob.Status.Succeeded = 1
+			accessJob.Status.Conditions = []batchv1.JobCondition{
+				{
+					Type:               batchv1.JobSuccessCriteriaMet,
+					Status:             corev1.ConditionTrue,
+					Reason:             "Completed",
+					LastTransitionTime: now,
+				},
+				{
+					Type:               batchv1.JobComplete,
+					Status:             corev1.ConditionTrue,
+					Reason:             "Completed",
+					LastTransitionTime: now,
+				},
+			}
+			return k8sClient.Status().Update(ctx, &accessJob)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+	}
+
+	createApplicationIdentity := func(ctx context.Context, name, managedName, principalID string) {
 		appIdentity := &identityv1alpha1.ApplicationIdentity{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
-				Namespace: namespace,
+				Namespace: ns,
 			},
 			Spec: identityv1alpha1.ApplicationIdentitySpec{},
 		}
@@ -117,7 +258,7 @@ var _ = Describe("Database controller", func() {
 		Expect(k8sClient.Status().Update(ctx, appIdentity)).To(Succeed())
 	}
 
-	markASOReady := func(ctx context.Context, db *storagev1alpha1.Database) {
+	markASOReady := func(ctx context.Context, db *storagev1alpha1.DatabaseServer) {
 		serverName := db.Name
 		adminName := fmt.Sprintf("%s-admin", db.Name)
 
@@ -133,11 +274,15 @@ var _ = Describe("Database controller", func() {
 				{
 					Type:               asoconditions.ConditionTypeReady,
 					Status:             metav1.ConditionTrue,
-					Reason:             "Ready",
+					Reason:             databaseConditionReady,
 					LastTransitionTime: metav1.Now(),
 					ObservedGeneration: server.Generation,
 				},
 			}
+			host := fmt.Sprintf("%s.postgres.database.azure.com", serverName)
+			server.Status.FullyQualifiedDomainName = &host
+			resourceID := expectedFlexibleServerResourceID(serverName)
+			server.Status.Id = &resourceID
 			return k8sClient.Status().Update(ctx, &server)
 		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
 			Should(Succeed())
@@ -154,7 +299,7 @@ var _ = Describe("Database controller", func() {
 				{
 					Type:               asoconditions.ConditionTypeReady,
 					Status:             metav1.ConditionTrue,
-					Reason:             "Ready",
+					Reason:             databaseConditionReady,
 					LastTransitionTime: metav1.Now(),
 					ObservedGeneration: admin.Generation,
 				},
@@ -164,20 +309,92 @@ var _ = Describe("Database controller", func() {
 			Should(Succeed())
 	}
 
+	markDatabaseASOReady := func(ctx context.Context, database *storagev1alpha1.Database) {
+		databaseName := expectedPostgresDatabaseName(database)
+		resourceName := databaseASOResourceName(database.Spec.Server.Name, databaseName)
+		Eventually(func() error {
+			var server dbforpostgresqlv1.FlexibleServer
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      database.Spec.Server.Name,
+				Namespace: database.Namespace,
+			}, &server); err != nil {
+				return err
+			}
+			server.Status.Conditions = []asoconditions.Condition{
+				{
+					Type:               asoconditions.ConditionTypeReady,
+					Status:             metav1.ConditionTrue,
+					Reason:             databaseConditionReady,
+					LastTransitionTime: metav1.Now(),
+					ObservedGeneration: server.Generation,
+				},
+			}
+			host := fmt.Sprintf("%s.postgres.database.azure.com", database.Spec.Server.Name)
+			server.Status.FullyQualifiedDomainName = &host
+			return k8sClient.Status().Update(ctx, &server)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func() error {
+			var asoDatabase dbforpostgresqlv1.FlexibleServersDatabase
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      resourceName,
+				Namespace: database.Namespace,
+			}, &asoDatabase); err != nil {
+				return err
+			}
+			asoDatabase.Status.Conditions = []asoconditions.Condition{
+				{
+					Type:               asoconditions.ConditionTypeReady,
+					Status:             metav1.ConditionTrue,
+					Reason:             databaseConditionReady,
+					LastTransitionTime: metav1.Now(),
+					ObservedGeneration: asoDatabase.Generation,
+				},
+			}
+			return k8sClient.Status().Update(ctx, &asoDatabase)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+	}
+
 	cleanupNamespacedTestResources := func(ctx context.Context, namespace string) {
+		propagationPolicy := metav1.DeletePropagationBackground
 		deleteAll := func(obj client.Object) {
-			Expect(k8sClient.DeleteAllOf(ctx, obj, client.InNamespace(namespace))).To(Succeed())
+			Expect(k8sClient.DeleteAllOf(ctx, obj,
+				client.InNamespace(namespace),
+				client.PropagationPolicy(propagationPolicy),
+			)).To(Succeed())
 		}
 
-		// Delete dependents first so each spec starts from a clean namespace.
+		// Delete reconciling parents first so they cannot recreate children while
+		// this cleanup is draining the namespace.
+		deleteAll(&storagev1alpha1.Database{})
+		deleteAll(&storagev1alpha1.DatabaseServer{})
+
+		// envtest has no garbage collector, so owner-referenced connection
+		// ConfigMaps are not reclaimed when their Database is deleted. Remove
+		// them by label so they do not leak across specs.
+		Expect(k8sClient.DeleteAllOf(ctx, &corev1.ConfigMap{},
+			client.InNamespace(namespace),
+			client.MatchingLabels{connection.LabelComponent: connection.ComponentValue},
+		)).To(Succeed())
+
 		deleteAll(&batchv1.Job{})
+		deleteAll(&dbforpostgresqlv1.FlexibleServersDatabase{})
 		deleteAll(&dbforpostgresqlv1.FlexibleServersAdministrator{})
 		deleteAll(&dbforpostgresqlv1.FlexibleServersConfiguration{})
+		deleteAll(&authorizationv1.RoleAssignment{})
 		deleteAll(&dbforpostgresqlv1.FlexibleServer{})
 		deleteAll(&networkv1.PrivateDnsZonesVirtualNetworkLink{})
 		deleteAll(&networkv1.PrivateDnsZone{})
 		deleteAll(&identityv1alpha1.ApplicationIdentity{})
-		deleteAll(&storagev1alpha1.Database{})
+
+		Eventually(func(g Gomega) int {
+			var list storagev1alpha1.DatabaseServerList
+			g.Expect(k8sClient.List(ctx, &list, client.InNamespace(namespace))).To(Succeed())
+			return len(list.Items)
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(0))
 
 		Eventually(func(g Gomega) int {
 			var list storagev1alpha1.DatabaseList
@@ -187,8 +404,20 @@ var _ = Describe("Database controller", func() {
 			Should(Equal(0))
 	}
 
+	listDatabaseASOChildren := func(g Gomega, databaseName string) []dbforpostgresqlv1.FlexibleServersDatabase {
+		var databases dbforpostgresqlv1.FlexibleServersDatabaseList
+		g.Expect(k8sClient.List(ctx, &databases,
+			client.InNamespace(ns),
+			client.MatchingLabels(map[string]string{
+				databaseNameLabelKey: databaseName,
+			}),
+		)).To(Succeed())
+		return databases.Items
+	}
+
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
+		ensureNamespace(ctx, ns)
 	})
 
 	AfterEach(func() {
@@ -199,14 +428,14 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("allocates a subnet and writes it to status", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-subnet",
 				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
 					"my-admin-app-identity",
 					"my-admin-app-identity-id",
@@ -220,7 +449,7 @@ var _ = Describe("Database controller", func() {
 
 		var subnetCIDR string
 		Eventually(func(g Gomega) string {
-			var updated storagev1alpha1.Database
+			var updated storagev1alpha1.DatabaseServer
 			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      "my-app-db-subnet",
 				Namespace: ns,
@@ -234,15 +463,15 @@ var _ = Describe("Database controller", func() {
 		Expect(subnetCIDR).To(Equal("10.100.1.0/28"))
 	})
 
-	It("allocates different /28 blocks for two databases", func() {
-		db1 := &storagev1alpha1.Database{
+	It("allocates different /28 blocks for two database servers", func() {
+		db1 := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "db1-subnet",
 				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
 					"adminidentity",
 					"adminidentity-id",
@@ -257,7 +486,7 @@ var _ = Describe("Database controller", func() {
 		// Wait until db1 has a subnet assigned
 		var cidr1 string
 		Eventually(func(g Gomega) string {
-			var updated storagev1alpha1.Database
+			var updated storagev1alpha1.DatabaseServer
 			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      "db1-subnet",
 				Namespace: ns,
@@ -268,7 +497,7 @@ var _ = Describe("Database controller", func() {
 			ShouldNot(BeEmpty())
 
 		Eventually(func(g Gomega) bool {
-			var list storagev1alpha1.DatabaseList
+			var list storagev1alpha1.DatabaseServerList
 			g.Expect(k8sClient.List(ctx, &list)).To(Succeed())
 			for _, item := range list.Items {
 				if item.Name == db1.Name && item.Status.SubnetCIDR == cidr1 {
@@ -278,14 +507,14 @@ var _ = Describe("Database controller", func() {
 			return false
 		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).Should(BeTrue())
 
-		db2 := &storagev1alpha1.Database{
+		db2 := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "db2-subnet",
 				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
 					"adminidentity",
 					"adminidentity-id",
@@ -300,7 +529,7 @@ var _ = Describe("Database controller", func() {
 		// Wait until db2 has a subnet assigned
 		var cidr2 string
 		Eventually(func(g Gomega) string {
-			var updated storagev1alpha1.Database
+			var updated storagev1alpha1.DatabaseServer
 			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      "db2-subnet",
 				Namespace: ns,
@@ -315,20 +544,20 @@ var _ = Describe("Database controller", func() {
 		Expect(cidr1).NotTo(Equal(cidr2))
 	})
 
-	// Database Private DNS Zone integration tests
-	It("creates a Private DNS zone per Database", func() {
-		db := &storagev1alpha1.Database{
+	// DatabaseServer Private DNS Zone integration tests
+	It("creates a Private DNS zone per database server", func() {
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-dns",
 				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -337,45 +566,49 @@ var _ = Describe("Database controller", func() {
 
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
-		expectedZoneName := fmt.Sprintf("%s.private.postgres.database.azure.com", db.Name)
+		expectedZoneCRName := zoneCRNameForDatabaseServer(db)
+		expectedZoneAzureName := fmt.Sprintf("%s.private.postgres.database.azure.com", db.Name)
 
 		Eventually(func(g Gomega) error {
 			var zone networkv1.PrivateDnsZone
 			key := types.NamespacedName{
-				Name:      expectedZoneName,
+				Name:      expectedZoneCRName,
 				Namespace: ns,
 			}
 			err := k8sClient.Get(ctx, key, &zone)
 			return err
 		}).WithTimeout(20*time.Second).WithPolling(500*time.Millisecond).
-			Should(Succeed(), "expected Private DNS zone for Database to be created by controller")
+			Should(Succeed(), "expected Private DNS zone for database server to be created by controller")
 
 		// Inspect metadata of created Private DNS zone
 		var zone networkv1.PrivateDnsZone
 		key := types.NamespacedName{
-			Name:      expectedZoneName,
+			Name:      expectedZoneCRName,
 			Namespace: ns,
 		}
 		Expect(k8sClient.Get(ctx, key, &zone)).To(Succeed())
 
-		// Miminal expectations about the created zone
-		Expect(zone.Name).To(Equal(expectedZoneName))
+		// The zone CR name is the short DatabaseServer name so ASO's owner-name
+		// label on child vnet links stays a valid <=63-char label; the Azure-side
+		// name (Spec.AzureName) remains the FQDN PostgreSQL requires.
+		Expect(zone.Name).To(Equal(expectedZoneCRName))
+		Expect(zone.Spec.AzureName).To(Equal(expectedZoneAzureName))
 		Expect(zone.Namespace).To(Equal(ns))
 	})
 
 	It("creates Private DNS zone virtual network links for DB and AKS VNets", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db",
-				Namespace: "default",
+				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -383,22 +616,22 @@ var _ = Describe("Database controller", func() {
 		}
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
-		zoneName := fmt.Sprintf("%s.private.postgres.database.azure.com", db.Name)
+		zoneCRName := zoneCRNameForDatabaseServer(db)
 
 		// Wait for the zone
 		Eventually(func(g Gomega) error {
 			var zone networkv1.PrivateDnsZone
 			key := types.NamespacedName{
-				Name:      zoneName,
+				Name:      zoneCRName,
 				Namespace: ns,
 			}
 			return k8sClient.Get(ctx, key, &zone)
 		}).WithTimeout(20*time.Second).WithPolling(500*time.Millisecond).
-			Should(Succeed(), "expected Private DNS zone for Database to be created")
+			Should(Succeed(), "expected Private DNS zone for database server to be created")
 
 		// Expect two VNet links
-		expectedDBLinkName := vnetLinkNameForDB(db)
-		expectedAKSLinkName := vnetLinkNameForAKS(db)
+		expectedDBLinkName := dbVNetLinkNameForDatabaseServer(db)
+		expectedAKSLinkName := aksVNetLinkNameForDatabaseServer(db)
 
 		Eventually(func(g Gomega) []string {
 			var list networkv1.PrivateDnsZonesVirtualNetworkLinkList
@@ -429,18 +662,18 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("reconciles existing Private DNS AKS VNet link when ARM ID drifts", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-vnet-drift",
 				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -448,7 +681,7 @@ var _ = Describe("Database controller", func() {
 		}
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
-		expectedAKSLinkName := vnetLinkNameForAKS(db)
+		expectedAKSLinkName := aksVNetLinkNameForDatabaseServer(db)
 		expectedAKSVNetARMID := "/subscriptions/my-subscription-id/resourceGroups/aks-vnet-rg/providers/Microsoft.Network/virtualNetworks/aks-vnet-dis-dev-001"
 
 		Eventually(func(g Gomega) string {
@@ -490,20 +723,404 @@ var _ = Describe("Database controller", func() {
 			Should(Equal(expectedAKSVNetARMID))
 	})
 
-	// Database testing
-	It("creates a FlexibleServer for the Database", func() {
-		db := &storagev1alpha1.Database{
+	It("allows dedicated database servers without user auth", func() {
+		db := &storagev1alpha1.DatabaseServer{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-app-db-dedicated-no-user",
+				Namespace: ns,
+			},
+			Spec: storagev1alpha1.DatabaseServerSpec{
+				Version:    17,
+				ServerType: serverTypeDev,
+				Auth: storagev1alpha1.DatabaseServerAuth{
+					Admin: storagev1alpha1.AdminIdentitySpec{
+						Identity: storagev1alpha1.IdentitySource{
+							Name:        adminManagedIdentity,
+							PrincipalId: adminManagedIdentityID,
+						},
+						ServiceAccountName: adminManagedIdentity,
+					},
+				},
+			},
+		}
+
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		Eventually(func(g Gomega) string {
+			var server dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &server)).To(Succeed())
+			return server.Name
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(db.Name))
+
+		// The Azure-side server name carries the cluster-id suffix so it stays
+		// globally unique across clusters; the suite config sets ClusterId="envtest".
+		Eventually(func(g Gomega) string {
+			var server dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &server)).To(Succeed())
+			return server.Spec.AzureName
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(db.Name + "-envtest"))
+
+		// DatabaseServer.status.serverName mirrors that AzureName so downstream
+		// consumers can read the authoritative identity from K8s without
+		// re-implementing the naming convention.
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &updated)).To(Succeed())
+			return updated.Status.ServerName
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(db.Name + "-envtest"))
+
+		Consistently(func(g Gomega) int {
+			var jobs batchv1.JobList
+			g.Expect(k8sClient.List(ctx, &jobs,
+				client.InNamespace(db.Namespace),
+				client.MatchingLabels(map[string]string{
+					databaseServerNameLabelKey: db.Name,
+					userProvisionLabelKey:      labelValueTrue,
+				}),
+			)).To(Succeed())
+			return len(jobs.Items)
+		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(0))
+	})
+
+	It("preserves a pre-existing FlexibleServer AzureName instead of recreating it", func() {
+		// Backward-compat guarantee: if a FlexibleServer for this DatabaseServer
+		// already exists with a hand-picked AzureName (e.g. the pre-cluster-id
+		// per-env-name mitigation), the operator must keep that AzureName so
+		// rolling out cluster-id-based naming does not orphan or recreate the
+		// underlying Azure resource.
+		const dbCRName = "preserve-existing-azurename"
+		const legacyAzureName = "preserve-existing-azurename-test"
+
+		db := newDedicatedDatabaseServer(dbCRName, adminAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+		))
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		// Wait for the operator to create the FlexibleServer, then overwrite its
+		// AzureName with a value that doesn't follow the cluster-id convention.
+		Eventually(func(g Gomega) {
+			var server dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &server)).To(Succeed())
+			server.Spec.AzureName = legacyAzureName
+			g.Expect(k8sClient.Update(ctx, &server)).To(Succeed())
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		// Trigger a re-reconcile by mutating the DatabaseServer spec.
+		Eventually(func(g Gomega) {
+			var current storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &current)).To(Succeed())
+			retention := 21
+			current.Spec.BackupRetentionDays = &retention
+			g.Expect(k8sClient.Update(ctx, &current)).To(Succeed())
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Consistently(func(g Gomega) string {
+			var server dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &server)).To(Succeed())
+			return server.Spec.AzureName
+		}).WithTimeout(5 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(legacyAzureName))
+	})
+
+	It("rejects dedicated database servers with shared network config", func() {
+		db := newDedicatedDatabaseServer("my-app-db-dedicated-network", directAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+			"user-mi",
+			"user-mi-id",
+		))
+		db.Spec.Network = sharedNetwork()
+
+		err := k8sClient.Create(ctx, db)
+		Expect(apierrors.IsInvalid(err)).To(BeTrue(), "expected dedicated database server with spec.network to be rejected")
+	})
+
+	It("rejects shared database servers without network config", func() {
+		db := newSharedDatabaseServer("my-app-db-shared-no-network")
+		db.Spec.Network = nil
+
+		err := k8sClient.Create(ctx, db)
+		Expect(apierrors.IsInvalid(err)).To(BeTrue(), "expected shared database server without spec.network to be rejected")
+	})
+
+	DescribeTable("rejects shared network ARM IDs outside the allowed scope or expected type",
+		func(mutate func(*storagev1alpha1.DatabaseServerNetworkSpec), expectedError string) {
+			db := newSharedDatabaseServer("my-app-db-shared-invalid-network")
+			mutate(db.Spec.Network)
+
+			reconciler := DatabaseServerReconciler{
+				Config: config.OperatorConfig{SubscriptionId: "my-subscription-id"},
+			}
+			_, err := reconciler.sharedPostgresNetworkConfig(db)
+
+			Expect(err).To(MatchError(ContainSubstring(expectedError)))
+		},
+		Entry("subnet in a different subscription",
+			func(network *storagev1alpha1.DatabaseServerNetworkSpec) {
+				network.DelegatedSubnetResourceID = "/subscriptions/other-subscription/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-dev-001/subnets/shared-postgres"
+			},
+			"spec.network.delegatedSubnetResourceId must be in subscription",
+		),
+		Entry("private DNS zone in a different subscription",
+			func(network *storagev1alpha1.DatabaseServerNetworkSpec) {
+				network.PrivateDNSZoneResourceID = "/subscriptions/other-subscription/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/privateDnsZones/shared.private.postgres.database.azure.com"
+			},
+			"spec.network.privateDnsZoneResourceId must be in subscription",
+		),
+		Entry("subnet reference with the wrong resource type",
+			func(network *storagev1alpha1.DatabaseServerNetworkSpec) {
+				network.DelegatedSubnetResourceID = "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-dev-001"
+			},
+			"spec.network.delegatedSubnetResourceId must reference Microsoft.Network/virtualNetworks/subnets",
+		),
+		Entry("private DNS zone reference with the wrong resource type",
+			func(network *storagev1alpha1.DatabaseServerNetworkSpec) {
+				network.PrivateDNSZoneResourceID = "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-dev-001/subnets/shared-postgres"
+			},
+			"spec.network.privateDnsZoneResourceId must reference Microsoft.Network/privateDnsZones",
+		),
+	)
+
+	It("creates a shared FlexibleServer with existing network references and skips dedicated side effects", func() {
+		db := newSharedDatabaseServer("my-app-db-shared")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		Eventually(func(g Gomega) struct {
+			subnetID string
+			zoneID   string
+		} {
+			var server dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &server)).To(Succeed())
+			g.Expect(server.Spec.Network).NotTo(BeNil())
+			g.Expect(server.Spec.Network.DelegatedSubnetResourceReference).NotTo(BeNil())
+			g.Expect(server.Spec.Network.PrivateDnsZoneArmResourceReference).NotTo(BeNil())
+			return struct {
+				subnetID string
+				zoneID   string
+			}{
+				subnetID: server.Spec.Network.DelegatedSubnetResourceReference.ARMID,
+				zoneID:   server.Spec.Network.PrivateDnsZoneArmResourceReference.ARMID,
+			}
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(struct {
+				subnetID string
+				zoneID   string
+			}{
+				subnetID: sharedDelegatedSubnetResourceID,
+				zoneID:   sharedPrivateDNSZoneResourceID,
+			}))
+
+		Consistently(func(g Gomega) string {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &updated)).To(Succeed())
+			return updated.Status.SubnetCIDR
+		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+
+		Consistently(func() bool {
+			var zone networkv1.PrivateDnsZone
+			err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      zoneCRNameForDatabaseServer(db),
+				Namespace: db.Namespace,
+			}, &zone)
+			return apierrors.IsNotFound(err)
+		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeTrue())
+
+		Consistently(func(g Gomega) []string {
+			var links networkv1.PrivateDnsZonesVirtualNetworkLinkList
+			g.Expect(k8sClient.List(ctx, &links, client.InNamespace(db.Namespace))).To(Succeed())
+			found := make([]string, 0)
+			for _, link := range links.Items {
+				if link.Name == dbVNetLinkNameForDatabaseServer(db) || link.Name == aksVNetLinkNameForDatabaseServer(db) {
+					found = append(found, link.Name)
+				}
+			}
+			return found
+		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+
+		Consistently(func(g Gomega) int {
+			var jobs batchv1.JobList
+			g.Expect(k8sClient.List(ctx, &jobs,
+				client.InNamespace(db.Namespace),
+				client.MatchingLabels(map[string]string{
+					databaseServerNameLabelKey: db.Name,
+					userProvisionLabelKey:      labelValueTrue,
+				}),
+			)).To(Succeed())
+			return len(jobs.Items)
+		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(0))
+	})
+
+	It("reconciles shared server settings and parameters", func() {
+		sizeGB := int32(64)
+		tier := skuP15
+		retentionDays := 21
+		highAvailabilityEnabled := true
+		db := newSharedDatabaseServer("my-app-db-shared-settings")
+		db.Spec.Storage = &storagev1alpha1.DatabaseServerStorageSpec{
+			SizeGB: &sizeGB,
+			Tier:   &tier,
+		}
+		db.Spec.BackupRetentionDays = &retentionDays
+		db.Spec.HighAvailabilityEnabled = &highAvailabilityEnabled
+		db.Spec.EnableExtensions = []storagev1alpha1.DatabaseServerExtension{
+			storagev1alpha1.DatabaseServerExtensionHstore,
+			storagev1alpha1.DatabaseServerExtensionPgCron,
+		}
+		db.Spec.ServerParams = []storagev1alpha1.DatabaseServerParameter{
+			{
+				Name:  paramAutovacuumNaptime,
+				Value: intstr.FromInt(15),
+			},
+		}
+
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		Eventually(func(g Gomega) struct {
+			sizeGB        int
+			tier          string
+			retentionDays int
+			haMode        dbforpostgresqlv1.HighAvailability_Mode
+		} {
+			var server dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &server)).To(Succeed())
+			g.Expect(server.Spec.Storage).NotTo(BeNil())
+			g.Expect(server.Spec.Storage.StorageSizeGB).NotTo(BeNil())
+			g.Expect(server.Spec.Storage.Tier).NotTo(BeNil())
+			g.Expect(server.Spec.Backup).NotTo(BeNil())
+			g.Expect(server.Spec.Backup.BackupRetentionDays).NotTo(BeNil())
+			g.Expect(server.Spec.HighAvailability).NotTo(BeNil())
+			g.Expect(server.Spec.HighAvailability.Mode).NotTo(BeNil())
+			return struct {
+				sizeGB        int
+				tier          string
+				retentionDays int
+				haMode        dbforpostgresqlv1.HighAvailability_Mode
+			}{
+				sizeGB:        *server.Spec.Storage.StorageSizeGB,
+				tier:          string(*server.Spec.Storage.Tier),
+				retentionDays: *server.Spec.Backup.BackupRetentionDays,
+				haMode:        *server.Spec.HighAvailability.Mode,
+			}
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(struct {
+				sizeGB        int
+				tier          string
+				retentionDays int
+				haMode        dbforpostgresqlv1.HighAvailability_Mode
+			}{
+				sizeGB:        64,
+				tier:          skuP15,
+				retentionDays: 21,
+				haMode:        dbforpostgresqlv1.HighAvailability_Mode_ZoneRedundant,
+			}))
+
+		expectedConfigurations := map[string]string{
+			extensionsConfigResourceName(db.Name):                              "hstore,pg_cron",
+			serverParameterConfigResourceName(db.Name, paramAutovacuumNaptime): "15",
+		}
+
+		for resourceName, expectedValue := range expectedConfigurations {
+			Eventually(func(g Gomega) string {
+				var configuration dbforpostgresqlv1.FlexibleServersConfiguration
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+					Name:      resourceName,
+					Namespace: db.Namespace,
+				}, &configuration)).To(Succeed())
+				g.Expect(configuration.Spec.Value).NotTo(BeNil())
+				return *configuration.Spec.Value
+			}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+				Should(Equal(expectedValue))
+		}
+	})
+
+	It("allows multiple shared database servers in one namespace without subnet allocation", func() {
+		db1 := newSharedDatabaseServer("my-app-db-shared-one")
+		db2 := newSharedDatabaseServer("my-app-db-shared-two")
+
+		Expect(k8sClient.Create(ctx, db1)).To(Succeed())
+		Expect(k8sClient.Create(ctx, db2)).To(Succeed())
+
+		Eventually(func(g Gomega) []string {
+			var servers dbforpostgresqlv1.FlexibleServerList
+			g.Expect(k8sClient.List(ctx, &servers, client.InNamespace(ns))).To(Succeed())
+			found := make([]string, 0, len(servers.Items))
+			for _, server := range servers.Items {
+				if server.Name == db1.Name || server.Name == db2.Name {
+					found = append(found, server.Name)
+				}
+			}
+			return found
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(ConsistOf(db1.Name, db2.Name))
+
+		Consistently(func(g Gomega) []string {
+			var dbList storagev1alpha1.DatabaseServerList
+			g.Expect(k8sClient.List(ctx, &dbList, client.InNamespace(ns))).To(Succeed())
+			subnets := make([]string, 0)
+			for _, item := range dbList.Items {
+				if item.Name == db1.Name || item.Name == db2.Name {
+					subnets = append(subnets, item.Status.SubnetCIDR)
+				}
+			}
+			return subnets
+		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(ConsistOf("", ""))
+	})
+
+	// DatabaseServer testing
+	It("creates a FlexibleServer for the database server", func() {
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql",
-				Namespace: "default",
+				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -520,7 +1137,7 @@ var _ = Describe("Database controller", func() {
 				Namespace: db.Namespace,
 			}, &s)
 		}).WithTimeout(30*time.Second).WithPolling(500*time.Millisecond).
-			Should(Succeed(), "expected FlexibleServer ASO resource to be created for Database")
+			Should(Succeed(), "expected FlexibleServer ASO resource to be created for database server")
 
 		var s dbforpostgresqlv1.FlexibleServer
 		Expect(k8sClient.Get(ctx, types.NamespacedName{
@@ -530,7 +1147,7 @@ var _ = Describe("Database controller", func() {
 
 		Expect(s.Name).To(Equal(expectedServerName))
 		Expect(s.Namespace).To(Equal(db.Namespace))
-		Expect(s.Labels["dis.altinn.cloud/database-name"]).To(Equal(db.Name))
+		Expect(s.Labels[databaseServerNameLabelKey]).To(Equal(db.Name))
 
 		// Owner should be set and should use ARMID
 		Expect(s.Spec.Owner).NotTo(BeNil())
@@ -542,7 +1159,7 @@ var _ = Describe("Database controller", func() {
 		Expect(*s.Spec.Storage.StorageSizeGB).To(Equal(32))
 
 		Expect(s.Spec.Storage.AutoGrow).NotTo(BeNil())
-		Expect(*s.Spec.Storage.AutoGrow).To(Equal(dbforpostgresqlv1.Storage_AutoGrow_Enabled))
+		Expect(*s.Spec.Storage.AutoGrow).To(Equal(dbforpostgresqlv1.StorageAutoGrow_Enabled))
 
 		Expect(s.Spec.Storage.Tier).NotTo(BeNil())
 		Expect(string(*s.Spec.Storage.Tier)).To(Equal("P10"))
@@ -560,18 +1177,18 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("defaults highAvailabilityEnabled to true for prod server types", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-ha-prod-default",
-				Namespace: "default",
+				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "prod",
+				ServerType: serverTypeProd,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -612,19 +1229,19 @@ var _ = Describe("Database controller", func() {
 	It("uses explicit highAvailabilityEnabled false when set", func() {
 		highAvailabilityEnabled := false
 
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-ha-explicit-false",
-				Namespace: "default",
+				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:                 17,
-				ServerType:              "prod",
+				ServerType:              serverTypeProd,
 				HighAvailabilityEnabled: &highAvailabilityEnabled,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -668,19 +1285,19 @@ var _ = Describe("Database controller", func() {
 	It("updates the FlexibleServer when highAvailabilityEnabled changes", func() {
 		highAvailabilityEnabled := true
 
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-ha-update",
-				Namespace: "default",
+				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:                 17,
-				ServerType:              "dev",
+				ServerType:              serverTypeDev,
 				HighAvailabilityEnabled: &highAvailabilityEnabled,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -718,7 +1335,7 @@ var _ = Describe("Database controller", func() {
 			}))
 
 		highAvailabilityDisabled := false
-		var updated storagev1alpha1.Database
+		var updated storagev1alpha1.DatabaseServer
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
 		updated.Spec.HighAvailabilityEnabled = &highAvailabilityDisabled
 		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
@@ -757,19 +1374,19 @@ var _ = Describe("Database controller", func() {
 
 	It("uses explicit backupRetentionDays when set", func() {
 		requestedRetentionDays := 21
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-backup-retention",
-				Namespace: "default",
+				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:             17,
-				ServerType:          "dev",
+				ServerType:          serverTypeDev,
 				BackupRetentionDays: &requestedRetentionDays,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -793,18 +1410,18 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("defaults backupRetentionDays to 30 for prod server types", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-backup-retention-prod-default",
-				Namespace: "default",
+				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "prod",
+				ServerType: serverTypeProd,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -828,18 +1445,18 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("forces GeoRedundantBackup to Disabled when backupRetentionDays changes", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-backup-geo",
-				Namespace: "default",
+				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -887,7 +1504,7 @@ var _ = Describe("Database controller", func() {
 		Expect(k8sClient.Update(ctx, &server)).To(Succeed())
 
 		requestedRetentionDays := 22
-		var updated storagev1alpha1.Database
+		var updated storagev1alpha1.DatabaseServer
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
 		updated.Spec.BackupRetentionDays = &requestedRetentionDays
 		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
@@ -923,18 +1540,18 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("sets fixed server defaults on FlexibleServer", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-server-defaults",
-				Namespace: "default",
+				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "prod",
+				ServerType: serverTypeProd,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -946,7 +1563,7 @@ var _ = Describe("Database controller", func() {
 		Eventually(func(g Gomega) struct {
 			availabilityZone string
 			standbyZone      string
-			storageType      dbforpostgresqlv1.Storage_Type
+			storageType      dbforpostgresqlv1.StorageType
 			geoBackup        dbforpostgresqlv1.Backup_GeoRedundantBackup
 			maintenanceDay   int
 			maintenanceHour  int
@@ -971,7 +1588,7 @@ var _ = Describe("Database controller", func() {
 			return struct {
 				availabilityZone string
 				standbyZone      string
-				storageType      dbforpostgresqlv1.Storage_Type
+				storageType      dbforpostgresqlv1.StorageType
 				geoBackup        dbforpostgresqlv1.Backup_GeoRedundantBackup
 				maintenanceDay   int
 				maintenanceHour  int
@@ -989,7 +1606,7 @@ var _ = Describe("Database controller", func() {
 			Should(Equal(struct {
 				availabilityZone string
 				standbyZone      string
-				storageType      dbforpostgresqlv1.Storage_Type
+				storageType      dbforpostgresqlv1.StorageType
 				geoBackup        dbforpostgresqlv1.Backup_GeoRedundantBackup
 				maintenanceDay   int
 				maintenanceHour  int
@@ -997,7 +1614,7 @@ var _ = Describe("Database controller", func() {
 			}{
 				availabilityZone: "1",
 				standbyZone:      "2",
-				storageType:      dbforpostgresqlv1.Storage_Type_Premium_LRS,
+				storageType:      dbforpostgresqlv1.StorageType_Premium_LRS,
 				geoBackup:        dbforpostgresqlv1.Backup_GeoRedundantBackup_Disabled,
 				maintenanceDay:   0,
 				maintenanceHour:  3,
@@ -1006,24 +1623,26 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("creates fixed and user-defined server parameter configurations", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-server-params",
-				Namespace: "default",
+				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
-				Version:    17,
-				ServerType: "dev",
+			Spec: storagev1alpha1.DatabaseServerSpec{
+				Version: 17,
+				// PgBouncer parameters are only emitted on tiers that support it,
+				// so use a prod (General Purpose) server to exercise them here.
+				ServerType: serverTypeProd,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
 				ServerParams: []storagev1alpha1.DatabaseServerParameter{
 					{
-						Name:  "autovacuum_naptime",
+						Name:  paramAutovacuumNaptime,
 						Value: intstr.FromInt(15),
 					},
 				},
@@ -1031,7 +1650,7 @@ var _ = Describe("Database controller", func() {
 		}
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
-		maxConnections, err := dbUtil.ResolveMaxConnections(dbUtil.GetProfile("dev"))
+		maxConnections, err := dbUtil.ResolveMaxConnections(dbUtil.GetProfile(serverTypeProd))
 		Expect(err).NotTo(HaveOccurred())
 
 		expectedValues := map[string]string{
@@ -1039,7 +1658,7 @@ var _ = Describe("Database controller", func() {
 			dbUtil.ServerParameterPgBouncerMaxPrepared: "5000",
 			dbUtil.ServerParameterPgBouncerPoolMode:    "transaction",
 			dbUtil.ServerParameterMaxConnections:       fmt.Sprintf("%d", maxConnections),
-			"autovacuum_naptime":                       "15",
+			paramAutovacuumNaptime:                     "15",
 		}
 
 		for parameterName, expectedValue := range expectedValues {
@@ -1072,12 +1691,12 @@ var _ = Describe("Database controller", func() {
 				}))
 		}
 
-		var updated storagev1alpha1.Database
+		var updated storagev1alpha1.DatabaseServer
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
 		updated.Spec.ServerParams = nil
 		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
 
-		customParamName := serverParameterConfigResourceName(db.Name, "autovacuum_naptime")
+		customParamName := serverParameterConfigResourceName(db.Name, paramAutovacuumNaptime)
 		Eventually(func() bool {
 			var configuration dbforpostgresqlv1.FlexibleServersConfiguration
 			err := k8sClient.Get(ctx, types.NamespacedName{
@@ -1089,25 +1708,25 @@ var _ = Describe("Database controller", func() {
 			Should(BeTrue())
 	})
 
-	It("writes ASO server parameter errors to Database status", func() {
-		db := &storagev1alpha1.Database{
+	It("writes ASO server parameter errors to database server status", func() {
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-server-params-status",
-				Namespace: "default",
+				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
 				ServerParams: []storagev1alpha1.DatabaseServerParameter{
 					{
-						Name:  "autovacuum_naptime",
+						Name:  paramAutovacuumNaptime,
 						Value: intstr.FromInt(15),
 					},
 				},
@@ -1115,7 +1734,7 @@ var _ = Describe("Database controller", func() {
 		}
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
-		parameterName := "autovacuum_naptime"
+		parameterName := paramAutovacuumNaptime
 		resourceName := serverParameterConfigResourceName(db.Name, parameterName)
 
 		Eventually(func(g Gomega) {
@@ -1145,7 +1764,7 @@ var _ = Describe("Database controller", func() {
 			condReason  string
 			condStatus  metav1.ConditionStatus
 		} {
-			var updated storagev1alpha1.Database
+			var updated storagev1alpha1.DatabaseServer
 			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      db.Name,
 				Namespace: db.Namespace,
@@ -1189,18 +1808,18 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("does not create FlexibleServersConfiguration resources when enableExtensions is omitted", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-no-extensions",
-				Namespace: "default",
+				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
@@ -1233,27 +1852,27 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("creates FlexibleServersConfiguration resources for enabled extensions", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-extensions",
-				Namespace: "default",
+				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
-				EnableExtensions: []storagev1alpha1.DatabaseExtension{
-					storagev1alpha1.DatabaseExtensionUUIDOSSP,
-					storagev1alpha1.DatabaseExtensionPgCron,
-					storagev1alpha1.DatabaseExtensionPgAudit,
-					storagev1alpha1.DatabaseExtensionPgStatStatements,
-					storagev1alpha1.DatabaseExtensionHstore,
+				EnableExtensions: []storagev1alpha1.DatabaseServerExtension{
+					storagev1alpha1.DatabaseServerExtensionUUIDOSSP,
+					storagev1alpha1.DatabaseServerExtensionPgCron,
+					storagev1alpha1.DatabaseServerExtensionPgAudit,
+					storagev1alpha1.DatabaseServerExtensionPgStatStatements,
+					storagev1alpha1.DatabaseServerExtensionHstore,
 				},
 			},
 		}
@@ -1316,23 +1935,23 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("updates FlexibleServersConfiguration resources when extensions change", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-extensions-update",
-				Namespace: "default",
+				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
-				EnableExtensions: []storagev1alpha1.DatabaseExtension{
-					storagev1alpha1.DatabaseExtensionHstore,
+				EnableExtensions: []storagev1alpha1.DatabaseServerExtension{
+					storagev1alpha1.DatabaseServerExtensionHstore,
 				},
 			},
 		}
@@ -1363,11 +1982,11 @@ var _ = Describe("Database controller", func() {
 		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
 			Should(BeEmpty())
 
-		var updated storagev1alpha1.Database
+		var updated storagev1alpha1.DatabaseServer
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
-		updated.Spec.EnableExtensions = []storagev1alpha1.DatabaseExtension{
-			storagev1alpha1.DatabaseExtensionHstore,
-			storagev1alpha1.DatabaseExtensionPgCron,
+		updated.Spec.EnableExtensions = []storagev1alpha1.DatabaseServerExtension{
+			storagev1alpha1.DatabaseServerExtensionHstore,
+			storagev1alpha1.DatabaseServerExtensionPgCron,
 		}
 		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
 
@@ -1420,28 +2039,28 @@ var _ = Describe("Database controller", func() {
 			Should(BeEmpty())
 	})
 
-	It("updates the FlexibleServer when Database storage spec changes", func() {
+	It("updates the FlexibleServer when database server storage spec changes", func() {
 		initialSize := int32(32)
 		initialTier := "P10"
 		updatedSize := int32(64)
-		updatedTier := "P15"
+		updatedTier := skuP15
 
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-update",
-				Namespace: "default",
+				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
-				Storage: &storagev1alpha1.DatabaseStorageSpec{
+				Storage: &storagev1alpha1.DatabaseServerStorageSpec{
 					SizeGB: &initialSize,
 					Tier:   &initialTier,
 				},
@@ -1462,9 +2081,9 @@ var _ = Describe("Database controller", func() {
 		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
 			Should(Equal(int(initialSize)))
 
-		var updated storagev1alpha1.Database
+		var updated storagev1alpha1.DatabaseServer
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
-		updated.Spec.Storage = &storagev1alpha1.DatabaseStorageSpec{
+		updated.Spec.Storage = &storagev1alpha1.DatabaseServerStorageSpec{
 			SizeGB: &updatedSize,
 			Tier:   &updatedTier,
 		}
@@ -1504,22 +2123,22 @@ var _ = Describe("Database controller", func() {
 		requestedTier := "P80"
 		expectedTier := "P50"
 
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-psql-tier-clamp",
-				Namespace: "default",
+				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
-					"admin-mi",
-					"admin-mi-id",
-					"admin-mi",
+					adminManagedIdentity,
+					adminManagedIdentityID,
+					adminManagedIdentity,
 					"user-mi",
 					"user-mi-id",
 				),
-				Storage: &storagev1alpha1.DatabaseStorageSpec{
+				Storage: &storagev1alpha1.DatabaseServerStorageSpec{
 					SizeGB: &size,
 					Tier:   &requestedTier,
 				},
@@ -1541,15 +2160,15 @@ var _ = Describe("Database controller", func() {
 			Should(Equal(expectedTier))
 	})
 
-	It("creates a FlexibleServersAdministrator for the Database", func() {
-		db := &storagev1alpha1.Database{
+	It("creates a FlexibleServersAdministrator for the database server", func() {
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-admin",
-				Namespace: "default",
+				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
 					"admin",
 					"admin-id",
@@ -1591,14 +2210,14 @@ var _ = Describe("Database controller", func() {
 	})
 
 	It("updates the FlexibleServersAdministrator when admin identity changes", func() {
-		db := &storagev1alpha1.Database{
+		db := &storagev1alpha1.DatabaseServer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "my-app-db-admin-update",
-				Namespace: "default",
+				Namespace: ns,
 			},
-			Spec: storagev1alpha1.DatabaseSpec{
+			Spec: storagev1alpha1.DatabaseServerSpec{
 				Version:    17,
-				ServerType: "dev",
+				ServerType: serverTypeDev,
 				Auth: directAuth(
 					"admin-old",
 					"admin-old-id",
@@ -1623,7 +2242,7 @@ var _ = Describe("Database controller", func() {
 		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
 			Should(Equal("admin-old"))
 
-		var updated storagev1alpha1.Database
+		var updated storagev1alpha1.DatabaseServer
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
 		updated.Spec.Auth.Admin.Identity.Name = "admin-new"
 		updated.Spec.Auth.Admin.Identity.PrincipalId = "admin-new-id"
@@ -1656,48 +2275,355 @@ var _ = Describe("Database controller", func() {
 			}))
 	})
 
-	It("creates a Job to provision the normal database user", func() {
-		db := newDatabaseForJob("my-app-db-user-job", directAuth(
-			"admin-mi",
-			"admin-mi-id",
-			"admin-mi",
-			"user-mi",
-			"user-mi-id",
+	It("creates a Reader RoleAssignment for each spec.debugAccess principal", func() {
+		db := newDedicatedDatabaseServer("my-app-db-debug", directAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+			"user",
+			"user-id",
 		))
+		db.Spec.DebugAccess = &storagev1alpha1.DatabaseServerDebugAccessSpec{
+			Principals: []storagev1alpha1.DebugAccessPrincipalSpec{
+				{
+					Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+						Name:        databaseOwnerGroup,
+						PrincipalId: databaseOwnerPrincipalID,
+					},
+				},
+				{
+					ServicePrincipal: &storagev1alpha1.DatabaseServicePrincipalSpec{
+						Name:        databaseExternalServicePrincipal,
+						PrincipalId: databaseExternalServicePrincipalID,
+					},
+				},
+			},
+		}
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
-		markASOReady(ctx, db)
+		listDebugAccessRoleAssignments := func(g Gomega) []authorizationv1.RoleAssignment {
+			var list authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(ctx, &list,
+				client.InNamespace(db.Namespace),
+				client.MatchingLabels{
+					databaseServerNameLabelKey:   db.Name,
+					debugAccessComponentLabelKey: debugAccessComponentLabelValue,
+				},
+			)).To(Succeed())
+			return list.Items
+		}
 
-		job := waitForProvisionJob(ctx, db.Name, db.Namespace)
+		Eventually(func(g Gomega) int {
+			return len(listDebugAccessRoleAssignments(g))
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(2))
 
-		Expect(job.Labels["dis.altinn.cloud/database-name"]).To(Equal(db.Name))
-		Expect(job.Spec.Template.Labels["azure.workload.identity/use"]).To(Equal("true"))
-		Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(db.Spec.Auth.Admin.ServiceAccountName))
-		Expect(job.Spec.Template.Spec.RestartPolicy).To(Equal(corev1.RestartPolicyOnFailure))
-		Expect(job.Spec.Template.Spec.Containers).To(HaveLen(1))
-		Expect(job.Spec.Template.Spec.Containers[0].Args).To(ContainElement("--provision-user"))
-		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_USER_APP_IDENTITY", Value: db.Spec.Auth.User.Identity.Name},
-		))
-		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_USER_APP_PRINCIPAL_ID", Value: db.Spec.Auth.User.Identity.PrincipalId},
-		))
-		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_ADMIN_APP_IDENTITY", Value: db.Spec.Auth.Admin.Identity.Name},
-		))
-		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_DATABASE_NAME", Value: db.Name},
-		))
-		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_DB_SCHEMA", Value: db.Name},
-		))
+		var assignments []authorizationv1.RoleAssignment
+		Eventually(func(g Gomega) int {
+			assignments = listDebugAccessRoleAssignments(g)
+			return len(assignments)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(2))
+
+		byPrincipalID := map[string]authorizationv1.RoleAssignment{}
+		for _, ra := range assignments {
+			Expect(ra.Spec.PrincipalId).NotTo(BeNil())
+			byPrincipalID[*ra.Spec.PrincipalId] = ra
+		}
+
+		Expect(byPrincipalID).To(HaveKey(databaseOwnerPrincipalID))
+		Expect(byPrincipalID).To(HaveKey(databaseExternalServicePrincipalID))
+
+		expectedType := map[string]string{
+			databaseOwnerPrincipalID:           "Group",
+			databaseExternalServicePrincipalID: "ServicePrincipal",
+		}
+		for principalID, ra := range byPrincipalID {
+			raCopy := ra
+			Expect(raCopy.Spec.RoleDefinitionReference).NotTo(BeNil())
+			Expect(raCopy.Spec.RoleDefinitionReference.WellKnownName).To(Equal("Reader"))
+
+			Expect(raCopy.Spec.PrincipalType).NotTo(BeNil())
+			Expect(string(*raCopy.Spec.PrincipalType)).To(Equal(expectedType[principalID]))
+
+			Expect(raCopy.Spec.Owner).NotTo(BeNil())
+			Expect(raCopy.Spec.Owner.Kind).To(Equal("FlexibleServer"))
+			Expect(raCopy.Spec.Owner.Name).To(Equal(db.Name))
+
+			Expect(metav1.IsControlledBy(&raCopy, db)).To(BeTrue())
+		}
 	})
 
-	It("recreates the user provisioning Job when the spec changes", func() {
-		db := newDatabaseForJob("my-app-db-user-job-update", directAuth(
-			"admin-mi",
-			"admin-mi-id",
-			"admin-mi",
+	It("prunes a debug RoleAssignment when a principal is removed", func() {
+		db := newDedicatedDatabaseServer("my-app-db-debug-prune", directAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+			"user",
+			"user-id",
+		))
+		db.Spec.DebugAccess = &storagev1alpha1.DatabaseServerDebugAccessSpec{
+			Principals: []storagev1alpha1.DebugAccessPrincipalSpec{
+				{
+					Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+						Name:        databaseOwnerGroup,
+						PrincipalId: databaseOwnerPrincipalID,
+					},
+				},
+				{
+					ServicePrincipal: &storagev1alpha1.DatabaseServicePrincipalSpec{
+						Name:        databaseExternalServicePrincipal,
+						PrincipalId: databaseExternalServicePrincipalID,
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		principalIDs := func(g Gomega) []string {
+			var list authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(ctx, &list,
+				client.InNamespace(db.Namespace),
+				client.MatchingLabels{
+					databaseServerNameLabelKey:   db.Name,
+					debugAccessComponentLabelKey: debugAccessComponentLabelValue,
+				},
+			)).To(Succeed())
+			ids := make([]string, 0, len(list.Items))
+			for _, ra := range list.Items {
+				g.Expect(ra.Spec.PrincipalId).NotTo(BeNil())
+				ids = append(ids, *ra.Spec.PrincipalId)
+			}
+			return ids
+		}
+
+		Eventually(func(g Gomega) []string {
+			return principalIDs(g)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(ConsistOf(databaseOwnerPrincipalID, databaseExternalServicePrincipalID))
+
+		var updated storagev1alpha1.DatabaseServer
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
+		updated.Spec.DebugAccess = &storagev1alpha1.DatabaseServerDebugAccessSpec{
+			Principals: []storagev1alpha1.DebugAccessPrincipalSpec{
+				{
+					Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+						Name:        databaseOwnerGroup,
+						PrincipalId: databaseOwnerPrincipalID,
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
+
+		Eventually(func(g Gomega) []string {
+			return principalIDs(g)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(ConsistOf(databaseOwnerPrincipalID))
+	})
+
+	It("rejects spec.debugAccess on a shared DatabaseServer", func() {
+		db := newSharedDatabaseServer("my-app-db-debug-shared")
+		db.Spec.DebugAccess = &storagev1alpha1.DatabaseServerDebugAccessSpec{
+			Principals: []storagev1alpha1.DebugAccessPrincipalSpec{
+				{
+					Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+						Name:        databaseOwnerGroup,
+						PrincipalId: databaseOwnerPrincipalID,
+					},
+				},
+			},
+		}
+
+		err := k8sClient.Create(ctx, db)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("debugAccess"))
+		Expect(err.Error()).To(ContainSubstring("dedicated"))
+	})
+
+	It("creates a Reader RoleAssignment for an identityRef debugger once the ApplicationIdentity is ready", func() {
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
+
+		db := newDedicatedDatabaseServer("my-app-db-debug-identityref", directAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+			"user",
+			"user-id",
+		))
+		db.Spec.DebugAccess = &storagev1alpha1.DatabaseServerDebugAccessSpec{
+			Principals: []storagev1alpha1.DebugAccessPrincipalSpec{
+				{
+					IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: databaseAppIdentityRef},
+				},
+				{
+					Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+						Name:        databaseOwnerGroup,
+						PrincipalId: databaseOwnerPrincipalID,
+					},
+				},
+				{
+					ServicePrincipal: &storagev1alpha1.DatabaseServicePrincipalSpec{
+						Name:        databaseExternalServicePrincipal,
+						PrincipalId: databaseExternalServicePrincipalID,
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		listDebugAccessRoleAssignments := func(g Gomega) []authorizationv1.RoleAssignment {
+			var list authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(ctx, &list,
+				client.InNamespace(db.Namespace),
+				client.MatchingLabels{
+					databaseServerNameLabelKey:   db.Name,
+					debugAccessComponentLabelKey: debugAccessComponentLabelValue,
+				},
+			)).To(Succeed())
+			return list.Items
+		}
+
+		var assignments []authorizationv1.RoleAssignment
+		Eventually(func(g Gomega) int {
+			assignments = listDebugAccessRoleAssignments(g)
+			return len(assignments)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(3))
+
+		byPrincipalID := map[string]authorizationv1.RoleAssignment{}
+		for _, ra := range assignments {
+			Expect(ra.Spec.PrincipalId).NotTo(BeNil())
+			byPrincipalID[*ra.Spec.PrincipalId] = ra
+		}
+		Expect(byPrincipalID).To(HaveKey(databaseAppPrincipalID))
+
+		resolvedRef := byPrincipalID[databaseAppPrincipalID]
+		Expect(resolvedRef.Spec.PrincipalType).NotTo(BeNil())
+		Expect(string(*resolvedRef.Spec.PrincipalType)).To(Equal("ServicePrincipal"))
+		Expect(resolvedRef.Spec.RoleDefinitionReference).NotTo(BeNil())
+		Expect(resolvedRef.Spec.RoleDefinitionReference.WellKnownName).To(Equal("Reader"))
+		Expect(resolvedRef.Spec.Owner).NotTo(BeNil())
+		Expect(resolvedRef.Spec.Owner.Kind).To(Equal("FlexibleServer"))
+		Expect(resolvedRef.Spec.Owner.Name).To(Equal(db.Name))
+		Expect(metav1.IsControlledBy(&resolvedRef, db)).To(BeTrue())
+
+		// All principals resolved -> DebugAccessReady=True (Provisioned).
+		Eventually(func(g Gomega) metav1.Condition {
+			var current storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &current)).To(Succeed())
+			cond := meta.FindStatusCondition(current.Status.Conditions, "DebugAccessReady")
+			g.Expect(cond).NotTo(BeNil())
+			return *cond
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(And(
+				HaveField("Status", metav1.ConditionTrue),
+				HaveField("Reason", "Provisioned"),
+			))
+	})
+
+	It("does not create a debug RoleAssignment while the identityRef ApplicationIdentity is not ready", func() {
+		// ApplicationIdentity exists but its status is not populated yet, so the
+		// principalId cannot be resolved and the debugger is skipped.
+		notReadyIdentity := &identityv1alpha1.ApplicationIdentity{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "debug-identity-not-ready",
+				Namespace: ns,
+			},
+			Spec: identityv1alpha1.ApplicationIdentitySpec{},
+		}
+		Expect(k8sClient.Create(ctx, notReadyIdentity)).To(Succeed())
+
+		db := newDedicatedDatabaseServer("my-app-db-debug-identityref-pending", directAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+			"user",
+			"user-id",
+		))
+		db.Spec.DebugAccess = &storagev1alpha1.DatabaseServerDebugAccessSpec{
+			Principals: []storagev1alpha1.DebugAccessPrincipalSpec{
+				{
+					IdentityRef: &storagev1alpha1.ApplicationIdentityRef{Name: notReadyIdentity.Name},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		// Give the controller time to reconcile the server (its Flexible Server is
+		// created), then confirm no debug RoleAssignment appears for the pending identity.
+		Eventually(func(g Gomega) error {
+			var s dbforpostgresqlv1.FlexibleServer
+			return k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &s)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Consistently(func(g Gomega) int {
+			var list authorizationv1.RoleAssignmentList
+			g.Expect(k8sClient.List(ctx, &list,
+				client.InNamespace(db.Namespace),
+				client.MatchingLabels{
+					databaseServerNameLabelKey:   db.Name,
+					debugAccessComponentLabelKey: debugAccessComponentLabelValue,
+				},
+			)).To(Succeed())
+			return len(list.Items)
+		}).WithTimeout(5 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(0))
+
+		// Pending identity -> DebugAccessReady=False (WaitingForIdentity), naming the identity.
+		Eventually(func(g Gomega) metav1.Condition {
+			var current storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &current)).To(Succeed())
+			cond := meta.FindStatusCondition(current.Status.Conditions, "DebugAccessReady")
+			g.Expect(cond).NotTo(BeNil())
+			return *cond
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(And(
+				HaveField("Status", metav1.ConditionFalse),
+				HaveField("Reason", "WaitingForIdentity"),
+				HaveField("Message", ContainSubstring(notReadyIdentity.Name)),
+			))
+
+		// The core Ready condition must be unaffected by a pending debug identity:
+		// once the ASO children report ready, the server reaches Ready=True.
+		markASOReady(ctx, db)
+		Eventually(func(g Gomega) metav1.Condition {
+			var current storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &current)).To(Succeed())
+			cond := meta.FindStatusCondition(current.Status.Conditions, "Ready")
+			g.Expect(cond).NotTo(BeNil())
+			return *cond
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(HaveField("Status", metav1.ConditionTrue))
+
+		// DebugAccessReady stays False while the identity is still pending, even
+		// though the server as a whole is Ready.
+		var afterReady storagev1alpha1.DatabaseServer
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &afterReady)).To(Succeed())
+		debugCond := meta.FindStatusCondition(afterReady.Status.Conditions, "DebugAccessReady")
+		Expect(debugCond).NotTo(BeNil())
+		Expect(debugCond.Status).To(Equal(metav1.ConditionFalse))
+
+		// Removing spec.debugAccess removes the DebugAccessReady condition entirely.
+		var updated storagev1alpha1.DatabaseServer
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
+		updated.Spec.DebugAccess = nil
+		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
+
+		Eventually(func(g Gomega) *metav1.Condition {
+			var current storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &current)).To(Succeed())
+			return meta.FindStatusCondition(current.Status.Conditions, "DebugAccessReady")
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(BeNil())
+	})
+
+	It("does not create a database server-owned user provisioning Job from legacy user auth", func() {
+		db := newDedicatedDatabaseServer("my-app-db-user-job-ignored", directAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
 			"user-mi",
 			"user-mi-id",
 		))
@@ -1705,75 +2631,1532 @@ var _ = Describe("Database controller", func() {
 
 		markASOReady(ctx, db)
 
-		oldJob := waitForProvisionJob(ctx, db.Name, db.Namespace)
-		oldJobName := oldJob.Name
-
-		var updated storagev1alpha1.Database
-		Expect(k8sClient.Get(ctx, types.NamespacedName{
-			Name:      db.Name,
-			Namespace: db.Namespace,
-		}, &updated)).To(Succeed())
-		updated.Spec.Auth.User.Identity.Name = "user-mi-2"
-		updated.Spec.Auth.User.Identity.PrincipalId = "user-mi-2-id"
-		Expect(k8sClient.Update(ctx, &updated)).To(Succeed())
-
-		var newJob batchv1.Job
-		Eventually(func(g Gomega) string {
+		Consistently(func(g Gomega) int {
 			var jobs batchv1.JobList
 			g.Expect(k8sClient.List(ctx, &jobs,
 				client.InNamespace(db.Namespace),
 				client.MatchingLabels(map[string]string{
-					"dis.altinn.cloud/database-name":  db.Name,
-					"dis.altinn.cloud/user-provision": "true",
+					databaseServerNameLabelKey: db.Name,
+					userProvisionLabelKey:      labelValueTrue,
 				}),
 			)).To(Succeed())
-			for i := range jobs.Items {
-				if jobs.Items[i].Name != oldJobName {
-					newJob = jobs.Items[i]
-					return newJob.Name
-				}
-			}
-			return ""
+			return len(jobs.Items)
+		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(0))
+	})
+
+	It("creates a server-debug provisioning Job for debugAccess principals", func() {
+		db := newDedicatedDatabaseServer("my-app-db-debug-job", directAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+			"user",
+			"user-id",
+		))
+		db.Spec.DebugAccess = &storagev1alpha1.DatabaseServerDebugAccessSpec{
+			Principals: []storagev1alpha1.DebugAccessPrincipalSpec{
+				{
+					Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+						Name:        databaseOwnerGroup,
+						PrincipalId: databaseOwnerPrincipalID,
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		markASOReady(ctx, db)
+
+		Eventually(func(g Gomega) {
+			var jobs batchv1.JobList
+			g.Expect(k8sClient.List(ctx, &jobs,
+				client.InNamespace(db.Namespace),
+				client.MatchingLabels(map[string]string{
+					databaseServerNameLabelKey:   db.Name,
+					debugAccessComponentLabelKey: debugAccessComponentLabelValue,
+					userProvisionLabelKey:        labelValueTrue,
+				}),
+			)).To(Succeed())
+			g.Expect(jobs.Items).To(HaveLen(1))
+
+			job := jobs.Items[0]
+			var fetched storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &fetched)).To(Succeed())
+			g.Expect(metav1.IsControlledBy(&job, &fetched)).To(BeTrue())
+			g.Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+				corev1.EnvVar{Name: dbUtil.ServerDebugAccessEnv, Value: "1"},
+			))
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &updated)).To(Succeed())
+			return updated.Status.DebugAccessProvisionedHash
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			ShouldNot(BeEmpty())
+	})
+
+	It("runs a revocation Job and clears the provisioned marker when debugAccess is removed", func() {
+		db := newDedicatedDatabaseServer("my-app-db-debug-revoke", directAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+			"user",
+			"user-id",
+		))
+		db.Spec.DebugAccess = &storagev1alpha1.DatabaseServerDebugAccessSpec{
+			Principals: []storagev1alpha1.DebugAccessPrincipalSpec{
+				{
+					Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+						Name:        databaseOwnerGroup,
+						PrincipalId: databaseOwnerPrincipalID,
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		markASOReady(ctx, db)
+
+		serverKey := types.NamespacedName{Name: db.Name, Namespace: db.Namespace}
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, serverKey, &updated)).To(Succeed())
+			return updated.Status.DebugAccessProvisionedHash
 		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
 			ShouldNot(BeEmpty())
 
-		Eventually(func() error {
+		Eventually(func(g Gomega) {
+			var fetched storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, serverKey, &fetched)).To(Succeed())
+			fetched.Spec.DebugAccess = nil
+			g.Expect(k8sClient.Update(ctx, &fetched)).To(Succeed())
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		var revocationJobName string
+		Eventually(func(g Gomega) {
+			var jobs batchv1.JobList
+			g.Expect(k8sClient.List(ctx, &jobs,
+				client.InNamespace(db.Namespace),
+				client.MatchingLabels(map[string]string{
+					databaseServerNameLabelKey:   db.Name,
+					debugAccessComponentLabelKey: debugAccessComponentLabelValue,
+					userProvisionLabelKey:        labelValueTrue,
+				}),
+			)).To(Succeed())
+			g.Expect(jobs.Items).To(HaveLen(1))
+
+			payload := ""
+			for _, env := range jobs.Items[0].Spec.Template.Spec.Containers[0].Env {
+				if env.Name == dbUtil.AccessPrincipalsEnv {
+					payload = env.Value
+				}
+			}
+			g.Expect(payload).To(ContainSubstring(`"principals":[]`))
+			revocationJobName = jobs.Items[0].Name
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func(g Gomega) {
 			var job batchv1.Job
-			err := k8sClient.Get(ctx, types.NamespacedName{
-				Name:      oldJobName,
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      revocationJobName,
 				Namespace: db.Namespace,
-			}, &job)
-			if err == nil {
-				return fmt.Errorf("old job still exists")
+			}, &job)).To(Succeed())
+			now := metav1.Now()
+			job.Status.StartTime = &now
+			job.Status.CompletionTime = &now
+			job.Status.Succeeded = 1
+			job.Status.Conditions = []batchv1.JobCondition{
+				{Type: batchv1.JobSuccessCriteriaMet, Status: corev1.ConditionTrue, LastTransitionTime: now},
+				{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: now},
 			}
-			if !apierrors.IsNotFound(err) {
-				return err
-			}
-			return nil
-		}).WithTimeout(30*time.Second).WithPolling(500*time.Millisecond).
-			Should(Succeed(), "expected old user-provisioning Job to be deleted")
+			g.Expect(k8sClient.Status().Update(ctx, &job)).To(Succeed())
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, serverKey, &updated)).To(Succeed())
+			return updated.Status.DebugAccessProvisionedHash
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(BeEmpty())
 	})
 
-	It("recreates the user provisioning Job when the current Job is failed", func() {
-		db := newDatabaseForJob("my-app-db-user-job-failed", directAuth(
-			"admin-mi",
-			"admin-mi-id",
-			"admin-mi",
-			"user-mi",
-			"user-mi-id",
+	It("sets DatabaseServer Ready after ASO resources are ready", func() {
+		db := newDedicatedDatabaseServer("my-app-db-ready", adminAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
 		))
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		markASOReady(ctx, db)
 
-		oldJob := waitForProvisionJob(ctx, db.Name, db.Namespace)
+		Eventually(func(g Gomega) metav1.ConditionStatus {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &updated)).To(Succeed())
+			ready := meta.FindStatusCondition(updated.Status.Conditions, databaseServerConditionReady)
+			g.Expect(ready).NotTo(BeNil())
+			g.Expect(ready.Reason).To(Equal(databaseServerReasonReady))
+			g.Expect(ready.ObservedGeneration).To(Equal(updated.Generation))
+			g.Expect(updated.Status.Host).To(Equal(fmt.Sprintf("%s.postgres.database.azure.com", db.Name)))
+			g.Expect(updated.Status.ResourceID).To(Equal(expectedFlexibleServerResourceID(db.Name)))
+			return ready.Status
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(metav1.ConditionTrue))
+	})
+
+	It("persists the Azure resource id on an already-Ready DatabaseServer", func() {
+		db := newDedicatedDatabaseServer("my-app-db-late-id", adminAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+		))
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		serverKey := types.NamespacedName{Name: db.Name, Namespace: db.Namespace}
+
+		// ASO reports Ready before Azure has filled in the server's ARM id
+		// (no FullyQualifiedDomainName/Id yet).
+		Eventually(func() error {
+			var server dbforpostgresqlv1.FlexibleServer
+			if err := k8sClient.Get(ctx, serverKey, &server); err != nil {
+				return err
+			}
+			server.Status.Conditions = []asoconditions.Condition{
+				{
+					Type:               asoconditions.ConditionTypeReady,
+					Status:             metav1.ConditionTrue,
+					Reason:             databaseConditionReady,
+					LastTransitionTime: metav1.Now(),
+					ObservedGeneration: server.Generation,
+				},
+			}
+			return k8sClient.Status().Update(ctx, &server)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func() error {
+			var admin dbforpostgresqlv1.FlexibleServersAdministrator
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      fmt.Sprintf("%s-admin", db.Name),
+				Namespace: db.Namespace,
+			}, &admin); err != nil {
+				return err
+			}
+			admin.Status.Conditions = []asoconditions.Condition{
+				{
+					Type:               asoconditions.ConditionTypeReady,
+					Status:             metav1.ConditionTrue,
+					Reason:             databaseConditionReady,
+					LastTransitionTime: metav1.Now(),
+					ObservedGeneration: admin.Generation,
+				},
+			}
+			return k8sClient.Status().Update(ctx, &admin)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		// The server settles Ready without a resource id.
+		Eventually(func(g Gomega) metav1.ConditionStatus {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, serverKey, &updated)).To(Succeed())
+			ready := meta.FindStatusCondition(updated.Status.Conditions, databaseServerConditionReady)
+			g.Expect(ready).NotTo(BeNil())
+			g.Expect(updated.Status.ResourceID).To(BeEmpty())
+			return ready.Status
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(metav1.ConditionTrue))
+
+		// Azure reports the ARM id afterwards; the Ready condition no longer
+		// changes, but the id must still be persisted.
+		Eventually(func() error {
+			var server dbforpostgresqlv1.FlexibleServer
+			if err := k8sClient.Get(ctx, serverKey, &server); err != nil {
+				return err
+			}
+			host := fmt.Sprintf("%s.postgres.database.azure.com", db.Name)
+			server.Status.FullyQualifiedDomainName = &host
+			resourceID := expectedFlexibleServerResourceID(db.Name)
+			server.Status.Id = &resourceID
+			return k8sClient.Status().Update(ctx, &server)
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, serverKey, &updated)).To(Succeed())
+			g.Expect(updated.Status.Host).To(Equal(fmt.Sprintf("%s.postgres.database.azure.com", db.Name)))
+			return updated.Status.ResourceID
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(expectedFlexibleServerResourceID(db.Name)))
+	})
+
+	It("preserves the legacy FQDN-named DNS zone and links on pre-rename servers", func() {
+		const serverName = "my-app-db-legacy-zone"
+		legacyZoneName := serverName + ".private.postgres.database.azure.com"
+		loc := privateDNSZoneLocation
+		regFalse := false
+
+		// The zone + links as the pre-rename operator laid them out: the zone CR
+		// named after the FQDN, the links owned by it.
+		zone := &networkv1.PrivateDnsZone{
+			ObjectMeta: metav1.ObjectMeta{Name: legacyZoneName, Namespace: ns},
+			Spec: networkv1.PrivateDnsZone_Spec{
+				AzureName: legacyZoneName,
+				Location:  &loc,
+				Owner: &genruntime.KnownResourceReference{
+					ARMID: "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network",
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, zone)).To(Succeed())
+
+		for linkName, vnetID := range map[string]string{
+			serverName + "-vnetlink":     "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network/providers/Microsoft.Network/virtualNetworks/vnet-dis-dev-001",
+			serverName + "-aks-vnetlink": "/subscriptions/my-subscription-id/resourceGroups/aks-vnet-rg/providers/Microsoft.Network/virtualNetworks/aks-vnet-dis-dev-001",
+		} {
+			link := &networkv1.PrivateDnsZonesVirtualNetworkLink{
+				ObjectMeta: metav1.ObjectMeta{Name: linkName, Namespace: ns},
+				Spec: networkv1.PrivateDnsZonesVirtualNetworkLink_Spec{
+					AzureName:           linkName,
+					Location:            &loc,
+					Owner:               &genruntime.KnownResourceReference{Name: legacyZoneName},
+					RegistrationEnabled: &regFalse,
+					VirtualNetwork: &networkv1.SubResource{
+						Reference: &genruntime.ResourceReference{ARMID: vnetID},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, link)).To(Succeed())
+		}
+
+		db := newDedicatedDatabaseServer(serverName, adminAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+		))
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		markASOReady(ctx, db)
+
+		// The reconcile completes past the DNS children and persists the ids.
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &updated)).To(Succeed())
+			return updated.Status.ResourceID
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(expectedFlexibleServerResourceID(db.Name)))
+
+		// The links still belong to the legacy zone (their owner is immutable in
+		// ASO), and no duplicate zone CR appeared under the new name.
+		var link networkv1.PrivateDnsZonesVirtualNetworkLink
+		Expect(k8sClient.Get(ctx, types.NamespacedName{
+			Name:      serverName + "-vnetlink",
+			Namespace: ns,
+		}, &link)).To(Succeed())
+		Expect(link.Spec.Owner.Name).To(Equal(legacyZoneName))
+
+		var dupe networkv1.PrivateDnsZone
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: serverName, Namespace: ns}, &dupe)
+		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "no zone CR should be created under the new name")
+	})
+
+	It("surfaces a ServerNameConflict and suppresses owner-not-found parameter errors when the FlexibleServer name is taken", func() {
+		db := newDedicatedDatabaseServer("my-app-db-name-conflict", adminAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+		))
+		db.Spec.ServerParams = []storagev1alpha1.DatabaseServerParameter{
+			{
+				Name:  paramAutovacuumNaptime,
+				Value: intstr.FromInt(15),
+			},
+		}
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		parameterConfigName := serverParameterConfigResourceName(db.Name, paramAutovacuumNaptime)
+
+		// Wait until the operator has created the FlexibleServer and its parameter
+		// configuration child.
+		Eventually(func(g Gomega) {
+			var server dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &server)).To(Succeed())
+
+			var configuration dbforpostgresqlv1.FlexibleServersConfiguration
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      parameterConfigName,
+				Namespace: db.Namespace,
+			}, &configuration)).To(Succeed())
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		// Azure rejects the create because the (globally unique) server name is taken.
+		// ASO classifies this as retryable, so it is reported as a Warning-severity
+		// Ready=False on the FlexibleServer (distinct from the Info-severity
+		// "Reconciling" state used during normal provisioning).
+		Eventually(func() error {
+			var server dbforpostgresqlv1.FlexibleServer
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &server); err != nil {
+				return err
+			}
+			server.Status.Conditions = []asoconditions.Condition{
+				{
+					Type:               asoconditions.ConditionTypeReady,
+					Status:             metav1.ConditionFalse,
+					Severity:           asoconditions.ConditionSeverityWarning,
+					Reason:             azureReasonServerNameAlreadyExists,
+					Message:            fmt.Sprintf("Server name '%s' already exists.", db.Name),
+					LastTransitionTime: metav1.Now(),
+					ObservedGeneration: server.Generation,
+				},
+			}
+			return k8sClient.Status().Update(ctx, &server)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		// ASO then blocks the child configuration on its missing owner. This is the
+		// misleading symptom that must NOT surface on the DatabaseServer.
+		Eventually(func() error {
+			var configuration dbforpostgresqlv1.FlexibleServersConfiguration
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      parameterConfigName,
+				Namespace: db.Namespace,
+			}, &configuration); err != nil {
+				return err
+			}
+			configuration.Status.Conditions = []asoconditions.Condition{
+				{
+					Type:               asoconditions.ConditionTypeReady,
+					Status:             metav1.ConditionFalse,
+					Severity:           asoconditions.ConditionSeverityWarning,
+					Reason:             "ReconciliationBlocked",
+					Message:            fmt.Sprintf("Owner %q cannot be found. Progress is blocked until the owner is created.", db.Name),
+					LastTransitionTime: metav1.Now(),
+					ObservedGeneration: configuration.Generation,
+				},
+			}
+			return k8sClient.Status().Update(ctx, &configuration)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		// The DatabaseServer surfaces the real Azure error with an actionable message.
+		Eventually(func(g Gomega) {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &updated)).To(Succeed())
+
+			ready := meta.FindStatusCondition(updated.Status.Conditions, databaseServerConditionReady)
+			g.Expect(ready).NotTo(BeNil())
+			g.Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(ready.Reason).To(Equal(databaseServerReasonServerNameConflict))
+			g.Expect(ready.Message).To(ContainSubstring(db.Name))
+			g.Expect(ready.Message).To(ContainSubstring("globally unique"))
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		// It never surfaces the misleading owner-not-found parameter error, and stays in
+		// the conflict state instead of flapping back to it.
+		Consistently(func(g Gomega) {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      db.Name,
+				Namespace: db.Namespace,
+			}, &updated)).To(Succeed())
+
+			g.Expect(updated.Status.ServerParameterErrors).To(BeEmpty())
+			g.Expect(meta.FindStatusCondition(updated.Status.Conditions, serverParametersReadyConditionType)).To(BeNil())
+
+			ready := meta.FindStatusCondition(updated.Status.Conditions, databaseServerConditionReady)
+			g.Expect(ready).NotTo(BeNil())
+			g.Expect(ready.Reason).To(Equal(databaseServerReasonServerNameConflict))
+		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+	})
+
+	It("tears down a dedicated server's private DNS zone only after its vnet links are gone", func() {
+		const holdFinalizer = "test.dis.altinn.cloud/hold-link"
+
+		db := newDedicatedDatabaseServer("my-app-db-teardown", adminAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+		))
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		zoneName := zoneCRNameForDatabaseServer(db)
+		dbLinkName := dbVNetLinkNameForDatabaseServer(db)
+		aksLinkName := aksVNetLinkNameForDatabaseServer(db)
+
+		// Wait until the operator has created the FlexibleServer, the private DNS zone and
+		// both vnet links, and has registered its teardown finalizer.
+		Eventually(func(g Gomega) {
+			var server dbforpostgresqlv1.FlexibleServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &server)).To(Succeed())
+
+			var zone networkv1.PrivateDnsZone
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: zoneName, Namespace: db.Namespace}, &zone)).To(Succeed())
+
+			var dbLink networkv1.PrivateDnsZonesVirtualNetworkLink
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: dbLinkName, Namespace: db.Namespace}, &dbLink)).To(Succeed())
+
+			var aksLink networkv1.PrivateDnsZonesVirtualNetworkLink
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: aksLinkName, Namespace: db.Namespace}, &aksLink)).To(Succeed())
+
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
+			g.Expect(controllerutil.ContainsFinalizer(&updated, databaseServerFinalizer)).To(BeTrue())
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		// Hold the DB vnet link with an extra finalizer so its deletion cannot complete.
+		// This lets us observe that the zone is held back while a link still exists.
+		Eventually(func() error {
+			var dbLink networkv1.PrivateDnsZonesVirtualNetworkLink
+			if err := k8sClient.Get(ctx, types.NamespacedName{Name: dbLinkName, Namespace: db.Namespace}, &dbLink); err != nil {
+				return err
+			}
+			controllerutil.AddFinalizer(&dbLink, holdFinalizer)
+			return k8sClient.Update(ctx, &dbLink)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Expect(k8sClient.Delete(ctx, db)).To(Succeed())
+
+		// The FlexibleServer and the unheld link are deleted right away.
+		Eventually(func(g Gomega) {
+			var server dbforpostgresqlv1.FlexibleServer
+			g.Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &server))).To(BeTrue())
+
+			var aksLink networkv1.PrivateDnsZonesVirtualNetworkLink
+			g.Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: aksLinkName, Namespace: db.Namespace}, &aksLink))).To(BeTrue())
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		// While the held DB link is still being deleted, the zone must NOT be deleted, and
+		// the DatabaseServer must retain its finalizer.
+		Consistently(func(g Gomega) {
+			var zone networkv1.PrivateDnsZone
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: zoneName, Namespace: db.Namespace}, &zone)).To(Succeed())
+
+			var dbLink networkv1.PrivateDnsZonesVirtualNetworkLink
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: dbLinkName, Namespace: db.Namespace}, &dbLink)).To(Succeed())
+			g.Expect(dbLink.DeletionTimestamp.IsZero()).To(BeFalse())
+
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
+			g.Expect(controllerutil.ContainsFinalizer(&updated, databaseServerFinalizer)).To(BeTrue())
+		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		// Release the held link; teardown then completes cleanly.
+		Eventually(func() error {
+			var dbLink networkv1.PrivateDnsZonesVirtualNetworkLink
+			if err := k8sClient.Get(ctx, types.NamespacedName{Name: dbLinkName, Namespace: db.Namespace}, &dbLink); err != nil {
+				return err
+			}
+			controllerutil.RemoveFinalizer(&dbLink, holdFinalizer)
+			return k8sClient.Update(ctx, &dbLink)
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func(g Gomega) {
+			var dbLink networkv1.PrivateDnsZonesVirtualNetworkLink
+			g.Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: dbLinkName, Namespace: db.Namespace}, &dbLink))).To(BeTrue())
+
+			var zone networkv1.PrivateDnsZone
+			g.Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: zoneName, Namespace: db.Namespace}, &zone))).To(BeTrue())
+
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated))).To(BeTrue())
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+	})
+
+	It("resolves ApplicationIdentity references for server admin", func() {
+		createApplicationIdentity(ctx, "adminidentity", adminManagedIdentity, adminManagedIdentityID)
+
+		db := newDedicatedDatabaseServer("my-app-db-appid-ref", adminIdentityRefAuth("adminidentity"))
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		adminName := fmt.Sprintf("%s-admin", db.Name)
+
+		Eventually(func(g Gomega) struct {
+			azureName     string
+			principalName string
+		} {
+			var a dbforpostgresqlv1.FlexibleServersAdministrator
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      adminName,
+				Namespace: db.Namespace,
+			}, &a)).To(Succeed())
+			g.Expect(a.Spec.PrincipalName).NotTo(BeNil())
+			return struct {
+				azureName     string
+				principalName string
+			}{
+				azureName:     a.Spec.AzureName,
+				principalName: *a.Spec.PrincipalName,
+			}
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Equal(struct {
+				azureName     string
+				principalName string
+			}{
+				azureName:     adminManagedIdentityID,
+				principalName: adminManagedIdentity,
+			}))
+	})
+
+	It("creates a FlexibleServersDatabase and publishes Database status", func() {
+		db := newSharedDatabaseServer("shared-db-database-valid")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
+
+		database := newDatabase("router-valid", db.Name)
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		expectedDatabaseName := expectedPostgresDatabaseName(database)
+		expectedResourceName := databaseASOResourceName(db.Name, expectedDatabaseName)
+		Expect(expectedResourceName).To(Equal(fmt.Sprintf("%s-%s", db.Name, expectedDatabaseName)))
+
+		Eventually(func(g Gomega) dbforpostgresqlv1.FlexibleServersDatabase_Spec {
+			var asoDatabase dbforpostgresqlv1.FlexibleServersDatabase
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      expectedResourceName,
+				Namespace: database.Namespace,
+			}, &asoDatabase)).To(Succeed())
+			g.Expect(asoDatabase.Spec.AzureName).To(Equal(expectedDatabaseName))
+			g.Expect(asoDatabase.Spec.Owner).NotTo(BeNil())
+			g.Expect(asoDatabase.Spec.Owner.Name).To(Equal(db.Name))
+			g.Expect(asoDatabase.Spec.Charset).To(BeNil())
+			g.Expect(asoDatabase.Spec.Collation).To(BeNil())
+			g.Expect(asoDatabase.Labels).To(HaveKeyWithValue(databaseServerNameLabelKey, db.Name))
+			g.Expect(asoDatabase.Labels).To(HaveKeyWithValue(databaseNameLabelKey, database.Name))
+			g.Expect(asoDatabase.Annotations).To(HaveKeyWithValue(
+				annotations.ReconcilePolicy,
+				string(annotations.ReconcilePolicyDetachOnDelete),
+			))
+			return asoDatabase.Spec
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			ShouldNot(BeZero())
+
+		markDatabaseASOReady(ctx, database)
+
+		Eventually(func(g Gomega) []storagev1alpha1.DatabaseValidationError {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      database.Name,
+				Namespace: database.Namespace,
+			}, &updated)).To(Succeed())
+			g.Expect(updated.Status.ObservedGeneration).To(Equal(updated.Generation))
+			g.Expect(updated.Status.DatabaseName).To(Equal(expectedDatabaseName))
+			g.Expect(updated.Status.Host).To(Equal(fmt.Sprintf("%s.postgres.database.azure.com", db.Name)))
+			g.Expect(updated.Status.Port).To(Equal(databasePort))
+
+			ready := meta.FindStatusCondition(updated.Status.Conditions, databaseConditionReady)
+			g.Expect(ready).NotTo(BeNil())
+			g.Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(ready.Reason).To(Equal(databaseReasonProvisioning))
+
+			databaseReady := meta.FindStatusCondition(updated.Status.Conditions, databaseConditionDatabaseReady)
+			g.Expect(databaseReady).NotTo(BeNil())
+			g.Expect(databaseReady.Status).To(Equal(metav1.ConditionTrue))
+			g.Expect(databaseReady.Reason).To(Equal(databaseReasonDatabaseReady))
+
+			accessReady := meta.FindStatusCondition(updated.Status.Conditions, databaseConditionAccessReady)
+			g.Expect(accessReady).NotTo(BeNil())
+			g.Expect(accessReady.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(accessReady.Reason).To(Equal(databaseReasonProvisioning))
+
+			return updated.Status.ValidationErrors
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+
+		job := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
+		Expect(job.Labels).To(HaveKeyWithValue(databaseServerNameLabelKey, db.Name))
+		Expect(job.Labels).To(HaveKeyWithValue(databaseNameLabelKey, database.Name))
+		Expect(job.Spec.Template.Labels["azure.workload.identity/use"]).To(Equal("true"))
+		Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(db.Spec.Auth.Admin.ServiceAccountName))
+		Expect(job.Spec.Template.Spec.Containers).To(HaveLen(1))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: dbUtil.DatabaseServerNameEnv, Value: db.Name},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: dbUtil.DBHostEnv, Value: fmt.Sprintf("%s.postgres.database.azure.com", db.Name)},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: dbUtil.DBNameEnv, Value: expectedDatabaseName},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: dbUtil.DBSchemaEnv, Value: expectedDatabaseName},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).NotTo(ContainElement(HaveField("Name", "DISPG_APP_IDENTITY_NAME")))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).NotTo(ContainElement(HaveField("Name", "DISPG_OWNER_IDENTITY_NAME")))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).NotTo(ContainElement(HaveField("Name", "DISPG_APP_IDENTITY_ID")))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).NotTo(ContainElement(HaveField("Name", "DISPG_OWNER_IDENTITY_ID")))
+		var accessPayload string
+		for _, env := range job.Spec.Template.Spec.Containers[0].Env {
+			if env.Name == dbUtil.AccessPrincipalsEnv {
+				accessPayload = env.Value
+			}
+		}
+		accessPrincipals, err := dbUtil.ParseAccessPrincipalsPayload(accessPayload)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(accessPrincipals).To(ConsistOf(
+			dbUtil.AccessPrincipal{
+				Role:          dbUtil.AccessRoleWriter,
+				Name:          databaseAppManagedIdentity,
+				PrincipalID:   databaseAppPrincipalID,
+				PrincipalType: dbUtil.PrincipalTypeService,
+			},
+			dbUtil.AccessPrincipal{
+				Role:          dbUtil.AccessRoleOwner,
+				Name:          databaseOwnerGroup,
+				PrincipalID:   databaseOwnerPrincipalID,
+				PrincipalType: dbUtil.PrincipalTypeGroup,
+			},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: "DISPG_REVOKE_PUBLIC_CONNECT", Value: "1"},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: "DISPG_DB_SEARCH_PATH_SCOPE", Value: searchPathScopeDatabase},
+		))
+	})
+
+	It("reports NotFound when Database server does not exist", func() {
+		database := newDatabase("router-missing-server", "missing-shared-db")
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      database.Name,
+				Namespace: database.Namespace,
+			}, &updated)).To(Succeed())
+			g.Expect(updated.Status.ObservedGeneration).To(Equal(updated.Generation))
+
+			ready := meta.FindStatusCondition(updated.Status.Conditions, databaseConditionReady)
+			g.Expect(ready).NotTo(BeNil())
+			g.Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(ready.Reason).To(Equal(databaseReasonValidationFailed))
+
+			for _, validationError := range updated.Status.ValidationErrors {
+				if validationError.Field == databaseValidationFieldServerName {
+					return validationError.Reason
+				}
+			}
+			return ""
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(databaseValidationReasonNotFound))
+
+		Consistently(func(g Gomega) []dbforpostgresqlv1.FlexibleServersDatabase {
+			return listDatabaseASOChildren(g, database.Name)
+		}).WithTimeout(2 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+	})
+
+	It("creates a Database and access Job on a dedicated database server", func() {
+		db := newDedicatedDatabaseServer("dedicated-db-database-valid", adminAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+		))
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
+
+		database := newDatabase("router-dedicated-server", db.Name)
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		expectedDatabaseName := expectedPostgresDatabaseName(database)
+		expectedResourceName := databaseASOResourceName(db.Name, expectedDatabaseName)
+
+		Eventually(func(g Gomega) dbforpostgresqlv1.FlexibleServersDatabase_Spec {
+			var asoDatabase dbforpostgresqlv1.FlexibleServersDatabase
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      expectedResourceName,
+				Namespace: database.Namespace,
+			}, &asoDatabase)).To(Succeed())
+			g.Expect(asoDatabase.Spec.AzureName).To(Equal(expectedDatabaseName))
+			g.Expect(asoDatabase.Spec.Owner).NotTo(BeNil())
+			g.Expect(asoDatabase.Spec.Owner.Name).To(Equal(db.Name))
+			g.Expect(asoDatabase.Labels).To(HaveKeyWithValue(databaseServerNameLabelKey, db.Name))
+			g.Expect(asoDatabase.Labels).To(HaveKeyWithValue(databaseNameLabelKey, database.Name))
+			return asoDatabase.Spec
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			ShouldNot(BeZero())
+
+		markDatabaseASOReady(ctx, database)
+
+		job := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
+		Expect(job.Labels).To(HaveKeyWithValue(databaseServerNameLabelKey, db.Name))
+		Expect(job.Labels).To(HaveKeyWithValue(databaseNameLabelKey, database.Name))
+		Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(db.Spec.Auth.Admin.ServiceAccountName))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: dbUtil.DatabaseServerNameEnv, Value: db.Name},
+		))
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
+			corev1.EnvVar{Name: dbUtil.DBNameEnv, Value: expectedDatabaseName},
+		))
+	})
+
+	It("rejects Database name and server references with surrounding whitespace", func() {
+		db := newSharedDatabaseServer("shared-db-database-whitespace")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		database := newDatabase("router-whitespace", db.Name)
+		database.Spec.Name = " router-whitespace "
+		database.Spec.Server.Name = " " + db.Name + " "
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) map[string]string {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      database.Name,
+				Namespace: database.Namespace,
+			}, &updated)).To(Succeed())
+
+			reasons := make(map[string]string, len(updated.Status.ValidationErrors))
+			for _, validationError := range updated.Status.ValidationErrors {
+				reasons[validationError.Field] = validationError.Reason
+			}
+			return reasons
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(HaveKeyWithValue(databaseValidationFieldSpecName, databaseValidationReasonInvalid))
+
+		Eventually(func(g Gomega) map[string]string {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      database.Name,
+				Namespace: database.Namespace,
+			}, &updated)).To(Succeed())
+
+			reasons := make(map[string]string, len(updated.Status.ValidationErrors))
+			for _, validationError := range updated.Status.ValidationErrors {
+				reasons[validationError.Field] = validationError.Reason
+			}
+			return reasons
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(HaveKeyWithValue(databaseValidationFieldServerName, databaseValidationReasonInvalid))
+
+		Consistently(func(g Gomega) []dbforpostgresqlv1.FlexibleServersDatabase {
+			return listDatabaseASOChildren(g, database.Name)
+		}).WithTimeout(2 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+	})
+
+	It("reports Database access validation errors for duplicate and malformed principals", func() {
+		db := newSharedDatabaseServer("shared-db-access-validation")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		database := newDatabase("router-access-validation", db.Name)
+		database.Spec.Access.Principals = []storagev1alpha1.DatabaseAccessPrincipalSpec{
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleReader,
+				IdentityRef: &storagev1alpha1.ApplicationIdentityRef{
+					Name: " app-ref ",
+				},
+			},
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleWriter,
+				IdentityRef: &storagev1alpha1.ApplicationIdentityRef{
+					Name: "same-ref",
+				},
+			},
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleOwner,
+				IdentityRef: &storagev1alpha1.ApplicationIdentityRef{
+					Name: "same-ref",
+				},
+			},
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleReader,
+				Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+					Name:        "group-one",
+					PrincipalId: "not-a-guid",
+				},
+			},
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleOwner,
+				Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+					Name:        "group-two",
+					PrincipalId: databaseOwnerPrincipalID,
+				},
+			},
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleWriter,
+				Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+					Name:        "group-three",
+					PrincipalId: databaseOwnerPrincipalID,
+				},
+			},
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleReader,
+				ServicePrincipal: &storagev1alpha1.DatabaseServicePrincipalSpec{
+					Name:        "sp-one",
+					PrincipalId: "not-a-guid",
+				},
+			},
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleWriter,
+				ServicePrincipal: &storagev1alpha1.DatabaseServicePrincipalSpec{
+					Name:        "sp-two",
+					PrincipalId: databaseExternalServicePrincipalID,
+				},
+			},
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleOwner,
+				ServicePrincipal: &storagev1alpha1.DatabaseServicePrincipalSpec{
+					Name:        "sp-three",
+					PrincipalId: databaseExternalServicePrincipalID,
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) map[string]string {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      database.Name,
+				Namespace: database.Namespace,
+			}, &updated)).To(Succeed())
+
+			reasons := make(map[string]string, len(updated.Status.ValidationErrors))
+			for _, validationError := range updated.Status.ValidationErrors {
+				reasons[validationError.Field] = validationError.Reason
+			}
+			return reasons
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(SatisfyAll(
+				HaveKeyWithValue("spec.access.principals[0].identityRef.name", databaseValidationReasonInvalid),
+				HaveKeyWithValue("spec.access.principals[2]", databaseValidationReasonConflict),
+				HaveKeyWithValue("spec.access.principals[3].group.principalId", databaseValidationReasonInvalid),
+				HaveKeyWithValue("spec.access.principals[5]", databaseValidationReasonConflict),
+				HaveKeyWithValue("spec.access.principals[6].servicePrincipal.principalId", databaseValidationReasonInvalid),
+				HaveKeyWithValue("spec.access.principals[8]", databaseValidationReasonConflict),
+			))
+
+		Consistently(func(g Gomega) []dbforpostgresqlv1.FlexibleServersDatabase {
+			return listDatabaseASOChildren(g, database.Name)
+		}).WithTimeout(2 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+	})
+
+	It("reports at most one Database validation error per field", func() {
+		database := newDatabase("router-duplicate-validation", "missing-shared-db")
+		database.Spec.Name = "   "
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      database.Name,
+				Namespace: database.Namespace,
+			}, &updated)).To(Succeed())
+
+			ready := meta.FindStatusCondition(updated.Status.Conditions, databaseConditionReady)
+			g.Expect(ready).NotTo(BeNil())
+			g.Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(ready.Reason).To(Equal(databaseReasonValidationFailed))
+
+			specNameErrorCount := 0
+			for _, validationError := range updated.Status.ValidationErrors {
+				if validationError.Field != databaseValidationFieldSpecName {
+					continue
+				}
+				specNameErrorCount++
+				g.Expect(validationError.Reason).To(Equal(databaseValidationReasonRequired))
+			}
+			return specNameErrorCount
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+	})
+
+	It("waits for referenced ApplicationIdentity before creating the access Job", func() {
+		db := newSharedDatabaseServer("shared-db-database-access-identity-wait")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		database := newDatabase("router-access-identity-wait", db.Name)
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			return len(listDatabaseASOChildren(g, database.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+
+		markDatabaseASOReady(ctx, database)
+
+		Eventually(func(g Gomega) []storagev1alpha1.DatabaseValidationError {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      database.Name,
+				Namespace: database.Namespace,
+			}, &updated)).To(Succeed())
+
+			accessReady := meta.FindStatusCondition(updated.Status.Conditions, databaseConditionAccessReady)
+			g.Expect(accessReady).NotTo(BeNil())
+			g.Expect(accessReady.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(accessReady.Reason).To(Equal(databaseReasonProvisioning))
+			g.Expect(accessReady.Message).To(ContainSubstring("Waiting for ApplicationIdentity"))
+			return updated.Status.ValidationErrors
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+
+		Consistently(func(g Gomega) int {
+			var jobs batchv1.JobList
+			g.Expect(k8sClient.List(ctx, &jobs,
+				client.InNamespace(database.Namespace),
+				client.MatchingLabels(map[string]string{
+					databaseNameLabelKey:  database.Name,
+					userProvisionLabelKey: labelValueTrue,
+				}),
+			)).To(Succeed())
+			return len(jobs.Items)
+		}).WithTimeout(2 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(0))
+
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
+		job := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
+		Expect(job.Name).NotTo(BeEmpty())
+	})
+
+	It("revalidates Database when the referenced DatabaseServer is created later", func() {
+		const serverName = "shared-db-created-later"
+		database := newDatabase("router-late-server", serverName)
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      database.Name,
+				Namespace: database.Namespace,
+			}, &updated)).To(Succeed())
+			for _, validationError := range updated.Status.ValidationErrors {
+				if validationError.Field == databaseValidationFieldServerName {
+					return validationError.Reason
+				}
+			}
+			return ""
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(databaseValidationReasonNotFound))
+
+		Expect(k8sClient.Create(ctx, newSharedDatabaseServer(serverName))).To(Succeed())
+
+		Eventually(func(g Gomega) []storagev1alpha1.DatabaseValidationError {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      database.Name,
+				Namespace: database.Namespace,
+			}, &updated)).To(Succeed())
+			return updated.Status.ValidationErrors
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+
+		Eventually(func(g Gomega) int {
+			return len(listDatabaseASOChildren(g, database.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+	})
+
+	It("allows the same database name on different shared database servers", func() {
+		db1 := newSharedDatabaseServer("shared-db-database-one")
+		db2 := newSharedDatabaseServer("shared-db-database-two")
+		Expect(k8sClient.Create(ctx, db1)).To(Succeed())
+		Expect(k8sClient.Create(ctx, db2)).To(Succeed())
+
+		database1 := newDatabase("router-one", db1.Name)
+		database2 := newDatabase("router-two", db2.Name)
+		database2.Spec.Name = database1.Spec.Name
+		Expect(k8sClient.Create(ctx, database1)).To(Succeed())
+		Expect(k8sClient.Create(ctx, database2)).To(Succeed())
+
+		expectedDatabaseName1 := expectedPostgresDatabaseName(database1)
+		expectedDatabaseName2 := expectedPostgresDatabaseName(database2)
+		Eventually(func(g Gomega) map[string]string {
+			databases := append(
+				listDatabaseASOChildren(g, database1.Name),
+				listDatabaseASOChildren(g, database2.Name)...,
+			)
+			azureNamesByResource := make(map[string]string, len(databases))
+			for _, asoDatabase := range databases {
+				azureNamesByResource[asoDatabase.Name] = asoDatabase.Spec.AzureName
+			}
+			return azureNamesByResource
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(map[string]string{
+				databaseASOResourceName(db1.Name, expectedDatabaseName1): expectedDatabaseName1,
+				databaseASOResourceName(db2.Name, expectedDatabaseName2): expectedDatabaseName2,
+			}))
+	})
+
+	It("reports Conflict when another Database manages the same database on the same server", func() {
+		db := newSharedDatabaseServer("shared-db-database-owner-guard")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		firstDatabase := newDatabase("router-owner-one", db.Name)
+		Expect(k8sClient.Create(ctx, firstDatabase)).To(Succeed())
+
+		secondDatabase := newDatabase("router-owner-two", db.Name)
+		secondDatabase.Spec.Name = firstDatabase.Spec.Name
+		expectedDatabaseName := expectedPostgresDatabaseName(secondDatabase)
+		expectedResourceName := databaseASOResourceName(db.Name, expectedDatabaseName)
+
+		var firstUpdated storagev1alpha1.Database
+		Eventually(func(g Gomega) {
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      firstDatabase.Name,
+				Namespace: firstDatabase.Namespace,
+			}, &firstUpdated)).To(Succeed())
+			var cachedASODatabase dbforpostgresqlv1.FlexibleServersDatabase
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      expectedResourceName,
+				Namespace: firstDatabase.Namespace,
+			}, &cachedASODatabase)).To(Succeed())
+			g.Expect(metav1.IsControlledBy(&cachedASODatabase, &firstUpdated)).To(BeTrue())
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		Expect(k8sClient.Create(ctx, secondDatabase)).To(Succeed())
+
+		Eventually(func(g Gomega) string {
+			var secondUpdated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      secondDatabase.Name,
+				Namespace: secondDatabase.Namespace,
+			}, &secondUpdated)).To(Succeed())
+			g.Expect(secondUpdated.Status.DatabaseName).To(BeEmpty())
+
+			ready := meta.FindStatusCondition(secondUpdated.Status.Conditions, databaseConditionReady)
+			g.Expect(ready).NotTo(BeNil())
+			g.Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(ready.Reason).To(Equal(databaseReasonValidationFailed))
+
+			for _, validationError := range secondUpdated.Status.ValidationErrors {
+				if validationError.Field == databaseValidationFieldSpecName {
+					g.Expect(validationError.Message).To(ContainSubstring(firstDatabase.Name))
+					return validationError.Reason
+				}
+			}
+			return ""
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(databaseValidationReasonConflict))
+
+		var existingASODatabase dbforpostgresqlv1.FlexibleServersDatabase
+		Expect(k8sClient.Get(ctx, types.NamespacedName{
+			Name:      expectedResourceName,
+			Namespace: firstDatabase.Namespace,
+		}, &existingASODatabase)).To(Succeed())
+		Expect(existingASODatabase.Labels).To(HaveKeyWithValue(databaseNameLabelKey, firstDatabase.Name))
+		Expect(metav1.IsControlledBy(&existingASODatabase, &firstUpdated)).To(BeTrue())
+
+		fixedDatabaseName := "router-owner-two-fixed"
+		Eventually(func() error {
+			var secondUpdated storagev1alpha1.Database
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      secondDatabase.Name,
+				Namespace: secondDatabase.Namespace,
+			}, &secondUpdated); err != nil {
+				return err
+			}
+			secondUpdated.Spec.Name = fixedDatabaseName
+			return k8sClient.Update(ctx, &secondUpdated)
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func(g Gomega) []storagev1alpha1.DatabaseValidationError {
+			var secondUpdated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      secondDatabase.Name,
+				Namespace: secondDatabase.Namespace,
+			}, &secondUpdated)).To(Succeed())
+			g.Expect(secondUpdated.Status.DatabaseName).To(Equal(fixedDatabaseName))
+			return secondUpdated.Status.ValidationErrors
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+
+		var secondASODatabase dbforpostgresqlv1.FlexibleServersDatabase
+		Expect(k8sClient.Get(ctx, types.NamespacedName{
+			Name:      databaseASOResourceName(db.Name, fixedDatabaseName),
+			Namespace: secondDatabase.Namespace,
+		}, &secondASODatabase)).To(Succeed())
+		Expect(secondASODatabase.Spec.AzureName).To(Equal(fixedDatabaseName))
+		Expect(secondASODatabase.Labels).To(HaveKeyWithValue(databaseNameLabelKey, secondDatabase.Name))
+	})
+
+	It("sets Database Ready after the access provisioning Job completes", func() {
+		db := newSharedDatabaseServer("shared-db-database-access-ready")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
+
+		database := newDatabase("router-access-ready", db.Name)
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			return len(listDatabaseASOChildren(g, database.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+
+		markDatabaseASOReady(ctx, database)
+
+		job := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
+
+		completeDatabaseAccessJob(ctx, job)
+
+		Eventually(func(g Gomega) metav1.ConditionStatus {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      database.Name,
+				Namespace: database.Namespace,
+			}, &updated)).To(Succeed())
+
+			accessReady := meta.FindStatusCondition(updated.Status.Conditions, databaseConditionAccessReady)
+			g.Expect(accessReady).NotTo(BeNil())
+			g.Expect(accessReady.Status).To(Equal(metav1.ConditionTrue))
+			g.Expect(accessReady.Reason).To(Equal(databaseReasonReady))
+
+			ready := meta.FindStatusCondition(updated.Status.Conditions, databaseConditionReady)
+			g.Expect(ready).NotTo(BeNil())
+			return ready.Status
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(metav1.ConditionTrue))
+	})
+
+	It("publishes a connection ConfigMap for each service principal when the Database is ready", func() {
+		db := newSharedDatabaseServer("shared-db-conn-configmap")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
+
+		database := newDatabase("router-conn-configmap", db.Name)
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			return len(listDatabaseASOChildren(g, database.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+
+		markDatabaseASOReady(ctx, database)
+
+		job := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
+
+		cmName := connection.DeterministicConfigMapName(database.Name, databaseAppIdentityRef)
+
+		// The ConfigMap is published only when the Database is fully ready, so
+		// it must not exist while the access Job is still running.
+		Consistently(func() error {
+			var cm corev1.ConfigMap
+			return k8sClient.Get(ctx, types.NamespacedName{Name: cmName, Namespace: database.Namespace}, &cm)
+		}).WithTimeout(2 * time.Second).WithPolling(250 * time.Millisecond).
+			ShouldNot(Succeed())
+
+		completeDatabaseAccessJob(ctx, job)
+
+		var cm corev1.ConfigMap
+		Eventually(func() error {
+			return k8sClient.Get(ctx, types.NamespacedName{Name: cmName, Namespace: database.Namespace}, &cm)
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		expectedHost := fmt.Sprintf("%s.postgres.database.azure.com", db.Name)
+		Expect(cm.Data[connection.DataKeyHost]).To(Equal(expectedHost))
+		Expect(cm.Data[connection.DataKeyPort]).To(Equal("5432"))
+		Expect(cm.Data[connection.DataKeyDBName]).To(Equal(database.Spec.Name))
+		// data.user is the resolved managed-identity name, not the identityRef name.
+		Expect(cm.Data[connection.DataKeyUser]).To(Equal(databaseAppManagedIdentity))
+		Expect(cm.Data[connection.DataKeySSLMode]).To(Equal(connection.SSLModeRequire))
+		Expect(cm.Data[connection.DataKeyURI]).To(Equal(fmt.Sprintf(
+			"postgresql://%s@%s:5432/%s?sslmode=require",
+			databaseAppManagedIdentity, expectedHost, database.Spec.Name,
+		)))
+
+		Expect(cm.Labels[connection.LabelDatabase]).To(Equal(database.Name))
+		Expect(cm.Labels[connection.LabelPrincipal]).To(Equal(databaseAppIdentityRef))
+		Expect(cm.Labels[connection.LabelComponent]).To(Equal(connection.ComponentValue))
+
+		Expect(metav1.IsControlledBy(&cm, database)).To(BeTrue())
+
+		// The group principal does not get a ConfigMap: exactly one is published
+		// for this Database.
+		var cms corev1.ConfigMapList
+		Expect(k8sClient.List(ctx, &cms,
+			client.InNamespace(database.Namespace),
+			client.MatchingLabels{
+				connection.LabelComponent: connection.ComponentValue,
+				connection.LabelDatabase:  database.Name,
+			},
+		)).To(Succeed())
+		Expect(cms.Items).To(HaveLen(1))
+	})
+
+	It("grants access to a servicePrincipal principal without publishing a ConfigMap", func() {
+		db := newSharedDatabaseServer("shared-db-sp-only")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		database := newDatabase("router-sp-only", db.Name)
+		database.Spec.Access.Principals = []storagev1alpha1.DatabaseAccessPrincipalSpec{
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleWriter,
+				ServicePrincipal: &storagev1alpha1.DatabaseServicePrincipalSpec{
+					Name:        databaseExternalServicePrincipal,
+					PrincipalId: databaseExternalServicePrincipalID,
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			return len(listDatabaseASOChildren(g, database.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+
+		markDatabaseASOReady(ctx, database)
+
+		job := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
+		var accessPayload string
+		for _, env := range job.Spec.Template.Spec.Containers[0].Env {
+			if env.Name == dbUtil.AccessPrincipalsEnv {
+				accessPayload = env.Value
+			}
+		}
+		accessPrincipals, err := dbUtil.ParseAccessPrincipalsPayload(accessPayload)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(accessPrincipals).To(ConsistOf(
+			dbUtil.AccessPrincipal{
+				Role:          dbUtil.AccessRoleWriter,
+				Name:          databaseExternalServicePrincipal,
+				PrincipalID:   databaseExternalServicePrincipalID,
+				PrincipalType: dbUtil.PrincipalTypeService,
+			},
+		))
+
+		completeDatabaseAccessJob(ctx, job)
+
+		Eventually(func(g Gomega) metav1.ConditionStatus {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      database.Name,
+				Namespace: database.Namespace,
+			}, &updated)).To(Succeed())
+
+			ready := meta.FindStatusCondition(updated.Status.Conditions, databaseConditionReady)
+			g.Expect(ready).NotTo(BeNil())
+			return ready.Status
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(metav1.ConditionTrue))
+
+		// servicePrincipal principals get no connection ConfigMap.
+		Consistently(func(g Gomega) []corev1.ConfigMap {
+			var cms corev1.ConfigMapList
+			g.Expect(k8sClient.List(ctx, &cms,
+				client.InNamespace(database.Namespace),
+				client.MatchingLabels{
+					connection.LabelComponent: connection.ComponentValue,
+					connection.LabelDatabase:  database.Name,
+				},
+			)).To(Succeed())
+			return cms.Items
+		}).WithTimeout(2 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+	})
+
+	It("grants access to mixed identityRef, group, and servicePrincipal principals", func() {
+		db := newSharedDatabaseServer("shared-db-sp-mixed")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
+
+		database := newDatabase("router-sp-mixed", db.Name)
+		database.Spec.Access.Principals = append(database.Spec.Access.Principals,
+			storagev1alpha1.DatabaseAccessPrincipalSpec{
+				Role: storagev1alpha1.DatabaseAccessRoleWriter,
+				ServicePrincipal: &storagev1alpha1.DatabaseServicePrincipalSpec{
+					Name:        databaseExternalServicePrincipal,
+					PrincipalId: databaseExternalServicePrincipalID,
+				},
+			},
+		)
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			return len(listDatabaseASOChildren(g, database.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+
+		markDatabaseASOReady(ctx, database)
+
+		job := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
+		var accessPayload string
+		for _, env := range job.Spec.Template.Spec.Containers[0].Env {
+			if env.Name == dbUtil.AccessPrincipalsEnv {
+				accessPayload = env.Value
+			}
+		}
+		accessPrincipals, err := dbUtil.ParseAccessPrincipalsPayload(accessPayload)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(accessPrincipals).To(ConsistOf(
+			dbUtil.AccessPrincipal{
+				Role:          dbUtil.AccessRoleWriter,
+				Name:          databaseAppManagedIdentity,
+				PrincipalID:   databaseAppPrincipalID,
+				PrincipalType: dbUtil.PrincipalTypeService,
+			},
+			dbUtil.AccessPrincipal{
+				Role:          dbUtil.AccessRoleOwner,
+				Name:          databaseOwnerGroup,
+				PrincipalID:   databaseOwnerPrincipalID,
+				PrincipalType: dbUtil.PrincipalTypeGroup,
+			},
+			dbUtil.AccessPrincipal{
+				Role:          dbUtil.AccessRoleWriter,
+				Name:          databaseExternalServicePrincipal,
+				PrincipalID:   databaseExternalServicePrincipalID,
+				PrincipalType: dbUtil.PrincipalTypeService,
+			},
+		))
+
+		completeDatabaseAccessJob(ctx, job)
+
+		// Only the identityRef principal gets a connection ConfigMap.
+		cmName := connection.DeterministicConfigMapName(database.Name, databaseAppIdentityRef)
+		var cms corev1.ConfigMapList
+		Eventually(func(g Gomega) []corev1.ConfigMap {
+			g.Expect(k8sClient.List(ctx, &cms,
+				client.InNamespace(database.Namespace),
+				client.MatchingLabels{
+					connection.LabelComponent: connection.ComponentValue,
+					connection.LabelDatabase:  database.Name,
+				},
+			)).To(Succeed())
+			return cms.Items
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(HaveLen(1))
+		Expect(cms.Items[0].Name).To(Equal(cmName))
+	})
+
+	It("rejects Database principals with zero or multiple principal sources", func() {
+		database := newDatabase("router-sp-zero-sources", "any-server")
+		database.Spec.Access.Principals = []storagev1alpha1.DatabaseAccessPrincipalSpec{
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleReader,
+			},
+		}
+		err := k8sClient.Create(ctx, database)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("exactly one principal source"))
+
+		database = newDatabase("router-sp-two-sources", "any-server")
+		database.Spec.Access.Principals = []storagev1alpha1.DatabaseAccessPrincipalSpec{
+			{
+				Role: storagev1alpha1.DatabaseAccessRoleOwner,
+				Group: &storagev1alpha1.DatabaseGroupPrincipalSpec{
+					Name:        databaseOwnerGroup,
+					PrincipalId: databaseOwnerPrincipalID,
+				},
+				ServicePrincipal: &storagev1alpha1.DatabaseServicePrincipalSpec{
+					Name:        databaseExternalServicePrincipal,
+					PrincipalId: databaseExternalServicePrincipalID,
+				},
+			},
+		}
+		err = k8sClient.Create(ctx, database)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("exactly one principal source"))
+	})
+
+	It("removes stale connection ConfigMaps it owns on the ready reconcile", func() {
+		db := newSharedDatabaseServer("shared-db-conn-stale")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
+
+		database := newDatabase("router-conn-stale", db.Name)
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			return len(listDatabaseASOChildren(g, database.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+
+		markDatabaseASOReady(ctx, database)
+
+		var owned storagev1alpha1.Database
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: database.Name, Namespace: database.Namespace}, &owned)).To(Succeed())
+
+		// Seed an operator-owned connection ConfigMap for a principal that is no
+		// longer desired; the ready reconcile must prune it.
+		staleName := connection.DeterministicConfigMapName(database.Name, "removed-principal")
+		stale := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      staleName,
+				Namespace: database.Namespace,
+				Labels: map[string]string{
+					connection.LabelDatabase:  database.Name,
+					connection.LabelPrincipal: "removed-principal",
+					connection.LabelComponent: connection.ComponentValue,
+				},
+			},
+			Data: map[string]string{connection.DataKeyHost: "stale"},
+		}
+		Expect(controllerutil.SetControllerReference(&owned, stale, k8sClient.Scheme())).To(Succeed())
+		Expect(k8sClient.Create(ctx, stale)).To(Succeed())
+
+		job := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
+		completeDatabaseAccessJob(ctx, job)
+
+		wantName := connection.DeterministicConfigMapName(database.Name, databaseAppIdentityRef)
+		Eventually(func(g Gomega) {
+			var want corev1.ConfigMap
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: wantName, Namespace: database.Namespace}, &want)).To(Succeed())
+
+			err := k8sClient.Get(ctx, types.NamespacedName{Name: staleName, Namespace: database.Namespace}, &corev1.ConfigMap{})
+			g.Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		}).WithTimeout(15 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+	})
+
+	It("recreates the Database access provisioning Job when the current Job is failed", func() {
+		db := newSharedDatabaseServer("shared-db-database-access-job-failed")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
+
+		database := newDatabase("router-access-job-failed", db.Name)
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			return len(listDatabaseASOChildren(g, database.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+
+		markDatabaseASOReady(ctx, database)
+
+		oldJob := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
 		oldUID := oldJob.UID
 
 		Eventually(func() error {
 			var failedJob batchv1.Job
 			if err := k8sClient.Get(ctx, types.NamespacedName{
 				Name:      oldJob.Name,
-				Namespace: db.Namespace,
+				Namespace: oldJob.Namespace,
 			}, &failedJob); err != nil {
 				return err
 			}
@@ -1803,61 +4186,152 @@ var _ = Describe("Database controller", func() {
 			var recreatedJob batchv1.Job
 			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      oldJob.Name,
-				Namespace: db.Namespace,
+				Namespace: oldJob.Namespace,
 			}, &recreatedJob)).To(Succeed())
 			return recreatedJob.UID
 		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
 			ShouldNot(Equal(oldUID))
 	})
 
-	It("resolves ApplicationIdentity references for admin and user", func() {
-		createApplicationIdentity(ctx, "adminidentity", ns, "admin-mi", "admin-mi-id")
-		createApplicationIdentity(ctx, "useridentity", ns, "user-mi", "user-mi-id")
+	It("recreates the Database access provisioning Job when ApplicationIdentity status changes", func() {
+		db := newSharedDatabaseServer("shared-db-database-access-identity-change")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
 
-		db := newDatabaseForJob("my-app-db-appid-ref", identityRefAuth("adminidentity", "useridentity"))
+		database := newDatabase("router-access-identity-change", db.Name)
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			return len(listDatabaseASOChildren(g, database.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+
+		markDatabaseASOReady(ctx, database)
+
+		oldJob := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
+		oldJobName := oldJob.Name
+
+		const updatedManagedIdentity = "myproduct-router-dev-mi-v2"
+		const updatedPrincipalID = "00000000-0000-0000-0000-000000000002"
+		Eventually(func() error {
+			var appIdentity identityv1alpha1.ApplicationIdentity
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      databaseAppIdentityRef,
+				Namespace: ns,
+			}, &appIdentity); err != nil {
+				return err
+			}
+			managed := updatedManagedIdentity
+			principal := updatedPrincipalID
+			appIdentity.Status.ManagedIdentityName = &managed
+			appIdentity.Status.PrincipalID = &principal
+			return k8sClient.Status().Update(ctx, &appIdentity)
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		Eventually(func(g Gomega) string {
+			var jobs batchv1.JobList
+			g.Expect(k8sClient.List(ctx, &jobs,
+				client.InNamespace(database.Namespace),
+				client.MatchingLabels(map[string]string{
+					databaseNameLabelKey:  database.Name,
+					userProvisionLabelKey: labelValueTrue,
+				}),
+			)).To(Succeed())
+			if len(jobs.Items) != 1 {
+				return ""
+			}
+
+			job := jobs.Items[0]
+			if job.Name == oldJobName {
+				return ""
+			}
+			for _, env := range job.Spec.Template.Spec.Containers[0].Env {
+				if env.Name == dbUtil.AccessPrincipalsEnv {
+					accessPrincipals, err := dbUtil.ParseAccessPrincipalsPayload(env.Value)
+					g.Expect(err).NotTo(HaveOccurred())
+					g.Expect(accessPrincipals).To(ContainElement(dbUtil.AccessPrincipal{
+						Role:          dbUtil.AccessRoleWriter,
+						Name:          updatedManagedIdentity,
+						PrincipalID:   updatedPrincipalID,
+						PrincipalType: dbUtil.PrincipalTypeService,
+					}))
+					return job.Name
+				}
+			}
+			return ""
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			ShouldNot(BeEmpty())
+	})
+
+	It("fails validation instead of creating a second database when spec.name changes", func() {
+		db := newSharedDatabaseServer("shared-db-database-name-change")
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
-		adminName := fmt.Sprintf("%s-admin", db.Name)
+		database := newDatabase("router", db.Name)
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
 
-		Eventually(func(g Gomega) struct {
-			azureName     string
-			principalName string
-		} {
-			var a dbforpostgresqlv1.FlexibleServersAdministrator
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.Database
 			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      adminName,
-				Namespace: db.Namespace,
-			}, &a)).To(Succeed())
-			g.Expect(a.Spec.PrincipalName).NotTo(BeNil())
-			return struct {
-				azureName     string
-				principalName string
-			}{
-				azureName:     a.Spec.AzureName,
-				principalName: *a.Spec.PrincipalName,
+				Name:      database.Name,
+				Namespace: database.Namespace,
+			}, &updated)).To(Succeed())
+			return updated.Status.DatabaseName
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(expectedPostgresDatabaseName(database)))
+
+		Eventually(func() error {
+			var updated storagev1alpha1.Database
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      database.Name,
+				Namespace: database.Namespace,
+			}, &updated); err != nil {
+				return err
 			}
-		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
-			Should(Equal(struct {
-				azureName     string
-				principalName string
-			}{
-				azureName:     "admin-mi-id",
-				principalName: "admin-mi",
-			}))
+			updated.Spec.Name = "renamed-db"
+			return k8sClient.Update(ctx, &updated)
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
 
-		markASOReady(ctx, db)
+		Eventually(func(g Gomega) string {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      database.Name,
+				Namespace: database.Namespace,
+			}, &updated)).To(Succeed())
+			for _, validationError := range updated.Status.ValidationErrors {
+				if validationError.Field == databaseValidationFieldDatabaseName {
+					return validationError.Reason
+				}
+			}
+			return ""
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(databaseValidationReasonImmutable))
 
-		job := waitForProvisionJob(ctx, db.Name, db.Namespace)
-		Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal("adminidentity"))
-		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_USER_APP_IDENTITY", Value: "user-mi"},
-		))
-		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_USER_APP_PRINCIPAL_ID", Value: "user-mi-id"},
-		))
-		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(
-			corev1.EnvVar{Name: "DISPG_ADMIN_APP_IDENTITY", Value: "admin-mi"},
-		))
+		Eventually(func(g Gomega) []dbforpostgresqlv1.FlexibleServersDatabase {
+			return listDatabaseASOChildren(g, database.Name)
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(HaveLen(1))
+	})
+
+	It("defaults Database deletionPolicy to Retain", func() {
+		db := newSharedDatabaseServer("shared-db-database-default-policy")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		database := newDatabase("router-default-policy", db.Name)
+		Expect(database.Spec.DeletionPolicy).To(BeEmpty())
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		var updated storagev1alpha1.Database
+		Eventually(func(g Gomega) storagev1alpha1.DatabaseDeletionPolicy {
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      database.Name,
+				Namespace: database.Namespace,
+			}, &updated)).To(Succeed())
+			return updated.Spec.DeletionPolicy
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(storagev1alpha1.DatabaseDeletionPolicyRetain))
 	})
 
 })

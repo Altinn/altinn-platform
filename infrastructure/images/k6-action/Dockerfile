@@ -1,10 +1,10 @@
-FROM golang:1.26-alpine@sha256:d4c4845f5d60c6a974c6000ce58ae079328d03ab7f721a0734277e69905473e5 AS builder
+FROM golang:1.26-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14  AS builder
 # renovate: datasource=github-tags depName=kubectl packageName=kubernetes/kubectl versioning=semver extractVersion=^kubernetes-(?<version>.*)$
-ARG KUBECTL_VERSION=1.35.1
-# renovate: datasource=github-releases depName=kubeseal packageName=bitnami-labs/sealed-secrets versioning=semver extractVersion=^sealed-secrets-(?<version>.*)$
-ARG KUBESEAL_VERSION=0.34.0
+ARG KUBECTL_VERSION=1.36.2
+# renovate: datasource=github-releases depName=kubeseal packageName=bitnami/sealed-secrets versioning=semver extractVersion=^sealed-secrets-(?<version>.*)$
+ARG KUBESEAL_VERSION=0.38.1
 # renovate: datasource=github-releases depName=jsonnet packageName=google/jsonnet versioning=semver
-ARG JSONNET_VERSION=0.21.0
+ARG JSONNET_VERSION=0.22.0
 # renovate: datasource=github-releases depName=jsonnet-bundler packageName=jsonnet-bundler/jsonnet-bundler versioning=semver extractVersion=^v(?<version>.*)$
 ARG JB_VERSION=0.6.0
 ARG K8S_LIBSONNET_VERSION=1.33
@@ -26,7 +26,7 @@ RUN curl -LO "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kube
     chmod +x kubectl && mv kubectl /usr/local/bin
 
 # Install kubeseal
-RUN curl -OL "https://github.com/bitnami-labs/sealed-secrets/releases/download/v${KUBESEAL_VERSION}/kubeseal-${KUBESEAL_VERSION}-linux-amd64.tar.gz" &&\
+RUN curl -OL "https://github.com/bitnami/sealed-secrets/releases/download/v${KUBESEAL_VERSION}/kubeseal-${KUBESEAL_VERSION}-linux-amd64.tar.gz" &&\
     tar -xvzf kubeseal-${KUBESEAL_VERSION}-linux-amd64.tar.gz kubeseal &&\
     chmod +x kubeseal && mv kubeseal /usr/local/bin
 
@@ -38,7 +38,6 @@ RUN curl -L "https://github.com/google/jsonnet/archive/refs/tags/v${JSONNET_VERS
     chmod +x jsonnet && mv jsonnet /usr/local/bin &&\
     chmod +x jsonnetfmt && mv jsonnetfmt /usr/local/bin
 
-# Install jb
 RUN curl -OL "https://github.com/jsonnet-bundler/jsonnet-bundler/releases/download/v${JB_VERSION}/jb-linux-amd64" &&\
     chmod +x jb-linux-amd64 && mv jb-linux-amd64 /usr/local/bin/jb
 
@@ -56,19 +55,21 @@ RUN go build . && \
     chmod +x generate-k6-manifests && \
     mv generate-k6-manifests /usr/local/bin
 
-FROM ghcr.io/altinn/altinn-platform/k6-image:v1.6@sha256:278928e7ec44d5881f9041e24e29732c814567433ebd48be137b9dadf45af1af  AS k6image
+FROM ghcr.io/altinn/altinn-platform/k6-image:v2.0.0@sha256:75fd58ab7dbaa068a0c1079b64756f9df886c217f6323e30b5144324cbc4b9da AS k6image
 
 # Final image with the needed binaries and helper files
-FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659
+FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /jsonnet/vendor /jsonnet/vendor
+
 COPY --from=k6image /usr/bin/k6 /usr/bin/k6
+
 COPY infrastructure/images/k6-action/default_scenarios /actions/generate-k6-manifests/default_scenarios/
 COPY infrastructure/images/k6-action/infra /actions/generate-k6-manifests/infra/
 COPY infrastructure/images/k6-action/jsonnet /actions/generate-k6-manifests/jsonnet/
 
 # err:Error loading shared library libstdc++.so.6: No such file or directory (needed by /usr/local/bin/jsonnet)
-RUN apk add --no-cache libstdc++
+RUN apk add --no-cache libstdc++ git
 WORKDIR /workspace
 
 CMD ["generate-k6-manifests"]

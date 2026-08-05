@@ -18,6 +18,11 @@
         }
       ]
     },
+    "services/dis-console": {
+      "dispatch-pipelines": [
+        {"filename": "dis-console-release.yml"}
+      ]
+    },
     "services/dis-pgsql-operator": {
       "dispatch-pipelines": [
         {"filename": "dis-pgsql-release.yml"}
@@ -31,6 +36,11 @@
     "services/dis-apim-operator": {
       "dispatch-pipelines": [
         {"filename": "dis-apim-release.yml"}
+      ]
+    },
+    "services/dis-vault-operator": {
+      "dispatch-pipelines": [
+        {"filename": "dis-vault-release.yml"}
       ]
     },
     "services/lakmus": {

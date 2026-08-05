@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dis-console
+  namespace: dis-console
+  labels:
+    app: dis-console
+spec:
+  selector:
+    app: dis-console
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

@@ -1,8 +1,81 @@
 # dis-pgsql-operator
-// TODO(user): Add simple overview of use/purpose
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+
+`dis-pgsql-operator` provides self-service PostgreSQL provisioning for app teams.
+It reconciles DIS storage APIs into Azure PostgreSQL Flexible Server resources
+through Azure Service Operator (ASO), and provisions app/owner access inside
+PostgreSQL with Kubernetes Jobs.
+
+## API Model
+
+The operator exposes two storage APIs:
+
+- `DatabaseServer` provisions and configures an Azure PostgreSQL Flexible Server.
+- `Database` provisions a PostgreSQL database on a same-namespace
+  `DatabaseServer`.
+
+`Database.spec.server.name` selects the `DatabaseServer`. `Database.spec.name`
+is the PostgreSQL database name and maps directly to the ASO
+`FlexibleServersDatabase.spec.azureName` field.
+
+Dedicated and multitenant layouts use the same APIs:
+
+- Dedicated: one `Database` per `DatabaseServer`.
+- Multitenant: many `Database` resources on one shared `DatabaseServer`.
+
+## Connection ConfigMaps
+
+Once a `Database` is fully ready (its Azure resources exist and access has been
+provisioned), the operator publishes one **non-secret** ConfigMap per
+`identityRef` access principal so consuming apps can read the connection
+coordinates declaratively. Access principals declared as Entra `group`s or
+`servicePrincipal`s do not get a ConfigMap (there is no `ApplicationIdentity`
+to derive a consumer from).
+
+The ConfigMap name is derivable before the database is deployed, from values
+known at authoring time:
+
+```
+<database.metadata.name>-<identityRef.name>-dis-pgsql
+```
+
+The name is lowercased/sanitized to a valid DNS-1123 name. If it would exceed 63
+characters it is truncated and given a deterministic hash suffix — in that case,
+select the ConfigMap by labels rather than recomputing the name.
+
+Data keys (CloudNativePG-style):
+
+| key       | value                                                              |
+|-----------|--------------------------------------------------------------------|
+| `host`    | PostgreSQL server FQDN                                              |
+| `port`    | `5432`                                                             |
+| `dbname`  | database name                                                      |
+| `user`    | the resolved managed-identity / Postgres role the app connects as  |
+| `sslmode` | `require`                                                          |
+| `uri`     | `postgresql://<user>@<host>:<port>/<dbname>?sslmode=require`        |
+
+There is **no password / pgpass** key: authentication is Entra (Azure AD) token
+based, so the ConfigMap holds no secrets.
+
+Labels (the binding contract; a consumer or a kro resource graph can select on
+these even when the name is hash-suffixed):
+
+- `pgsql.dis.altinn.cloud/database`: the `Database` name
+- `pgsql.dis.altinn.cloud/principal`: the `identityRef.name`
+- `pgsql.dis.altinn.cloud/component`: `connection`
+
+The ConfigMap is owned by the `Database`, so it is garbage-collected when the
+`Database` is deleted, and removed when its principal is dropped from
+`spec.access.principals`.
+
+Apps can consume it directly with `envFrom`:
+
+```yaml
+envFrom:
+  - configMapRef:
+      name: <database>-<identityRef>-dis-pgsql
+```
 
 ## Getting Started
 
@@ -39,13 +112,13 @@ make deploy IMG=<some-registry>/dis-pgsql-operator:tag
 privileges or be logged in as admin.
 
 **Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
+You can apply the samples from `config/samples`:
 
 ```sh
 kubectl apply -k config/samples/
 ```
 
->**NOTE**: Ensure that the samples has default values to test it out.
+The samples include both a dedicated layout and a multitenant layout.
 
 ### To Uninstall
 **Delete the instances (CRs) from the cluster:**
@@ -111,7 +184,6 @@ previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml
 is manually re-applied afterwards.
 
 ## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
 
 **NOTE:** Run `make help` for more information on all potential `make` targets
 
@@ -132,4 +204,3 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-

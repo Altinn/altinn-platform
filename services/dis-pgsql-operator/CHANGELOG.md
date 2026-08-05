@@ -1,5 +1,191 @@
 # Changelog
 
+## [0.12.2](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.12.1...dis-pgsql-v0.12.2) (2026-07-07)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** preserve legacy FQDN-named private DNS zone CRs ([#3798](https://github.com/Altinn/altinn-platform/issues/3798)) ([b44d944](https://github.com/Altinn/altinn-platform/commit/b44d9444d82e2b31817052ea037320652277264a))
+
+## [0.12.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.12.0...dis-pgsql-v0.12.1) (2026-07-03)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** persist status.resourceId on already-Ready servers ([#3795](https://github.com/Altinn/altinn-platform/issues/3795)) ([4d77729](https://github.com/Altinn/altinn-platform/commit/4d77729b860ec81e479852793a08ad0acbbc7f48))
+
+## [0.12.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.11.1...dis-pgsql-v0.12.0) (2026-07-03)
+
+
+### Features
+
+* **dis-operators:** surface status.resourceId on DatabaseServer and ApplicationIdentity ([#3786](https://github.com/Altinn/altinn-platform/issues/3786)) ([68751c1](https://github.com/Altinn/altinn-platform/commit/68751c1160eb4df8df1302e50ce100c779fe8f58))
+* **dis-pgsql-operator:** read-only debug access on dedicated servers ([#3782](https://github.com/Altinn/altinn-platform/issues/3782)) ([f5fa38e](https://github.com/Altinn/altinn-platform/commit/f5fa38e997b5c025ea5f9b56708fdd0aa38104ed))
+* **dis-pgsql-operator:** read-only PostgreSQL debug access on dedicated servers ([#3784](https://github.com/Altinn/altinn-platform/issues/3784)) ([a5bf020](https://github.com/Altinn/altinn-platform/commit/a5bf02013b93b23eea187e3f3569632f5283eb7d))
+
+## [0.11.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.11.0...dis-pgsql-v0.11.1) (2026-06-29)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** grant Owner CREATE on its database ([#3772](https://github.com/Altinn/altinn-platform/issues/3772)) ([1715a2f](https://github.com/Altinn/altinn-platform/commit/1715a2f8e01269128b5b88327b5183339d1ba6c8))
+
+## [0.11.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.10.1...dis-pgsql-v0.11.0) (2026-06-29)
+
+
+### Features
+
+* **dis-pgsql:** suffix Flexible Server AzureName with --cluster-id ([#3758](https://github.com/Altinn/altinn-platform/issues/3758)) ([3ffdf8f](https://github.com/Altinn/altinn-platform/commit/3ffdf8f6f4773526461b91c4996033f73fd33ea9))
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** bump golang.org/x/crypto + x/net for HIGH CVEs ([#3760](https://github.com/Altinn/altinn-platform/issues/3760)) ([ab6a31c](https://github.com/Altinn/altinn-platform/commit/ab6a31c8543dda56e5e5bea127853f644020e8b9))
+* **dis-pgsql-operator:** decouple Private DNS zone CR name from Azure FQDN ([#3769](https://github.com/Altinn/altinn-platform/issues/3769)) ([50ea1a5](https://github.com/Altinn/altinn-platform/commit/50ea1a50b5e6d76b0d10d3ead83d1171c89f059c))
+
+## [0.10.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.10.0...dis-pgsql-v0.10.1) (2026-06-18)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** order DatabaseServer teardown via finalizer to unstick DNS zone ([#3725](https://github.com/Altinn/altinn-platform/issues/3725)) ([55bf526](https://github.com/Altinn/altinn-platform/commit/55bf52629317c174d28678624d254d16b17accab))
+* **dis-pgsql-operator:** pin e2e kubectl to a dedicated Kind kubeconfig ([#3720](https://github.com/Altinn/altinn-platform/issues/3720)) ([38ba150](https://github.com/Altinn/altinn-platform/commit/38ba150f2b86c2e2bd1a8e6cfc59fb840b78f8f6))
+* **dis-pgsql-operator:** surface FlexibleServer errors on DatabaseServer status ([#3724](https://github.com/Altinn/altinn-platform/issues/3724)) ([22261d4](https://github.com/Altinn/altinn-platform/commit/22261d428efb405e0f1c71c1ec2f4f6141cb0b40))
+
+## [0.10.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.9.0...dis-pgsql-v0.10.0) (2026-06-11)
+
+
+### Features
+
+* **dis-pgsql:** support direct service-principal access grants (servicePrincipal) ([#3676](https://github.com/Altinn/altinn-platform/issues/3676)) ([1b15c6d](https://github.com/Altinn/altinn-platform/commit/1b15c6dd823f8341ae3fe0b48f5d5e75b0cffe29))
+
+## [0.9.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.8.3...dis-pgsql-v0.9.0) (2026-06-01)
+
+
+### Features
+
+* **dis-pgsql-operator:** publish connection ConfigMap per access principal ([#3621](https://github.com/Altinn/altinn-platform/issues/3621)) ([80379a0](https://github.com/Altinn/altinn-platform/commit/80379a043f1e9931f0a605930dbaf4062d55d149))
+
+## [0.8.3](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.8.2...dis-pgsql-v0.8.3) (2026-05-31)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** never revoke the connecting admin from managed roles ([#3612](https://github.com/Altinn/altinn-platform/issues/3612)) ([7b47c35](https://github.com/Altinn/altinn-platform/commit/7b47c35537af9ab2682ceb48b6258742c325ed83))
+
+## [0.8.2](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.8.1...dis-pgsql-v0.8.2) (2026-05-29)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** create Entra principals on postgres maintenance db ([#3610](https://github.com/Altinn/altinn-platform/issues/3610)) ([7f946d5](https://github.com/Altinn/altinn-platform/commit/7f946d50b209fefb74a249f86bfec738cda6ecea))
+
+## [0.8.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.8.0...dis-pgsql-v0.8.1) (2026-05-29)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** skip PgBouncer params on Burstable tier ([#3606](https://github.com/Altinn/altinn-platform/issues/3606)) ([522d5ae](https://github.com/Altinn/altinn-platform/commit/522d5ae31a975f076eefdbe0a3ababe05840eca8))
+
+## [0.8.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.6...dis-pgsql-v0.8.0) (2026-05-28)
+
+
+### Features
+
+* **dis-pgsql:** role-based Database access via principals list ([#3591](https://github.com/Altinn/altinn-platform/issues/3591)) ([cc3725e](https://github.com/Altinn/altinn-platform/commit/cc3725e2a83aeb476d5a1c2f1774b14f286aaf11))
+
+## [0.7.6](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.5...dis-pgsql-v0.7.6) (2026-05-26)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** remove unused armnetwork/v9 direct dependency ([#3580](https://github.com/Altinn/altinn-platform/issues/3580)) ([ecde3ee](https://github.com/Altinn/altinn-platform/commit/ecde3ee6437f969e871b19f57ccf64c4f1126e88))
+
+## [0.7.5](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.4...dis-pgsql-v0.7.5) (2026-05-26)
+
+
+### Dependency Updates
+
+* update github-actions non-major dependencies ([#3528](https://github.com/Altinn/altinn-platform/issues/3528)) ([a48285f](https://github.com/Altinn/altinn-platform/commit/a48285ff1a562e67cc4ddc4ff1b958d4f01ea426))
+* update module github.com/azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7 to v9 ([#3566](https://github.com/Altinn/altinn-platform/issues/3566)) ([b3a8263](https://github.com/Altinn/altinn-platform/commit/b3a82638b651eeaa9978018554a62170aea682b5))
+* update module github.com/pashagolub/pgxmock/v4 to v5 ([#3568](https://github.com/Altinn/altinn-platform/issues/3568)) ([87cd561](https://github.com/Altinn/altinn-platform/commit/87cd5618efaaf00ddfc24de74d2ecf363e841eaf))
+
+## [0.7.4](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.3...dis-pgsql-v0.7.4) (2026-05-26)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** remove unused pgxmock/v5 dependency ([#3557](https://github.com/Altinn/altinn-platform/issues/3557)) ([2262a91](https://github.com/Altinn/altinn-platform/commit/2262a918270e39c9146b30f48ac6b42d1aea0fa7))
+
+## [0.7.3](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.2...dis-pgsql-v0.7.3) (2026-05-22)
+
+
+### Dependency Updates
+
+* update github.com/altinn/altinn-platform/services/dis-identity-operator digest to 5189c1d ([#3515](https://github.com/Altinn/altinn-platform/issues/3515)) ([99ceb5a](https://github.com/Altinn/altinn-platform/commit/99ceb5ab342c27f15317ba894b82701a38c329a3))
+* update module github.com/azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7 to v9 ([#3537](https://github.com/Altinn/altinn-platform/issues/3537)) ([2bceb33](https://github.com/Altinn/altinn-platform/commit/2bceb335950b6d3520b7d8931653b963c191c93e))
+* update module github.com/pashagolub/pgxmock/v4 to v5 ([#3540](https://github.com/Altinn/altinn-platform/issues/3540)) ([b949424](https://github.com/Altinn/altinn-platform/commit/b9494246ca59287eed4c5480e173a32019f1e489))
+
+## [0.7.2](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.1...dis-pgsql-v0.7.2) (2026-05-22)
+
+
+### Dependency Updates
+
+* update gomod non-major dependencies ([#3024](https://github.com/Altinn/altinn-platform/issues/3024)) ([0cd0452](https://github.com/Altinn/altinn-platform/commit/0cd0452c9083e202fca6a9fd4a047d5e364cd587))
+
+## [0.7.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.7.0...dis-pgsql-v0.7.1) (2026-05-22)
+
+
+### Dependency Updates
+
+* update gcr.io/distroless/static:nonroot docker digest to 963fa6c ([#3466](https://github.com/Altinn/altinn-platform/issues/3466)) ([a17762f](https://github.com/Altinn/altinn-platform/commit/a17762f295ad24e80eefe0f78f19696d56af0a92))
+
+## [0.7.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.6.0...dis-pgsql-v0.7.0) (2026-05-22)
+
+
+### Features
+
+* **dis-pgsql:** introduce DatabaseServer API ([#3493](https://github.com/Altinn/altinn-platform/issues/3493)) ([2eb571c](https://github.com/Altinn/altinn-platform/commit/2eb571c3e60d6824bbc1e3999aa1188c50bda8af))
+* **dis-pgsql:** move access provisioning to LogicalDatabase ([#3481](https://github.com/Altinn/altinn-platform/issues/3481)) ([faea70d](https://github.com/Altinn/altinn-platform/commit/faea70de2220465a47382673d31abebc6ba4ff23))
+* **dis-pgsql:** rename LogicalDatabase API to Database ([#3494](https://github.com/Altinn/altinn-platform/issues/3494)) ([bb5e81b](https://github.com/Altinn/altinn-platform/commit/bb5e81b222d6b96c272ba7101b696f86fd2707ad))
+* **dis-pgsql:** use explicit database names ([#3474](https://github.com/Altinn/altinn-platform/issues/3474)) ([1761b6b](https://github.com/Altinn/altinn-platform/commit/1761b6b6fd4e7a9f9b1979641e1671f27ad1c7d5))
+
+
+### Dependency Updates
+
+* update gcr.io/distroless/static:nonroot docker digest to e3f9456 ([#3283](https://github.com/Altinn/altinn-platform/issues/3283)) ([dd7b157](https://github.com/Altinn/altinn-platform/commit/dd7b1578787e084472d1e5b5c6ed8a241afd6cdd))
+
+## [0.6.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.5.3...dis-pgsql-v0.6.0) (2026-05-07)
+
+
+### Features
+
+* **dis-pgsql:** add LogicalDatabase API validation ([#3425](https://github.com/Altinn/altinn-platform/issues/3425)) ([0098d66](https://github.com/Altinn/altinn-platform/commit/0098d6638fcaeb8cf52dfa6327106bcddacf8d14))
+* **dis-pgsql:** add shared database mode ([#3421](https://github.com/Altinn/altinn-platform/issues/3421)) ([bb9a4a4](https://github.com/Altinn/altinn-platform/commit/bb9a4a488bfbf7de0fefbb57002e8b7c90717478))
+* **dis-pgsql:** create logical databases  ([#3430](https://github.com/Altinn/altinn-platform/issues/3430)) ([012d820](https://github.com/Altinn/altinn-platform/commit/012d8205ebe0d9207a84e8ac8d586cb2ef83ac1a))
+* **dis-pgsql:** provision logical database access ([#3437](https://github.com/Altinn/altinn-platform/issues/3437)) ([2a7e8af](https://github.com/Altinn/altinn-platform/commit/2a7e8afdd21e49b87a5e10c841cf3fdfa224eb74))
+
+
+### Dependency Updates
+
+* update github-actions non-major dependencies ([#3018](https://github.com/Altinn/altinn-platform/issues/3018)) ([100ab8d](https://github.com/Altinn/altinn-platform/commit/100ab8d5d0b9f413983c4b6ca7b5baac6afe51ed))
+* update golangci/golangci-lint-action action to v9 ([#3378](https://github.com/Altinn/altinn-platform/issues/3378)) ([7184911](https://github.com/Altinn/altinn-platform/commit/7184911a4fb241f65d7917f3bd04383d6f9aa38f))
+
+## [0.5.3](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.5.2...dis-pgsql-v0.5.3) (2026-04-24)
+
+
+### Bug Fixes
+
+* **dis-pgsql:** update pgx and fix vulns ([#3359](https://github.com/Altinn/altinn-platform/issues/3359)) ([56f5219](https://github.com/Altinn/altinn-platform/commit/56f5219bdcced1576dff0289739a7b5feb826aec))
+
+## [0.5.2](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.5.1...dis-pgsql-v0.5.2) (2026-03-25)
+
+
+### Dependency Updates
+
+* bump grpc-GO to 1.79.3 ([#3269](https://github.com/Altinn/altinn-platform/issues/3269)) ([9166356](https://github.com/Altinn/altinn-platform/commit/916635673abdde61b55ebb24addd51ff4b159f85))
+* kubebuilder update services/dis pgsql operator to 4.11.1 ([#3255](https://github.com/Altinn/altinn-platform/issues/3255)) ([9bfa8d4](https://github.com/Altinn/altinn-platform/commit/9bfa8d48fef346a3736d23ff5db1bc910fa1785d))
+
 ## [0.5.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.5.0...dis-pgsql-v0.5.1) (2026-02-27)
 
 

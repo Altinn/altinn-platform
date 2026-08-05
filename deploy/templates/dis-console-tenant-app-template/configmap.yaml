@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dis-console-db
+  namespace: dis-console
+data:
+  uri: ${DISCON_DB_URI}

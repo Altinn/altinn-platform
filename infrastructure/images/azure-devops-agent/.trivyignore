@@ -1,0 +1,5 @@
+# urllib3 vulnerabilities - will be resolved when Azure CLI updates its urllib3 dependency
+# https://avd.aquasec.com/nvd/cve-2026-44431
+CVE-2026-44431
+# https://avd.aquasec.com/nvd/cve-2026-44432
+CVE-2026-44432

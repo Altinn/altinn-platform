@@ -21,6 +21,10 @@ type DisIdentityConfig struct {
 	TargetResourceGroup string `json:"targetResourceGroup" koanf:"targetResourceGroup" toml:"targetResourceGroup"`
 	// TargetTenantID the tenant ID where the managed identity will be created.
 	TargetTenantID string `json:"targetTenantId" koanf:"targetTenantId" toml:"targetTenantId"`
+	// BaseTags a JSON object of platform-owned Azure tags (the RFC 0007 finops
+	// base tag set) applied to every Azure resource this operator creates.
+	// Optional: empty disables platform tagging.
+	BaseTags string `json:"baseTags" koanf:"baseTags" toml:"baseTags"`
 }
 
 const CONFIG_PREFIX = "DISID_"

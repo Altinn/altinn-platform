@@ -65,7 +65,6 @@ func (r K8sManifestGenerator) Initialize(filePath string) *ConfigFile {
 		ValidEnvironmentValues: []string{
 			"at22",
 			"at23",
-			"at24",
 			"tt02",
 			"yt01",
 			"prod",
@@ -89,7 +88,7 @@ func (r K8sManifestGenerator) Initialize(filePath string) *ConfigFile {
 	if !cf.IsValid() {
 		log.Fatal("Config file is not valid.")
 	}
-	cf.SetDefaults()
+	cf.SetDefaults(filePath)
 
 	requiredDirs := []string{
 		r.ConfigDirectory,
@@ -140,6 +139,9 @@ func generate(td *TestDefinition, c *TestContext, r K8sManifestGenerator, cf Con
 		"--env", fmt.Sprintf("%s=%s", "TESTID", *c.TestRun.Id),
 		"--env", fmt.Sprintf("%s=%s", "TEST_NAME", *c.TestRun.Name),
 		"--env", fmt.Sprintf("%s=%s", "TESTFILENAME", testFilename),
+	}
+	if *c.TestTypeDefinition.Type == "functional" {
+		k6ArchiveArgs = append(k6ArchiveArgs, "--env", fmt.Sprintf("%s=%s", "K6_PROMETHEUS_RW_PUSH_INTERVAL", "1s"))
 	}
 	for _, env := range mergedEnvs {
 		k6ArchiveArgs = append(k6ArchiveArgs, "--env", fmt.Sprintf("%s=%s", *env.Name, *env.Value))
@@ -194,9 +196,9 @@ func generate(td *TestDefinition, c *TestContext, r K8sManifestGenerator, cf Con
 	if err != nil {
 		log.Fatalf("error: %v", err)
 	}
-	imageName := "ghcr.io/altinn/altinn-platform/k6-image:latest"
+	imageName := "ghcr.io/altinn/altinn-platform/k6-image:v2.0.0"
 	if *c.TestTypeDefinition.Type == "browser" {
-		imageName = "grafana/k6:master-with-browser"
+		imageName = "grafana/k6:2.0.0-with-browser"
 	}
 
 	mergedEnvsMarshalled, err := yaml.Marshal(mergedEnvs)
@@ -261,6 +263,19 @@ func (r K8sManifestGenerator) HandleConfigFileOverride(base map[string]any, over
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	_, okst := base["stages"]
+	_, oksc := base["scenarios"]
+
+	_, okit := override["iterations"]
+	_, okvus := override["vus"]
+	_, okduration := override["duration"]
+
+	if (okit || okvus || okduration) && (okst || oksc) {
+		delete(base, "stages")
+		delete(base, "scenarios")
+	}
+
 	maps.Copy(base, override)
 
 	return base
@@ -415,9 +430,13 @@ func (r K8sManifestGenerator) CallKubectl(dirName string, configMapName string, 
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	generationTimestamp := strings.Split(uniqName, "-")[1]
+
 	temp.SetLabels(map[string]string{
-		"generated-by": "k6-action-image",
-		"uniq_name":    uniqName,
+		"generated-by":         "k6-action-image",
+		"uniq_name":            uniqName,
+		"generation_timestamp": generationTimestamp,
 	})
 	temp.SetAnnotations(map[string]string{
 		"k6-action-image/test_name":    testName,

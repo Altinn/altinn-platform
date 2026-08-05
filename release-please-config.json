@@ -12,9 +12,21 @@
       "release-type": "simple",
       "component": "dis-apim"
     },
+    "services/dis-vault-operator": {
+      "release-type": "simple",
+      "component": "dis-vault"
+    },
     "services/lakmus": {
       "release-type": "simple",
       "component": "lakmus"
+    },
+    "services/dis-console": {
+      "release-type": "simple",
+      "component": "dis-console"
+    },
+    "services/dis-console-ui": {
+      "release-type": "node",
+      "component": "dis-console-ui"
     },
     "infrastructure/images/azure-devops-agent": {
       "release-type": "simple",

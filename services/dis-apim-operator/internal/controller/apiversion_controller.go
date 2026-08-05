@@ -130,6 +130,9 @@ func (r *ApiVersionReconciler) deleteApiVersion(ctx context.Context, apiVersion 
 		return ctrl.Result{}, nil
 	}
 	resumeToken := apiVersion.Status.ResumeToken
+	if apiVersion.Status.ProvisioningState != apimv1alpha1.ProvisioningStateDeleting {
+		resumeToken = ""
+	}
 	options := &apim.APIClientBeginDeleteOptions{ResumeToken: resumeToken}
 	poller, err := r.apimClient.DeleteApi(ctx, apiVersion.GetApiVersionAzureFullName(), "*", options)
 	if err != nil {
@@ -137,6 +140,7 @@ func (r *ApiVersionReconciler) deleteApiVersion(ctx context.Context, apiVersion 
 		patch := client.MergeFrom(orig)
 		if azure.IgnoreNotFound(err) != nil {
 			logger.Error(err, "Failed to delete APIVersion")
+			r.setOperationFailed(ctx, &apiVersion)
 			return ctrl.Result{}, err
 		}
 		logger.Info("APIVersion deleted successfully")
@@ -155,21 +159,16 @@ func (r *ApiVersionReconciler) deleteApiVersion(ctx context.Context, apiVersion 
 	status, _, token, err := azure.StartResumeOperation[apim.APIClientDeleteResponse](ctx, poller)
 	if err != nil {
 		logger.Error(err, "Failed to watch LR operation for deletion")
+		r.setOperationFailed(ctx, &apiVersion)
 		return ctrl.Result{}, err
 	}
 	orig := apiVersion.DeepCopy()
 	patch := client.MergeFrom(orig)
 	switch status {
 	case azure.OperationStatusFailed:
-		logger.Error(err, "Failed to delete APIVersion")
-		apiVersion.Status.ResumeToken = ""
-		apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateFailed
-		err = r.Status().Patch(ctx, &apiVersion, patch)
-		if err != nil {
-			logger.Error(err, "Failed to update status")
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, fmt.Errorf("failed to delete APIVersion: %w", err)
+		logger.Error(nil, "Failed to delete APIVersion")
+		r.setOperationFailed(ctx, &apiVersion)
+		return ctrl.Result{}, fmt.Errorf("failed to delete APIVersion")
 	case azure.OperationStatusSucceeded:
 		logger.Info("APIVersion deleted successfully")
 		apiVersion.Status.ResumeToken = ""
@@ -256,27 +255,22 @@ func (r *ApiVersionReconciler) createUpdateApimApiVersion(ctx context.Context, a
 
 	if err != nil {
 		logger.Error(err, "Failed to create/update API")
-		apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateFailed
-		_ = r.Status().Update(ctx, &apiVersion)
+		r.setOperationFailed(ctx, &apiVersion)
 		return ctrl.Result{}, err
 	}
 	logger.Info("Watching LR operation")
 	status, _, token, err := azure.StartResumeOperation[apim.APIClientCreateOrUpdateResponse](ctx, poller)
 	if err != nil {
 		logger.Error(err, "Failed to watch LR operation")
+		r.setOperationFailed(ctx, &apiVersion)
 		return ctrl.Result{}, err
 	}
 
 	switch status {
 	case azure.OperationStatusFailed:
-		logger.Error(err, "Failed to watch LR operation")
-		apiVersion.Status.ResumeToken = ""
-		apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateFailed
-		err = r.Status().Update(ctx, &apiVersion)
-		if err != nil {
-			logger.Error(err, "Failed to update status")
-		}
-		return ctrl.Result{}, err
+		logger.Error(nil, "Failed to watch LR operation")
+		r.setOperationFailed(ctx, &apiVersion)
+		return ctrl.Result{}, fmt.Errorf("LRO failed for API create/update")
 	case azure.OperationStatusInProgress:
 		apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateUpdating
 		apiVersion.Status.ResumeToken = token
@@ -458,6 +452,16 @@ func (r *ApiVersionReconciler) ensureDiagnosticsDeleted(ctx context.Context, api
 		}
 	}
 	return nil
+}
+
+func (r *ApiVersionReconciler) setOperationFailed(ctx context.Context, apiVersion *apimv1alpha1.ApiVersion) {
+	orig := apiVersion.DeepCopy()
+	patch := client.MergeFrom(orig)
+	apiVersion.Status.ResumeToken = ""
+	apiVersion.Status.ProvisioningState = apimv1alpha1.ProvisioningStateFailed
+	if err := r.Status().Patch(ctx, apiVersion, patch); err != nil {
+		log.FromContext(ctx).Error(err, "Failed to update status")
+	}
 }
 
 func (r *ApiVersionReconciler) runPolicyTemplating(ctx context.Context, values []apimv1alpha1.PolicyValue, policyContent string, apiVersionNamespace string) (string, error) {

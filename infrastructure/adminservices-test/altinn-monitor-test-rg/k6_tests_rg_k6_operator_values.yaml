@@ -2,3 +2,9 @@ installCRDs: true
 
 namespace:
   create: false
+
+manager:
+  resources:
+    limits: null
+    requests:
+      memory: 500Mi

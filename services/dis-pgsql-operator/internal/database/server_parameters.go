@@ -53,10 +53,15 @@ func ResolveServerParameters(
 	}
 
 	resolved := map[string]string{
-		ServerParameterPgBouncerEnabled:     defaultPgBouncerEnabled,
-		ServerParameterPgBouncerMaxPrepared: defaultPgBouncerMaxPrepared,
-		ServerParameterPgBouncerPoolMode:    defaultPgBouncerPoolMode,
-		ServerParameterMaxConnections:       strconv.Itoa(maxConnections),
+		ServerParameterMaxConnections: strconv.Itoa(maxConnections),
+	}
+
+	// PgBouncer is only available on tiers that support it (Azure rejects it on
+	// the Burstable tier), so only seed its parameters when the profile allows it.
+	if profile.SupportsPgBouncer() {
+		resolved[ServerParameterPgBouncerEnabled] = defaultPgBouncerEnabled
+		resolved[ServerParameterPgBouncerMaxPrepared] = defaultPgBouncerMaxPrepared
+		resolved[ServerParameterPgBouncerPoolMode] = defaultPgBouncerPoolMode
 	}
 
 	for i := range requested {
@@ -107,6 +112,6 @@ func normalizeServerParameterValue(value intstr.IntOrString) (string, error) {
 		}
 		return trimmed, nil
 	default:
-		return "", fmt.Errorf("unsupported value type %q", value.Type)
+		return "", fmt.Errorf("unsupported value type %v", value.Type)
 	}
 }

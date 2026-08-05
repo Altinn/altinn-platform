@@ -15,6 +15,10 @@
       value: ${DISPG_AKS_RESOURCE_GROUP}
     - name: DISPG_USER_PROVISION_IMAGE
       value: ${DISPG_USER_PROVISION_IMAGE}
+    - name: DISPG_CLUSTER_ID
+      value: ${DISPG_CLUSTER_ID}
+    - name: DISPG_BASE_TAGS
+      value: ${DISPG_BASE_TAGS}
 - op: add
   path: /spec/template/metadata/labels/azure.workload.identity~1use
   value: "true"

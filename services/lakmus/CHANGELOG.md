@@ -1,5 +1,55 @@
 # Changelog
 
+## [1.1.6](https://github.com/Altinn/altinn-platform/compare/lakmus-v1.1.5...lakmus-v1.1.6) (2026-05-26)
+
+
+### Bug Fixes
+
+* **lakmus:** remove unused armkeyvault/v2 direct dependency ([#3579](https://github.com/Altinn/altinn-platform/issues/3579)) ([7304975](https://github.com/Altinn/altinn-platform/commit/7304975daba6b4c849fded4321829cf9578b4b09))
+
+## [1.1.5](https://github.com/Altinn/altinn-platform/compare/lakmus-v1.1.4...lakmus-v1.1.5) (2026-05-26)
+
+
+### Dependency Updates
+
+* update module github.com/azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault to v2 ([#3565](https://github.com/Altinn/altinn-platform/issues/3565)) ([576d1bb](https://github.com/Altinn/altinn-platform/commit/576d1bbb75a4c1029074b8dbebf11fee115a4f27))
+
+## [1.1.4](https://github.com/Altinn/altinn-platform/compare/lakmus-v1.1.3...lakmus-v1.1.4) (2026-05-26)
+
+
+### Bug Fixes
+
+* update golang.org/x/net to v0.55.0 to fix GO-2026-5026 ([#3552](https://github.com/Altinn/altinn-platform/issues/3552)) ([ee5738e](https://github.com/Altinn/altinn-platform/commit/ee5738ea01a69944efa8ba578e8ff6707e758a96))
+
+## [1.1.3](https://github.com/Altinn/altinn-platform/compare/lakmus-v1.1.2...lakmus-v1.1.3) (2026-05-22)
+
+
+### Dependency Updates
+
+* update module github.com/azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault to v2 ([#3536](https://github.com/Altinn/altinn-platform/issues/3536)) ([99216a0](https://github.com/Altinn/altinn-platform/commit/99216a017d8b72a4ff8bd2a8c499c54b42fb2163))
+
+## [1.1.2](https://github.com/Altinn/altinn-platform/compare/lakmus-v1.1.1...lakmus-v1.1.2) (2026-05-22)
+
+
+### Dependency Updates
+
+* update gomod non-major dependencies ([#3024](https://github.com/Altinn/altinn-platform/issues/3024)) ([0cd0452](https://github.com/Altinn/altinn-platform/commit/0cd0452c9083e202fca6a9fd4a047d5e364cd587))
+
+## [1.1.1](https://github.com/Altinn/altinn-platform/compare/lakmus-v1.1.0...lakmus-v1.1.1) (2026-05-22)
+
+
+### Bug Fixes
+
+* **lakmus:** align go toolchain to 1.26.1 ([#3280](https://github.com/Altinn/altinn-platform/issues/3280)) ([538767b](https://github.com/Altinn/altinn-platform/commit/538767b23e00ad5e476f2da0a1a31fd055bf8e02))
+
+
+### Dependency Updates
+
+* pin gcr.io/distroless/static docker tag to 0376b51 ([#3156](https://github.com/Altinn/altinn-platform/issues/3156)) ([bcec942](https://github.com/Altinn/altinn-platform/commit/bcec942accd274699f3dd8dccf50a89f58aa1b11))
+* update dockerfile non-major dependencies ([#3382](https://github.com/Altinn/altinn-platform/issues/3382)) ([f0e15d1](https://github.com/Altinn/altinn-platform/commit/f0e15d1823a539184149f82e0ab15493a393f4a8))
+* update gcr.io/distroless/static:nonroot docker digest to 963fa6c ([#3466](https://github.com/Altinn/altinn-platform/issues/3466)) ([a17762f](https://github.com/Altinn/altinn-platform/commit/a17762f295ad24e80eefe0f78f19696d56af0a92))
+* update gcr.io/distroless/static:nonroot docker digest to e3f9456 ([#3283](https://github.com/Altinn/altinn-platform/issues/3283)) ([dd7b157](https://github.com/Altinn/altinn-platform/commit/dd7b1578787e084472d1e5b5c6ed8a241afd6cdd))
+
 ## [1.1.0](https://github.com/Altinn/altinn-platform/compare/lakmus-v1.0.0...lakmus-v1.1.0) (2026-02-26)
 
 

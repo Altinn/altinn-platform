@@ -13,10 +13,13 @@ import (
 	"github.com/Altinn/altinn-platform/services/dis-identity-operator/internal/utils"
 )
 
-const managedByDisIdentityTag = "managed-by:dis-identity-operator"
+const (
+	managedByDisIdentityTag      = "managed-by:dis-identity-operator"
+	managedByDisIdentityTagValue = "true"
+)
 
 // GenerateUserAssignedIdentity generates a managedidentity.UserAssignedIdentity object based on the ApplicationIdentity instance.
-func (a *ApplicationIdentity) GenerateUserAssignedIdentity(ownerARMID string) *managedidentity.UserAssignedIdentity {
+func (a *ApplicationIdentity) GenerateUserAssignedIdentity(ownerARMID string, platformTags map[string]string) *managedidentity.UserAssignedIdentity {
 	// Create a new UserAssignedIdentity object
 	identity := &managedidentity.UserAssignedIdentity{
 		ObjectMeta: metav1.ObjectMeta{
@@ -29,17 +32,21 @@ func (a *ApplicationIdentity) GenerateUserAssignedIdentity(ownerARMID string) *m
 			Owner: &genruntime.KnownResourceReference{
 				ARMID: ownerARMID,
 			},
-			Tags: a.GetUserAssignedIdentityTags(),
+			Tags: a.GetUserAssignedIdentityTags(platformTags),
 		},
 	}
 	return identity
 }
 
-func (a *ApplicationIdentity) GetUserAssignedIdentityTags() map[string]string {
+// GetUserAssignedIdentityTags returns the Azure tags for the identity: the
+// tenant's spec.tags overlaid by the platform tags (platform keys win — they
+// carry finops cost data owned by the platform) plus the managed-by marker.
+func (a *ApplicationIdentity) GetUserAssignedIdentityTags(platformTags map[string]string) map[string]string {
 	result := make(map[string]string)
 	maps.Copy(result, a.Spec.Tags)
+	maps.Copy(result, platformTags)
 	// Add the managed-by tag to the tags map
-	result[managedByDisIdentityTag] = "true"
+	result[managedByDisIdentityTag] = managedByDisIdentityTagValue
 	return result
 }
 
@@ -76,11 +83,11 @@ func (a *ApplicationIdentity) ReplaceCondition(conditionType ConditionType, cond
 	a.Status.Conditions = append(a.Status.Conditions, condition)
 }
 
-func (a *ApplicationIdentity) OutdatedUserAssignedIdentity(identity *managedidentity.UserAssignedIdentity) bool {
+func (a *ApplicationIdentity) OutdatedUserAssignedIdentity(identity *managedidentity.UserAssignedIdentity, platformTags map[string]string) bool {
 	if identity == nil {
 		return true
 	}
-	expectedTags := a.GetUserAssignedIdentityTags()
+	expectedTags := a.GetUserAssignedIdentityTags(platformTags)
 	return !reflect.DeepEqual(expectedTags, identity.Spec.Tags)
 }
 

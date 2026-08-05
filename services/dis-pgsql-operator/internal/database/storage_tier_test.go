@@ -9,143 +9,143 @@ import (
 
 type diskTierConstraint struct {
 	sizeGB   int32
-	baseline dbforpostgresqlv1.Storage_Tier
-	upgrades []dbforpostgresqlv1.Storage_Tier
+	baseline dbforpostgresqlv1.AzureManagedDiskPerformanceTier
+	upgrades []dbforpostgresqlv1.AzureManagedDiskPerformanceTier
 }
 
 var managedDiskTierConstraints = []diskTierConstraint{
 	{
 		sizeGB:   4,
-		baseline: dbforpostgresqlv1.Storage_Tier_P1,
-		upgrades: []dbforpostgresqlv1.Storage_Tier{
-			dbforpostgresqlv1.Storage_Tier_P2,
-			dbforpostgresqlv1.Storage_Tier_P3,
-			dbforpostgresqlv1.Storage_Tier_P4,
-			dbforpostgresqlv1.Storage_Tier_P6,
-			dbforpostgresqlv1.Storage_Tier_P10,
-			dbforpostgresqlv1.Storage_Tier_P15,
-			dbforpostgresqlv1.Storage_Tier_P20,
-			dbforpostgresqlv1.Storage_Tier_P30,
-			dbforpostgresqlv1.Storage_Tier_P40,
-			dbforpostgresqlv1.Storage_Tier_P50,
+		baseline: dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P1,
+		upgrades: []dbforpostgresqlv1.AzureManagedDiskPerformanceTier{
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P2,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P3,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P4,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P6,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P10,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P15,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P20,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P30,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P40,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P50,
 		},
 	},
 	{
 		sizeGB:   8,
-		baseline: dbforpostgresqlv1.Storage_Tier_P2,
-		upgrades: []dbforpostgresqlv1.Storage_Tier{
-			dbforpostgresqlv1.Storage_Tier_P3,
-			dbforpostgresqlv1.Storage_Tier_P4,
-			dbforpostgresqlv1.Storage_Tier_P6,
-			dbforpostgresqlv1.Storage_Tier_P10,
-			dbforpostgresqlv1.Storage_Tier_P15,
-			dbforpostgresqlv1.Storage_Tier_P20,
-			dbforpostgresqlv1.Storage_Tier_P30,
-			dbforpostgresqlv1.Storage_Tier_P40,
-			dbforpostgresqlv1.Storage_Tier_P50,
+		baseline: dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P2,
+		upgrades: []dbforpostgresqlv1.AzureManagedDiskPerformanceTier{
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P3,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P4,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P6,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P10,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P15,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P20,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P30,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P40,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P50,
 		},
 	},
 	{
 		sizeGB:   16,
-		baseline: dbforpostgresqlv1.Storage_Tier_P3,
-		upgrades: []dbforpostgresqlv1.Storage_Tier{
-			dbforpostgresqlv1.Storage_Tier_P4,
-			dbforpostgresqlv1.Storage_Tier_P6,
-			dbforpostgresqlv1.Storage_Tier_P10,
-			dbforpostgresqlv1.Storage_Tier_P15,
-			dbforpostgresqlv1.Storage_Tier_P20,
-			dbforpostgresqlv1.Storage_Tier_P30,
-			dbforpostgresqlv1.Storage_Tier_P40,
-			dbforpostgresqlv1.Storage_Tier_P50,
+		baseline: dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P3,
+		upgrades: []dbforpostgresqlv1.AzureManagedDiskPerformanceTier{
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P4,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P6,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P10,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P15,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P20,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P30,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P40,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P50,
 		},
 	},
 	{
 		sizeGB:   32,
-		baseline: dbforpostgresqlv1.Storage_Tier_P4,
-		upgrades: []dbforpostgresqlv1.Storage_Tier{
-			dbforpostgresqlv1.Storage_Tier_P6,
-			dbforpostgresqlv1.Storage_Tier_P10,
-			dbforpostgresqlv1.Storage_Tier_P15,
-			dbforpostgresqlv1.Storage_Tier_P20,
-			dbforpostgresqlv1.Storage_Tier_P30,
-			dbforpostgresqlv1.Storage_Tier_P40,
-			dbforpostgresqlv1.Storage_Tier_P50,
+		baseline: dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P4,
+		upgrades: []dbforpostgresqlv1.AzureManagedDiskPerformanceTier{
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P6,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P10,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P15,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P20,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P30,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P40,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P50,
 		},
 	},
 	{
 		sizeGB:   64,
-		baseline: dbforpostgresqlv1.Storage_Tier_P6,
-		upgrades: []dbforpostgresqlv1.Storage_Tier{
-			dbforpostgresqlv1.Storage_Tier_P10,
-			dbforpostgresqlv1.Storage_Tier_P15,
-			dbforpostgresqlv1.Storage_Tier_P20,
-			dbforpostgresqlv1.Storage_Tier_P30,
-			dbforpostgresqlv1.Storage_Tier_P40,
-			dbforpostgresqlv1.Storage_Tier_P50,
+		baseline: dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P6,
+		upgrades: []dbforpostgresqlv1.AzureManagedDiskPerformanceTier{
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P10,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P15,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P20,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P30,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P40,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P50,
 		},
 	},
 	{
 		sizeGB:   128,
-		baseline: dbforpostgresqlv1.Storage_Tier_P10,
-		upgrades: []dbforpostgresqlv1.Storage_Tier{
-			dbforpostgresqlv1.Storage_Tier_P15,
-			dbforpostgresqlv1.Storage_Tier_P20,
-			dbforpostgresqlv1.Storage_Tier_P30,
-			dbforpostgresqlv1.Storage_Tier_P40,
-			dbforpostgresqlv1.Storage_Tier_P50,
+		baseline: dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P10,
+		upgrades: []dbforpostgresqlv1.AzureManagedDiskPerformanceTier{
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P15,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P20,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P30,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P40,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P50,
 		},
 	},
 	{
 		sizeGB:   256,
-		baseline: dbforpostgresqlv1.Storage_Tier_P15,
-		upgrades: []dbforpostgresqlv1.Storage_Tier{
-			dbforpostgresqlv1.Storage_Tier_P20,
-			dbforpostgresqlv1.Storage_Tier_P30,
-			dbforpostgresqlv1.Storage_Tier_P40,
-			dbforpostgresqlv1.Storage_Tier_P50,
+		baseline: dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P15,
+		upgrades: []dbforpostgresqlv1.AzureManagedDiskPerformanceTier{
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P20,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P30,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P40,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P50,
 		},
 	},
 	{
 		sizeGB:   512,
-		baseline: dbforpostgresqlv1.Storage_Tier_P20,
-		upgrades: []dbforpostgresqlv1.Storage_Tier{
-			dbforpostgresqlv1.Storage_Tier_P30,
-			dbforpostgresqlv1.Storage_Tier_P40,
-			dbforpostgresqlv1.Storage_Tier_P50,
+		baseline: dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P20,
+		upgrades: []dbforpostgresqlv1.AzureManagedDiskPerformanceTier{
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P30,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P40,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P50,
 		},
 	},
 	{
 		sizeGB:   1024,
-		baseline: dbforpostgresqlv1.Storage_Tier_P30,
-		upgrades: []dbforpostgresqlv1.Storage_Tier{
-			dbforpostgresqlv1.Storage_Tier_P40,
-			dbforpostgresqlv1.Storage_Tier_P50,
+		baseline: dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P30,
+		upgrades: []dbforpostgresqlv1.AzureManagedDiskPerformanceTier{
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P40,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P50,
 		},
 	},
 	{
 		sizeGB:   2048,
-		baseline: dbforpostgresqlv1.Storage_Tier_P40,
-		upgrades: []dbforpostgresqlv1.Storage_Tier{
-			dbforpostgresqlv1.Storage_Tier_P50,
+		baseline: dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P40,
+		upgrades: []dbforpostgresqlv1.AzureManagedDiskPerformanceTier{
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P50,
 		},
 	},
-	{sizeGB: 4096, baseline: dbforpostgresqlv1.Storage_Tier_P50},
+	{sizeGB: 4096, baseline: dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P50},
 	{
 		sizeGB:   8192,
-		baseline: dbforpostgresqlv1.Storage_Tier_P60,
-		upgrades: []dbforpostgresqlv1.Storage_Tier{
-			dbforpostgresqlv1.Storage_Tier_P70,
-			dbforpostgresqlv1.Storage_Tier_P80,
+		baseline: dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P60,
+		upgrades: []dbforpostgresqlv1.AzureManagedDiskPerformanceTier{
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P70,
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P80,
 		},
 	},
 	{
 		sizeGB:   16384,
-		baseline: dbforpostgresqlv1.Storage_Tier_P70,
-		upgrades: []dbforpostgresqlv1.Storage_Tier{
-			dbforpostgresqlv1.Storage_Tier_P80,
+		baseline: dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P70,
+		upgrades: []dbforpostgresqlv1.AzureManagedDiskPerformanceTier{
+			dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P80,
 		},
 	},
-	{sizeGB: 32768, baseline: dbforpostgresqlv1.Storage_Tier_P80},
+	{sizeGB: 32768, baseline: dbforpostgresqlv1.AzureManagedDiskPerformanceTier_P80},
 }
 
 func TestResolveStorageTier_ManagedDiskConstraints(t *testing.T) {
@@ -162,7 +162,7 @@ func TestResolveStorageTier_ManagedDiskConstraints(t *testing.T) {
 		rowName := fmt.Sprintf("sizeGB=%d", row.sizeGB)
 
 		t.Run(rowName+"/accepts_all_allowed_tiers", func(t *testing.T) {
-			allowed := append([]dbforpostgresqlv1.Storage_Tier{row.baseline}, row.upgrades...)
+			allowed := append([]dbforpostgresqlv1.AzureManagedDiskPerformanceTier{row.baseline}, row.upgrades...)
 			for _, tier := range allowed {
 				if got := ResolveStorageTier(row.sizeGB, ptr(string(tier))); got != tier {
 					t.Fatalf("ResolveStorageTier(%d, %q) = %q, want %q", row.sizeGB, tier, got, tier)

@@ -141,6 +141,10 @@ spec:
               principalId:
                 description: PrincipalID is the ID of the managed identity in Azure.
                 type: string
+              resourceId:
+                description: ResourceID is the ARM resource id of the managed identity
+                  in Azure.
+                type: string
             type: object
         required:
         - spec

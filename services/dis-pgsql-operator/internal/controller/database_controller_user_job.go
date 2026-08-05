@@ -2,84 +2,110 @@ package controller
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"maps"
 	"strings"
 
+	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
-	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 )
 
-func userProvisionJobName(dbName string, auth resolvedDatabaseAuth) string {
-	hash := userProvisionSpecHash(dbName, auth)
-	base := fmt.Sprintf("%s-user-provision", dbName)
-	maxBaseLen := max(63-1-len(hash), 1)
-	if len(base) > maxBaseLen {
-		base = strings.TrimRight(base[:maxBaseLen], "-")
-		if base == "" {
-			base = "db"
-		}
-	}
-	return fmt.Sprintf("%s-%s", base, hash)
-}
-
-func userProvisionSpecHash(dbName string, auth resolvedDatabaseAuth) string {
-	payload := fmt.Sprintf("adminSA=%s;admin=%s;user=%s;userPID=%s;db=%s",
-		auth.Admin.ServiceAccountName,
-		auth.Admin.Name,
-		auth.User.Name,
-		auth.User.PrincipalID,
-		dbName,
-	)
-	sum := sha256.Sum256([]byte(payload))
-	return hex.EncodeToString(sum[:])[:8]
-}
-
-func (r *DatabaseReconciler) ensureUserProvisionJob(
+func (r *DatabaseReconciler) ensureUserProvisionJobForTarget(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
-	auth resolvedDatabaseAuth,
+	spec userProvisionJobSpec,
 ) error {
-	ns := db.Namespace
-	jobName := userProvisionJobName(db.Name, auth)
+	return ensureUserProvisionJobForReconciler(ctx, logger, r, spec)
+}
 
-	if auth.Admin.ServiceAccountName == "" {
-		return fmt.Errorf("admin serviceAccountName must be set for user provisioning")
-	}
-	if auth.User.Name == "" {
-		return fmt.Errorf("user identity name must be set for user provisioning")
-	}
-	if auth.User.PrincipalID == "" {
-		return fmt.Errorf("user principal ID must be set for user provisioning")
+type userProvisionJobSpec struct {
+	Owner client.Object
+
+	JobName string
+	Labels  map[string]string
+
+	ServiceAccountName string
+	AdminIdentityName  string
+
+	ServerName   string
+	DatabaseHost string
+	DatabaseName string
+	SchemaName   string
+
+	AccessPrincipals []dbUtil.AccessPrincipal
+
+	RevokePublicConnect bool
+	SearchPathScope     string
+
+	// ServerDebugAccess selects server-wide debug access provisioning instead of
+	// per-database schema access. In this mode SchemaName/SearchPathScope and the
+	// per-principal Role field are unused; principals are granted membership in a
+	// single managed role holding DebugBuiltinRoles plus CONNECT on all databases.
+	ServerDebugAccess bool
+
+	// DebugBuiltinRoles are the built-in PostgreSQL roles (e.g. pg_monitor,
+	// pg_read_all_data) granted to the managed debug role. Only used when
+	// ServerDebugAccess is true.
+	DebugBuiltinRoles []string
+}
+
+type userProvisionJobReconciler interface {
+	List(context.Context, client.ObjectList, ...client.ListOption) error
+	Delete(context.Context, client.Object, ...client.DeleteOption) error
+	Create(context.Context, client.Object, ...client.CreateOption) error
+
+	userProvisionJobScheme() *runtime.Scheme
+	userProvisionJobImage() string
+	userProvisionJobUseAzFakes() bool
+}
+
+func (r *DatabaseReconciler) userProvisionJobScheme() *runtime.Scheme {
+	return r.Scheme
+}
+
+func (r *DatabaseReconciler) userProvisionJobImage() string {
+	return r.Config.UserProvisionImage
+}
+
+func (r *DatabaseReconciler) userProvisionJobUseAzFakes() bool {
+	return r.Config.UseAzFakes
+}
+
+func ensureUserProvisionJobForReconciler(
+	ctx context.Context,
+	logger logr.Logger,
+	r userProvisionJobReconciler,
+	spec userProvisionJobSpec,
+) error {
+	ns := spec.Owner.GetNamespace()
+	jobName := spec.JobName
+	useAzFakes := r.userProvisionJobUseAzFakes()
+
+	if err := validateUserProvisionJobSpec(spec, useAzFakes); err != nil {
+		return err
 	}
 
 	ttlSeconds := int32(300)
 	// Run pod at a time
 	parallelism := int32(1)
 	completions := int32(1)
-	image := strings.TrimSpace(r.Config.UserProvisionImage)
+	image := strings.TrimSpace(r.userProvisionJobImage())
 	if image == "" {
 		return fmt.Errorf("user provision image is not configured")
 	}
-	labels := map[string]string{
-		"dis.altinn.cloud/database-name":  db.Name,
-		"dis.altinn.cloud/user-provision": "true",
-	}
+	labels := userProvisionJobLabels(spec.Labels)
 
 	var jobs batchv1.JobList
 	if err := r.List(ctx, &jobs, client.InNamespace(ns), client.MatchingLabels(labels)); err != nil {
-		return fmt.Errorf("list user provisioning jobs for %s/%s: %w", ns, db.Name, err)
+		return fmt.Errorf("list user provisioning jobs for %s/%s: %w", ns, spec.Owner.GetName(), err)
 	}
 
 	hasCurrent := false
@@ -94,7 +120,7 @@ func (r *DatabaseReconciler) ensureUserProvisionJob(
 				}); err != nil && !apierrors.IsNotFound(err) {
 					return fmt.Errorf("delete failed user provisioning Job %s/%s: %w", job.Namespace, job.Name, err)
 				}
-				logger.Info("deleting failed user provisioning Job for database",
+				logger.Info("deleting failed user provisioning Job for database access",
 					"jobName", job.Name,
 					"namespace", job.Namespace,
 				)
@@ -116,70 +142,24 @@ func (r *DatabaseReconciler) ensureUserProvisionJob(
 		return nil
 	}
 
-	podLabels := map[string]string{
-		"azure.workload.identity/use": "true",
-	}
-	maps.Copy(podLabels, labels)
-
-	job := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      jobName,
-			Namespace: ns,
-			Labels:    labels,
-		},
-		Spec: batchv1.JobSpec{
-			Parallelism:             &parallelism,
-			Completions:             &completions,
-			TTLSecondsAfterFinished: &ttlSeconds,
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: podLabels,
-				},
-				Spec: corev1.PodSpec{
-					ServiceAccountName: auth.Admin.ServiceAccountName,
-					RestartPolicy:      corev1.RestartPolicyOnFailure,
-					Containers: []corev1.Container{
-						{
-							Name:  "provision-user",
-							Image: image,
-							Args:  []string{"--provision-user"},
-							Env: []corev1.EnvVar{
-								{
-									Name:  "DISPG_USER_APP_IDENTITY",
-									Value: auth.User.Name,
-								},
-								{
-									Name:  "DISPG_USER_APP_PRINCIPAL_ID",
-									Value: auth.User.PrincipalID,
-								},
-								{
-									Name:  "DISPG_ADMIN_APP_IDENTITY",
-									Value: auth.Admin.Name,
-								},
-								{
-									Name:  "DISPG_DATABASE_NAME",
-									Value: db.Name,
-								},
-								{
-									Name:  "DISPG_DB_SCHEMA",
-									Value: db.Name,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
+	job := buildUserProvisionJob(ns, jobName, image, labels, spec, parallelism, completions, ttlSeconds)
 
 	// If we're using AzFakes, we need to disable AAD authentication in the provisioner
-	// since we're running on Kind
-	if r.Config.UseAzFakes {
+	// since we're running on Kind. We also connect as a dedicated NON-superuser admin
+	// instead of the bootstrap "postgres" superuser. Azure PostgreSQL's Entra admin is
+	// a non-superuser CREATEROLE role, which (unlike a superuser) is auto-granted
+	// membership in every role it creates. Connecting as a superuser hides that, so the
+	// Kind environment must mirror the non-superuser admin to exercise that code path.
+	if useAzFakes {
 		job.Spec.Template.Spec.Containers[0].Env = append(
 			job.Spec.Template.Spec.Containers[0].Env,
 			corev1.EnvVar{
-				Name:  "DISPG_DISABLE_AAD",
+				Name:  dbUtil.DisableAADEnv,
 				Value: "1",
+			},
+			corev1.EnvVar{
+				Name:  dbUtil.DBAdminUserEnv,
+				Value: kindProvisionAdminUser,
 			},
 		)
 		job.Spec.Template.Spec.InitContainers = append(
@@ -196,15 +176,15 @@ func (r *DatabaseReconciler) ensureUserProvisionJob(
 		)
 	}
 
-	if err := controllerutil.SetControllerReference(db, job, r.Scheme); err != nil {
+	if err := controllerutil.SetControllerReference(spec.Owner, job, r.userProvisionJobScheme()); err != nil {
 		return fmt.Errorf("set controller reference on user provisioning Job: %w", err)
 	}
 
-	logger.Info("creating user provisioning Job for database",
+	logger.Info("creating user provisioning Job for database access",
 		"jobName", jobName,
 		"namespace", ns,
-		"serviceAccount", auth.Admin.ServiceAccountName,
-		"userIdentity", auth.User.Name,
+		"serviceAccount", spec.ServiceAccountName,
+		"accessPrincipalCount", len(spec.AccessPrincipals),
 	)
 
 	if err := r.Create(ctx, job); err != nil {
@@ -215,6 +195,146 @@ func (r *DatabaseReconciler) ensureUserProvisionJob(
 	}
 
 	return nil
+}
+
+func validateUserProvisionJobSpec(spec userProvisionJobSpec, useAzFakes bool) error {
+	if spec.ServiceAccountName == "" {
+		return fmt.Errorf("serviceAccountName must be set for user provisioning")
+	}
+	if spec.AdminIdentityName == "" && !useAzFakes {
+		return fmt.Errorf("admin identity name must be set for user provisioning")
+	}
+	if spec.ServerName == "" {
+		return fmt.Errorf("server name must be set for user provisioning")
+	}
+	// Server debug access is server-wide: it has no schema and does not use the
+	// per-principal Role field, so those checks are skipped for it below.
+	if !spec.ServerDebugAccess && spec.SchemaName == "" {
+		return fmt.Errorf("schema name must be set for user provisioning")
+	}
+	if spec.ServerDebugAccess && len(spec.DebugBuiltinRoles) == 0 {
+		return fmt.Errorf("at least one built-in role must be set for server debug access provisioning")
+	}
+	// Server debug access allows an empty principal set: the revocation Job runs
+	// with zero principals so the membership reconcile revokes everyone.
+	if len(spec.AccessPrincipals) == 0 && !spec.ServerDebugAccess {
+		return fmt.Errorf("at least one access principal must be set for user provisioning")
+	}
+	for i, principal := range spec.AccessPrincipals {
+		if principal.Name == "" {
+			return fmt.Errorf("access principal %d name must be set for user provisioning", i)
+		}
+		if principal.PrincipalID == "" && !useAzFakes {
+			return fmt.Errorf("access principal %d principal ID must be set for user provisioning", i)
+		}
+		switch principal.PrincipalType {
+		case dbUtil.PrincipalTypeService, dbUtil.PrincipalTypeGroup:
+		default:
+			return fmt.Errorf("access principal %d principal type must be service or group", i)
+		}
+		if spec.ServerDebugAccess {
+			continue
+		}
+		switch principal.Role {
+		case dbUtil.AccessRoleReader, dbUtil.AccessRoleWriter, dbUtil.AccessRoleOwner:
+		default:
+			return fmt.Errorf("access principal %d role must be Reader, Writer, or Owner", i)
+		}
+	}
+	if _, err := dbUtil.MarshalAccessPrincipals(spec.AccessPrincipals); err != nil {
+		return err
+	}
+	return nil
+}
+
+func userProvisionJobLabels(specLabels map[string]string) map[string]string {
+	labels := maps.Clone(specLabels)
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	labels[userProvisionLabelKey] = labelValueTrue
+	return labels
+}
+
+func buildUserProvisionJob(
+	namespace,
+	jobName,
+	image string,
+	labels map[string]string,
+	spec userProvisionJobSpec,
+	parallelism,
+	completions,
+	ttlSeconds int32,
+) *batchv1.Job {
+	podLabels := map[string]string{
+		"azure.workload.identity/use": labelValueTrue,
+	}
+	maps.Copy(podLabels, labels)
+
+	return &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Spec: batchv1.JobSpec{
+			Parallelism:             &parallelism,
+			Completions:             &completions,
+			TTLSecondsAfterFinished: &ttlSeconds,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: podLabels,
+				},
+				Spec: corev1.PodSpec{
+					ServiceAccountName: spec.ServiceAccountName,
+					RestartPolicy:      corev1.RestartPolicyOnFailure,
+					Containers: []corev1.Container{
+						{
+							Name:  "provision-user",
+							Image: image,
+							Args:  []string{"--provision-user"},
+							Env:   userProvisionJobEnv(spec),
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func userProvisionJobEnv(spec userProvisionJobSpec) []corev1.EnvVar {
+	accessPrincipals, err := dbUtil.MarshalAccessPrincipals(spec.AccessPrincipals)
+	if err != nil {
+		// Unreachable: validateUserProvisionJobSpec already runs MarshalAccessPrincipals
+		// and rejects specs that fail to marshal before we reach this point.
+		panic(fmt.Sprintf("userProvisionJobEnv: MarshalAccessPrincipals failed after validation: %v", err))
+	}
+
+	env := []corev1.EnvVar{
+		{Name: dbUtil.AdminAppIdentityEnv, Value: spec.AdminIdentityName},
+		{Name: dbUtil.DatabaseServerNameEnv, Value: spec.ServerName},
+		{Name: dbUtil.DBSchemaEnv, Value: spec.SchemaName},
+		{Name: dbUtil.AccessPrincipalsEnv, Value: accessPrincipals},
+	}
+	if spec.DatabaseHost != "" {
+		env = append(env, corev1.EnvVar{Name: dbUtil.DBHostEnv, Value: spec.DatabaseHost})
+	}
+	if spec.DatabaseName != "" {
+		env = append(env, corev1.EnvVar{Name: dbUtil.DBNameEnv, Value: spec.DatabaseName})
+	}
+	if spec.RevokePublicConnect {
+		env = append(env, corev1.EnvVar{Name: dbUtil.RevokePublicConnectEnv, Value: "1"})
+	}
+	if spec.SearchPathScope != "" {
+		env = append(env, corev1.EnvVar{Name: dbUtil.DBSearchPathScopeEnv, Value: spec.SearchPathScope})
+	}
+	if spec.ServerDebugAccess {
+		env = append(env,
+			corev1.EnvVar{Name: dbUtil.ServerDebugAccessEnv, Value: "1"},
+			corev1.EnvVar{Name: dbUtil.DebugBuiltinRolesEnv, Value: strings.Join(spec.DebugBuiltinRoles, ",")},
+		)
+	}
+	return env
 }
 
 func jobConditionTrue(job *batchv1.Job, conditionType batchv1.JobConditionType) bool {

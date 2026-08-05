@@ -1,0 +1,14 @@
+namespace: platform
+base_dir: "actions/generate-k6-manifests/test_service/k8s_wrapper"
+test_definitions:
+  - test_file: get_deployments.js
+    contexts:
+      - environment: at22
+        test_type:
+          type: smoke
+          enabled: true
+      - environment: at23
+        test_type:
+          type: smoke
+          enabled: true
+          config_file: ../test_configs/smoke.json

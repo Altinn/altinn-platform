@@ -1,5 +1,64 @@
 # Changelog
 
+## [0.3.0](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.2.5...dis-identity-v0.3.0) (2026-07-03)
+
+
+### Features
+
+* **dis-operators:** surface status.resourceId on DatabaseServer and ApplicationIdentity ([#3786](https://github.com/Altinn/altinn-platform/issues/3786)) ([68751c1](https://github.com/Altinn/altinn-platform/commit/68751c1160eb4df8df1302e50ce100c779fe8f58))
+
+
+### Bug Fixes
+
+* **dis-operators:** pin e2e to a dedicated Kind kubeconfig ([#3727](https://github.com/Altinn/altinn-platform/issues/3727)) ([20fb836](https://github.com/Altinn/altinn-platform/commit/20fb8367683bf88021897597d3d156e32ed064c5))
+* **dis-operators:** resolve goconst lint debt under golangci-lint v2.12.2 ([#3729](https://github.com/Altinn/altinn-platform/issues/3729)) ([a8b99a5](https://github.com/Altinn/altinn-platform/commit/a8b99a541e7be41f0e5e9ebcda632ba53e585562))
+
+
+### Dependency Updates
+
+* update actions/checkout digest to df4cb1c ([#3653](https://github.com/Altinn/altinn-platform/issues/3653)) ([44353b4](https://github.com/Altinn/altinn-platform/commit/44353b47ad5f9312641b244e2bb32b202c2e084b))
+
+## [0.2.5](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.2.4...dis-identity-v0.2.5) (2026-05-26)
+
+
+### Dependency Updates
+
+* update github-actions non-major dependencies ([#3528](https://github.com/Altinn/altinn-platform/issues/3528)) ([a48285f](https://github.com/Altinn/altinn-platform/commit/a48285ff1a562e67cc4ddc4ff1b958d4f01ea426))
+
+## [0.2.4](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.2.3...dis-identity-v0.2.4) (2026-05-26)
+
+
+### Bug Fixes
+
+* update golang.org/x/net to v0.55.0 to fix GO-2026-5026 ([#3552](https://github.com/Altinn/altinn-platform/issues/3552)) ([ee5738e](https://github.com/Altinn/altinn-platform/commit/ee5738ea01a69944efa8ba578e8ff6707e758a96))
+
+## [0.2.3](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.2.2...dis-identity-v0.2.3) (2026-05-22)
+
+
+### Dependency Updates
+
+* update gomod non-major dependencies ([#3024](https://github.com/Altinn/altinn-platform/issues/3024)) ([0cd0452](https://github.com/Altinn/altinn-platform/commit/0cd0452c9083e202fca6a9fd4a047d5e364cd587))
+
+## [0.2.2](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.2.1...dis-identity-v0.2.2) (2026-05-22)
+
+
+### Dependency Updates
+
+* bump grpc-GO to 1.79.3 ([#3269](https://github.com/Altinn/altinn-platform/issues/3269)) ([9166356](https://github.com/Altinn/altinn-platform/commit/916635673abdde61b55ebb24addd51ff4b159f85))
+* update actions/setup-go digest to 4a36011 ([#3191](https://github.com/Altinn/altinn-platform/issues/3191)) ([3c78f2b](https://github.com/Altinn/altinn-platform/commit/3c78f2b53ad80d613b3c2f7ec686ddf9212829ef))
+* update dockerfile non-major dependencies ([#3382](https://github.com/Altinn/altinn-platform/issues/3382)) ([f0e15d1](https://github.com/Altinn/altinn-platform/commit/f0e15d1823a539184149f82e0ab15493a393f4a8))
+* update gcr.io/distroless/static:nonroot docker digest to 963fa6c ([#3466](https://github.com/Altinn/altinn-platform/issues/3466)) ([a17762f](https://github.com/Altinn/altinn-platform/commit/a17762f295ad24e80eefe0f78f19696d56af0a92))
+* update gcr.io/distroless/static:nonroot docker digest to e3f9456 ([#3283](https://github.com/Altinn/altinn-platform/issues/3283)) ([dd7b157](https://github.com/Altinn/altinn-platform/commit/dd7b1578787e084472d1e5b5c6ed8a241afd6cdd))
+* update github-actions non-major dependencies ([#3018](https://github.com/Altinn/altinn-platform/issues/3018)) ([100ab8d](https://github.com/Altinn/altinn-platform/commit/100ab8d5d0b9f413983c4b6ca7b5baac6afe51ed))
+* update golangci/golangci-lint-action action to v9 ([#3378](https://github.com/Altinn/altinn-platform/issues/3378)) ([7184911](https://github.com/Altinn/altinn-platform/commit/7184911a4fb241f65d7917f3bd04383d6f9aa38f))
+
+## [0.2.1](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.2.0...dis-identity-v0.2.1) (2026-03-20)
+
+
+### Dependency Updates
+
+* update actions/checkout digest to de0fac2 ([#3062](https://github.com/Altinn/altinn-platform/issues/3062)) ([9bc47e2](https://github.com/Altinn/altinn-platform/commit/9bc47e2988c19a2a3d945b6dab755bd9c468b847))
+
 ## [0.2.0](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.1.1...dis-identity-v0.2.0) (2026-02-27)
 
 

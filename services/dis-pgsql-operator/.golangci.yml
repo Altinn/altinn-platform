@@ -13,6 +13,7 @@ linters:
     - govet
     - ineffassign
     - lll
+    - modernize
     - misspell
     - nakedret
     - prealloc
@@ -26,6 +27,10 @@ linters:
       rules:
         - name: comment-spacings
         - name: import-shadowing
+    modernize:
+      disable:
+        - omitzero
+        - newexpr
   exclusions:
     generated: lax
     rules:
@@ -36,6 +41,10 @@ linters:
           - dupl
           - lll
         path: internal/*
+      - linters:
+          - staticcheck
+        path: api/v1alpha1/groupversion_info.go
+        text: SA1019
     paths:
       - third_party$
       - builtin$

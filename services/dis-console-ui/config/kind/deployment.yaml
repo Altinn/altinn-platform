@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dis-console-ui
+  namespace: default
+  labels:
+    app: dis-console-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dis-console-ui
+  template:
+    metadata:
+      labels:
+        app: dis-console-ui
+    spec:
+      containers:
+        - name: dis-console-ui
+          image: localhost/dis-console-ui:e2e
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dis-console-ui
+  namespace: default
+  labels:
+    app: dis-console-ui
+spec:
+  selector:
+    app: dis-console-ui
+  ports:
+    - port: 80
+      targetPort: 8080

@@ -24,6 +24,8 @@ spec:
               value: "fake-tenant"
             - name: DISPG_AKS_RESOURCE_GROUP
               value: "fake-aks-rg"
+            - name: DISPG_CLUSTER_ID
+              value: "kind"
           resources:
             requests:
               cpu: 50m

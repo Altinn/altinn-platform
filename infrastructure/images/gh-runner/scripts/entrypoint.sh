@@ -59,6 +59,8 @@ ACCESS_TOKEN=$(APP_ID="${APP_ID}" APP_PRIVATE_KEY="${APP_PRIVATE_KEY//\\n/${nl}}
 _TOKEN=$(ACCESS_TOKEN="${ACCESS_TOKEN}" REPO_URL="${_REPO_URL}" bash ./token.sh)
 RUNNER_TOKEN=$(echo "${_TOKEN}" | jq -r .token)
 
+mkdir -p "${_RUNNER_WORKDIR}"
+
 ./config.sh \
     --url "${_REPO_URL}" \
     --token $RUNNER_TOKEN \

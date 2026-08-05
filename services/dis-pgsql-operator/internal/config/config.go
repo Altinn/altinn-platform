@@ -15,16 +15,29 @@ type OperatorConfig struct {
 	SubscriptionId   string
 	TenantId         string
 
+	// ClusterId is the deterministic, human-readable identifier of the cluster
+	// this operator runs in (e.g. "admin-test", "admin-prod"). It is appended
+	// to new Azure PostgreSQL Flexible Server names ("<db.Name>-<ClusterId>")
+	// to keep them globally unique across clusters, and is the same value
+	// out-of-cluster consumers (service-owner Terraform) use to derive the
+	// server name without needing to read DatabaseServer.status.
+	ClusterId string
+
 	// UserProvisionImage is the image used for user provisioning Jobs.
 	UserProvisionImage string
 
 	// UseAzFakes toggles Azure fake servers (used for kind/local).
 	UseAzFakes bool
+
+	// BaseTags are the platform-owned Azure tags (the RFC 0007 finops base
+	// tag set) applied to every Azure resource this operator creates. It is
+	// optional and set after construction: empty disables platform tagging.
+	BaseTags map[string]string
 }
 
 // NewOperatorConfig builds and validates the OperatorConfig from already-parsed
 // flag values. It does NOT read environment variables itself.
-func NewOperatorConfig(resourceGroup, dbVnetName, aksVnetName, subscriptionId, tenantId, aksRG, userProvisionImage string, useAzFakes bool) (*OperatorConfig, error) {
+func NewOperatorConfig(resourceGroup, dbVnetName, aksVnetName, subscriptionId, tenantId, aksRG, userProvisionImage, clusterId string, useAzFakes bool) (*OperatorConfig, error) {
 	var missing []string
 
 	subscriptionId = strings.TrimSpace(subscriptionId)
@@ -33,6 +46,7 @@ func NewOperatorConfig(resourceGroup, dbVnetName, aksVnetName, subscriptionId, t
 	aksVnetName = strings.TrimSpace(aksVnetName)
 	aksRG = strings.TrimSpace(aksRG)
 	userProvisionImage = strings.TrimSpace(userProvisionImage)
+	clusterId = strings.TrimSpace(clusterId)
 
 	tenantId = strings.TrimSpace(tenantId)
 
@@ -57,6 +71,9 @@ func NewOperatorConfig(resourceGroup, dbVnetName, aksVnetName, subscriptionId, t
 	if userProvisionImage == "" {
 		missing = append(missing, "user-provision-image")
 	}
+	if clusterId == "" {
+		missing = append(missing, "cluster-id")
+	}
 
 	if len(missing) > 0 {
 		return nil, fmt.Errorf("missing required configuration: %s", strings.Join(missing, ", "))
@@ -68,6 +85,7 @@ func NewOperatorConfig(resourceGroup, dbVnetName, aksVnetName, subscriptionId, t
 		AKSVNetName:        aksVnetName,
 		AKSResourceGroup:   aksRG,
 		TenantId:           tenantId,
+		ClusterId:          clusterId,
 		UserProvisionImage: userProvisionImage,
 		UseAzFakes:         useAzFakes,
 	}, nil

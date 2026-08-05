@@ -5,6 +5,7 @@ import (
 
 	managedidentity "github.com/Azure/azure-service-operator/v2/api/managedidentity/v1api20230131"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -48,7 +49,7 @@ func (r *ApplicationIdentityReconciler) updateFederatedCredentialsStatus(ctx con
 
 	// Check if the FederatedIdentityCredential is ready
 	readyCondition := getReadyConditionFromStatus(credential.Status.Conditions)
-	if readyCondition.Status == "True" {
+	if readyCondition.Status == metav1.ConditionTrue {
 		applicationIdentity.Status.AzureAudiences = credential.Status.Audiences
 		ready = true
 	}

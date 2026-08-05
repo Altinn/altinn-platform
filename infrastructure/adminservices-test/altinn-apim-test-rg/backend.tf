@@ -100,3 +100,10 @@ resource "azurerm_role_assignment" "altinncr_acrpull" {
   scope                            = data.azurerm_container_registry.altinncr.id
   skip_service_principal_aad_check = true
 }
+
+resource "azurerm_role_assignment" "altinncr_acr_repo_read" {
+  principal_id                     = azurerm_user_assigned_identity.acaghr_managed_identity.principal_id
+  role_definition_name             = "Container Registry Repository Reader"
+  scope                            = data.azurerm_container_registry.altinncr.id
+  skip_service_principal_aad_check = true
+}

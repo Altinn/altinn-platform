@@ -38,11 +38,19 @@ import (
 
 const applicationIdentityFinalizer = "applicationidentity.application.dis.altinn.cloud/finalizer"
 
+// conditionReasonSucceeded is the condition Reason indicating successful provisioning.
+const conditionReasonSucceeded = "Succeeded"
+
 // ApplicationIdentityReconciler reconciles a ApplicationIdentity object
 type ApplicationIdentityReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 	Config *config.DisIdentityConfig
+
+	// BaseTags are the parsed platform-owned Azure tags (the RFC 0007 finops
+	// base tag set) applied to identities created by this operator. Empty
+	// disables platform tagging.
+	BaseTags map[string]string
 }
 
 // +kubebuilder:rbac:groups=application.dis.altinn.cloud,resources=applicationidentities,verbs=get;list;watch;create;update;patch;delete
@@ -168,7 +176,7 @@ func (r *ApplicationIdentityReconciler) Reconcile(ctx context.Context, req ctrl.
 			logger.Error(err, "unable to create ServiceAccount")
 			_ = r.patchReadyStatusCondition(ctx, applicationIdentity, metav1.Condition{
 				Type:               string(applicationv1alpha1.ConditionReady),
-				Status:             "False",
+				Status:             metav1.ConditionFalse,
 				ObservedGeneration: applicationIdentity.Generation,
 				LastTransitionTime: metav1.Now(),
 				Reason:             "Failed to create ServiceAccount",
@@ -182,7 +190,7 @@ func (r *ApplicationIdentityReconciler) Reconcile(ctx context.Context, req ctrl.
 			logger.Error(err, "unable to update ServiceAccount")
 			_ = r.patchReadyStatusCondition(ctx, applicationIdentity, metav1.Condition{
 				Type:               string(applicationv1alpha1.ConditionReady),
-				Status:             "False",
+				Status:             metav1.ConditionFalse,
 				ObservedGeneration: applicationIdentity.Generation,
 				LastTransitionTime: metav1.Now(),
 				Reason:             "Failed to update ServiceAccount",
@@ -193,10 +201,10 @@ func (r *ApplicationIdentityReconciler) Reconcile(ctx context.Context, req ctrl.
 	}
 	err = r.patchReadyStatusCondition(ctx, applicationIdentity, metav1.Condition{
 		Type:               string(applicationv1alpha1.ConditionReady),
-		Status:             "True",
+		Status:             metav1.ConditionTrue,
 		ObservedGeneration: applicationIdentity.Generation,
 		LastTransitionTime: metav1.Now(),
-		Reason:             "Succeeded",
+		Reason:             conditionReasonSucceeded,
 		Message:            "",
 	})
 	return ctrl.Result{}, err
@@ -226,13 +234,13 @@ func (r *ApplicationIdentityReconciler) SetupWithManager(mgr ctrl.Manager) error
 
 func getReadyConditionFromStatus(status []conditions.Condition) conditions.Condition {
 	for _, condition := range status {
-		if condition.Type == "Ready" {
+		if condition.Type == conditions.ConditionTypeReady {
 			return condition
 		}
 	}
 	return conditions.Condition{
-		Type:    "Ready",
-		Status:  "False",
+		Type:    conditions.ConditionTypeReady,
+		Status:  metav1.ConditionFalse,
 		Reason:  "NoStatus",
 		Message: "No status available from the underlying resource",
 	}

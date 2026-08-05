@@ -59,8 +59,8 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
     name                 = "default"
     auto_scaling_enabled = true
     min_count            = 1
-    max_count            = 10
-    vm_size              = "Standard_D3_v2"
+    max_count            = 5
+    vm_size              = "Standard_D4s_v6"
     upgrade_settings { # Adding these to keep plans clean
       drain_timeout_in_minutes      = 0
       max_surge                     = "10%"
@@ -90,12 +90,13 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
   }
 
   automatic_upgrade_channel = "stable"
+
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "spot" {
   name                  = "spot"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.k6tests.id
-  vm_size               = "Standard_D3_v2"
+  vm_size               = "Standard_D4s_v6"
   auto_scaling_enabled  = true
   node_count            = 0
   min_count             = 0
@@ -124,7 +125,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot" {
 resource "azurerm_kubernetes_cluster_node_pool" "spot8c28g" {
   name                  = "spot8c28g"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.k6tests.id
-  vm_size               = "Standard_D4_v2"
+  vm_size               = "Standard_D8s_v6"
   auto_scaling_enabled  = true
   node_count            = 0
   min_count             = 0
@@ -140,12 +141,18 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot8c28g" {
     "kubernetes.azure.com/scalesetpriority=spot:NoSchedule", # Automatically added by Azure
   ]
   temporary_name_for_rotation = "tmpd8c28g"
+
+  lifecycle {
+    ignore_changes = [
+      node_count
+    ]
+  }
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "spot2c7g" {
   name                  = "spot2c7g"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.k6tests.id
-  vm_size               = "Standard_D2_v2"
+  vm_size               = "Standard_D2s_v6"
   auto_scaling_enabled  = true
   node_count            = 0
   min_count             = 0
@@ -161,12 +168,18 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot2c7g" {
     "kubernetes.azure.com/scalesetpriority=spot:NoSchedule", # Automatically added by Azure
   ]
   temporary_name_for_rotation = "tmpd2c7g"
+
+  lifecycle {
+    ignore_changes = [
+      node_count
+    ]
+  }
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "prometheus" {
   name                  = "prometheus"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.k6tests.id
-  vm_size               = "Standard_D3_v2"
+  vm_size               = "Standard_D8s_v6"
   auto_scaling_enabled  = false
   node_count            = 1
   node_labels = {

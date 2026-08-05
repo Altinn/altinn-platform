@@ -10,6 +10,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 )
@@ -24,17 +25,33 @@ type resolvedAdminIdentity struct {
 	ServiceAccountName string
 }
 
-type resolvedDatabaseAuth struct {
-	Admin resolvedAdminIdentity
-	User  resolvedIdentity
+type identitySourceResolver interface {
+	Get(context.Context, types.NamespacedName, client.Object, ...client.GetOption) error
+}
+
+func (r *DatabaseServerReconciler) resolveAdminIdentity(
+	ctx context.Context,
+	logger logr.Logger,
+	db *storagev1alpha1.DatabaseServer,
+) (resolvedAdminIdentity, bool, error) {
+	return resolveAdminIdentity(ctx, logger, r, db)
 }
 
 func (r *DatabaseReconciler) resolveAdminIdentity(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	db *storagev1alpha1.DatabaseServer,
 ) (resolvedAdminIdentity, bool, error) {
-	identity, requeue, err := r.resolveIdentitySource(ctx, logger, db, "admin", db.Spec.Auth.Admin.Identity)
+	return resolveAdminIdentity(ctx, logger, r, db)
+}
+
+func resolveAdminIdentity(
+	ctx context.Context,
+	logger logr.Logger,
+	r identitySourceResolver,
+	db *storagev1alpha1.DatabaseServer,
+) (resolvedAdminIdentity, bool, error) {
+	identity, requeue, err := resolveIdentitySource(ctx, logger, r, db, "admin", db.Spec.Auth.Admin.Identity)
 	if err != nil || requeue {
 		return resolvedAdminIdentity{}, requeue, err
 	}
@@ -53,18 +70,11 @@ func (r *DatabaseReconciler) resolveAdminIdentity(
 	}, false, nil
 }
 
-func (r *DatabaseReconciler) resolveUserIdentity(
+func resolveIdentitySource(
 	ctx context.Context,
 	logger logr.Logger,
-	db *storagev1alpha1.Database,
-) (resolvedIdentity, bool, error) {
-	return r.resolveIdentitySource(ctx, logger, db, "user", db.Spec.Auth.User.Identity)
-}
-
-func (r *DatabaseReconciler) resolveIdentitySource(
-	ctx context.Context,
-	logger logr.Logger,
-	db *storagev1alpha1.Database,
+	r identitySourceResolver,
+	db *storagev1alpha1.DatabaseServer,
 	role string,
 	source storagev1alpha1.IdentitySource,
 ) (resolvedIdentity, bool, error) {

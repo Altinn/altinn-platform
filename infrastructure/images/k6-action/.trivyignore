@@ -21,3 +21,103 @@ CVE-2025-61728
 
 # https://avd.aquasec.com/nvd/cve-2025-61730
 CVE-2025-61730
+
+# https://avd.aquasec.com/nvd/cve-2026-22184
+CVE-2026-22184
+
+# https://avd.aquasec.com/nvd/cve-2026-24051
+CVE-2026-24051
+
+# https://avd.aquasec.com/nvd/cve-2026-33186
+CVE-2026-33186
+
+# https://avd.aquasec.com/nvd/cve-2026-25679
+CVE-2026-25679
+
+# https://avd.aquasec.com/nvd/cve-2026-39883
+CVE-2026-39883
+
+# https://avd.aquasec.com/nvd/cve-2026-32280
+CVE-2026-32280
+
+# https://avd.aquasec.com/nvd/cve-2026-32281
+CVE-2026-32281
+
+# https://avd.aquasec.com/nvd/cve-2026-32283
+CVE-2026-32283
+
+# https://avd.aquasec.com/nvd/cve-2026-33810
+CVE-2026-33810
+
+# https://avd.aquasec.com/nvd/cve-2026-29181
+CVE-2026-29181
+
+# Go stdlib CVEs fixed in 1.26.3/1.25.10 - kubectl (v1.36.1 uses Go 1.26.2), jb (v0.6.0 uses Go 1.23.0),
+# and k6 (k6-image not yet rebuilt with Go 1.26.3) still embed vulnerable versions.
+# https://avd.aquasec.com/nvd/cve-2025-22871
+CVE-2025-22871
+# https://avd.aquasec.com/nvd/cve-2025-47906
+CVE-2025-47906
+# https://avd.aquasec.com/nvd/cve-2025-47912
+CVE-2025-47912
+# https://avd.aquasec.com/nvd/cve-2025-58185
+CVE-2025-58185
+# https://avd.aquasec.com/nvd/cve-2025-58186
+CVE-2025-58186
+# https://avd.aquasec.com/nvd/cve-2025-58187
+CVE-2025-58187
+# https://avd.aquasec.com/nvd/cve-2025-58188
+CVE-2025-58188
+# https://avd.aquasec.com/nvd/cve-2025-58189
+CVE-2025-58189
+# https://avd.aquasec.com/nvd/cve-2025-61723
+CVE-2025-61723
+# https://avd.aquasec.com/nvd/cve-2025-61724
+CVE-2025-61724
+# https://avd.aquasec.com/nvd/cve-2025-61725
+CVE-2025-61725
+# https://avd.aquasec.com/nvd/cve-2025-61727
+CVE-2025-61727
+# https://avd.aquasec.com/nvd/cve-2026-33811
+CVE-2026-33811
+# https://avd.aquasec.com/nvd/cve-2026-33814
+CVE-2026-33814
+# https://avd.aquasec.com/nvd/cve-2026-39820
+CVE-2026-39820
+# https://avd.aquasec.com/nvd/cve-2026-39823
+CVE-2026-39823
+# https://avd.aquasec.com/nvd/cve-2026-39825
+CVE-2026-39825
+# https://avd.aquasec.com/nvd/cve-2026-39826
+CVE-2026-39826
+# https://avd.aquasec.com/nvd/cve-2026-39836
+CVE-2026-39836
+# https://avd.aquasec.com/nvd/cve-2026-42499
+CVE-2026-42499
+
+# https://avd.aquasec.com/nvd/cve-2026-45447
+CVE-2026-45447
+
+# https://avd.aquasec.com/nvd/cve-2026-42504
+CVE-2026-42504
+
+# https://avd.aquasec.com/nvd/cve-2026-25680
+CVE-2026-25680
+
+# https://avd.aquasec.com/nvd/cve-2026-25681
+CVE-2026-25681
+
+# https://avd.aquasec.com/nvd/cve-2026-27136
+CVE-2026-27136
+
+# https://avd.aquasec.com/nvd/cve-2026-39821
+ CVE-2026-39821
+
+# https://avd.aquasec.com/nvd/cve-2026-42502
+ CVE-2026-42502
+
+# https://avd.aquasec.com/nvd/cve-2026-42506
+CVE-2026-42506
+
+# https://avd.aquasec.com/nvd/cve-2026-27145
+CVE-2026-27145

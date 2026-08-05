@@ -10,6 +10,57 @@ resource "azurerm_role_assignment" "reader_user_role" {
   principal_id         = "b95b1fc9-7f21-49c3-8932-07161cd9ac5a"
 }
 
+resource "kubernetes_service_account_v1" "k6" {
+  for_each = var.k8s_rbac
+  metadata {
+    name      = "k6"
+    namespace = each.value.namespace
+  }
+}
+
+resource "kubernetes_role_v1" "k6_tests_manager" {
+  for_each = var.k8s_rbac
+  metadata {
+    name      = "k6"
+    namespace = each.value.namespace
+  }
+  rule {
+    api_groups = ["k6.io"]
+    resources  = ["testruns"]
+    verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
+  }
+  rule {
+    api_groups = [""]
+    resources  = ["configmaps"]
+    verbs      = ["get", "list", "watch", "delete", "patch", "create"]
+  }
+  rule {
+    api_groups = [""]
+    resources  = ["pods"]
+    verbs      = ["get", "list", "watch"]
+  }
+
+}
+
+resource "kubernetes_role_binding_v1" "k6_tests_manager" {
+  for_each = var.k8s_rbac
+
+  metadata {
+    name      = "k6"
+    namespace = each.value.namespace
+  }
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "Role"
+    name      = "k6"
+  }
+  subject {
+    kind      = "ServiceAccount"
+    namespace = each.value.namespace
+    name      = "k6"
+  }
+}
+
 resource "kubernetes_cluster_role_v1" "dev_access" {
   metadata {
     name = "dev-access"
@@ -106,7 +157,28 @@ variable "k8s_rbac" {
       namespace = "authentication"
       dev_group = "5c42ac79-86e2-46d0-85d3-ae751dd5f057"
       sp_group  = "328cbe61-aeb1-4782-bb36-d288c69b4f15"
-    }
+    },
+    authorization = {
+      namespace = "authorization"
+      dev_group = "dcf337f1-f1ba-428e-b101-642d9d619c73"
+      sp_group  = "447482ce-de4b-4081-b611-e510252c3120"
+    },
+    "access-management-bff" = { # TODO: Create dedicated groups
+      namespace = "access-management-bff"
+      dev_group = "5c42ac79-86e2-46d0-85d3-ae751dd5f057"
+      sp_group  = "328cbe61-aeb1-4782-bb36-d288c69b4f15"
+    },
+    "access-management" = { # TODO: Create dedicated groups
+      namespace = "access-management"
+      dev_group = "5c42ac79-86e2-46d0-85d3-ae751dd5f057"
+      sp_group  = "328cbe61-aeb1-4782-bb36-d288c69b4f15"
+    },
+
+    register = {
+      namespace = "register"
+      dev_group = "cd36f41f-fc41-4f07-92f3-ce7f4db7caee"
+      sp_group  = "3f5467cf-ad70-430e-888e-83d2f6ed8ffe"
+    },
     platform = {
       namespace = "platform"
       dev_group = "975d2ed6-f3dc-48a3-b014-8d876cb96e25"
@@ -116,6 +188,21 @@ variable "k8s_rbac" {
       namespace = "portaler",
       dev_group = "01505bd1-7216-419d-ae24-bdad763d7e06"
       sp_group  = "3b2529e7-8fa6-48d8-a4ce-eb4683d79c0c"
+    }
+    broker = {
+      namespace = "broker",
+      dev_group = "d3ed431d-bd25-46dd-a539-48d716f47b1d"
+      sp_group  = "76b9c1c2-30e5-4338-88d6-63932a26251a"
+    }
+    shared = {
+      namespace = "shared",
+      dev_group = "975d2ed6-f3dc-48a3-b014-8d876cb96e25" # TODO: Create dedicated groups
+      sp_group  = "122986e4-eb3d-4d9e-ab7d-8aec6174f332"
+    }
+    "sanity-checks" = {
+      namespace = "sanity-checks",
+      dev_group = "975d2ed6-f3dc-48a3-b014-8d876cb96e25" # TODO: Create dedicated groups
+      sp_group  = "122986e4-eb3d-4d9e-ab7d-8aec6174f332"
     }
   }
 }

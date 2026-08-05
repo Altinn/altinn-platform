@@ -45,7 +45,7 @@ runs:
 
     - name: Generate Terraform Summary
       id: action_summary
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
       if: always()
       env:
         VALIDATE_OUTPUT: ${{ env.VALIDATE_STEP_OUTPUT }}
@@ -107,7 +107,7 @@ runs:
 
     - name: GitHub Issue
       id: issue_number
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
       with:
         result-encoding: string
         script: |
@@ -132,7 +132,7 @@ runs:
 
     - name: Terraform Summary PR
       id: pr_summary
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
       if: steps.issue_number.outputs.result != 'null' && env.PLAN_STEP_EXITCODE == 2
       env:
         VALIDATE_OUTPUT: ${{ env.VALIDATE_STEP_OUTPUT }}

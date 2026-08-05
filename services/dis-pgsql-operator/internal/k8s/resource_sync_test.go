@@ -2,6 +2,12 @@ package k8s
 
 import "testing"
 
+const (
+	sameValue         = "same"
+	databaseNameLabel = "dis.altinn.cloud/database-name"
+	myDBValue         = "my-db"
+)
+
 type testSpec struct {
 	Name  string
 	Count int
@@ -13,13 +19,13 @@ func TestSyncSpecAndLabels(t *testing.T) {
 	t.Run("returns false when spec and labels already match", func(t *testing.T) {
 		t.Parallel()
 
-		existingSpec := testSpec{Name: "same", Count: 1}
-		desiredSpec := testSpec{Name: "same", Count: 1}
+		existingSpec := testSpec{Name: sameValue, Count: 1}
+		desiredSpec := testSpec{Name: sameValue, Count: 1}
 		existingLabels := map[string]string{
-			"dis.altinn.cloud/database-name": "my-db",
+			databaseNameLabel: myDBValue,
 		}
 		desiredLabels := map[string]string{
-			"dis.altinn.cloud/database-name": "my-db",
+			databaseNameLabel: myDBValue,
 		}
 
 		labels, updated := SyncSpecAndLabels(&existingSpec, desiredSpec, existingLabels, desiredLabels)
@@ -30,8 +36,8 @@ func TestSyncSpecAndLabels(t *testing.T) {
 		if existingSpec != desiredSpec {
 			t.Fatalf("spec mismatch: got %#v, want %#v", existingSpec, desiredSpec)
 		}
-		if labels["dis.altinn.cloud/database-name"] != "my-db" {
-			t.Fatalf("label mismatch: got %q, want %q", labels["dis.altinn.cloud/database-name"], "my-db")
+		if labels[databaseNameLabel] != myDBValue {
+			t.Fatalf("label mismatch: got %q, want %q", labels[databaseNameLabel], myDBValue)
 		}
 	})
 
@@ -57,10 +63,10 @@ func TestSyncSpecAndLabels(t *testing.T) {
 	t.Run("returns true when desired label is missing", func(t *testing.T) {
 		t.Parallel()
 
-		existingSpec := testSpec{Name: "same", Count: 1}
-		desiredSpec := testSpec{Name: "same", Count: 1}
+		existingSpec := testSpec{Name: sameValue, Count: 1}
+		desiredSpec := testSpec{Name: sameValue, Count: 1}
 		desiredLabels := map[string]string{
-			"dis.altinn.cloud/database-name": "my-db",
+			databaseNameLabel: myDBValue,
 		}
 
 		labels, updated := SyncSpecAndLabels(&existingSpec, desiredSpec, nil, desiredLabels)
@@ -68,22 +74,22 @@ func TestSyncSpecAndLabels(t *testing.T) {
 		if !updated {
 			t.Fatalf("expected updated=true, got false")
 		}
-		if labels["dis.altinn.cloud/database-name"] != "my-db" {
-			t.Fatalf("label mismatch: got %q, want %q", labels["dis.altinn.cloud/database-name"], "my-db")
+		if labels[databaseNameLabel] != myDBValue {
+			t.Fatalf("label mismatch: got %q, want %q", labels[databaseNameLabel], myDBValue)
 		}
 	})
 
 	t.Run("keeps extra existing labels and returns false when desired set already satisfied", func(t *testing.T) {
 		t.Parallel()
 
-		existingSpec := testSpec{Name: "same", Count: 1}
-		desiredSpec := testSpec{Name: "same", Count: 1}
+		existingSpec := testSpec{Name: sameValue, Count: 1}
+		desiredSpec := testSpec{Name: sameValue, Count: 1}
 		existingLabels := map[string]string{
-			"dis.altinn.cloud/database-name": "my-db",
-			"custom":                         "keep-me",
+			databaseNameLabel: myDBValue,
+			"custom":          "keep-me",
 		}
 		desiredLabels := map[string]string{
-			"dis.altinn.cloud/database-name": "my-db",
+			databaseNameLabel: myDBValue,
 		}
 
 		labels, updated := SyncSpecAndLabels(&existingSpec, desiredSpec, existingLabels, desiredLabels)
@@ -99,8 +105,8 @@ func TestSyncSpecAndLabels(t *testing.T) {
 	t.Run("initializes nil labels without forcing update when no desired labels", func(t *testing.T) {
 		t.Parallel()
 
-		existingSpec := testSpec{Name: "same", Count: 1}
-		desiredSpec := testSpec{Name: "same", Count: 1}
+		existingSpec := testSpec{Name: sameValue, Count: 1}
+		desiredSpec := testSpec{Name: sameValue, Count: 1}
 
 		labels, updated := SyncSpecAndLabels(&existingSpec, desiredSpec, nil, map[string]string{})
 

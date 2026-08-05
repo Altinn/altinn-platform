@@ -240,11 +240,32 @@ variable "aks_workpool_vnet_name" {
 }
 
 variable "dis_db_vnet_name" {
-  type = string
+  type        = string
   description = "The name of the VNet where the DIS PostgreSQL instance is deployed"
 }
 
 variable "dis_resource_group_name" {
   type        = string
   description = "Name of the resource group for DIS resources"
+}
+
+variable "aks_vnet_ipv4_cidr" {
+  type        = string
+  description = "IPv4 CIDR of the AKS VNet"
+}
+
+variable "aks_vnet_ipv6_cidr" {
+  type        = string
+  description = "IPv6 CIDR of the AKS VNet"
+}
+
+variable "dis_identity_target_tenant_id" {
+  type        = string
+  description = "Tenant ID where dis-identity ApplicationIdentity will be created"
+  sensitive   = true
+  default     = ""
+  validation {
+    condition     = var.enable_dis_identity_operator == false || (var.enable_dis_identity_operator == true && length(var.dis_identity_target_tenant_id) > 0)
+    error_message = "You must provide a value for dis_identity_target_tenant_id when enable_dis_identity_operator is true."
+  }
 }

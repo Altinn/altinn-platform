@@ -31,6 +31,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -43,6 +44,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	"github.com/Altinn/altinn-platform/services/dis-common/platformtags"
 	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
@@ -69,6 +71,8 @@ func init() {
 
 	utilruntime.Must(dbforpostgresqlv1.AddToScheme(scheme))
 
+	utilruntime.Must(authorizationv1.AddToScheme(scheme))
+
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -92,6 +96,8 @@ func main() {
 	var aksResourceGroup string
 	var tenantID string
 	var userProvisionImage string
+	var clusterID string
+	var rawBaseTags string
 	var provisionUser bool
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -154,6 +160,20 @@ func main() {
 		os.Getenv("DISPG_USER_PROVISION_IMAGE"),
 		"Image used for user provisioning Jobs (required)",
 	)
+	flag.StringVar(
+		&clusterID,
+		"cluster-id",
+		os.Getenv("DISPG_CLUSTER_ID"),
+		"Stable, human-readable cluster identifier (e.g. 'admin-test'); appended to new "+
+			"Flexible Server AzureNames to keep them globally unique across clusters and "+
+			"derivable by out-of-cluster consumers (required)",
+	)
+	flag.StringVar(
+		&rawBaseTags,
+		"base-tags",
+		os.Getenv("DISPG_BASE_TAGS"),
+		"JSON object of platform base tags applied to every Azure resource this operator creates (optional)",
+	)
 
 	opts := zap.Options{
 		Development: true,
@@ -206,7 +226,7 @@ func main() {
 
 	// Metrics endpoint is enabled in 'config/default/kustomization.yaml'. The Metrics options configure the server.
 	// More info:
-	// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.22.4/pkg/metrics/server
+	// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.23.1/pkg/metrics/server
 	// - https://book.kubebuilder.io/reference/metrics.html
 	metricsServerOptions := metricsserver.Options{
 		BindAddress:   metricsAddr,
@@ -218,7 +238,7 @@ func main() {
 		// FilterProvider is used to protect the metrics endpoint with authn/authz.
 		// These configurations ensure that only authorized users and service accounts
 		// can access the metrics endpoint. The RBAC are configured in 'config/rbac/kustomization.yaml'. More info:
-		// https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.22.4/pkg/metrics/filters#WithAuthenticationAndAuthorization
+		// https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.23.1/pkg/metrics/filters#WithAuthenticationAndAuthorization
 		metricsServerOptions.FilterProvider = filters.WithAuthenticationAndAuthorization
 	}
 
@@ -291,12 +311,19 @@ func main() {
 		tenantID,
 		aksResourceGroup,
 		userProvisionImage,
+		clusterID,
 		useFakes,
 	)
 	if err != nil {
 		setupLog.Error(err, "invalid operator configuration")
 		os.Exit(1)
 	}
+
+	baseTags, err := platformtags.ParseBase(rawBaseTags)
+	if err != nil {
+		setupLog.Error(err, "ignoring invalid base-tags value; Azure resources will not receive platform tags")
+	}
+	opCfg.BaseTags = baseTags
 
 	// Startup context just for fetching the subnet catalog
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -312,11 +339,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&controller.DatabaseReconciler{
+	if err := (&controller.DatabaseServerReconciler{
 		Client:        mgr.GetClient(),
 		Scheme:        mgr.GetScheme(),
 		SubnetCatalog: subnetCatalog,
 		Config:        *opCfg,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "DatabaseServer")
+		os.Exit(1)
+	}
+	if err := (&controller.DatabaseReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+		Config: *opCfg,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Database")
 		os.Exit(1)

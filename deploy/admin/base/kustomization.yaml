@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - dis-console-db-admin.yaml
+  - dis-console.yaml
+  - dis-console-databaseserver.yaml
+  - dis-console-database.yaml
+  - dis-console-deployment.yaml
+  - dis-console-agent.yaml
+  - dis-console-agent-database.yaml
+  - dis-console-agent-rbac.yaml
+  - dis-console-agent-deployment.yaml
+  - dis-console-ui-deployment.yaml

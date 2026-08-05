@@ -15,7 +15,7 @@ const (
 
 type Profile struct {
 	SkuName  string
-	SkuTier  dbforpostgresqlv1.Sku_Tier
+	SkuTier  dbforpostgresqlv1.SkuTier
 	MemoryGB int
 	// TODO: Storage will come later in the beta version.
 }
@@ -26,13 +26,13 @@ type Profile struct {
 // https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/concepts-limits
 var devProfile = Profile{
 	SkuName:  "Standard_B1ms",
-	SkuTier:  dbforpostgresqlv1.Sku_Tier_Burstable,
+	SkuTier:  dbforpostgresqlv1.SkuTier_Burstable,
 	MemoryGB: 2,
 }
 
 var prodProfile = Profile{
 	SkuName:  "Standard_D4s_v3",
-	SkuTier:  dbforpostgresqlv1.Sku_Tier_GeneralPurpose,
+	SkuTier:  dbforpostgresqlv1.SkuTier_GeneralPurpose,
 	MemoryGB: 16,
 }
 
@@ -41,6 +41,12 @@ func GetProfile(serverType string) Profile {
 		return prodProfile
 	}
 	return devProfile
+}
+
+// SupportsPgBouncer reports whether the profile's compute tier can run the
+// built-in PgBouncer. Azure rejects PgBouncer on the Burstable tier.
+func (p Profile) SupportsPgBouncer() bool {
+	return p.SkuTier != dbforpostgresqlv1.SkuTier_Burstable
 }
 
 func ResolveBackupRetentionDays(serverType string, requested *int) int {

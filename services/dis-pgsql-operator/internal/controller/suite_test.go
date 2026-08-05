@@ -9,11 +9,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -28,6 +30,7 @@ import (
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/network"
+	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	networkv1 "github.com/Azure/azure-service-operator/v2/api/network/v1api20240601"
 )
@@ -60,11 +63,15 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	err = identityv1alpha1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
+	err = corev1.AddToScheme(scheme)
+	Expect(err).NotTo(HaveOccurred())
 	err = batchv1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = networkv1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = dbforpostgresqlv1.AddToScheme(scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = authorizationv1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:scheme
@@ -114,13 +121,20 @@ var _ = BeforeSuite(func() {
 		SubscriptionId:     "my-subscription-id",
 		TenantId:           "my-tenant-id",
 		AKSResourceGroup:   "aks-vnet-rg",
+		ClusterId:          "envtest",
 		UserProvisionImage: "controller:latest",
 	}
-	err = (&DatabaseReconciler{
+	err = (&DatabaseServerReconciler{
 		Client:        k8sManager.GetClient(),
 		Scheme:        k8sManager.GetScheme(),
 		SubnetCatalog: testCatalog,
 		Config:        config,
+	}).SetupWithManager(k8sManager)
+	Expect(err).NotTo(HaveOccurred())
+	err = (&DatabaseReconciler{
+		Client: k8sManager.GetClient(),
+		Scheme: k8sManager.GetScheme(),
+		Config: config,
 	}).SetupWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -141,8 +155,9 @@ var _ = AfterSuite(func() {
 	if cancel != nil {
 		cancel()
 	}
-	err := testEnv.Stop()
-	Expect(err).NotTo(HaveOccurred())
+	Eventually(func() error {
+		return testEnv.Stop()
+	}, time.Minute, time.Second).Should(Succeed())
 })
 
 // getFirstFoundEnvTestBinaryDir locates the first binary in the specified path.
@@ -175,7 +190,7 @@ func disIdentityCRDPath() string {
 
 func buildTestSubnets(count int) []network.SubnetInfo {
 	out := make([]network.SubnetInfo, 0, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		thirdOctet := (i / 16) + 1
 		fourthOctet := (i % 16) * 16
 		out = append(out, network.SubnetInfo{

@@ -5,10 +5,12 @@ import (
 
 	managedidentity "github.com/Azure/azure-service-operator/v2/api/managedidentity/v1api20230131"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/Altinn/altinn-platform/services/dis-common/platformtags"
 	applicationv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-identity-operator/internal/utils"
 )
@@ -42,7 +44,8 @@ func (r *ApplicationIdentityReconciler) removeUserAssignedIdentity(ctx context.C
 func (r *ApplicationIdentityReconciler) createNewUserAssignedIdentity(ctx context.Context, applicationIdentity *applicationv1alpha1.ApplicationIdentity) error {
 	logger := logf.FromContext(ctx)
 	// Create a new UserAssignedIdentity object
-	uaID := applicationIdentity.GenerateUserAssignedIdentity(r.Config.TargetResourceGroup)
+	platformTags := platformtags.ForNamespace(r.BaseTags, applicationIdentity.Namespace)
+	uaID := applicationIdentity.GenerateUserAssignedIdentity(r.Config.TargetResourceGroup, platformTags)
 	err := controllerutil.SetControllerReference(applicationIdentity, uaID, r.Scheme)
 	if err != nil {
 		logger.Error(err, "unable to set controller reference for UserAssignedIdentity")
@@ -59,10 +62,11 @@ func (r *ApplicationIdentityReconciler) createNewUserAssignedIdentity(ctx contex
 func (r *ApplicationIdentityReconciler) updateUserAssignedIdentityStatus(ctx context.Context, applicationIdentity *applicationv1alpha1.ApplicationIdentity, uaID *managedidentity.UserAssignedIdentity) (bool, error) {
 	logger := logf.FromContext(ctx)
 	// Update the status of the ApplicationIdentity from the UserAssignedIdentity status
-	if applicationIdentity.OutdatedUserAssignedIdentity(uaID) {
+	platformTags := platformtags.ForNamespace(r.BaseTags, applicationIdentity.Namespace)
+	if applicationIdentity.OutdatedUserAssignedIdentity(uaID, platformTags) {
 		origUaID := uaID.DeepCopy()
 		uaIDPatch := client.MergeFrom(origUaID)
-		uaID.Spec.Tags = applicationIdentity.GetUserAssignedIdentityTags()
+		uaID.Spec.Tags = applicationIdentity.GetUserAssignedIdentityTags(platformTags)
 		if err := r.Patch(ctx, uaID, uaIDPatch); err != nil {
 			logger.Error(err, "unable to update UserAssignedIdentity")
 			return false, err
@@ -73,10 +77,13 @@ func (r *ApplicationIdentityReconciler) updateUserAssignedIdentityStatus(ctx con
 	ready := false
 	orig := applicationIdentity.DeepCopy()
 	patch := client.MergeFrom(orig)
-	if readyCondition.Status == "True" {
+	if readyCondition.Status == metav1.ConditionTrue {
 		applicationIdentity.Status.PrincipalID = uaID.Status.PrincipalId
 		applicationIdentity.Status.ClientID = uaID.Status.ClientId
 		applicationIdentity.Status.ManagedIdentityName = utils.ToPointer(uaID.Spec.AzureName)
+		if uaID.Status.Id != nil {
+			applicationIdentity.Status.ResourceID = uaID.Status.Id
+		}
 		ready = true
 	}
 	applicationIdentity.ReplaceCondition(applicationv1alpha1.ConditionUserAssignedIdentityType, getMetav1ConditionFromAzureCondition(applicationv1alpha1.ConditionUserAssignedIdentityType, readyCondition, applicationIdentity.Generation))

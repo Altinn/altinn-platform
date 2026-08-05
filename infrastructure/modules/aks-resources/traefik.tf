@@ -11,6 +11,8 @@ resource "azapi_resource" "traefik" {
           path  = "./"
           postBuild = {
             substitute = {
+              AKS_VNET_IPV4_CIDR : "${var.aks_vnet_ipv4_cidr}"
+              AKS_VNET_IPV6_CIDR : "${var.aks_vnet_ipv6_cidr}"
               AKS_SYSP00L_IP_PREFIX_0 : "${var.subnet_address_prefixes.aks_syspool[0]}"
               AKS_SYSP00L_IP_PREFIX_1 : "${var.subnet_address_prefixes.aks_syspool[1]}"
               AKS_WORKPOOL_IP_PREFIX_0 : "${var.subnet_address_prefixes.aks_workpool[0]}"

@@ -1,0 +1,8 @@
+# More info: https://docs.docker.com/engine/reference/builder/#dockerignore-file
+# Ignore build and test binaries.
+bin/
+.cache/
+# Kubeconfigs may carry cluster credentials — keep them out of the build context.
+*.kubeconfig
+**/*.kubeconfig
+kubeconfig

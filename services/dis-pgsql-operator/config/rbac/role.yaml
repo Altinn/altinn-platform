@@ -5,6 +5,18 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - application.dis.altinn.cloud
   resources:
   - applicationidentities
@@ -12,6 +24,26 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - authorization.azure.com
+  resources:
+  - roleassignments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - authorization.azure.com
+  resources:
+  - roleassignments/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - batch
   resources:
@@ -30,14 +62,13 @@ rules:
   - jobs/status
   verbs:
   - get
-  - patch
-  - update
 - apiGroups:
   - dbforpostgresql.azure.com
   resources:
   - flexibleservers
   - flexibleserversadministrators
   - flexibleserversconfigurations
+  - flexibleserversdatabases
   verbs:
   - create
   - delete
@@ -56,6 +87,12 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - dbforpostgresql.azure.com
+  resources:
+  - flexibleserversdatabases/status
+  verbs:
+  - get
 - apiGroups:
   - network.azure.com
   resources:
@@ -83,6 +120,23 @@ rules:
   resources:
   - databases
   verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - storage.dis.altinn.cloud
+  resources:
+  - databases/status
+  - databaseservers/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - storage.dis.altinn.cloud
+  resources:
+  - databaseservers
+  verbs:
   - create
   - delete
   - get
@@ -90,11 +144,3 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - storage.dis.altinn.cloud
-  resources:
-  - databases/status
-  verbs:
-  - get
-  - patch
-  - update

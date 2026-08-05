@@ -21,6 +21,12 @@ body:
 
         Do not grant access before the approver has confirmed in a comment on this issue.
 
+  - type: textarea
+    id: setup_guide
+    attributes:
+      label: Setup guide
+      value: See the [VPN Altinn Cloud User Guide](https://digdir.atlassian.net/wiki/x/aoDN7w) for setup instructions.
+
   - type: input
     id: full_name
     attributes:

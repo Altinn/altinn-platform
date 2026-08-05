@@ -1,184 +1,164 @@
 package v1alpha1
 
-import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
+import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+// DatabaseDeletionPolicy controls what happens to the PostgreSQL
+// database when the Database resource is deleted.
+// +kubebuilder:validation:Enum=Retain
+type DatabaseDeletionPolicy string
+
+const (
+	DatabaseDeletionPolicyRetain DatabaseDeletionPolicy = "Retain"
 )
 
-// DatabaseAuth contains the identities that should get access to the database.
-type DatabaseAuth struct {
-	// admin defines the identity used for admin access.
-	Admin AdminIdentitySpec `json:"admin"`
-
-	// user defines the identity used for normal user access.
-	User UserIdentitySpec `json:"user"`
-}
-
-// +kubebuilder:validation:XValidation:rule="has(self.identity.identityRef) || has(self.serviceAccountName)",message="serviceAccountName is required when identity.identityRef is not set."
-// AdminIdentitySpec contains admin identity configuration and the workload identity ServiceAccount.
-type AdminIdentitySpec struct {
-	// identity defines the Entra identity source (direct values or ApplicationIdentity reference).
-	Identity IdentitySource `json:"identity"`
-
-	// serviceAccountName is the ServiceAccount name used for workload identity
-	// when provisioning normal DB users for this database.
-	// Optional when identityRef is set; defaults to identityRef.name.
-	// +optional
+// DatabaseServerReference identifies the DatabaseServer that hosts this
+// database.
+type DatabaseServerReference struct {
+	// name is the same-namespace DatabaseServer resource to use as the server.
 	// +kubebuilder:validation:MinLength=1
-	ServiceAccountName string `json:"serviceAccountName,omitempty"`
+	Name string `json:"name"`
 }
 
-// UserIdentitySpec contains identity configuration for normal user access.
-type UserIdentitySpec struct {
-	// identity defines the Entra identity source (direct values or ApplicationIdentity reference).
-	Identity IdentitySource `json:"identity"`
+// +kubebuilder:validation:Enum=Reader;Writer;Owner
+// DatabaseAccessRole is the database role granted to an access principal.
+type DatabaseAccessRole string
+
+const (
+	// DatabaseAccessRoleReader grants read-only database access.
+	DatabaseAccessRoleReader DatabaseAccessRole = "Reader"
+
+	// DatabaseAccessRoleWriter grants read/write DML access without DDL.
+	DatabaseAccessRoleWriter DatabaseAccessRole = "Writer"
+
+	// DatabaseAccessRoleOwner grants read/write access plus schema ownership for DDL.
+	DatabaseAccessRoleOwner DatabaseAccessRole = "Owner"
+)
+
+// DatabaseGroupPrincipalSpec contains an existing Entra group that should get
+// access to the database.
+type DatabaseGroupPrincipalSpec struct {
+	// name is the Entra group display name used as the PostgreSQL principal name.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// principalId is the Entra group object ID.
+	// +kubebuilder:validation:MinLength=1
+	PrincipalId string `json:"principalId"`
 }
 
-// +kubebuilder:validation:XValidation:rule="(has(self.identityRef) && !has(self.name) && !has(self.principalId)) || (!has(self.identityRef) && has(self.name) && has(self.principalId))",message="Provide either identityRef or both name and principalId."
-// IdentitySource specifies either a reference to an ApplicationIdentity or direct identity values.
-type IdentitySource struct {
+// DatabaseServicePrincipalSpec identifies an existing Entra service principal
+// (e.g. a user-assigned managed identity) that should get access to the database.
+// Use this to grant access directly by object id, for example for workloads that
+// run outside this cluster and cannot be referenced via identityRef.
+type DatabaseServicePrincipalSpec struct {
+	// name is used as the PostgreSQL principal (login role) name. The workload
+	// connects with this as the username. Convention: the managed identity name.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// principalId is the Entra object ID of the service principal.
+	// +kubebuilder:validation:MinLength=1
+	PrincipalId string `json:"principalId"`
+}
+
+// +kubebuilder:validation:XValidation:rule="(has(self.identityRef) ? 1 : 0) + (has(self.group) ? 1 : 0) + (has(self.servicePrincipal) ? 1 : 0) == 1",message="Provide exactly one principal source: identityRef, group, or servicePrincipal."
+// DatabaseAccessPrincipalSpec describes one principal and the role it should get.
+type DatabaseAccessPrincipalSpec struct {
+	// role is the managed database access role granted to the principal.
+	Role DatabaseAccessRole `json:"role"`
+
 	// identityRef points to an ApplicationIdentity in the same namespace.
+	// The operator resolves the managed identity name and principalId from status.
 	// +optional
 	IdentityRef *ApplicationIdentityRef `json:"identityRef,omitempty"`
 
-	// name is the Entra principal name (managed identity name).
+	// group identifies an existing Entra group.
 	// +optional
-	// +kubebuilder:validation:MinLength=1
-	Name string `json:"name,omitempty"`
+	Group *DatabaseGroupPrincipalSpec `json:"group,omitempty"`
 
-	// principalId is the Entra principal object ID (GUID).
+	// servicePrincipal identifies an existing Entra service principal by object id.
 	// +optional
-	// +kubebuilder:validation:MinLength=1
-	PrincipalId string `json:"principalId,omitempty"`
+	ServicePrincipal *DatabaseServicePrincipalSpec `json:"servicePrincipal,omitempty"`
 }
 
-// ApplicationIdentityRef references an ApplicationIdentity in the same namespace.
-type ApplicationIdentityRef struct {
-	// name is the ApplicationIdentity name in the same namespace.
-	// +kubebuilder:validation:MinLength=1
-	Name string `json:"name"`
-}
-
-// +kubebuilder:validation:Enum=hstore;pg_cron;pg_stat_statements;pgaudit;uuid-ossp
-// DatabaseExtension is a curated PostgreSQL extension allowed by this operator.
-type DatabaseExtension string
-
-const (
-	DatabaseExtensionHstore           DatabaseExtension = "hstore"
-	DatabaseExtensionPgCron           DatabaseExtension = "pg_cron"
-	DatabaseExtensionPgStatStatements DatabaseExtension = "pg_stat_statements"
-	DatabaseExtensionPgAudit          DatabaseExtension = "pgaudit"
-	DatabaseExtensionUUIDOSSP         DatabaseExtension = "uuid-ossp"
-)
-
-// +kubebuilder:validation:XValidation:rule="self.name != 'azure.extensions' && self.name != 'shared_preload_libraries' && self.name != 'pgbouncer.enabled' && self.name != 'pgbouncer.max_prepared_statements' && self.name != 'pgbouncer.pool_mode' && self.name != 'max_connections'",message="azure.extensions/shared_preload_libraries are managed via enableExtensions, and pgbouncer/max_connections are managed by the operator."
-// DatabaseServerParameter is a PostgreSQL server parameter with a scalar value.
-type DatabaseServerParameter struct {
-	// name is the PostgreSQL server parameter name.
-	// +kubebuilder:validation:MinLength=1
-	Name string `json:"name"`
-
-	// value is the desired parameter value.
-	Value intstr.IntOrString `json:"value"`
+// DatabaseAccessSpec describes role-based access requirements for the database.
+type DatabaseAccessSpec struct {
+	// principals is the list of Entra principals that should get database access.
+	// +listType=atomic
+	// +kubebuilder:validation:MinItems=1
+	Principals []DatabaseAccessPrincipalSpec `json:"principals"`
 }
 
 // DatabaseSpec defines the desired state of Database.
+//
+// The PostgreSQL database name is spec.name.
 type DatabaseSpec struct {
-	// version is the major version of PostgreSQL to run (e.g. 17).
-	// +kubebuilder:validation:Minimum=9
-	Version int `json:"version"`
-
-	// serverType selects the size/profile of the database server (e.g. "dev", "prod").
+	// name is the PostgreSQL database name to create inside the selected server.
+	// It must be unique per server.
 	// +kubebuilder:validation:MinLength=1
-	ServerType string `json:"serverType"`
-
-	// auth defines which AppIdentities should have access to this database.
-	Auth DatabaseAuth `json:"auth"`
-
-	// enableExtensions is the curated list of PostgreSQL extensions that should be enabled.
-	// Some extensions require shared_preload_libraries and are configured automatically.
-	// +optional
-	// +listType=set
-	EnableExtensions []DatabaseExtension `json:"enableExtensions,omitempty"`
-
-	// serverParams configures allowed PostgreSQL server parameters.
-	// azure.extensions and shared_preload_libraries are managed via enableExtensions.
-	// pgbouncer settings and max_connections are managed by the operator.
-	// +optional
-	// +listType=map
-	// +listMapKey=name
-	ServerParams []DatabaseServerParameter `json:"serverParams,omitempty"`
-
-	// +optional
-	Storage *DatabaseStorageSpec `json:"storage,omitempty"`
-
-	// highAvailabilityEnabled controls whether PostgreSQL high availability is enabled.
-	// If omitted, it defaults to true for prod/production server types and false otherwise.
-	// +optional
-	HighAvailabilityEnabled *bool `json:"highAvailabilityEnabled,omitempty"`
-
-	// backupRetentionDays controls backup retention for the server.
-	// If omitted, it defaults to 14 for non-prod server types and 30 for prod/production.
-	// +optional
-	// +kubebuilder:validation:Minimum=7
-	// +kubebuilder:validation:Maximum=35
-	BackupRetentionDays *int `json:"backupRetentionDays,omitempty"`
-}
-
-type DatabaseStorageSpec struct {
-	// sizeGB is the initial storage size in GB.
-	// If omitted, the operator will default it.
-	// +optional
-	SizeGB *int32 `json:"sizeGB,omitempty"`
-
-	// tier is the storage performance tier (e.g. P10).
-	// If omitted, the operator will default it.
-	// +optional
-	Tier *string `json:"tier,omitempty"`
-}
-
-// DatabaseServerParameterError captures a failed server parameter reconciliation.
-type DatabaseServerParameterError struct {
-	// name is the PostgreSQL server parameter name that failed.
-	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
 	Name string `json:"name"`
 
-	// reason is the ASO/Azure reason for the failure, when available.
-	// +optional
-	Reason string `json:"reason,omitempty"`
+	// server identifies the same-namespace DatabaseServer.
+	Server DatabaseServerReference `json:"server"`
 
-	// message is a human-readable error from ASO/Azure.
+	// access defines the principals that should get access to this database.
+	Access DatabaseAccessSpec `json:"access"`
+
+	// deletionPolicy controls database cleanup when this resource is deleted.
+	// Only Retain is supported in this API slice.
 	// +optional
-	Message string `json:"message,omitempty"`
+	// +kubebuilder:default=Retain
+	DeletionPolicy DatabaseDeletionPolicy `json:"deletionPolicy,omitempty"`
+}
+
+// DatabaseValidationError captures a validation failure observed by the
+// controller.
+type DatabaseValidationError struct {
+	// field is the JSON path of the invalid field.
+	// +kubebuilder:validation:MinLength=1
+	Field string `json:"field"`
+
+	// reason is a machine-readable reason for the validation failure.
+	// +kubebuilder:validation:MinLength=1
+	Reason string `json:"reason"`
+
+	// message is a human-readable description of the validation failure.
+	// +kubebuilder:validation:MinLength=1
+	Message string `json:"message"`
 }
 
 // DatabaseStatus defines the observed state of Database.
 type DatabaseStatus struct {
-	// subnetCIDR is the /28 network block allocated for this database's subnet.
-	// It is set by the controller once allocation succeeds.
+	// databaseName is the PostgreSQL database name managed by the operator.
 	// +optional
-	SubnetCIDR string `json:"subnetCIDR,omitempty"`
+	DatabaseName string `json:"databaseName,omitempty"`
 
-	// conditions represent the current state of the Database resource.
-	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
-	//
-	// Standard condition types might include:
-	// - "Ready": the database and its networking are fully provisioned
-	// - "Provisioning": resources are being created
-	// - "Error": the controller failed to reconcile the resource
-	//
-	// The status of each condition is one of True, False, or Unknown.
+	// host is the PostgreSQL server host for this database.
+	// It is populated in a later reconciliation slice.
+	// +optional
+	Host string `json:"host,omitempty"`
+
+	// port is the PostgreSQL server port for this database.
+	// It is populated in a later reconciliation slice.
+	// +optional
+	Port int32 `json:"port,omitempty"`
+
+	// observedGeneration is the most recent generation observed by the controller.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// conditions represent the current validation/provisioning state.
 	// +listType=map
 	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
-	// serverParameterErrors contains per-parameter reconciliation failures reported
-	// from owned FlexibleServersConfiguration resources.
+	// validationErrors contains field-level validation failures.
 	// +listType=map
-	// +listMapKey=name
+	// +listMapKey=field
 	// +optional
-	ServerParameterErrors []DatabaseServerParameterError `json:"serverParameterErrors,omitempty"`
+	ValidationErrors []DatabaseValidationError `json:"validationErrors,omitempty"`
 }
 
 // +kubebuilder:object:root=true

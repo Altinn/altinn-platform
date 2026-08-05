@@ -1,5 +1,54 @@
 # Changelog
 
+## [0.9.6](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.9.5...tf-azdev-agent-0.9.6) (2026-06-05)
+
+
+### Bug Fixes
+
+* Add CVE-2026-42504 to trivyignore ([#3651](https://github.com/Altinn/altinn-platform/issues/3651)) ([e095eaa](https://github.com/Altinn/altinn-platform/commit/e095eaa67ba630897e9b488a933c8ebb82b36732))
+
+## [0.9.5](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.9.4...tf-azdev-agent-0.9.5) (2026-06-05)
+
+
+### Bug Fixes
+
+* **tf-azdev-agent:** suppress Go stdlib CVE-2026-39823/39825/39826 in trivyignore ([#3625](https://github.com/Altinn/altinn-platform/issues/3625)) ([1ca65cb](https://github.com/Altinn/altinn-platform/commit/1ca65cb05324c1499045bf9ad3d1795eb384f0f1))
+
+## [0.9.4](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.9.3...tf-azdev-agent-0.9.4) (2026-05-26)
+
+
+### Dependency Updates
+
+* update dependency helm to v4 ([#3532](https://github.com/Altinn/altinn-platform/issues/3532)) ([2dbdbf5](https://github.com/Altinn/altinn-platform/commit/2dbdbf50a810f32f36876f316149ee568b98f138))
+
+## [0.9.3](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.9.2...tf-azdev-agent-0.9.3) (2026-05-26)
+
+
+### Dependency Updates
+
+* update dependency helm to v3.21.0 ([#3524](https://github.com/Altinn/altinn-platform/issues/3524)) ([3867152](https://github.com/Altinn/altinn-platform/commit/3867152ac0f7669f4fa0ceb6c8829d334d8d9c2b))
+
+## [0.9.2](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.9.1...tf-azdev-agent-0.9.2) (2026-05-22)
+
+
+### Dependency Updates
+
+* update dependency kubectl to v1.36.1 ([#3520](https://github.com/Altinn/altinn-platform/issues/3520)) ([83da30c](https://github.com/Altinn/altinn-platform/commit/83da30ce313ebd1f26f2c5b4e7e3ff2a9770d9b0))
+
+## [0.9.1](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.9.0...tf-azdev-agent-0.9.1) (2026-04-29)
+
+
+### Bug Fixes
+
+* Update kubectl and helm versions, ignore golang CVEs ([#3403](https://github.com/Altinn/altinn-platform/issues/3403)) ([4737da7](https://github.com/Altinn/altinn-platform/commit/4737da73001c493b33d57211af1d27bbe10a6232))
+
+## [0.9.0](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.8.3...tf-azdev-agent-0.9.0) (2026-04-29)
+
+
+### Features
+
+* Update azure-devops-agent base image to v1.2.7 ([#3399](https://github.com/Altinn/altinn-platform/issues/3399)) ([673f84a](https://github.com/Altinn/altinn-platform/commit/673f84a0b12ac9910281216f9f6fab715eb99c1d))
+
 ## [0.8.3](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.8.2...tf-azdev-agent-0.8.3) (2026-01-22)
 
 

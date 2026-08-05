@@ -115,15 +115,16 @@ var _ = Describe("ApplicationIdentity Controller", func() {
 			// Update the UAID status
 			uaID.Status.Conditions = []conditions.Condition{
 				{
-					Type:               "Ready",
-					Status:             "True",
-					Reason:             "Succeeded",
+					Type:               conditions.ConditionTypeReady,
+					Status:             metav1.ConditionTrue,
+					Reason:             conditionReasonSucceeded,
 					ObservedGeneration: uaID.Generation,
 					LastTransitionTime: metav1.Now(),
 				},
 			}
 			uaID.Status.ClientId = utils.ToPointer("325e4fc8-5e58-4942-be61-11b8ee679ff2")
 			uaID.Status.PrincipalId = utils.ToPointer("3fb69913-169d-4c23-8ab7-39278f71d314")
+			uaID.Status.Id = utils.ToPointer("/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/test-identity")
 			Eventually(func(g Gomega) {
 				err := k8sClient.Status().Update(ctx, uaID)
 				g.Expect(err).NotTo(HaveOccurred())
@@ -134,6 +135,7 @@ var _ = Describe("ApplicationIdentity Controller", func() {
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(appIdentity.Status.PrincipalID).To(Equal(uaID.Status.PrincipalId))
 				g.Expect(appIdentity.Status.ClientID).To(Equal(uaID.Status.ClientId))
+				g.Expect(appIdentity.Status.ResourceID).To(Equal(uaID.Status.Id))
 			}, timeout, interval).Should(Succeed())
 			// Verify that the FederatedIdentityCredential is created
 			federatedCredential := &managedidentity.FederatedIdentityCredential{}
@@ -157,9 +159,9 @@ var _ = Describe("ApplicationIdentity Controller", func() {
 			// Update the UAID status
 			uaID.Status.Conditions = []conditions.Condition{
 				{
-					Type:               "Ready",
-					Status:             "True",
-					Reason:             "Succeeded",
+					Type:               conditions.ConditionTypeReady,
+					Status:             metav1.ConditionTrue,
+					Reason:             conditionReasonSucceeded,
 					ObservedGeneration: uaID.Generation,
 					LastTransitionTime: metav1.Now(),
 				},
@@ -179,9 +181,9 @@ var _ = Describe("ApplicationIdentity Controller", func() {
 			// Update the FederatedIdentityCredential status
 			federatedCredential.Status.Conditions = []conditions.Condition{
 				{
-					Type:               "Ready",
-					Status:             "True",
-					Reason:             "Succeeded",
+					Type:               conditions.ConditionTypeReady,
+					Status:             metav1.ConditionTrue,
+					Reason:             conditionReasonSucceeded,
 					ObservedGeneration: federatedCredential.Generation,
 					LastTransitionTime: metav1.Now(),
 				},
@@ -212,7 +214,7 @@ var _ = Describe("ApplicationIdentity Controller", func() {
 				for _, condition := range appIdentity.Status.Conditions {
 					if condition.Type == string(applicationv1alpha1.ConditionReady) {
 						g.Expect(condition.Status).To(Equal(metav1.ConditionTrue))
-						g.Expect(condition.Reason).To(Equal("Succeeded"))
+						g.Expect(condition.Reason).To(Equal(conditionReasonSucceeded))
 						g.Expect(condition.ObservedGeneration).To(Equal(appIdentity.Generation))
 					}
 				}

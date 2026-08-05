@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+  - dis-console-identity.yaml
+  - dis-console-db-admin.yaml
+  - dis-console-databaseserver.yaml
+  - dis-console-database.yaml
+  - dis-console.yaml

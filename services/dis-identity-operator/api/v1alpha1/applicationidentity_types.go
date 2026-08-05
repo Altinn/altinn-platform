@@ -51,6 +51,9 @@ type ApplicationIdentityStatus struct {
 	// ManagedIdentityName is the name of the managed identity in Azure.
 	// +kubebuilder:validation:Optional
 	ManagedIdentityName *string `json:"managedIdentityName,omitempty"`
+	// ResourceID is the ARM resource id of the managed identity in Azure.
+	// +kubebuilder:validation:Optional
+	ResourceID *string `json:"resourceId,omitempty"`
 }
 
 type ConditionType string
