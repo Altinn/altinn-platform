@@ -141,7 +141,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.event.client_payload.environment }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.client_payload.commit_sha }}
 
@@ -199,7 +199,7 @@ The `repository_dispatch` event payload available to workflows:
     "environment": "at23",
     "commit_sha": "abc1234def5678",
     "revision": "at23@sha256:aabbccdd",
-    "kustomization_name": "dialogporten-apps-at23",
+    "kustomization_name": "dialogporten-apps",
     "reason": "ReconciliationSucceeded",
     "message": "Applied revision at23@sha256:aabbccdd"
   }
@@ -216,7 +216,7 @@ The `repository_dispatch` event payload available to workflows:
     "environment": "at23",
     "commit_sha": "abc1234def5678",
     "revision": "at23@sha256:aabbccdd",
-    "kustomization_name": "dialogporten-apps-at23",
+    "kustomization_name": "dialogporten-apps",
     "reason": "ReconciliationFailed",
     "message": "kustomize build failed: ... (truncated)"
   }
@@ -257,8 +257,9 @@ POST /flux-events (from Flux notification-controller)
   │      └── Invalid/missing signature → 401 Unauthorized (logged, not retried)
   ├── 2. Parse JSON body into FluxEvent struct (request body limited to 64 KB via http.MaxBytesReader)
   ├── 3. Validate: reason is a recognized reconciliation event and required metadata present
-  │      ├── Accepted reasons: "ReconciliationSucceeded", "ReconciliationFailed",
-  │      │   "ValidationFailed", "DependencyNotReady", "ArtifactFailed"
+  │      ├── Accepted reasons — success: "ReconciliationSucceeded"; failure: "ReconciliationFailed",
+  │      │   "BuildFailed", "HealthCheckFailed", "PruneFailed", "DependencyNotReady", "ArtifactFailed"
+  │      │   (kustomize-controller v1 event reasons; "HealthCheckFailed" requires wait/healthChecks on the Kustomization)
   │      └── Unrecognized reason → 200 OK (non-retryable, Flux should not retry)
   ├── 4. Reject if dispatch_repo missing → 200 OK + log warning
   ├── 5. Validate dispatch_repo format and org prefix
@@ -268,11 +269,13 @@ POST /flux-events (from Flux notification-controller)
   ├── 6. Construct GitHub API URL using url.JoinPath (prevents path traversal)
   ├── 7. Dedup check: has this (product, env, reason, OCI-digest, dispatch_repo) been seen before?
   │      └── Yes → 200 OK + log "skipping duplicate event"
-  ├── 8. Extract commit SHA from originRevision ("main/abc123" → "abc123")
+  ├── 8. Extract commit SHA from kustomize.toolkit.fluxcd.io/originRevision ("main/abc123" → "abc123";
+  │      last "/" segment — branch names may contain "/")
   ├── 9. Authenticate as GitHub App (cached installation token)
   ├── 10. POST /repos/{dispatch_repo}/dispatches with client_payload (includes reason + message)
   │       ├── Success → record in dedup tracker, increment metrics → 200 OK
-  │       └── Failure → log error, increment error metric → 502 (Flux retries on 5xx)
+  │       ├── GitHub 4xx (non-retryable config issue, e.g. App not installed → 404) → log warning → 200 OK
+  │       └── GitHub 5xx / timeout → log error, increment error metric → 502 (Flux retries on 5xx)
   └── Done
 ```
 
@@ -282,7 +285,7 @@ POST /flux-events (from Flux notification-controller)
 
 ## Deduplication
 
-Flux reconciles on an interval (e.g., every 10 minutes) even when nothing changed, emitting `ReconciliationSucceeded` each time. Without dedup, every product would get a `repository_dispatch` every 10 minutes.
+Flux can re-emit success events for an unchanged revision — interval reconciles, controller restarts, spec-change re-applies, and notification-controller redeliveries all produce events carrying the same digest. The exact cadence varies by controller version and the notification-controller's rate limiter; deduplication makes dispatch behavior independent of it, so products get **one** workflow run per new artifact rather than one per event.
 
 **Design:** In-memory map keyed by `{product}/{env}/{reason}/{sha256-digest}/{dispatch_repo}`. Including `reason` in the key ensures that a success and a failure for the same digest are treated as distinct events (both get dispatched). Including `dispatch_repo` ensures that a single Kustomization dispatching to multiple repos (e.g., one for e2e tests and one for a dashboard) does not incorrectly deduplicate the second dispatch. Background goroutine evicts entries older than a configurable TTL (default 24h).
 
@@ -419,9 +422,34 @@ spec:
       ports:
         - protocol: TCP
           port: 9090
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: flux-dispatch-allow-egress
+  namespace: dis-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: flux-dispatch
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - ports:
+        - protocol: TCP
+          port: 443
 ```
 
-This ensures only the Flux notification-controller can reach the webhook handler (port 8080) and only Prometheus can scrape metrics (port 9090).
+This ensures only the Flux notification-controller can reach the webhook handler (port 8080), only Prometheus can scrape metrics (port 9090), and the pod itself can reach only DNS and HTTPS (GitHub's API sits behind changing IPs, so the egress rule is port-scoped rather than IP-pinned). The egress policy matters on clusters with a default-deny egress baseline — without it, every dispatch would fail with a 502 and Flux would retry indefinitely. The `kubernetes.io/metadata.name` label is set automatically on every namespace (Kubernetes ≥ 1.21), so these selectors need no manual labeling.
 
 ## Interaction with existing features
 
@@ -443,6 +471,7 @@ This ensures only the Flux notification-controller can reach the webhook handler
 | Reconciliation failure event | Dispatched with `reason: "ReconciliationFailed"` and the error `message` from Flux |
 | Same digest fails then succeeds | Both dispatched — dedup key includes `reason`, so they are distinct events |
 | Repeated failures with same digest | Deduplicated — only the first failure for a given digest triggers dispatch |
+| Kustomization has `wait: true` and health checks fail | `HealthCheckFailed` is an accepted failure reason — dispatched through the failure Alert |
 | `eventSeverity: info` Alert receives error event | Service filters by `reason` field — error reasons are not dispatched through success-type Alerts |
 | Dedup map reaches capacity (10,000 entries) | Oldest entry evicted, new event processed normally |
 | Service pod restarts | Dedup state lost, at most one duplicate dispatch per env (harmless) |
@@ -453,7 +482,7 @@ This ensures only the Flux notification-controller can reach the webhook handler
 
 - **New service to maintain.** Another pod in the cluster, another GitHub App to manage. However, the service is small (~500 LoC Go), stateless, and follows existing patterns (`lakmus`).
 - **Trusts product-provided `dispatch_repo`.** A product could target another product's repo within the `Altinn/` org. Mitigated by strict format validation (owner/repo regex), `Altinn/` org prefix enforcement, and GitHub App installation scope (can only dispatch to installed repos). A per-product allowlist can be added later if needed.
-- **Single point of failure.** If the service is down, no dispatches fire. Flux will retry on 5xx, so brief outages self-heal. For extended outages, dispatches queue in Flux and fire when the service recovers.
+- **Single point of failure.** If the service is down, no dispatches fire. Flux retries on 5xx with backoff, so brief outages self-heal. For extended outages there is **no durable queue** — the notification-controller's retries are bounded, and events that exhaust them are lost; the next reconcile interval or artifact push produces a fresh event once the service recovers.
 
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
@@ -470,9 +499,9 @@ GitHub App authentication, Flux payload parsing, deduplication, and `repository_
 
 A config file in the service would require a PR + redeploy for every new product. By reading `dispatch_repo` from the Flux Alert's `eventMetadata`, products onboard without any service changes. The GitHub App installation scope provides the trust boundary.
 
-## Why not use Flux's built-in GitHub provider?
+## Why not use Flux's built-in GitHub providers?
 
-Flux has a `github` provider type, but it creates commit statuses / deployment statuses — not `repository_dispatch` events. We need to trigger arbitrary workflows, which requires `repository_dispatch`.
+Flux has two relevant provider types. The `github` provider creates commit statuses — not workflow triggers. The `githubdispatch` provider *does* send `repository_dispatch` (and supports GitHub App auth), but using it directly from product namespaces would mean: GitHub App credentials materialized into **every product namespace** (any holder can dispatch to any repo the App is installed on — a far wider blast radius than one platform-held key); a fixed event type auto-generated from the involved object (`Kustomization/{name}.{namespace}`) instead of product-chosen `dispatch_event` routing; no deduplication of repeat events for an unchanged revision; and no org-prefix enforcement or central dispatch metrics. The platform-owned service keeps the credential in one place and gives products the small `dispatch_repo`/`dispatch_event` contract instead.
 
 ## What is the impact of not doing this?
 
@@ -492,7 +521,7 @@ Teams would either run e2e tests on a timer (wasteful, delayed feedback), build 
 - ~~Should we maintain an allowlist of permitted `dispatch_repo` values?~~ **Resolved:** The service enforces an `Altinn/` org prefix and strict format validation. A per-product allowlist is deferred to "Future possibilities" until there is evidence of cross-product dispatch being a concern.
 - What naming convention for the GitHub App? (e.g., `dis-flux-dispatch`)
 - Should the platform-provided Provider manifest live in a shared OCI artifact or be documented for products to copy?
-- What Kubernetes namespace label should be used for the Flux notification-controller namespace in the NetworkPolicy? (e.g., `kubernetes.io/metadata.name: flux-system`)
+- ~~What Kubernetes namespace label should be used for the Flux notification-controller namespace in the NetworkPolicy?~~ **Resolved:** `kubernetes.io/metadata.name` is set automatically on every namespace (Kubernetes ≥ 1.21), so the policies rely on it; only the literal namespace names (`flux-system`, `monitoring`) need confirming per cluster.
 
 # Future possibilities
 [future-possibilities]: #future-possibilities
