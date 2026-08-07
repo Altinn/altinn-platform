@@ -1,0 +1,517 @@
+// Command manifests synthesizes the Kubernetes manifests for flux-dispatch
+// into config/. See RFC 0010 (rfcs/0010-flux-reconcile-webhooks.md) §"Kubernetes
+// deployment" and §NetworkPolicy for the normative shape of these resources.
+package main
+
+import (
+	"fmt"
+
+	"github.com/Altinn/altinn-platform/services/flux-dispatch/imports/k8s"
+	"github.com/Altinn/altinn-platform/services/flux-dispatch/manifests/internal/k8scompat"
+	"github.com/aws/constructs-go/constructs/v10"
+	_jsii_ "github.com/aws/jsii-runtime-go"
+	cdk8s "github.com/cdk8s-team/cdk8s-core-go/cdk8s/v2"
+)
+
+const (
+	containerImage = "flux-dispatch:latest"
+	appName        = "flux-dispatch"
+	namespace      = "dis-platform"
+
+	webhookPort = 8080
+	metricsPort = 9090
+
+	fluxSystemNamespace = "flux-system"
+	monitoringNamespace = "monitoring"
+	kubeSystemNamespace = "kube-system"
+
+	// Secret names match the platform-provided Provider manifest from RFC 0010
+	// §"Platform-provided base Provider" (flux-dispatch-hmac-token is shared
+	// between the Flux Provider and this Deployment) and the brief's Task 4a
+	// naming (flux-dispatch-github-app-key).
+	githubAppKeySecretName = "flux-dispatch-github-app-key"
+	hmacTokenSecretName    = "flux-dispatch-hmac-token"
+
+	githubAppKeyMountPath = "/etc/flux-dispatch/secrets/github-app"
+	hmacTokenMountPath    = "/etc/flux-dispatch/secrets/hmac"
+
+	githubAppKeyDataKey = "private-key.pem"
+	// hmacTokenDataKey MUST be "token": Flux's generic-hmac Provider always reads
+	// that literal key out of its secretRef Secret to sign webhook bodies. Any
+	// other key name here means the Provider signs with an empty/missing value,
+	// and every webhook this service receives fails HMAC verification with a
+	// silent 401 — the single most common way this integration breaks.
+	hmacTokenDataKey = "token"
+
+	// scalingNoteAnnotation documents why replicas is pinned to 1. cdk8s
+	// synthesizes YAML from JSON patches, which has no comment support, so this
+	// rides along as a Deployment annotation instead of a YAML comment — visible
+	// via `kubectl get/describe`, not just in this source file.
+	scalingNoteAnnotation = "dis.altinn.cloud/scaling-note"
+	scalingNoteText       = "replicas is pinned to 1: the dedup tracker (RFC 0010 Deduplication) lives in " +
+		"this pod's own memory. A second replica has a disjoint dedup map, so the same Flux reconcile " +
+		"event (or a notification-controller retry) delivered to both pods dispatches twice — duplicate " +
+		"GitHub Actions runs for one deploy, the exact failure mode this service exists to prevent. Do not " +
+		"scale horizontally without first moving dedup to shared storage."
+
+	// secretStoreName is the namespaced external-secrets SecretStore that both
+	// ExternalSecrets below reference. See the assumption documented on
+	// newExternalSecrets.
+	secretStoreName = "flux-dispatch-kv-store"
+)
+
+func main() {
+	app := cdk8s.NewApp(&cdk8s.AppProps{
+		Outdir:              _jsii_.String("config"),
+		OutputFileExtension: _jsii_.String(".yaml"),
+		YamlOutputType:      cdk8s.YamlOutputType_FILE_PER_CHART,
+	})
+
+	newFluxDispatchChart(app, "flux-dispatch")
+	newKustomizationChart(app, "kustomization")
+
+	app.Synth()
+}
+
+func newFluxDispatchChart(scope constructs.Construct, id string) cdk8s.Chart {
+	chart := cdk8s.NewChart(scope, _jsii_.String(id), nil)
+
+	labels := stringMap(map[string]string{
+		"app":   appName,
+		"owner": "platform",
+	})
+	podLabels := stringMap(map[string]string{
+		"app":                         appName,
+		"owner":                       "platform",
+		"azure.workload.identity/use": "true",
+	})
+
+	// The ServiceAccount doubles as the workload identity for the ExternalSecrets
+	// SecretStore below (see newExternalSecrets) — flux-dispatch itself never
+	// calls Azure directly, but external-secrets impersonates this identity to
+	// pull the two Key Vault secrets it mounts.
+	sa := k8scompat.NewKubeServiceAccount(chart, _jsii_.String("sa"), &k8s.KubeServiceAccountProps{
+		Metadata: &k8s.ObjectMeta{
+			Name:      _jsii_.String(appName),
+			Namespace: _jsii_.String(namespace),
+			Labels:    labels,
+			Annotations: stringMap(map[string]string{
+				"azure.workload.identity/client-id": "${FLUX_DISPATCH_WORKLOAD_IDENTITY_CLIENT_ID}",
+			}),
+		},
+		AutomountServiceAccountToken: _jsii_.Bool(false),
+	})
+
+	newDeployment(chart, sa, labels, podLabels)
+	newService(chart, labels)
+	newNetworkPolicies(chart)
+	newPodMonitor(chart, labels)
+	newExternalSecrets(chart, labels)
+
+	return chart
+}
+
+// newDeployment defines the single-replica flux-dispatch Deployment. Env vars
+// mirror internal/config/config.go exactly: the four required variables (no
+// default, Load fails loudly if unset) get values here; optional variables
+// whose defaults already match RFC 0010 (GITHUB_API_URL, DEDUP_TTL,
+// DEDUP_MAX_ENTRIES, DEFAULT_DISPATCH_EVENT) are left unset.
+func newDeployment(chart cdk8s.Chart, sa cdk8s.ApiObject, labels, podLabels *map[string]*string) {
+	k8scompat.NewKubeDeployment(chart, _jsii_.String("deployment"), &k8s.KubeDeploymentProps{
+		Metadata: &k8s.ObjectMeta{
+			Name:      _jsii_.String(appName),
+			Namespace: _jsii_.String(namespace),
+			Labels:    labels,
+			Annotations: stringMap(map[string]string{
+				scalingNoteAnnotation: scalingNoteText,
+			}),
+		},
+		Spec: &k8s.DeploymentSpec{
+			// See scalingNoteAnnotation above for why this is 1 and must stay 1.
+			Replicas: _jsii_.Number(1),
+			Selector: &k8s.LabelSelector{
+				MatchLabels: labels,
+			},
+			Template: &k8s.PodTemplateSpec{
+				Metadata: &k8s.ObjectMeta{
+					Labels: podLabels,
+					Annotations: stringMap(map[string]string{
+						"cluster-autoscaler.kubernetes.io/safe-to-evict": "true",
+					}),
+				},
+				Spec: &k8s.PodSpec{
+					ServiceAccountName:           sa.Name(),
+					AutomountServiceAccountToken: _jsii_.Bool(false),
+					EnableServiceLinks:           _jsii_.Bool(false),
+					SecurityContext: &k8s.PodSecurityContext{
+						RunAsNonRoot: _jsii_.Bool(true),
+						SeccompProfile: &k8s.SeccompProfile{
+							Type: _jsii_.String("RuntimeDefault"),
+						},
+					},
+					Volumes: &[]*k8s.Volume{
+						{
+							Name: _jsii_.String("github-app-key"),
+							Secret: &k8s.SecretVolumeSource{
+								SecretName: _jsii_.String(githubAppKeySecretName),
+							},
+						},
+						{
+							Name: _jsii_.String("hmac-token"),
+							Secret: &k8s.SecretVolumeSource{
+								SecretName: _jsii_.String(hmacTokenSecretName),
+							},
+						},
+					},
+					Containers: &[]*k8s.Container{
+						{
+							Name:  _jsii_.String(appName),
+							Image: _jsii_.String(containerImage),
+							Ports: &[]*k8s.ContainerPort{
+								{
+									Name:          _jsii_.String("webhook"),
+									ContainerPort: _jsii_.Number(webhookPort),
+								},
+								{
+									Name:          _jsii_.String("metrics"),
+									ContainerPort: _jsii_.Number(metricsPort),
+								},
+							},
+							Env: &[]*k8s.EnvVar{
+								{
+									Name:  _jsii_.String("LISTEN_ADDR"),
+									Value: _jsii_.String(fmt.Sprintf(":%d", webhookPort)),
+								},
+								{
+									Name:  _jsii_.String("METRICS_ADDR"),
+									Value: _jsii_.String(fmt.Sprintf(":%d", metricsPort)),
+								},
+								{
+									Name:  _jsii_.String("GITHUB_APP_ID"),
+									Value: _jsii_.String("${GITHUB_APP_ID}"),
+								},
+								{
+									Name:  _jsii_.String("GITHUB_INSTALLATION_ID"),
+									Value: _jsii_.String("${GITHUB_INSTALLATION_ID}"),
+								},
+								{
+									Name:  _jsii_.String("GITHUB_PRIVATE_KEY_PATH"),
+									Value: _jsii_.String(githubAppKeyMountPath + "/" + githubAppKeyDataKey),
+								},
+								{
+									Name:  _jsii_.String("HMAC_TOKEN_PATH"),
+									Value: _jsii_.String(hmacTokenMountPath + "/" + hmacTokenDataKey),
+								},
+							},
+							VolumeMounts: &[]*k8s.VolumeMount{
+								{
+									Name:      _jsii_.String("github-app-key"),
+									MountPath: _jsii_.String(githubAppKeyMountPath),
+									ReadOnly:  _jsii_.Bool(true),
+								},
+								{
+									Name:      _jsii_.String("hmac-token"),
+									MountPath: _jsii_.String(hmacTokenMountPath),
+									ReadOnly:  _jsii_.Bool(true),
+								},
+							},
+							LivenessProbe: &k8s.Probe{
+								HttpGet: &k8s.HttpGetAction{
+									Path: _jsii_.String("/healthz"),
+									Port: k8s.IntOrString_FromString(_jsii_.String("webhook")),
+								},
+							},
+							ReadinessProbe: &k8s.Probe{
+								HttpGet: &k8s.HttpGetAction{
+									Path: _jsii_.String("/readyz"),
+									Port: k8s.IntOrString_FromString(_jsii_.String("webhook")),
+								},
+							},
+							Resources: &k8s.ResourceRequirements{
+								Requests: &map[string]k8s.Quantity{
+									"cpu":    k8s.Quantity_FromString(_jsii_.String("50m")),
+									"memory": k8s.Quantity_FromString(_jsii_.String("64Mi")),
+								},
+							},
+							SecurityContext: &k8s.SecurityContext{
+								AllowPrivilegeEscalation: _jsii_.Bool(false),
+								ReadOnlyRootFilesystem:   _jsii_.Bool(true),
+								Capabilities: &k8s.Capabilities{
+									Drop: &[]*string{_jsii_.String("ALL")},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+}
+
+// newService defines the ClusterIP Service fronting the webhook port. The
+// metrics port is intentionally not exposed here — the PodMonitor below
+// scrapes pods directly, matching lakmus's pattern.
+func newService(chart cdk8s.Chart, labels *map[string]*string) {
+	svc := cdk8s.NewApiObject(chart, _jsii_.String("service"), &cdk8s.ApiObjectProps{
+		ApiVersion: _jsii_.String("v1"),
+		Kind:       _jsii_.String("Service"),
+		Metadata: &cdk8s.ApiObjectMetadata{
+			Name:      _jsii_.String(appName),
+			Namespace: _jsii_.String(namespace),
+			Labels:    labels,
+		},
+	})
+	svc.AddJsonPatch(cdk8s.JsonPatch_Add(_jsii_.String("/spec"), map[string]any{
+		"type":     "ClusterIP",
+		"selector": rawLabels(),
+		"ports": []any{
+			map[string]any{
+				"name":       "webhook",
+				"port":       webhookPort,
+				"targetPort": "webhook",
+				"protocol":   "TCP",
+			},
+		},
+	}))
+}
+
+// newNetworkPolicies defines the three NetworkPolicies copied verbatim from
+// RFC 0010 §NetworkPolicy (field-for-field, including the podSelector using
+// only `app: flux-dispatch`, not the broader two-key `labels` map used
+// elsewhere in this file — Kubernetes label selectors are a subset match, so
+// this still selects the Deployment's pods).
+//
+// The brief also asked to check the other dis-* operators (dis-apim-operator,
+// dis-identity-operator, dis-pgsql-operator) for the local egress convention
+// before writing the egress rule. None of their config/network-policy
+// manifests define an egress policy at all — they are unmodified kubebuilder
+// scaffolding (generic `webhook: enabled` / `metrics: enabled` namespace-label
+// placeholders, ingress-only). There is no established egress convention to
+// reconcile with, so the RFC's verbatim block is authoritative as-is.
+func newNetworkPolicies(chart cdk8s.Chart) {
+	newIngressNetworkPolicy(chart, "allow-webhook-traffic", "flux-dispatch-allow-webhook-traffic", fluxSystemNamespace, webhookPort)
+	newIngressNetworkPolicy(chart, "allow-metrics-traffic", "flux-dispatch-allow-metrics-traffic", monitoringNamespace, metricsPort)
+	newEgressNetworkPolicy(chart)
+}
+
+func newIngressNetworkPolicy(chart cdk8s.Chart, id, name, fromNamespace string, port int) {
+	np := cdk8s.NewApiObject(chart, _jsii_.String(id), &cdk8s.ApiObjectProps{
+		ApiVersion: _jsii_.String("networking.k8s.io/v1"),
+		Kind:       _jsii_.String("NetworkPolicy"),
+		Metadata: &cdk8s.ApiObjectMetadata{
+			Name:      _jsii_.String(name),
+			Namespace: _jsii_.String(namespace),
+		},
+	})
+	np.AddJsonPatch(cdk8s.JsonPatch_Add(_jsii_.String("/spec"), map[string]any{
+		"podSelector": map[string]any{
+			"matchLabels": map[string]any{"app": appName},
+		},
+		"policyTypes": []any{"Ingress"},
+		"ingress": []any{
+			map[string]any{
+				"from": []any{
+					map[string]any{
+						"namespaceSelector": map[string]any{
+							"matchLabels": map[string]any{"kubernetes.io/metadata.name": fromNamespace},
+						},
+					},
+				},
+				"ports": []any{
+					map[string]any{"protocol": "TCP", "port": port},
+				},
+			},
+		},
+	}))
+}
+
+func newEgressNetworkPolicy(chart cdk8s.Chart) {
+	np := cdk8s.NewApiObject(chart, _jsii_.String("allow-egress"), &cdk8s.ApiObjectProps{
+		ApiVersion: _jsii_.String("networking.k8s.io/v1"),
+		Kind:       _jsii_.String("NetworkPolicy"),
+		Metadata: &cdk8s.ApiObjectMetadata{
+			Name:      _jsii_.String("flux-dispatch-allow-egress"),
+			Namespace: _jsii_.String(namespace),
+		},
+	})
+	np.AddJsonPatch(cdk8s.JsonPatch_Add(_jsii_.String("/spec"), map[string]any{
+		"podSelector": map[string]any{
+			"matchLabels": map[string]any{"app": appName},
+		},
+		"policyTypes": []any{"Egress"},
+		"egress": []any{
+			map[string]any{
+				"to": []any{
+					map[string]any{
+						"namespaceSelector": map[string]any{
+							"matchLabels": map[string]any{"kubernetes.io/metadata.name": kubeSystemNamespace},
+						},
+					},
+				},
+				"ports": []any{
+					map[string]any{"protocol": "UDP", "port": 53},
+					map[string]any{"protocol": "TCP", "port": 53},
+				},
+			},
+			map[string]any{
+				"ports": []any{
+					map[string]any{"protocol": "TCP", "port": 443},
+				},
+			},
+		},
+	}))
+}
+
+// newPodMonitor scrapes the metrics port. lakmus uses PodMonitor (not
+// ServiceMonitor) on the azmonitoring.coreos.com/v1 group — Azure Managed
+// Prometheus's own CRD group — so this mirrors that exactly.
+func newPodMonitor(chart cdk8s.Chart, labels *map[string]*string) {
+	pm := cdk8s.NewApiObject(chart, _jsii_.String("flux-dispatch-podmonitor"), &cdk8s.ApiObjectProps{
+		ApiVersion: _jsii_.String("azmonitoring.coreos.com/v1"),
+		Kind:       _jsii_.String("PodMonitor"),
+		Metadata: &cdk8s.ApiObjectMetadata{
+			Name:      _jsii_.String(appName),
+			Namespace: _jsii_.String(namespace),
+			Labels:    labels,
+		},
+	})
+	pm.AddJsonPatch(cdk8s.JsonPatch_Add(_jsii_.String("/spec"), map[string]any{
+		"selector": map[string]any{
+			"matchLabels": rawLabels(),
+		},
+		"namespaceSelector": map[string]any{
+			"any": true,
+		},
+		"podMetricsEndpoints": []any{
+			map[string]any{
+				"port":     "metrics",
+				"path":     "/metrics",
+				"interval": "30s",
+			},
+		},
+	}))
+}
+
+// newExternalSecrets defines the namespaced SecretStore and the two
+// ExternalSecrets that materialize the GitHub App private key and the HMAC
+// token as Kubernetes Secrets.
+//
+// ASSUMPTION (flagged per the task brief — this is the "known-open decision"
+// from plan Task 3 Step 5, genuinely unresolved as of this writing): no
+// dis-platform SecretStore exists anywhere yet, and none of the operators
+// this brief pointed at (dis-apim-operator, dis-identity-operator,
+// dis-pgsql-operator) consume Key Vault secrets via ExternalSecret at all —
+// they are cluster-scoped controllers that talk to Azure directly over
+// workload identity, not consumers of namespaced secrets. The closest real,
+// already-working precedent in any of these repos is gitops-manifests'
+// otel-collector (oci/otel-collector/base/external-secrets.yaml) and
+// dis-tls-cert/traefik (oci/traefik/apps/post-deploy/ssl-cert-external-secret.yaml):
+// both provision a namespaced external-secrets.io/v1 SecretStore with
+// provider.azurekv, authType: WorkloadIdentity, and a serviceAccountRef to a
+// same-namespace ServiceAccount, then an ExternalSecret with a
+// ${KV_...}-templated remoteRef.key. This mirrors that pattern exactly:
+// vaultUrl is left as the same ${KV_URI} placeholder otel-collector uses, and
+// the two remote secret names are new placeholders following the
+// ${KV_SECRET_NAME_*} convention dis-tls-cert's ExternalSecret uses. A
+// dis-vault-operator also exists in this repo (services/dis-vault-operator)
+// with a Vault CRD whose spec has an `externalSecrets: true` flag that would
+// have the operator provision a *new* dedicated Key Vault and manage the
+// SecretStore itself — but grepping every deploy/ and gitops-manifests
+// directory turns up zero uses of `kind: Vault` outside the operator's own
+// CRD/sample files, so there is no live evidence that path is wired up or
+// how naming would resolve. Using it here would mean inventing both a
+// SecretStore name and a new Azure resource with no precedent backing either
+// — exactly what the brief said not to do. The raw SecretStore/ExternalSecret
+// route below is the closest pattern with actual working precedent; whoever
+// resolves plan Task 3 Step 5 should confirm vaultUrl and the two secret
+// names (and may prefer the Vault CRD instead — see task-6-report.md).
+func newExternalSecrets(chart cdk8s.Chart, labels *map[string]*string) {
+	store := cdk8s.NewApiObject(chart, _jsii_.String("kv-store"), &cdk8s.ApiObjectProps{
+		ApiVersion: _jsii_.String("external-secrets.io/v1"),
+		Kind:       _jsii_.String("SecretStore"),
+		Metadata: &cdk8s.ApiObjectMetadata{
+			Name:      _jsii_.String(secretStoreName),
+			Namespace: _jsii_.String(namespace),
+			Labels:    labels,
+		},
+	})
+	store.AddJsonPatch(cdk8s.JsonPatch_Add(_jsii_.String("/spec"), map[string]any{
+		"provider": map[string]any{
+			"azurekv": map[string]any{
+				"authType": "WorkloadIdentity",
+				"vaultUrl": "${KV_URI}",
+				"serviceAccountRef": map[string]any{
+					"name":      appName,
+					"namespace": namespace,
+				},
+			},
+		},
+	}))
+
+	newExternalSecret(chart, "github-app-key-external-secret", githubAppKeySecretName, labels,
+		githubAppKeyDataKey, "${KV_SECRET_NAME_GITHUB_APP_KEY}")
+	newExternalSecret(chart, "hmac-token-external-secret", hmacTokenSecretName, labels,
+		hmacTokenDataKey, "${KV_SECRET_NAME_HMAC_TOKEN}")
+}
+
+func newExternalSecret(chart cdk8s.Chart, id, targetSecretName string, labels *map[string]*string, secretKey, remoteKey string) {
+	es := cdk8s.NewApiObject(chart, _jsii_.String(id), &cdk8s.ApiObjectProps{
+		ApiVersion: _jsii_.String("external-secrets.io/v1"),
+		Kind:       _jsii_.String("ExternalSecret"),
+		Metadata: &cdk8s.ApiObjectMetadata{
+			Name:      _jsii_.String(targetSecretName + "-external-secret"),
+			Namespace: _jsii_.String(namespace),
+			Labels:    labels,
+		},
+	})
+	es.AddJsonPatch(cdk8s.JsonPatch_Add(_jsii_.String("/spec"), map[string]any{
+		"refreshInterval": "1h",
+		"secretStoreRef": map[string]any{
+			"kind": "SecretStore",
+			"name": secretStoreName,
+		},
+		"target": map[string]any{
+			"name":           targetSecretName,
+			"creationPolicy": "Owner",
+		},
+		"data": []any{
+			map[string]any{
+				"secretKey": secretKey,
+				"remoteRef": map[string]any{
+					"key": remoteKey,
+				},
+			},
+		},
+	}))
+}
+
+func newKustomizationChart(scope constructs.Construct, id string) cdk8s.Chart {
+	chart := cdk8s.NewChart(scope, _jsii_.String(id), nil)
+
+	kustomization := cdk8s.NewApiObject(chart, _jsii_.String("kustomization"), &cdk8s.ApiObjectProps{
+		ApiVersion: _jsii_.String("kustomize.config.k8s.io/v1beta1"),
+		Kind:       _jsii_.String("Kustomization"),
+		Metadata: &cdk8s.ApiObjectMetadata{
+			Name: _jsii_.String(appName),
+		},
+	})
+	kustomization.AddJsonPatch(cdk8s.JsonPatch_Add(_jsii_.String("/resources"), []any{"flux-dispatch.yaml"}))
+
+	return chart
+}
+
+func rawLabels() map[string]any {
+	return map[string]any{
+		"app":   appName,
+		"owner": "platform",
+	}
+}
+
+func stringMap(values map[string]string) *map[string]*string {
+	out := make(map[string]*string, len(values))
+	for key, value := range values {
+		out[key] = _jsii_.String(value)
+	}
+
+	return &out
+}
