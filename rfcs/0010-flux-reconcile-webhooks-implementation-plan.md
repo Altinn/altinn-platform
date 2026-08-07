@@ -222,7 +222,7 @@ func (d *Dispatcher) Send(ctx context.Context, repo, eventType string, p Payload
 
 ### Task 8: Finish dialogporten-manifests draft PR #30 (`Altinn/dialogporten-manifests`)
 
-Continue on draft PR **#30** (head branch `arealmaas/kyiv-v2`), which already carries an initial Provider/Alert but predates the RFC 0010 design (see gaps above).
+Continue on draft PR **#30** in `Altinn/dialogporten-manifests`, pushing to that PR's head branch. It already carries an initial Provider/Alert, but one that predates the RFC 0010 design (see gaps above).
 
 - [ ] **Step 1 — fix the Alert target (blocking):** the real object is Kustomization **`dialogporten-apps`** in ns **`product-dialogporten`** (`flux/syncroot/base/dialogporten-flux-kustomization.yaml`) — same name in every env; the overlays patch only `spec.path` (verified in-repo, no cluster access needed). The committed Alert (ns `dialogporten`, watching `dialogporten-apps-{env}`) is wrong on both name and namespace, and this is worse than a matching bug: the syncroot's fluxConfiguration is namespace-scoped (`scope = "namespace"`, namespace `product-dialogporten` — `dis_products_syncroot_multitenancy` in dis-modules), so a syncroot object declaring any other namespace **fails RBAC and breaks the whole syncroot reconciliation**. Alert, Provider, and Secret/ExternalSecret must all live in `product-dialogporten`, and `eventSources[0].name` must be `dialogporten-apps` (Flux `eventSources` are same-namespace under multi-tenancy). Optional sanity check when cluster access is handy: `kubectl get kustomizations -A | grep dialogporten`.
 - [ ] **Step 2:** Update `flux/syncroot/base/deploy-webhook-provider.yaml` to the RFC design:
@@ -246,7 +246,7 @@ spec:
 
 ### Task 9: Rewrite the core-repo product guide (`dis-way/core`)
 
-Branch `arealmaas/flux-reconcile-webhooks`.
+Work in `dis-way/core`, on the existing feature branch that carries the flux-reconcile-webhooks doc changes — the guide rewrite continues there rather than starting fresh. PR against that repo's `main`.
 
 - [ ] **Step 1:** Rewrite `FLUX-RECONCILE-WEBHOOKS.md` for the final design. Keep: overview of the two-level OCI architecture, "watch the app Kustomization", payload field docs. Replace the DIY sections (product-managed Provider `address`, product HMAC secret, receiver/dedup/version-mapping guidance) with: include the platform-provided Provider, add the Alert with `dispatch_repo`/`dispatch_event` `eventMetadata` (copy the two Alert examples from RFC §"What product teams do"), add a `repository_dispatch` workflow (copy the success + failure workflow examples), document the `client_payload` fields table, note the default-branch limitation of `repository_dispatch`, link to RFC 0010.
 - [ ] **Step 2:** `git add FLUX-RECONCILE-WEBHOOKS.md README.md && git commit -m "docs: add flux deploy webhook product guide"`; push and open a PR to `main` (include affected path per repo convention).
