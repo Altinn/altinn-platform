@@ -74,6 +74,8 @@ The platform provides a base Provider manifest. Products include it and add an A
 
 **Success alert** — triggers on successful reconciliation (e.g., run e2e tests):
 
+> **Finding the app Kustomization name:** Run `kubectl get kustomizations -n product-{name}` to list the Kustomizations in a product's namespace and use the exact name it prints. The examples below use `<your-app-kustomization-name>` as a placeholder, not a naming pattern — the convention differs per product (e.g., dialogporten's app Kustomization is `dialogporten-apps`, with **no** environment suffix; only `spec.path` varies per environment). Copying a guessed name instead of the real one means `eventSources` matches nothing and the Alert silently never fires.
+
 > **Note on `eventSeverity`:** Flux's `eventSeverity: info` forwards **all** events (including errors) — it is not a success-only filter. The `flux-dispatch` service filters events server-side by the `reason` field: only reasons indicating success (e.g., `ReconciliationSucceeded`) are dispatched for Alerts using `dispatch_event: "flux-deploy"`. Products wanting only failure events should use `eventSeverity: error`, which Flux filters at the Alert level.
 
 ```yaml
@@ -88,7 +90,7 @@ spec:
   eventSeverity: info              # forwards all events; service filters by reason
   eventSources:
     - kind: Kustomization
-      name: {product}-apps-{env}   # the app Kustomization (NOT the syncroot)
+      name: <your-app-kustomization-name>  # the app Kustomization (NOT the syncroot) — see tip above
   eventMetadata:
     product: "{name}"
     env: "{environment}"
@@ -110,7 +112,7 @@ spec:
   eventSeverity: error              # only fires on errors
   eventSources:
     - kind: Kustomization
-      name: {product}-apps-{env}
+      name: <your-app-kustomization-name>  # see tip above
   eventMetadata:
     product: "{name}"
     env: "{environment}"
@@ -184,6 +186,38 @@ That's it. No platform team involvement to onboard, no PRs to altinn-platform.
 - The GitHub App registration and installation (controls which repos can be dispatched to)
 - The base Provider manifest that products include in their syncroot
 - The service endpoint URL (cluster-internal, products never see it)
+
+## Webhook payload
+
+The **inbound** JSON body that Flux's notification-controller POSTs to the `flux-dispatch` service at `/flux-events` — distinct from the **outbound** [Workflow payload](#workflow-payload) below that the service sends to GitHub:
+
+```json
+{
+  "involvedObject": {
+    "kind": "Kustomization",
+    "name": "my-app-kustomization",
+    "namespace": "product-{name}"
+  },
+  "severity": "info",
+  "reason": "ReconciliationSucceeded",
+  "metadata": {
+    "kustomize.toolkit.fluxcd.io/originRevision": "main/abc1234def5678",
+    "kustomize.toolkit.fluxcd.io/revision": "{env}@sha256:...",
+    "product": "{name}",
+    "env": "{environment}"
+  },
+  "timestamp": "2026-03-05T12:00:00Z"
+}
+```
+
+| Field | Description |
+|---|---|
+| `involvedObject.kind` / `.name` / `.namespace` | The Flux resource that triggered the event — the app Kustomization, not the syncroot |
+| `severity` | Flux's event severity (`info` or `error`), set by the Alert's `eventSeverity` |
+| `reason` | The reconciliation reason (e.g., `ReconciliationSucceeded`, `ReconciliationFailed`) — see [Request flow](#request-flow) for the full accepted list |
+| `message` | Human-readable message from Flux, present on some events (e.g. failures); forwarded into the outbound payload's `message` field — omitted in the sample above, which is a bare success event |
+| `metadata` | The Alert's `eventMetadata`, plus the Flux-added keys `kustomize.toolkit.fluxcd.io/originRevision` (source revision, used to extract `commit_sha`) and `kustomize.toolkit.fluxcd.io/revision` (OCI revision/digest) |
+| `timestamp` | Event time, RFC 3339 |
 
 ## Workflow payload
 
@@ -265,8 +299,12 @@ POST /flux-events (from Flux notification-controller)
   ├── 5. Validate dispatch_repo format and org prefix
   │      ├── Must match `^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$` (strict owner/repo format)
   │      ├── Must start with `Altinn/` (reject cross-org dispatch attempts)
+  │      ├── Owner and repo segments must not be all dots (rejects values like `Altinn/..` that the
+  │      │   regex above would otherwise accept)
   │      └── Invalid → 200 OK + log warning (non-retryable config issue)
-  ├── 6. Construct GitHub API URL using url.JoinPath (prevents path traversal)
+  ├── 6. Construct GitHub API URL using url.JoinPath — url.JoinPath cleans `..` segments rather than
+  │      rejecting them, so it must not be relied on as the traversal control; step 5's validation is
+  │      what rejects traversal attempts
   ├── 7. Dedup check: has this (product, env, reason, OCI-digest, dispatch_repo) been seen before?
   │      └── Yes → 200 OK + log "skipping duplicate event"
   ├── 8. Extract commit SHA from kustomize.toolkit.fluxcd.io/originRevision ("main/abc123" → "abc123";
@@ -318,15 +356,9 @@ spec:
   address: http://flux-dispatch.dis-platform.svc.cluster.local:8080/flux-events
   secretRef:
     name: flux-dispatch-hmac-token
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: flux-dispatch-hmac-token
-type: Opaque
-stringData:
-  token: "${HMAC_TOKEN}"  # provisioned by platform; shared between Provider and service
 ```
+
+The `secretRef` points at a Secret named `flux-dispatch-hmac-token`, holding the shared HMAC token under the data key `token`. Products do not create this Secret — the platform provisions it into the product namespace so the `secretRef` resolves.
 
 The `generic-hmac` provider type causes Flux to sign each webhook payload with an HMAC-SHA256 signature sent in the `X-Signature` header. The `flux-dispatch` service verifies this signature before processing, ensuring only authentic Flux notifications are accepted.
 
