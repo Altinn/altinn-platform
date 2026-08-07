@@ -55,6 +55,9 @@ jobs:
           go-version-file: "services/flux-dispatch/go.mod"
           cache-dependency-path: "services/flux-dispatch/go.sum"
 
+      - name: Verify generated manifests
+        run: make cdk8s-manifests-verify
+
       - name: Running Tests
         run: |
           go mod tidy

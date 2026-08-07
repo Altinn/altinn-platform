@@ -31,4 +31,28 @@ verify: ## Run the gate the PR must pass: gofmt, go vet, race tests.
 	go vet ./...
 	go test -race ./...
 
+# cdk8s-manifests / cdk8s-manifests-verify deliberately are not named
+# manifests / manifests-verify (the names services/lakmus uses for the same
+# cdk8s generate-and-commit pattern): Makefile.common already defines
+# `manifests: controller-gen` for the kubebuilder operators, and GNU Make
+# unions prerequisites across same-named rules even when the recipe is
+# overridden — so reusing that name here would silently pull in
+# controller-gen on every `make manifests`, exactly the kubebuilder machinery
+# this service opts out of above.
+CONFIG_DIR := config
+
+.PHONY: cdk8s-manifests
+cdk8s-manifests: ## Synthesize Kubernetes manifests into config/.
+	@echo ">> Synthesizing Kubernetes manifests into $(CONFIG_DIR)"
+	go run ./manifests
+
+.PHONY: cdk8s-manifests-verify
+cdk8s-manifests-verify: cdk8s-manifests ## Re-generate manifests and fail if config/ changed.
+	@echo ">> Verifying generated manifests are committed under $(CONFIG_DIR)"
+	@if [ -n "$$(git status --porcelain -- "$(CONFIG_DIR)")" ]; then \
+		echo "Generated manifests are out of date. Run 'make cdk8s-manifests' and commit config changes."; \
+		git --no-pager diff -- "$(CONFIG_DIR)"; \
+		exit 1; \
+	fi
+
 # tidy is already provided by Makefile.common (go mod tidy); no override needed.
