@@ -25,7 +25,8 @@ eventMetadata:
    `413` with no parsing attempted.
 2. Verify the HMAC-SHA256 `X-Signature` over the raw body — `401` if it does
    not match.
-3. Parse the Flux event — `400` if the body is not a Flux event.
+3. Parse the Flux event — `200` if the body is not a Flux event; retrying
+   cannot help, so Flux is not told to resend it.
 4. Ignore unrecognised reconciliation reasons.
 5. Require `dispatch_repo`, and require it to match
    `^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$` and start with `Altinn/`.
