@@ -31,6 +31,4 @@ verify: ## Run the gate the PR must pass: gofmt, go vet, race tests.
 	go vet ./...
 	go test -race ./...
 
-.PHONY: tidy
-tidy: ## Sync go.mod/go.sum.
-	go mod tidy
+# tidy is already provided by Makefile.common (go mod tidy); no override needed.
