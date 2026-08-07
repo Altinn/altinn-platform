@@ -7,12 +7,14 @@ on:
     paths:
       - services/flux-dispatch/**
       - .github/workflows/flux-dispatch-lint-test.yml
+      - Makefile.common
   pull_request:
     branches:
       - main
     paths:
       - services/flux-dispatch/**
       - .github/workflows/flux-dispatch-lint-test.yml
+      - Makefile.common
 
 permissions:
   contents: read
