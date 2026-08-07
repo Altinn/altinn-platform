@@ -1,0 +1,110 @@
+# flux-dispatch
+
+Receives Flux reconciliation webhooks and triggers GitHub Actions workflows in
+product repositories via `repository_dispatch`.
+
+Design: [RFC 0010 — Flux reconcile webhooks](../../rfcs/0010-flux-reconcile-webhooks.md).
+
+Product teams do not interact with this service directly. They add a Flux
+`Alert` referencing the platform-provided `deploy-webhook` `Provider` and put
+their dispatch target in `eventMetadata`:
+
+```yaml
+eventMetadata:
+  product: "dialogporten"
+  env: "at23"
+  dispatch_repo: "Altinn/dialogporten"   # required, must be in the Altinn org
+  dispatch_event: "flux-deploy"          # optional, defaults to flux-deploy
+```
+
+## Request flow
+
+`POST /flux-events` runs the RFC 0010 flow in order:
+
+1. Read the body behind a 64 KB `http.MaxBytesReader` — oversized bodies get
+   `413` with no parsing attempted.
+2. Verify the HMAC-SHA256 `X-Signature` over the raw body — `401` if it does
+   not match.
+3. Parse the Flux event — `400` if the body is not a Flux event.
+4. Ignore unrecognised reconciliation reasons.
+5. Require `dispatch_repo`, and require it to match
+   `^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$` and start with `Altinn/`.
+6. Route by reason: a `dispatch_event` ending in `-failed` receives failure
+   reasons only, any other value receives success reasons only. Flux's
+   `eventSeverity: info` forwards errors too, so this filter is what keeps a
+   failure from arriving as a success event.
+7. Skip events already dispatched for the same
+   `{product}/{env}/{reason}/{digest}/{dispatch_repo}`.
+8. Authenticate as the GitHub App (cached installation token) and
+   `POST /repos/{dispatch_repo}/dispatches`.
+
+### Return codes
+
+| Code | When |
+|---|---|
+| `200` | Dispatched, deduplicated, ignored, or rejected for a config reason — retrying cannot help |
+| `400` | Body is not a parseable Flux event |
+| `401` | Missing or invalid HMAC signature |
+| `413` | Body larger than 64 KB |
+| `502` | Transient GitHub failure (5xx, timeout, auth outage) — Flux retries with backoff |
+
+`400` is the one deviation from "2xx for everything non-retryable": a body the
+service cannot parse means Flux and the service disagree about the payload
+shape, and that should be loud rather than silently acknowledged.
+
+## Accepted reconciliation reasons
+
+kustomize-controller v1 event reasons (`fluxcd/pkg/apis/meta`):
+
+- Success: `ReconciliationSucceeded`
+- Failure: `ReconciliationFailed`, `BuildFailed`, `HealthCheckFailed`,
+  `PruneFailed`, `DependencyNotReady`, `ArtifactFailed`
+
+`HealthCheckFailed` is only emitted for Kustomizations configured with
+`wait`/`healthChecks`. Anything else is acknowledged with `200` and ignored.
+
+## Configuration
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `GITHUB_APP_ID` | yes | | GitHub App ID |
+| `GITHUB_INSTALLATION_ID` | yes | | App installation ID |
+| `GITHUB_PRIVATE_KEY_PATH` | yes | | Path to the PEM private key |
+| `HMAC_TOKEN_PATH` | yes | | Path to the token shared with the Flux Provider |
+| `GITHUB_API_URL` | no | `https://api.github.com` | GitHub API base |
+| `DEDUP_TTL` | no | `24h` | How long a dispatched event is remembered |
+| `DEDUP_MAX_ENTRIES` | no | `10000` | Dedup tracker cap; oldest is evicted |
+| `LISTEN_ADDR` | no | `:8080` | Webhook listener |
+| `METRICS_ADDR` | no | `:9090` | Prometheus listener |
+| `DEFAULT_DISPATCH_EVENT` | no | `flux-deploy` | Used when the Alert omits `dispatch_event` |
+
+## Endpoints
+
+| Port | Path | Purpose |
+|---|---|---|
+| 8080 | `POST /flux-events` | Webhook receiver |
+| 8080 | `GET /healthz` | Liveness |
+| 8080 | `GET /readyz` | Readiness |
+| 9090 | `GET /metrics` | Prometheus exposition |
+
+## Metrics
+
+`flux_dispatch_events_received_total{reason}`,
+`flux_dispatch_dispatches_total{repo,event_type,reason}`,
+`flux_dispatch_dispatch_errors_total{repo,event_type,error_code}`,
+`flux_dispatch_dedup_hits_total{reason}`, `flux_dispatch_dedup_entries`,
+`flux_dispatch_github_auth_errors_total`,
+`flux_dispatch_dispatch_duration_seconds{repo}`.
+
+They live on a dedicated registry, so the metrics port exposes only these.
+
+## Development
+
+```sh
+make verify   # gofmt -l . && go vet ./... && go test -race ./...
+make test     # race tests with coverage
+make build    # bin/flux-dispatch
+```
+
+Dedup state is in-memory: a pod restart costs at most one extra dispatch per
+environment, which is harmless for idempotent workflows.
