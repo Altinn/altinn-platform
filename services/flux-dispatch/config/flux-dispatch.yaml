@@ -32,7 +32,6 @@ spec:
         cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
       labels:
         app: flux-dispatch
-        azure.workload.identity/use: "true"
         owner: platform
     spec:
       automountServiceAccountToken: false

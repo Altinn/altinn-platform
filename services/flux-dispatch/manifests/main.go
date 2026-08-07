@@ -80,10 +80,17 @@ func newFluxDispatchChart(scope constructs.Construct, id string) cdk8s.Chart {
 		"app":   appName,
 		"owner": "platform",
 	})
+	// podLabels intentionally omits azure.workload.identity/use: flux-dispatch
+	// never calls Azure directly — external-secrets performs the token
+	// exchange itself via the SecretStore's serviceAccountRef (see
+	// newExternalSecrets), which impersonates the ServiceAccount below through
+	// the Kubernetes TokenRequest API, not through the workload-identity
+	// mutating webhook. That webhook only triggers off this pod label, so
+	// setting it here would just inject an unused projected token volume and
+	// env vars into this pod.
 	podLabels := stringMap(map[string]string{
-		"app":                         appName,
-		"owner":                       "platform",
-		"azure.workload.identity/use": "true",
+		"app":   appName,
+		"owner": "platform",
 	})
 
 	// The ServiceAccount doubles as the workload identity for the ExternalSecrets
@@ -448,18 +455,23 @@ func newExternalSecrets(chart cdk8s.Chart, labels *map[string]*string) {
 		},
 	}))
 
-	newExternalSecret(chart, "github-app-key-external-secret", githubAppKeySecretName, labels,
+	newExternalSecret(chart, githubAppKeySecretName, labels,
 		githubAppKeyDataKey, "${KV_SECRET_NAME_GITHUB_APP_KEY}")
-	newExternalSecret(chart, "hmac-token-external-secret", hmacTokenSecretName, labels,
+	newExternalSecret(chart, hmacTokenSecretName, labels,
 		hmacTokenDataKey, "${KV_SECRET_NAME_HMAC_TOKEN}")
 }
 
-func newExternalSecret(chart cdk8s.Chart, id, targetSecretName string, labels *map[string]*string, secretKey, remoteKey string) {
+// newExternalSecret derives both the cdk8s construct id and the object's
+// metadata.name from targetSecretName using the single "<secret>-external-secret"
+// convention, rather than taking an independent id argument that could drift
+// from the name it labels.
+func newExternalSecret(chart cdk8s.Chart, targetSecretName string, labels *map[string]*string, secretKey, remoteKey string) {
+	id := targetSecretName + "-external-secret"
 	es := cdk8s.NewApiObject(chart, _jsii_.String(id), &cdk8s.ApiObjectProps{
 		ApiVersion: _jsii_.String("external-secrets.io/v1"),
 		Kind:       _jsii_.String("ExternalSecret"),
 		Metadata: &cdk8s.ApiObjectMetadata{
-			Name:      _jsii_.String(targetSecretName + "-external-secret"),
+			Name:      _jsii_.String(id),
 			Namespace: _jsii_.String(namespace),
 			Labels:    labels,
 		},
