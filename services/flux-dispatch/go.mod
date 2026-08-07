@@ -2,7 +2,10 @@ module github.com/Altinn/altinn-platform/services/flux-dispatch
 
 go 1.25.3
 
-require github.com/prometheus/client_golang v1.23.2
+require (
+	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/prometheus/client_golang v1.23.2
+)
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
