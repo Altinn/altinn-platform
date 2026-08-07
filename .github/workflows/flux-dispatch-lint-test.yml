@@ -41,6 +41,7 @@ jobs:
         with:
           version: v2.12.2
           working-directory: services/flux-dispatch
+          args: ./cmd/... ./internal/... ./manifests/...
   test:
     name: Run tests on Ubuntu
     runs-on: self-hosted
