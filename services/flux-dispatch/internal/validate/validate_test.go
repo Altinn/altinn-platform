@@ -1,0 +1,132 @@
+package validate
+
+import "testing"
+
+func TestRepoAllowed(t *testing.T) {
+	tests := []struct {
+		name    string
+		repo    string
+		wantErr bool
+	}{
+		{"canonical repo", "Altinn/dialogporten", false},
+		{"dots and dashes", "Altinn/altinn-platform.core_v2", false},
+		{"other org rejected", "Evil/repo", true},
+		{"lowercase org rejected", "altinn/dialogporten", true},
+		{"org prefix substring rejected", "AltinnEvil/repo", true},
+		{"three segments rejected", "Altinn/a/b", true},
+		{"path traversal rejected", "Altinn/../x", true},
+		{"empty rejected", "", true},
+		{"owner only rejected", "Altinn", true},
+		{"trailing slash rejected", "Altinn/", true},
+		{"leading slash rejected", "/Altinn/dialogporten", true},
+		{"space rejected", "Altinn/dialog porten", true},
+		{"url escape rejected", "Altinn/%2e%2e", true},
+		{"newline rejected", "Altinn/repo\n", true},
+		{"query injection rejected", "Altinn/repo?x=1", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := RepoAllowed(tt.repo)
+			if tt.wantErr && err == nil {
+				t.Fatalf("RepoAllowed(%q) = nil, want error", tt.repo)
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("RepoAllowed(%q) = %v, want nil", tt.repo, err)
+			}
+		})
+	}
+}
+
+func TestKnownReason(t *testing.T) {
+	// Every reason the service accepts must be reported as known.
+	for reason := range successReasons {
+		if !KnownReason(reason) {
+			t.Errorf("KnownReason(%q) = false, want true", reason)
+		}
+	}
+	for reason := range failureReasons {
+		if !KnownReason(reason) {
+			t.Errorf("KnownReason(%q) = false, want true", reason)
+		}
+	}
+
+	for _, reason := range []string{
+		"", "Progressing", "ProgressingWithRetry", "info", "reconciliationsucceeded",
+		"HealthCheckCanceled", "InvalidCELExpression", "unknown",
+	} {
+		if KnownReason(reason) {
+			t.Errorf("KnownReason(%q) = true, want false", reason)
+		}
+	}
+}
+
+// TestReasonSets pins the exact accepted reason set from RFC 0010. These are
+// kustomize-controller v1 event reasons (fluxcd/pkg/apis/meta).
+func TestReasonSets(t *testing.T) {
+	wantSuccess := []string{"ReconciliationSucceeded"}
+	wantFailure := []string{
+		"ReconciliationFailed", "BuildFailed", "HealthCheckFailed",
+		"PruneFailed", "DependencyNotReady", "ArtifactFailed",
+	}
+
+	if len(successReasons) != len(wantSuccess) {
+		t.Errorf("successReasons has %d entries, want %d", len(successReasons), len(wantSuccess))
+	}
+	for _, reason := range wantSuccess {
+		if !successReasons[reason] {
+			t.Errorf("successReasons is missing %q", reason)
+		}
+	}
+
+	if len(failureReasons) != len(wantFailure) {
+		t.Errorf("failureReasons has %d entries, want %d", len(failureReasons), len(wantFailure))
+	}
+	for _, reason := range wantFailure {
+		if !failureReasons[reason] {
+			t.Errorf("failureReasons is missing %q", reason)
+		}
+	}
+
+	for reason := range successReasons {
+		if failureReasons[reason] {
+			t.Errorf("%q is in both successReasons and failureReasons", reason)
+		}
+	}
+}
+
+func TestShouldDispatch(t *testing.T) {
+	tests := []struct {
+		reason        string
+		dispatchEvent string
+		want          bool
+	}{
+		{"ReconciliationSucceeded", "flux-deploy", true},
+		{"ReconciliationFailed", "flux-deploy", false},
+		{"ReconciliationFailed", "flux-deploy-failed", true},
+		{"BuildFailed", "flux-deploy-failed", true},
+		{"HealthCheckFailed", "flux-deploy", false},
+		{"ReconciliationSucceeded", "flux-deploy-failed", false},
+		{"HealthCheckFailed", "flux-deploy-failed", true},
+		{"PruneFailed", "flux-deploy-failed", true},
+		{"DependencyNotReady", "flux-deploy-failed", true},
+		{"ArtifactFailed", "flux-deploy-failed", true},
+		// Any non "-failed" event type is a success channel.
+		{"ReconciliationSucceeded", "run-e2e", true},
+		{"ReconciliationFailed", "run-e2e", false},
+		{"ReconciliationFailed", "incident-failed", true},
+		// Unknown reasons are never dispatched, on either channel.
+		{"Progressing", "flux-deploy", false},
+		{"Progressing", "flux-deploy-failed", false},
+		{"", "flux-deploy", false},
+		{"", "flux-deploy-failed", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.reason+"/"+tt.dispatchEvent, func(t *testing.T) {
+			if got := ShouldDispatch(tt.reason, tt.dispatchEvent); got != tt.want {
+				t.Errorf("ShouldDispatch(%q, %q) = %v, want %v", tt.reason, tt.dispatchEvent, got, tt.want)
+			}
+		})
+	}
+}
