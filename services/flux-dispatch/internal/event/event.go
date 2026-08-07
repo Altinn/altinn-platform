@@ -5,7 +5,6 @@ package event
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -43,24 +42,20 @@ type FluxEvent struct {
 	Metadata  map[string]string `json:"metadata"`
 }
 
-// Parse decodes a webhook body into a FluxEvent and checks that the fields the
-// service routes on are present. It returns an error for malformed JSON or a
-// body that is not shaped like a Flux event.
+// Parse decodes a webhook body into a FluxEvent. Only a body that is not
+// decodable JSON is an error.
+//
+// There are deliberately no field-presence checks: an empty reason is just an
+// unrecognised reason, and RFC 0010 step 3 answers 200 OK for those. Failing
+// the parse instead would push cases the RFC mandates a 200 for behind an
+// error response.
 func Parse(r io.Reader) (FluxEvent, error) {
 	var e FluxEvent
 	if err := json.NewDecoder(r).Decode(&e); err != nil {
 		// Wrapped, not replaced: the caller unwraps to spot
-		// *http.MaxBytesError and answer 413 instead of 400.
+		// *http.MaxBytesError and answer 413.
 		return FluxEvent{}, fmt.Errorf("decode flux event: %w", err)
 	}
-
-	if e.Reason == "" {
-		return FluxEvent{}, errors.New("flux event has no reason")
-	}
-	if e.InvolvedObject.Kind == "" || e.InvolvedObject.Name == "" {
-		return FluxEvent{}, errors.New("flux event has no involvedObject kind/name")
-	}
-
 	return e, nil
 }
 

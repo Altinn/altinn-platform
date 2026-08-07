@@ -286,12 +286,17 @@ func TestSendRejectsRepoThatWouldEscapeThePath(t *testing.T) {
 	fake := newFakeGitHub(t, http.StatusNoContent)
 	d := New(fake.server.URL, staticToken("ghs"), fake.server.Client())
 
-	err := d.Send(context.Background(), "Altinn/../../secret", "flux-deploy", samplePayload())
-	if err == nil {
-		t.Fatal("Send() with a traversal repo returned no error")
+	for _, repo := range []string{"Altinn/../../secret", "Altinn/..", "Altinn/.", "Altinn/...", "../x"} {
+		err := d.Send(context.Background(), repo, "flux-deploy", samplePayload())
+		if err == nil {
+			t.Fatalf("Send(%q) returned no error", repo)
+		}
+		if !errors.Is(err, ErrNonRetryable) {
+			t.Errorf("Send(%q) error = %v, want it to wrap ErrNonRetryable", repo, err)
+		}
 	}
-	if !errors.Is(err, ErrNonRetryable) {
-		t.Errorf("Send() error = %v, want it to wrap ErrNonRetryable", err)
+	if fake.hits.Load() != 0 {
+		t.Errorf("endpoint hits = %d, want 0 (no request may leave with a traversal repo)", fake.hits.Load())
 	}
 }
 

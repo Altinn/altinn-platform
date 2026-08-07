@@ -147,14 +147,35 @@ func TestParseErrors(t *testing.T) {
 		{"not json", "this is not json"},
 		{"empty body", ""},
 		{"json array", `["nope"]`},
-		{"missing reason", `{"involvedObject":{"kind":"Kustomization","name":"app"},"severity":"info"}`},
-		{"missing involvedObject kind", `{"involvedObject":{"name":"app"},"reason":"ReconciliationSucceeded"}`},
-		{"missing involvedObject name", `{"involvedObject":{"kind":"Kustomization"},"reason":"ReconciliationSucceeded"}`},
+		{"wrong type for reason", `{"reason":{"nested":true}}`},
+		{"wrong type for metadata", `{"reason":"X","metadata":"not-an-object"}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, err := Parse(strings.NewReader(tt.body)); err == nil {
 				t.Fatalf("Parse(%q) returned no error", tt.body)
+			}
+		})
+	}
+}
+
+// TestParseAcceptsSparseEvents pins M2: an event that is valid JSON but missing
+// reason or involvedObject fields must parse cleanly, so the handler can answer
+// 200 per RFC step 3 instead of hiding it behind an error response.
+func TestParseAcceptsSparseEvents(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{"missing reason", `{"involvedObject":{"kind":"Kustomization","name":"app"},"severity":"info"}`},
+		{"missing involvedObject kind", `{"involvedObject":{"name":"app"},"reason":"ReconciliationSucceeded"}`},
+		{"missing involvedObject name", `{"involvedObject":{"kind":"Kustomization"},"reason":"ReconciliationSucceeded"}`},
+		{"empty object", `{}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := Parse(strings.NewReader(tt.body)); err != nil {
+				t.Fatalf("Parse(%q) returned error %v, want nil", tt.body, err)
 			}
 		})
 	}

@@ -141,7 +141,7 @@ func (s *Server) handleFluxEvent(w http.ResponseWriter, r *http.Request) {
 		}
 		s.log.Warn("reading webhook body failed",
 			"outcome", outcomeInvalidPayload, "error", err)
-		http.Error(w, "could not read request body", http.StatusBadRequest)
+		writeAccepted(w, outcomeInvalidPayload)
 		return
 	}
 
@@ -156,9 +156,13 @@ func (s *Server) handleFluxEvent(w http.ResponseWriter, r *http.Request) {
 	// Step 2: parse.
 	e, err := event.Parse(bytes.NewReader(body))
 	if err != nil {
+		// Non-retryable, so 2xx per the return-code contract: Flux collapses
+		// every non-2xx into one "failed to send notification" class, so a 4xx
+		// here would be indistinguishable from a real outage on its side. The
+		// diagnostic signal lives in this warning log instead.
 		s.log.Warn("rejecting unparseable webhook body",
 			"outcome", outcomeInvalidPayload, "error", err)
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeAccepted(w, outcomeInvalidPayload)
 		return
 	}
 
@@ -236,8 +240,12 @@ func (s *Server) handleFluxEvent(w http.ResponseWriter, r *http.Request) {
 	elapsed := time.Since(start)
 
 	if errors.Is(dispatchErr, dispatch.ErrAuth) {
-		// No API call was made, so no latency to record.
+		// No API call was made, so no latency to record — observing here would
+		// poison the histogram. The dispatch still failed, so it must also land
+		// in dispatch_errors_total: without that, a rotated App key fails 100%
+		// of dispatches while any error-rate alert reads a flat zero.
 		s.opts.Metrics.GitHubAuthErrors.Inc()
+		s.opts.Metrics.DispatchErrors.WithLabelValues(repo, eventType, dispatch.ErrorCode(dispatchErr)).Inc()
 		log.Error("could not authenticate as the GitHub App",
 			"outcome", outcomeAuthFailed, "error", dispatchErr)
 		http.Error(w, "github authentication unavailable", http.StatusBadGateway)

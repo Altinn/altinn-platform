@@ -42,15 +42,22 @@ eventMetadata:
 
 | Code | When |
 |---|---|
-| `200` | Dispatched, deduplicated, ignored, or rejected for a config reason — retrying cannot help |
-| `400` | Body is not a parseable Flux event |
+| `200` | Dispatched, deduplicated, ignored, unparseable, or rejected for a config reason — retrying cannot help |
 | `401` | Missing or invalid HMAC signature |
 | `413` | Body larger than 64 KB |
 | `502` | Transient GitHub failure (5xx, timeout, auth outage) — Flux retries with backoff |
 
-`400` is the one deviation from "2xx for everything non-retryable": a body the
-service cannot parse means Flux and the service disagree about the payload
-shape, and that should be loud rather than silently acknowledged.
+`401` and `413` are the only non-2xx answers to a delivered request. An
+unparseable body is acknowledged with `200` and a warning log carrying
+`outcome=invalid_payload`: Flux collapses every non-2xx into a single "failed
+to send notification" class, so a `4xx` would be indistinguishable from a real
+outage on its side while the log already carries the full diagnostic.
+
+`dispatch_repo` is matched **case-sensitively** against the `Altinn/` prefix, so
+a lowercase `altinn/...` is rejected even though GitHub treats owner names
+case-insensitively. Segments consisting only of dots (`Altinn/..`, `Altinn/.`)
+are rejected too — `url.JoinPath` cleans them rather than failing, so they would
+otherwise rewrite the outbound request path.
 
 ## Accepted reconciliation reasons
 

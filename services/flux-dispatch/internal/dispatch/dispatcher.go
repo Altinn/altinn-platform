@@ -174,8 +174,16 @@ func dispatchURL(apiBase, repo string) (string, error) {
 	if !ok || owner == "" || name == "" {
 		return "", fmt.Errorf("dispatch repo %q is not in owner/repo format", repo)
 	}
-	if strings.ContainsAny(owner+name, "/") || owner == ".." || name == ".." {
+	if strings.ContainsAny(owner+name, "/") {
 		return "", fmt.Errorf("dispatch repo %q contains path separators", repo)
+	}
+	// Second layer behind validate.RepoAllowed: url.JoinPath *cleans* "." and
+	// ".." rather than rejecting them, so an all-dot segment reaching here
+	// would silently change the request path.
+	for _, segment := range []string{owner, name} {
+		if strings.Trim(segment, ".") == "" {
+			return "", fmt.Errorf("dispatch repo %q contains a path-traversal segment", repo)
+		}
 	}
 
 	endpoint, err := url.JoinPath(apiBase, "repos", owner, name, "dispatches")

@@ -15,6 +15,20 @@ func TestRepoAllowed(t *testing.T) {
 		{"org prefix substring rejected", "AltinnEvil/repo", true},
 		{"three segments rejected", "Altinn/a/b", true},
 		{"path traversal rejected", "Altinn/../x", true},
+		// Dot-only segments are well-formed to repoRe (it allows "." in the
+		// name class) and pass the org prefix check, but url.JoinPath *cleans*
+		// them instead of rejecting them, so a value that survives validation
+		// silently rewrites the outbound request path.
+		{"parent traversal rejected", "Altinn/..", true},
+		{"current dir rejected", "Altinn/.", true},
+		{"triple dot rejected", "Altinn/...", true},
+		{"many dots rejected", "Altinn/....", true},
+		{"dot-only owner rejected", "../dialogporten", true},
+		{"dot-only owner and name rejected", "../..", true},
+		// Leading and trailing dots are legitimate GitHub repo names; only an
+		// all-dot segment is a traversal token, so these must still pass.
+		{"dotfile repo name allowed", "Altinn/.github", false},
+		{"trailing dot name allowed", "Altinn/repo.", false},
 		{"empty rejected", "", true},
 		{"owner only rejected", "Altinn", true},
 		{"trailing slash rejected", "Altinn/", true},

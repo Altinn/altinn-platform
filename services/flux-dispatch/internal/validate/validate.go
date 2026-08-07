@@ -49,6 +49,17 @@ func RepoAllowed(repo string) error {
 	if !repoRe.MatchString(repo) {
 		return fmt.Errorf("dispatch_repo %q is not in owner/repo format", repo)
 	}
+	// repoRe allows "." inside a segment, so "Altinn/.." is well-formed to it.
+	// url.JoinPath *cleans* traversal segments rather than rejecting them, so a
+	// value that survived validation would silently rewrite the outbound path.
+	// Reject all-dot segments; leading/trailing dots (".github", "repo.") stay
+	// legal because they are real GitHub repository names.
+	owner, name, _ := strings.Cut(repo, "/")
+	for _, segment := range []string{owner, name} {
+		if strings.Trim(segment, ".") == "" {
+			return fmt.Errorf("dispatch_repo %q contains a path-traversal segment", repo)
+		}
+	}
 	if !strings.HasPrefix(repo, orgPrefix) {
 		return fmt.Errorf("dispatch_repo %q is not in the %s organisation", repo, strings.TrimSuffix(orgPrefix, "/"))
 	}

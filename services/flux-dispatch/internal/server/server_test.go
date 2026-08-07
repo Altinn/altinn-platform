@@ -365,6 +365,30 @@ func TestCornerCases(t *testing.T) {
 			wantDispatch: 0,
 		},
 		{
+			name: "dot-only dispatch_repo cannot traverse the API path",
+			body: buildEvent(eventOptions{
+				reason:       "ReconciliationSucceeded",
+				revision:     "at23@sha256:aabbccdd",
+				product:      "dialogporten",
+				env:          "at23",
+				dispatchRepo: "Altinn/..",
+			}),
+			wantStatus:   http.StatusOK,
+			wantDispatch: 0,
+		},
+		{
+			name: "current-dir dispatch_repo cannot traverse the API path",
+			body: buildEvent(eventOptions{
+				reason:       "ReconciliationSucceeded",
+				revision:     "at23@sha256:aabbccdd",
+				product:      "dialogporten",
+				env:          "at23",
+				dispatchRepo: "Altinn/.",
+			}),
+			wantStatus:   http.StatusOK,
+			wantDispatch: 0,
+		},
+		{
 			name: "malformed dispatch_repo",
 			body: buildEvent(eventOptions{
 				reason:       "ReconciliationSucceeded",
@@ -404,9 +428,9 @@ func TestCornerCases(t *testing.T) {
 			wantDispatch: 0,
 		},
 		{
-			name:         "malformed JSON body",
+			name:         "malformed JSON body is acknowledged",
 			body:         `{"involvedObject":`,
-			wantStatus:   http.StatusBadRequest,
+			wantStatus:   http.StatusOK,
 			wantDispatch: 0,
 		},
 		{
@@ -700,6 +724,16 @@ func TestGitHubAuthFailureIsRetryable(t *testing.T) {
 	}
 	if got := testutil.ToFloat64(h.metrics.GitHubAuthErrors); got != 1 {
 		t.Errorf("github_auth_errors_total = %v, want 1", got)
+	}
+	// A rotated App key fails every dispatch; an alert on dispatch error rate
+	// must see it, so the auth path also increments dispatch_errors_total.
+	if got := testutil.ToFloat64(h.metrics.DispatchErrors.WithLabelValues(
+		"Altinn/dialogporten", "flux-deploy", "auth")); got != 1 {
+		t.Errorf("dispatch_errors_total{error_code=\"auth\"} = %v, want 1", got)
+	}
+	// No API call was made, so the latency histogram must stay empty.
+	if got := testutil.CollectAndCount(h.metrics.DispatchDuration); got != 0 {
+		t.Errorf("dispatch_duration series = %d, want 0 on the auth path", got)
 	}
 }
 
