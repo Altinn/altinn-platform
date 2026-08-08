@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.7](https://github.com/Altinn/altinn-platform/compare/lakmus-v1.1.6...lakmus-v1.1.7) (2026-08-05)
+
+
+### Bug Fixes
+
+* **deps:** remediate govulncheck + Trivy CVEs (grpc, x/text, Go 1.26.5) ([#3854](https://github.com/Altinn/altinn-platform/issues/3854)) ([2fb8b07](https://github.com/Altinn/altinn-platform/commit/2fb8b07d47d63b6ff8cc87cb415daf4e32d85dd9))
+
 ## [1.1.6](https://github.com/Altinn/altinn-platform/compare/lakmus-v1.1.5...lakmus-v1.1.6) (2026-05-26)
 
 
