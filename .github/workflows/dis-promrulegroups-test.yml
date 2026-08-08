@@ -1,0 +1,36 @@
+name: dis-promrulegroups Tests
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - services/dis-promrulegroups-operator/**
+      - .github/workflows/dis-promrulegroups-test.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - services/dis-promrulegroups-operator/**
+      - .github/workflows/dis-promrulegroups-test.yml
+
+jobs:
+  test:
+    name: Run on Ubuntu
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/dis-promrulegroups-operator
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'services/dis-promrulegroups-operator/go.mod'
+
+      - name: Running Tests
+        run: |
+          go mod tidy
+          make test
