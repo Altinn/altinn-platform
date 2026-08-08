@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.0](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.4.9...dis-vault-v1.5.0) (2026-08-05)
+
+
+### Features
+
+* **dis-operators:** apply RFC 0007 finops base tags to operator-created Azure resources ([#3856](https://github.com/Altinn/altinn-platform/issues/3856)) ([e4e3591](https://github.com/Altinn/altinn-platform/commit/e4e359128a002a3dbdc71dbd70c46146d4fdd04c))
+
+
+### Bug Fixes
+
+* **deps:** remediate govulncheck + Trivy CVEs (grpc, x/text, Go 1.26.5) ([#3854](https://github.com/Altinn/altinn-platform/issues/3854)) ([2fb8b07](https://github.com/Altinn/altinn-platform/commit/2fb8b07d47d63b6ff8cc87cb415daf4e32d85dd9))
+
 ## [1.4.9](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.4.8...dis-vault-v1.4.9) (2026-07-03)
 
 
