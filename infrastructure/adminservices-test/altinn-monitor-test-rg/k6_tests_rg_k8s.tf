@@ -69,6 +69,10 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
     temporary_name_for_rotation = "tmpdefault"
   }
 
+  key_vault_secrets_provider {
+    secret_rotation_enabled = true
+  }
+
   workload_identity_enabled = true
   oidc_issuer_enabled       = true
 
