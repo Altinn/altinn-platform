@@ -42,8 +42,7 @@ module "container_apps_gh_runners" {
   runner_cpu               = var.runner_cpu
   runner_memory            = var.runner_memory
   runner_labels            = var.runner_labels
-  # renovate: datasource=docker depName=ghcr.io/altinn/altinn-platform/gh-runner
-  runner_image = "ghcr.io/altinn/altinn-platform/gh-runner:v0.10.0"
+  runner_image             = var.runner_image
   additional_tags = merge(
     var.tags,
     { submodule = "${var.repository_name}-github-runners" }
