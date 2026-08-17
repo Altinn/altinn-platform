@@ -136,3 +136,171 @@ CVE-2026-39825
 
 # stdlib: html/template script tag injection by trusted template author
 CVE-2026-39826
+
+# .NET runtime bundled inside the Actions runner itself (Runner.Listener et al).
+# We do not ship or control this runtime; it updates when actions/runner does.
+# Review when the pinned actions-runner base image is bumped.
+
+# dotnet: DoS via uncontrolled resource consumption
+CVE-2026-47302
+
+# dotnet: DoS via improper input validation
+CVE-2026-50524
+
+# dotnet: Security feature bypass due to incorrect authorization
+CVE-2026-50528
+
+# dotnet: SocketsHttpHandler HTTP/2 SETTINGS/PING ACK flood DoS
+CVE-2026-50651
+
+# dotnet: DoS via type confusion
+CVE-2026-57108
+
+# dotnet: DoS vulnerability
+CVE-2026-62901
+
+# npm dependencies bundled in the Node.js distribution in the base image.
+# Reachable only by build tooling we invoke deliberately, not by untrusted input.
+# Should be handled upstream by nodesource/actions.
+
+# node-tar: DoS via crafted gzip bomb
+CVE-2026-59873
+
+# node-tar: DoS via malformed tar archive header
+CVE-2026-59874
+
+# brace-expansion: DoS via exponential-time expansion
+CVE-2026-13149
+
+# brace-expansion: DoS via memory exhaustion
+CVE-2026-14257
+
+# brace-expansion: DoS via unbounded intermediate arrays (CVE-2026-13149 bypass)
+CVE-2026-69152
+
+# undici: DoS via unbounded memory growth in WebSocket handling
+CVE-2026-12151
+
+# ip-address: SSRF via inconsistent IP address parsing
+CVE-2026-69192
+
+# sigstore: Unauthorized certificates accepted due to ignored cert field
+CVE-2026-48815
+
+# Python dependencies bundled in the Azure CLI virtualenv.
+# Fixed only when Microsoft ships an updated az CLI package.
+
+# setuptools: Path traversal in PackageIndex
+CVE-2025-47273
+
+# cryptography: vulnerable primitives in bundled wheel
+CVE-2026-69247
+
+# cryptography: vulnerable primitives in bundled wheel
+CVE-2026-69249
+
+# cryptography: vulnerable OpenSSL included in wheels
+GHSA-537c-gmf6-5ccf
+
+# msgpack: Out-of-bounds read on Unpacker reuse
+GHSA-6v7p-g79w-8964
+
+# Go libraries in the docker/containerd/buildx binaries shipped in the base image.
+# These runners execute no Docker workloads (no daemon is available to them), so
+# this tooling is inert here. Should be handled upstream.
+
+# containerd: Host-root command execution
+CVE-2026-53488
+
+# containerd: Arbitrary host file read
+CVE-2026-53489
+
+# containerd: Security bypass via container config
+CVE-2026-53492
+
+# sigstore/rekor: DoS via unbounded gzip decompression
+CVE-2026-48702
+
+# google.golang.org/grpc: xDS RBAC and HTTP/2 vulnerabilities
+GHSA-hrxh-6v49-42gf
+
+# x/crypto/ssh: Unauthorized command execution
+CVE-2026-39828
+
+# x/crypto/ssh: DoS via crafted input
+CVE-2026-39829
+
+# x/crypto/ssh: DoS via resource exhaustion
+CVE-2026-39830
+
+# x/crypto/ssh: Security key bypass
+CVE-2026-39831
+
+# x/crypto/ssh/agent: Security bypass
+CVE-2026-39832
+
+# x/crypto/ssh: DoS
+CVE-2026-39835
+
+# x/crypto/ssh/knownhosts: Host key verification weakness
+CVE-2026-42508
+
+# x/crypto/ssh: Authorization bypass
+CVE-2026-46595
+
+# x/crypto/ssh: DoS via crafted input
+CVE-2026-46597
+
+# x/net/html: Arbitrary code execution
+CVE-2026-25681
+
+# x/net/html: Cross-site scripting
+CVE-2026-27136
+
+# Go stdlib and shared Go libraries, reported against every Go binary in the
+# image (docker, containerd, runc, gh, yq). Fixed by rebuilding those binaries
+# with a patched toolchain, which is upstream work for each vendor.
+
+# stdlib crypto/x509: DoS via excessive processing
+CVE-2026-27145
+
+# stdlib encoding/asn1: DoS via excessive recursion
+CVE-2026-33818
+
+# x/net/idna, net/http: Privilege escalation via crafted hostnames
+CVE-2026-39821
+
+# stdlib os.Root: Symlink following allows directory traversal
+CVE-2026-39822
+
+# stdlib mime: DoS via crafted MIME headers
+CVE-2026-42504
+
+# x/net/dns/dnsmessage: DoS via crafted DNS messages
+CVE-2026-46600
+
+# stdlib net/http: Unencrypted HTTP/2 connections vulnerable to interception
+CVE-2026-56853
+
+# stdlib html/template: XSS via pathological input
+CVE-2026-56858
+
+# stdlib encoding/xml: DoS via XML decoding recursion depth
+CVE-2026-56859
+
+# stdlib net/url: DoS via quadratic complexity
+CVE-2026-56860
+
+# stdlib crypto/tls: DoS via indefinite key updates
+CVE-2026-56862
+
+# x/text: DoS via invalid UTF-8 input
+CVE-2026-56852
+
+# Ubuntu OS package from the base image. A fixed package exists
+# (3.0.13-0ubuntu3.11); it arrives when the pinned base image is rebuilt.
+# Revisit if the base image bump lags — this one is fixable on our side with an
+# apt upgrade if it becomes a concern.
+
+# openssl: Heap use-after-free in PKCS7_verify()
+CVE-2026-45447
