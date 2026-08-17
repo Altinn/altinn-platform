@@ -10,6 +10,11 @@ module "gh_runners_info_altinn_no" {
   altinn_app_install_id         = var.altinn_app_install_id
   altinn_app_key                = var.altinn_app_key
   host_ip                       = var.host_ip
+
+  # Staged rollout of v0.10.0 (adds yq, needed by Altinn/info.altinn.no#695).
+  # Remove this override once proven here and the module default is moved up.
+  runner_image = "ghcr.io/altinn/altinn-platform/gh-runner:v0.10.0"
+
   tags = merge(local.tags, {
     finops_product = "infoportal"
     product        = "infoportal"

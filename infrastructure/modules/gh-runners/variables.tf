@@ -58,3 +58,10 @@ variable "runner_memory" {
   description = "Memory allocated to a runner"
   default     = "4Gi"
 }
+
+variable "runner_image" {
+  type        = string
+  description = "Runner image. Override per repository to roll a new image out to one repository at a time before changing this default."
+  # renovate: datasource=docker depName=ghcr.io/altinn/altinn-platform/gh-runner
+  default = "ghcr.io/altinn/altinn-platform/gh-runner:v0.8.0"
+}
