@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.9.1...ghrunner-0.10.0) (2026-08-17)
+
+
+### Features
+
+* Add yq to gh-runner Docker image ([#3893](https://github.com/Altinn/altinn-platform/issues/3893)) ([3146d6e](https://github.com/Altinn/altinn-platform/commit/3146d6efba5af22c366516540115bc924eda339d))
+
 ## [0.9.1](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.9.0...ghrunner-0.9.1) (2026-05-31)
 
 
