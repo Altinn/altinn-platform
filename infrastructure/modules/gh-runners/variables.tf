@@ -58,3 +58,9 @@ variable "runner_memory" {
   description = "Memory allocated to a runner"
   default     = "4Gi"
 }
+
+variable "runner_labels" {
+  default     = "default"
+  type        = string
+  description = "Additional labels to add to the runner"
+}

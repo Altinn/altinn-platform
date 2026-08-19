@@ -41,6 +41,7 @@ module "container_apps_gh_runners" {
   resource_group_name      = var.resource_group_name
   runner_cpu               = var.runner_cpu
   runner_memory            = var.runner_memory
+  runner_labels            = var.runner_labels
   # renovate: datasource=docker depName=ghcr.io/altinn/altinn-platform/gh-runner
   runner_image = "ghcr.io/altinn/altinn-platform/gh-runner:v0.8.0"
   additional_tags = merge(
