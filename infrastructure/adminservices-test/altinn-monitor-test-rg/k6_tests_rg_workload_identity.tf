@@ -13,7 +13,7 @@ resource "azuread_application_federated_identity_credential" "playwright_reporte
   display_name   = "adminservicestest-k6tests-playwrightreporter"
   audiences      = ["api://AzureADTokenExchange"]
   issuer         = azurerm_kubernetes_cluster.k6tests.oidc_issuer_url
-  subject        = "system:serviceaccount:platform:playwright-reporter-sa"
+  subject        = "system:serviceaccount:playwright:playwright-reporter-sa"
 }
 
 data "azurerm_storage_account" "playwrightartifacts" {
@@ -37,7 +37,7 @@ resource "azurerm_role_assignment" "playwright_reports_storage_blob_data_contrib
 resource "kubernetes_service_account_v1" "playwright_reporter" {
   metadata {
     name      = "playwright-reporter-sa"
-    namespace = "platform"
+    namespace = "playwright"
     annotations = {
       "azure.workload.identity/client-id" : azuread_application.playwright_reporter.client_id
     }
