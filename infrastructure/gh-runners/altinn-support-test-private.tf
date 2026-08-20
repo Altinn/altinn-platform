@@ -11,6 +11,7 @@ module "gh_runners_support_test" {
   altinn_app_key                = var.altinn_app_key
   host_ip                       = var.host_ip
   runner_labels                 = "altinn-support-test-runner"
+  runner_image                  = "ghcr.io/altinn/altinn-support-private/gh-runner-image:latest"
   tags = merge(local.tags, {
     finops_product = "altinn-support"
     product        = "altinn-support"
