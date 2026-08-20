@@ -37,3 +37,46 @@ runs:
         client-id: ${{ inputs.azure_app_id }}
         subscription-id: ${{ inputs.azure_subscription_id }}
         tenant-id: ${{ inputs.azure_tenant_id }}
+    - name: Expose federated credentials to the Azure SDK
+      shell: bash
+      env:
+        AZURE_APP_ID: ${{ inputs.azure_app_id }}
+        AZURE_TENANT: ${{ inputs.azure_tenant_id }}
+      run: |
+        set -euo pipefail
+
+        # `flux --provider=azure` authenticates through the Azure SDK's
+        # DefaultAzureCredential, which resolves a credential by discovery rather
+        # than using the session `az login` just established. The chain stops at
+        # the first credential that fails outright.
+        #
+        # On GitHub-hosted runners nothing earlier in the chain is available, so it
+        # falls through to the CLI credential and picks up that session. On
+        # self-hosted runners backed by Azure Container App Jobs a managed identity
+        # endpoint is present, so ManagedIdentityCredential is attempted instead. It
+        # returns HTTP 400 ("Unable to load the proper Managed Identity") because
+        # the job has a user-assigned identity and flux supplies no client id, and
+        # the chain aborts before the CLI credential is ever reached.
+        #
+        # Handing the SDK the same federated credentials azure/login uses makes
+        # WorkloadIdentityCredential resolve first, so flux authenticates as the
+        # same application on every runner type instead of depending on where the
+        # job happens to land.
+
+        if [[ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]]; then
+          echo "::error::No OIDC token endpoint available. This action needs 'permissions: id-token: write' on the calling job."
+          exit 1
+        fi
+
+        token_file="${RUNNER_TEMP}/azure-federated-token"
+        install -m 600 /dev/null "${token_file}"
+        curl -sSf \
+          -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+          "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api%3A%2F%2FAzureADTokenExchange" \
+          | jq -er '.value' > "${token_file}"
+
+        {
+          echo "AZURE_CLIENT_ID=${AZURE_APP_ID}"
+          echo "AZURE_TENANT_ID=${AZURE_TENANT}"
+          echo "AZURE_FEDERATED_TOKEN_FILE=${token_file}"
+        } >> "${GITHUB_ENV}"
