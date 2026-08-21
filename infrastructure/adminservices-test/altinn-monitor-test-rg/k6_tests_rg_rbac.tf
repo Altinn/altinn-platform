@@ -143,6 +143,11 @@ variable "k8s_rbac" {
       dev_group = "c403060d-5c8a-41b0-8c19-84fa60d0ce18"
       sp_group  = "b22b612d-9dc5-4f8b-8816-e551749bd19c"
     }
+    arbeidsflate = {
+      namespace = "arbeidsflate",
+      dev_group = "c403060d-5c8a-41b0-8c19-84fa60d0ce18"
+      sp_group  = "b22b612d-9dc5-4f8b-8816-e551749bd19c"
+    }
     correspondence = {
       namespace = "correspondence"
       dev_group = "954a4d24-8c7e-4382-9861-2b5d1a515253"
