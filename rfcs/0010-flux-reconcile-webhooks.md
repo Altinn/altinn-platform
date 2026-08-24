@@ -46,7 +46,7 @@ The GitHub repository and event type a product wants triggered on deployment. Pr
 │ Flux         │     │ flux-dispatch    │     │ GitHub                          │
 │ notification │────>│ (platform svc)   │────>│                                 │
 │ controller   │     │                  │     │  Altinn/dialogporten            │
-└─────────────┘     │  - HMAC verify   │     │    └── .github/workflows/       │
+└─────────────┘     │                  │     │    └── .github/workflows/       │
                     │  - GitHub App    │     │        └── e2e-on-deploy.yml    │
                     │    auth          │     │                                 │
                     │  - dispatch      │────>│  Altinn/correspondence          │
@@ -57,8 +57,8 @@ The GitHub repository and event type a product wants triggered on deployment. Pr
 
 1. Product CI pushes a new app OCI artifact (already happens today)
 2. Flux detects the new artifact and reconciles the app Kustomization
-3. Flux notification-controller fires an HMAC-signed webhook to the `flux-dispatch` service
-4. The service verifies the HMAC signature, validates `dispatch_repo` format and org prefix
+3. Flux notification-controller fires a webhook to the `flux-dispatch` service
+4. The service validates `dispatch_repo` format and org prefix
 5. The service deduplicates (skips routine reconciles where nothing changed)
 6. The service reads `dispatch_repo` and `dispatch_event` from the event metadata
 7. The service authenticates as a GitHub App and sends `repository_dispatch` to the target repo, including the reconciliation `reason` in the payload
@@ -279,7 +279,7 @@ The `repository_dispatch` event payload available to workflows:
 **Dependencies (minimal):**
 - `golang-jwt/jwt/v5` for GitHub App JWT generation (RS256)
 - `prometheus/client_golang` for metrics exposition
-- stdlib for everything else: `net/http`, `crypto/hmac`, `log/slog`, `sync`, `encoding/json`
+- stdlib for everything else: `net/http`, `log/slog`, `sync`, `encoding/json`
 - No GitHub SDK — `repository_dispatch` is a single POST
 
 ## Request flow
@@ -287,33 +287,31 @@ The `repository_dispatch` event payload available to workflows:
 ```
 POST /flux-events (from Flux notification-controller)
   │
-  ├── 1. Verify HMAC-SHA256 signature from X-Signature header against shared secret
-  │      └── Invalid/missing signature → 401 Unauthorized (logged, not retried)
-  ├── 2. Parse JSON body into FluxEvent struct (request body limited to 64 KB via http.MaxBytesReader)
-  ├── 3. Validate: reason is a recognized reconciliation event and required metadata present
+  ├── 1. Parse JSON body into FluxEvent struct (request body limited to 64 KB via http.MaxBytesReader)
+  ├── 2. Validate: reason is a recognized reconciliation event and required metadata present
   │      ├── Accepted reasons — success: "ReconciliationSucceeded"; failure: "ReconciliationFailed",
   │      │   "BuildFailed", "HealthCheckFailed", "PruneFailed", "DependencyNotReady", "ArtifactFailed"
   │      │   (kustomize-controller v1 event reasons; "HealthCheckFailed" requires wait/healthChecks on the Kustomization)
   │      └── Unrecognized reason → 200 OK (non-retryable, Flux should not retry)
-  ├── 4. Reject if dispatch_repo missing → 200 OK + log warning
-  ├── 5. Validate dispatch_repo format and org prefix
+  ├── 3. Reject if dispatch_repo missing → 200 OK + log warning
+  ├── 4. Validate dispatch_repo format and org prefix
   │      ├── Must match `^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$` (strict owner/repo format)
   │      ├── Must start with `Altinn/` (reject cross-org dispatch attempts)
   │      ├── Owner and repo segments must not be all dots (rejects values like `Altinn/..` that the
   │      │   regex above would otherwise accept)
   │      └── Invalid → 200 OK + log warning (non-retryable config issue)
-  ├── 6. Construct GitHub API URL using url.JoinPath — url.JoinPath cleans `..` segments rather than
-  │      rejecting them, so it must not be relied on as the traversal control; step 5's validation is
+  ├── 5. Construct GitHub API URL using url.JoinPath — url.JoinPath cleans `..` segments rather than
+  │      rejecting them, so it must not be relied on as the traversal control; step 4's validation is
   │      what rejects traversal attempts
-  ├── 7. Dedup check: has this (product, env, reason, OCI-digest, dispatch_repo) been seen before?
+  ├── 6. Dedup check: has this (product, env, reason, OCI-digest, dispatch_repo) been seen before?
   │      └── Yes → 200 OK + log "skipping duplicate event"
-  ├── 8. Extract commit SHA from kustomize.toolkit.fluxcd.io/originRevision ("main/abc123" → "abc123";
+  ├── 7. Extract commit SHA from kustomize.toolkit.fluxcd.io/originRevision ("main/abc123" → "abc123";
   │      last "/" segment — branch names may contain "/")
-  ├── 9. Authenticate as GitHub App (cached installation token)
-  ├── 10. POST /repos/{dispatch_repo}/dispatches with client_payload (includes reason + message)
-  │       ├── Success → record in dedup tracker, increment metrics → 200 OK
-  │       ├── GitHub 4xx (non-retryable config issue, e.g. App not installed → 404) → log warning → 200 OK
-  │       └── GitHub 5xx / timeout → log error, increment error metric → 502 (Flux retries on 5xx)
+  ├── 8. Authenticate as GitHub App (cached installation token)
+  ├── 9. POST /repos/{dispatch_repo}/dispatches with client_payload (includes reason + message)
+  │      ├── Success → record in dedup tracker, increment metrics → 200 OK
+  │      ├── GitHub 4xx (non-retryable config issue, e.g. App not installed → 404) → log warning → 200 OK
+  │      └── GitHub 5xx / timeout → log error, increment error metric → 502 (Flux retries on 5xx)
   └── Done
 ```
 
@@ -352,15 +350,11 @@ kind: Provider
 metadata:
   name: deploy-webhook
 spec:
-  type: generic-hmac
+  type: generic
   address: http://flux-dispatch.dis-platform.svc.cluster.local:8080/flux-events
-  secretRef:
-    name: flux-dispatch-hmac-token
 ```
 
-The `secretRef` points at a Secret named `flux-dispatch-hmac-token`, holding the shared HMAC token under the data key `token`. Products do not create this Secret — the platform provisions it into the product namespace so the `secretRef` resolves.
-
-The `generic-hmac` provider type causes Flux to sign each webhook payload with an HMAC-SHA256 signature sent in the `X-Signature` header. The `flux-dispatch` service verifies this signature before processing, ensuring only authentic Flux notifications are accepted.
+The Provider needs no credential — there is no `secretRef`, and nothing for products to provision or rotate. The endpoint is not authenticated at the HTTP layer; access control is enforced entirely by the NetworkPolicy restricting inbound connections on port 8080 to the `flux-system` namespace (see [NetworkPolicy](#networkpolicy) for the rationale and the residual risk this implies).
 
 Products include this in their syncroot base and reference it from their Alerts with `providerRef.name: deploy-webhook`. The namespace is set by the product's Kustomization `targetNamespace`.
 
@@ -398,7 +392,7 @@ server := &http.Server{
 }
 ```
 
-Request bodies are limited to 64 KB via `http.MaxBytesReader` before JSON parsing (see request flow step 2). This prevents oversized payloads from consuming memory.
+Request bodies are limited to 64 KB via `http.MaxBytesReader` before JSON parsing (see request flow step 1). This prevents oversized payloads from consuming memory.
 
 ## Kubernetes deployment
 
@@ -407,7 +401,6 @@ Request bodies are limited to 64 KB via `http.MaxBytesReader` before JSON parsin
 - Metrics port: `9090` (scraped by Prometheus via `PodMonitor` or `ServiceMonitor`)
 - Health endpoints: `GET /healthz` (liveness), `GET /readyz` (readiness)
 - GitHub App private key from Kubernetes Secret (sourced from Azure Key Vault)
-- HMAC shared secret from Kubernetes Secret (sourced from Azure Key Vault, shared with Flux Provider)
 - No external ingress — cluster-internal only
 
 ### NetworkPolicy
@@ -483,6 +476,15 @@ spec:
 
 This ensures only the Flux notification-controller can reach the webhook handler (port 8080), only Prometheus can scrape metrics (port 9090), and the pod itself can reach only DNS and HTTPS (GitHub's API sits behind changing IPs, so the egress rule is port-scoped rather than IP-pinned). The egress policy matters on clusters with a default-deny egress baseline — without it, every dispatch would fail with a 502 and Flux would retry indefinitely. The `kubernetes.io/metadata.name` label is set automatically on every namespace (Kubernetes ≥ 1.21), so these selectors need no manual labeling.
 
+**Why this is the access control.** The inbound webhook endpoint is not authenticated at the HTTP layer — there is no HMAC signature or token check on the request. This is a deliberate design choice, not an oversight:
+
+- The product namespace never sends the request. Flux `Alert` and `Provider` are CRDs read by notification-controller, which runs in `flux-system` and makes the outbound HTTP call itself. A per-product credential would still have had to live in the product namespace even though nothing in that namespace consumes it.
+- The NetworkPolicy above is the stronger control: only `flux-system` can open a connection to port 8080 at all. A product's own workloads cannot reach the endpoint regardless of whether they hold a credential.
+- A shared token would have provided no per-product authorization anyway: `dispatch_repo` is self-asserted in `eventMetadata`, so any namespace holding the token could have forged an event naming a different product's repo. A signature would only have proven cluster-insider status against an endpoint already restricted to cluster insiders.
+- The real security boundary is the GitHub App installation scope (see [GitHub App authentication](#github-app-authentication)): the App can only `repository_dispatch` to repositories it is installed on. That boundary is unaffected by this section.
+
+**Residual risk.** This design leans entirely on NetworkPolicy enforcement. On a cluster whose CNI does not enforce NetworkPolicy, any in-cluster workload could POST to `/flux-events` and trigger a `repository_dispatch` to any repo the GitHub App is installed on — the endpoint itself performs no authentication. The blast radius is bounded by the App's installation scope, not by the endpoint; this is not equivalent to an authenticated endpoint, and operators should not treat it as one.
+
 ## Interaction with existing features
 
 - **RFC 0001 (pull-based CD):** The `originRevision` metadata already set by product CI provides the commit SHA — no pipeline changes needed.
@@ -496,7 +498,6 @@ This ensures only the Flux notification-controller can reach the webhook handler
 | Product omits `dispatch_repo` in eventMetadata | 200 OK, log warning, no dispatch |
 | `dispatch_repo` has invalid format or non-Altinn org | 200 OK, log warning, no dispatch (non-retryable config issue) |
 | GitHub App not installed on target repo | GitHub returns 404, service logs error, returns 200 (non-retryable config issue) |
-| Invalid or missing HMAC signature | 401 Unauthorized, log warning, no dispatch |
 | Request body exceeds 64 KB | 413 Request Entity Too Large, no parsing attempted |
 | Rapid consecutive deploys (different digests) | Each has unique OCI digest, dedup correctly allows each through |
 | Same Kustomization dispatches to two different repos | Both dispatched — dedup key includes `dispatch_repo` |
