@@ -205,6 +205,14 @@ func transportErrorCode(err error) string {
 	return "transport"
 }
 
+// TruncateMessage shortens s to the same limit Send applies to an outbound
+// payload's message field. It is exported so a caller that builds a Payload
+// without calling Send — such as the server's DRY_RUN logging path — can log
+// the same value a real dispatch would have sent.
+func TruncateMessage(s string) string {
+	return truncate(s, maxMessageLen)
+}
+
 // truncate shortens s to at most limit runes, never splitting a rune.
 func truncate(s string, limit int) string {
 	if len(s) <= limit {

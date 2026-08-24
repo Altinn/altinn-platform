@@ -300,6 +300,26 @@ func TestSendRejectsRepoThatWouldEscapeThePath(t *testing.T) {
 	}
 }
 
+// TestTruncateMessageMatchesSendTruncation pins TruncateMessage to the same
+// limit Send applies to an outbound payload's message field, so the server's
+// dry-run logging path (which never calls Send) can still log the message a
+// real dispatch would have carried.
+func TestTruncateMessageMatchesSendTruncation(t *testing.T) {
+	short := "Applied revision at23@sha256:aabbccdd"
+	if got := TruncateMessage(short); got != short {
+		t.Errorf("TruncateMessage(%q) = %q, want it untouched", short, got)
+	}
+
+	long := strings.Repeat("e", 4096)
+	got := TruncateMessage(long)
+	if len(got) != maxMessageLen {
+		t.Errorf("TruncateMessage(long) length = %d, want %d", len(got), maxMessageLen)
+	}
+	if !utf8.ValidString(got) {
+		t.Error("TruncateMessage did not preserve valid UTF-8")
+	}
+}
+
 func TestErrorCodeOnUnrelatedError(t *testing.T) {
 	if got := ErrorCode(errors.New("boom")); got != "" {
 		t.Errorf("ErrorCode(unrelated) = %q, want empty", got)
