@@ -354,7 +354,7 @@ spec:
   address: http://flux-dispatch.dis-platform.svc.cluster.local:8080/flux-events
 ```
 
-The Provider needs no credential — there is no `secretRef`, and nothing for products to provision or rotate. The endpoint is not authenticated at the HTTP layer; access control is enforced entirely by the NetworkPolicy restricting inbound connections on port 8080 to the `flux-system` namespace (see [NetworkPolicy](#networkpolicy) for the rationale and the residual risk this implies).
+The Provider needs no credential — there is no `secretRef`, and nothing for products to provision or rotate. The endpoint is not authenticated at the HTTP layer; access control is enforced entirely by the NetworkPolicy restricting inbound connections on port 8080 to the `flux-system` namespace (see [NetworkPolicy](#networkpolicy) for the rationale and the trust model behind it).
 
 Products include this in their syncroot base and reference it from their Alerts with `providerRef.name: deploy-webhook`. The namespace is set by the product's Kustomization `targetNamespace`.
 
@@ -483,7 +483,7 @@ This ensures only the Flux notification-controller can reach the webhook handler
 - A shared token would have provided no per-product authorization anyway: `dispatch_repo` is self-asserted in `eventMetadata`, so any namespace holding the token could have forged an event naming a different product's repo. A signature would only have proven cluster-insider status against an endpoint already restricted to cluster insiders.
 - The real security boundary is the GitHub App installation scope (see [GitHub App authentication](#github-app-authentication)): the App can only `repository_dispatch` to repositories it is installed on. That boundary is unaffected by this section.
 
-**Residual risk.** This design leans entirely on NetworkPolicy enforcement. On a cluster whose CNI does not enforce NetworkPolicy, any in-cluster workload could POST to `/flux-events` and trigger a `repository_dispatch` to any repo the GitHub App is installed on — the endpoint itself performs no authentication. The blast radius is bounded by the App's installation scope, not by the endpoint; this is not equivalent to an authenticated endpoint, and operators should not treat it as one.
+**Trust model.** In-cluster traffic is trusted by design: any workload already running in the cluster is considered authorized to reach platform services. This is a deliberate, platform-wide assumption, not a gap specific to `flux-dispatch`. The NetworkPolicy above is accordingly defense-in-depth, not the sole control: it costs nothing to run and remains good hygiene, which is why it and the other NetworkPolicies in this section stay as specified. The consequence: a workload inside the cluster can POST to `/flux-events` and trigger a `repository_dispatch` to any repo the GitHub App is installed on, with the blast radius bounded by the App's installation scope (see [GitHub App authentication](#github-app-authentication)).
 
 ## Interaction with existing features
 
