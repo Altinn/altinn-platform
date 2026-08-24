@@ -328,3 +328,155 @@ func TestErrorCodeOnUnrelatedError(t *testing.T) {
 		t.Errorf("ErrorCode(nil) = %q, want empty", got)
 	}
 }
+
+// rotatingToken is a TokenSource whose token GitHub can revoke, so a test can
+// observe whether Send drops a rejected one instead of presenting it again.
+type rotatingToken struct {
+	issued      atomic.Int64
+	invalidated atomic.Value // string
+	current     atomic.Value // string
+}
+
+func newRotatingToken() *rotatingToken {
+	r := &rotatingToken{}
+	r.mint()
+	return r
+}
+
+func (r *rotatingToken) mint() {
+	r.current.Store(fmt.Sprintf("ghs_token_%d", r.issued.Add(1)))
+}
+
+func (r *rotatingToken) Token(context.Context) (string, error) {
+	token, _ := r.current.Load().(string)
+	return token, nil
+}
+
+func (r *rotatingToken) InvalidateToken(token string) {
+	r.invalidated.Store(token)
+	r.mint()
+}
+
+// permanentToken stands in for a GitHub App that will never authenticate: a
+// malformed key, or an App or installation ID GitHub rejects.
+type permanentToken struct{}
+
+func (permanentToken) Token(context.Context) (string, error) { return "", permanentTokenErr{} }
+
+type permanentTokenErr struct{}
+
+func (permanentTokenErr) Error() string   { return "app credentials rejected" }
+func (permanentTokenErr) Permanent() bool { return true }
+
+// TestSendRetriesOnceAfterUnauthorized covers a token GitHub revoked mid-life,
+// which is what an App key rotation looks like from here.
+func TestSendRetriesOnceAfterUnauthorized(t *testing.T) {
+	var calls atomic.Int64
+	var seen []string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Header.Get("Authorization"))
+		if calls.Add(1) == 1 {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	tokens := newRotatingToken()
+	dispatcher := New(server.URL, tokens, server.Client())
+
+	if err := dispatcher.Send(context.Background(), "Altinn/repo", "flux-deploy", Payload{}); err != nil {
+		t.Fatalf("Send() error = %v, want nil after the retry succeeded", err)
+	}
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("dispatch attempts = %d, want 2", got)
+	}
+	if got, _ := tokens.invalidated.Load().(string); got != "ghs_token_1" {
+		t.Errorf("invalidated token = %q, want %q", got, "ghs_token_1")
+	}
+	if seen[0] == seen[1] {
+		t.Errorf("retry reused the rejected token %q", seen[0])
+	}
+}
+
+// TestSendDoesNotRetryTwice keeps the refresh from becoming a retry loop: if a
+// freshly minted token is also rejected, the failure stands.
+func TestSendDoesNotRetryTwice(t *testing.T) {
+	var calls atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer server.Close()
+
+	dispatcher := New(server.URL, newRotatingToken(), server.Client())
+
+	err := dispatcher.Send(context.Background(), "Altinn/repo", "flux-deploy", Payload{})
+	if err == nil {
+		t.Fatal("Send() error = nil, want an error when both attempts are rejected")
+	}
+	if got := calls.Load(); got != 2 {
+		t.Errorf("dispatch attempts = %d, want exactly 2", got)
+	}
+	if !errors.Is(err, ErrNonRetryable) {
+		t.Errorf("error = %v, want ErrNonRetryable for a persistent 401", err)
+	}
+}
+
+// TestSendAuthErrorClassification pins the split the return-code contract rests
+// on: a rejected credential must not be answered 502.
+func TestSendAuthErrorClassification(t *testing.T) {
+	tests := []struct {
+		name        string
+		tokens      TokenSource
+		wantClass   error
+		wantCode    string
+		wantOtherIs error
+	}{
+		{
+			name:        "transient outage",
+			tokens:      failingToken{},
+			wantClass:   ErrRetryable,
+			wantCode:    "auth",
+			wantOtherIs: ErrAuth,
+		},
+		{
+			name:        "rejected credentials",
+			tokens:      permanentToken{},
+			wantClass:   ErrNonRetryable,
+			wantCode:    "auth_permanent",
+			wantOtherIs: ErrAuth,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dispatcher := New("https://api.github.invalid", tt.tokens, http.DefaultClient)
+
+			err := dispatcher.Send(context.Background(), "Altinn/repo", "flux-deploy", Payload{})
+			if err == nil {
+				t.Fatal("Send() error = nil, want an auth error")
+			}
+			if !errors.Is(err, tt.wantClass) {
+				t.Errorf("error = %v, want it to wrap %v", err, tt.wantClass)
+			}
+			if !errors.Is(err, tt.wantOtherIs) {
+				t.Errorf("error = %v, want it to wrap %v", err, tt.wantOtherIs)
+			}
+			if got := ErrorCode(err); got != tt.wantCode {
+				t.Errorf("ErrorCode() = %q, want %q", got, tt.wantCode)
+			}
+		})
+	}
+}
+
+// TestErrorMessage covers the Error string, which lands in the operator-facing
+// log line for every failed dispatch.
+func TestErrorMessage(t *testing.T) {
+	err := &Error{Code: "429", Status: 429, Class: ErrRetryable, Reason: "rate limited"}
+	if got, want := err.Error(), "dispatch failed (429): rate limited"; got != want {
+		t.Errorf("Error() = %q, want %q", got, want)
+	}
+}
