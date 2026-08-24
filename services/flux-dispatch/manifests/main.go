@@ -108,10 +108,14 @@ func newFluxDispatchChart(scope constructs.Construct, id string) cdk8s.Chart {
 }
 
 // newDeployment defines the single-replica flux-dispatch Deployment. Env vars
-// mirror internal/config/config.go exactly: the three required variables (no
-// default, Load fails loudly if unset) get values here; optional variables
-// whose defaults already match RFC 0010 (GITHUB_API_URL, DEDUP_TTL,
-// DEDUP_MAX_ENTRIES, DEFAULT_DISPATCH_EVENT) are left unset.
+// mirror internal/config/config.go exactly: the three GitHub App variables
+// (no default, Load fails loudly if unset — unless DRY_RUN is true) get
+// values here, as does DRY_RUN itself (default false in code, but this
+// Deployment always sets it explicitly via the ${DRY_RUN} postBuild
+// placeholder so an environment's gitops values are the single source of
+// truth for the mode — see DECISION-dry-run.md "Manifests"); optional
+// variables whose defaults already match RFC 0010 (GITHUB_API_URL,
+// DEDUP_TTL, DEDUP_MAX_ENTRIES, DEFAULT_DISPATCH_EVENT) are left unset.
 func newDeployment(chart cdk8s.Chart, sa cdk8s.ApiObject, labels, podLabels *map[string]*string) {
 	k8scompat.NewKubeDeployment(chart, _jsii_.String("deployment"), &k8s.KubeDeploymentProps{
 		Metadata: &k8s.ObjectMeta{
@@ -150,6 +154,17 @@ func newDeployment(chart cdk8s.Chart, sa cdk8s.ApiObject, labels, podLabels *map
 							Name: _jsii_.String("github-app-key"),
 							Secret: &k8s.SecretVolumeSource{
 								SecretName: _jsii_.String(githubAppKeySecretName),
+								// Optional: the ExternalSecret below cannot
+								// materialize this Secret until the GitHub App
+								// and its Key Vault entry exist. Marking the
+								// volume optional lets the pod start (with an
+								// empty mount) before that happens, which is
+								// what the DRY_RUN rollout needs. Production
+								// still fails fast: config.Load's startup
+								// check requires the mounted file to exist and
+								// be readable whenever DRY_RUN=false. See
+								// DECISION-dry-run.md "Manifests".
+								Optional: _jsii_.Bool(true),
 							},
 						},
 					},
@@ -175,6 +190,10 @@ func newDeployment(chart cdk8s.Chart, sa cdk8s.ApiObject, labels, podLabels *map
 								{
 									Name:  _jsii_.String("METRICS_ADDR"),
 									Value: _jsii_.String(fmt.Sprintf(":%d", metricsPort)),
+								},
+								{
+									Name:  _jsii_.String("DRY_RUN"),
+									Value: _jsii_.String("${DRY_RUN}"),
 								},
 								{
 									Name:  _jsii_.String("GITHUB_APP_ID"),

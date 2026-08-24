@@ -41,6 +41,8 @@ spec:
               value: :8080
             - name: METRICS_ADDR
               value: :9090
+            - name: DRY_RUN
+              value: ${DRY_RUN}
             - name: GITHUB_APP_ID
               value: ${GITHUB_APP_ID}
             - name: GITHUB_INSTALLATION_ID
@@ -85,6 +87,7 @@ spec:
       volumes:
         - name: github-app-key
           secret:
+            optional: true
             secretName: flux-dispatch-github-app-key
 ---
 apiVersion: v1
