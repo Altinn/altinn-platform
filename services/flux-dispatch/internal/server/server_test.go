@@ -31,6 +31,7 @@ const testInstallationID = "7891011"
 // recordedDispatch is one repository_dispatch call the fake GitHub received.
 type recordedDispatch struct {
 	Path          string
+	Authorization string
 	EventType     string         `json:"event_type"`
 	ClientPayload map[string]any `json:"client_payload"`
 }
@@ -43,6 +44,13 @@ type fakeGitHub struct {
 	mu             sync.Mutex
 	dispatches     []recordedDispatch
 	dispatchStatus int
+	// dispatchQueue, when non-empty, supplies the status for the next call and
+	// is consumed one entry at a time. It lets a test drive a 401-then-success
+	// sequence.
+	dispatchQueue  []int
+	dispatchHeader map[string]string
+	dispatchBody   string
+	dispatchDelay  time.Duration
 	tokenStatus    int
 	tokenCalls     int
 }
@@ -55,6 +63,9 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 	mux.HandleFunc("POST /app/installations/{id}/access_tokens", func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.tokenCalls++
+		// A distinct token per exchange, so a test can tell a reused token from
+		// a freshly minted one.
+		token := fmt.Sprintf("ghs_installation_token_%d", f.tokenCalls)
 		status := f.tokenStatus
 		f.mu.Unlock()
 
@@ -65,7 +76,7 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(map[string]string{
-			"token":      "ghs_installation_token",
+			"token":      token,
 			"expires_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
 		})
 	})
@@ -74,13 +85,31 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 		var recorded recordedDispatch
 		_ = json.Unmarshal(raw, &recorded)
 		recorded.Path = r.URL.Path
+		recorded.Authorization = r.Header.Get("Authorization")
 
 		f.mu.Lock()
 		f.dispatches = append(f.dispatches, recorded)
 		status := f.dispatchStatus
+		if len(f.dispatchQueue) > 0 {
+			status = f.dispatchQueue[0]
+			f.dispatchQueue = f.dispatchQueue[1:]
+		}
+		header, body, delay := f.dispatchHeader, f.dispatchBody, f.dispatchDelay
 		f.mu.Unlock()
 
+		// Holding the call open widens the window in which a concurrent
+		// duplicate could slip past deduplication.
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+
+		for k, v := range header {
+			w.Header().Set(k, v)
+		}
 		w.WriteHeader(status)
+		if body != "" {
+			_, _ = io.WriteString(w, body)
+		}
 	})
 
 	f.server = httptest.NewServer(mux)
@@ -94,10 +123,39 @@ func (f *fakeGitHub) setDispatchStatus(status int) {
 	f.dispatchStatus = status
 }
 
+// queueDispatchStatuses drives the next len(statuses) dispatch calls.
+func (f *fakeGitHub) queueDispatchStatuses(statuses ...int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.dispatchQueue = append(f.dispatchQueue, statuses...)
+}
+
+// setDispatchResponse sets the headers and body returned with the status, so a
+// test can reproduce GitHub's rate-limit signalling.
+func (f *fakeGitHub) setDispatchResponse(header map[string]string, body string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.dispatchHeader, f.dispatchBody = header, body
+}
+
 func (f *fakeGitHub) setTokenStatus(status int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.tokenStatus = status
+}
+
+// tokenCount reports how many installation-token exchanges happened.
+func (f *fakeGitHub) tokenCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.tokenCalls
+}
+
+// setDispatchDelay holds each dispatch open for d before responding.
+func (f *fakeGitHub) setDispatchDelay(d time.Duration) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.dispatchDelay = d
 }
 
 func (f *fakeGitHub) recorded() []recordedDispatch {
@@ -666,29 +724,57 @@ func TestGitHubErrorMetrics(t *testing.T) {
 	}
 }
 
-func TestGitHubAuthFailureIsRetryable(t *testing.T) {
-	h := newHarness(t)
-	h.github.setTokenStatus(http.StatusUnauthorized)
+// TestGitHubAuthFailures pins the split between an App that cannot authenticate
+// right now and one that will never authenticate. Answering 502 for a rejected
+// App ID makes Flux retry until it gives up and drops the event; answering 200
+// for a GitHub outage throws the event away immediately.
+func TestGitHubAuthFailures(t *testing.T) {
+	tests := []struct {
+		name        string
+		tokenStatus int
+		wantStatus  int
+		wantCode    string
+	}{
+		// GitHub rejects the credentials themselves: no retry can fix it.
+		{"unauthorized", http.StatusUnauthorized, http.StatusOK, "auth_permanent"},
+		{"installation not found", http.StatusNotFound, http.StatusOK, "auth_permanent"},
+		// GitHub is unwell: the same request may well succeed later.
+		{"server error", http.StatusInternalServerError, http.StatusBadGateway, "auth"},
+		{"rate limited", http.StatusTooManyRequests, http.StatusBadGateway, "auth"},
+	}
 
-	rec := h.post(successEvent())
-	if rec.Code != http.StatusBadGateway {
-		t.Errorf("status = %d, want 502", rec.Code)
-	}
-	if got := h.github.count(); got != 0 {
-		t.Errorf("dispatch calls = %d, want 0", got)
-	}
-	if got := testutil.ToFloat64(h.metrics.GitHubAuthErrors); got != 1 {
-		t.Errorf("github_auth_errors_total = %v, want 1", got)
-	}
-	// A rotated App key fails every dispatch; an alert on dispatch error rate
-	// must see it, so the auth path also increments dispatch_errors_total.
-	if got := testutil.ToFloat64(h.metrics.DispatchErrors.WithLabelValues(
-		"Altinn/dialogporten", "flux-deploy", "auth")); got != 1 {
-		t.Errorf("dispatch_errors_total{error_code=\"auth\"} = %v, want 1", got)
-	}
-	// No API call was made, so the latency histogram must stay empty.
-	if got := testutil.CollectAndCount(h.metrics.DispatchDuration); got != 0 {
-		t.Errorf("dispatch_duration series = %d, want 0 on the auth path", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.github.setTokenStatus(tt.tokenStatus)
+
+			rec := h.post(successEvent())
+			if rec.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d", rec.Code, tt.wantStatus)
+			}
+			if got := h.github.count(); got != 0 {
+				t.Errorf("dispatch calls = %d, want 0", got)
+			}
+			if got := testutil.ToFloat64(h.metrics.GitHubAuthErrors); got != 1 {
+				t.Errorf("github_auth_errors_total = %v, want 1", got)
+			}
+			// A rotated App key fails every dispatch; an alert on dispatch error
+			// rate must see it, so the auth path also increments
+			// dispatch_errors_total whichever way it is classified.
+			if got := testutil.ToFloat64(h.metrics.DispatchErrors.WithLabelValues(
+				"Altinn/dialogporten", "flux-deploy", tt.wantCode)); got != 1 {
+				t.Errorf("dispatch_errors_total{error_code=%q} = %v, want 1", tt.wantCode, got)
+			}
+			// No API call was made, so the latency histogram must stay empty.
+			if got := testutil.CollectAndCount(h.metrics.DispatchDuration); got != 0 {
+				t.Errorf("dispatch_duration series = %d, want 0 on the auth path", got)
+			}
+			// Neither outcome may be remembered: a transient failure must be
+			// retryable, and a permanent one must not mask a later fix.
+			if got := testutil.ToFloat64(h.metrics.DedupEntries); got != 0 {
+				t.Errorf("dedup_entries = %v, want 0 after an auth failure", got)
+			}
+		})
 	}
 }
 
@@ -1071,4 +1157,246 @@ func findLogRecord(t *testing.T, logs, wantOutcome string) map[string]any {
 	}
 	t.Fatalf("no log record with outcome=%s; logs:\n%s", wantOutcome, logs)
 	return nil
+}
+
+// TestRateLimitedDispatchIsRetryable pins the rate-limit classification.
+// GitHub signals both primary and secondary rate limits with 403 as well as
+// 429. Classifying those as permanent answers 200, which tells Flux the
+// notification was delivered and silently drops the deploy.
+func TestRateLimitedDispatchIsRetryable(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     int
+		header     map[string]string
+		body       string
+		wantStatus int
+	}{
+		{
+			name:       "too many requests",
+			status:     http.StatusTooManyRequests,
+			wantStatus: http.StatusBadGateway,
+		},
+		{
+			name:       "secondary rate limit with retry-after",
+			status:     http.StatusForbidden,
+			header:     map[string]string{"Retry-After": "60"},
+			wantStatus: http.StatusBadGateway,
+		},
+		{
+			name:       "primary rate limit exhausted",
+			status:     http.StatusForbidden,
+			header:     map[string]string{"X-RateLimit-Remaining": "0"},
+			wantStatus: http.StatusBadGateway,
+		},
+		{
+			name:       "secondary rate limit in body",
+			status:     http.StatusForbidden,
+			body:       `{"message":"You have exceeded a secondary rate limit"}`,
+			wantStatus: http.StatusBadGateway,
+		},
+		{
+			// A plain 403 is a real refusal: the App lacks permission.
+			name:       "forbidden without rate-limit signal",
+			status:     http.StatusForbidden,
+			body:       `{"message":"Resource not accessible by integration"}`,
+			wantStatus: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.github.setDispatchStatus(tt.status)
+			h.github.setDispatchResponse(tt.header, tt.body)
+
+			rec := h.post(successEvent())
+			if rec.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d", rec.Code, tt.wantStatus)
+			}
+			// Either way the dispatch failed, so nothing may be remembered.
+			if got := testutil.ToFloat64(h.metrics.DedupEntries); got != 0 {
+				t.Errorf("dedup_entries = %v, want 0 after a failed dispatch", got)
+			}
+		})
+	}
+}
+
+// TestUnauthorizedDispatchRefreshesToken covers a token GitHub revoked before
+// its nominal expiry, which happens on every App key rotation. Without
+// invalidation the cached token keeps failing for up to its full lifetime.
+func TestUnauthorizedDispatchRefreshesToken(t *testing.T) {
+	h := newHarness(t)
+	h.github.queueDispatchStatuses(http.StatusUnauthorized, http.StatusNoContent)
+
+	rec := h.post(successEvent())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if got := strings.TrimSpace(rec.Body.String()); got != outcomeDispatched {
+		t.Errorf("outcome = %q, want %q", got, outcomeDispatched)
+	}
+	if got := h.github.count(); got != 2 {
+		t.Fatalf("dispatch calls = %d, want 2 (one rejected, one retried)", got)
+	}
+	if got := h.github.tokenCount(); got != 2 {
+		t.Errorf("token exchanges = %d, want 2 (the rejected token must be replaced)", got)
+	}
+
+	recorded := h.github.recorded()
+	if recorded[0].Authorization == recorded[1].Authorization {
+		t.Errorf("retry reused the rejected token %q", recorded[0].Authorization)
+	}
+	// The retry succeeded, so the event is deduplicated from here on.
+	if got := testutil.ToFloat64(h.metrics.DedupEntries); got != 1 {
+		t.Errorf("dedup_entries = %v, want 1 after a successful retry", got)
+	}
+}
+
+// TestEventWithoutDigestIsNotDeduplicated covers an event carrying no revision
+// metadata. Its digest is empty, so every such event for one product, env,
+// reason and repo shares a key. Deduplicating on that would let the first
+// delivery suppress every later one for the whole TTL.
+func TestEventWithoutDigestIsNotDeduplicated(t *testing.T) {
+	h := newHarness(t)
+
+	noDigest := buildEvent(eventOptions{
+		reason:        "ReconciliationFailed",
+		product:       "dialogporten",
+		env:           "at23",
+		dispatchRepo:  "Altinn/dialogporten",
+		dispatchEvent: "flux-deploy-failed",
+		message:       "build failed",
+	})
+
+	for i := range 3 {
+		rec := h.post(noDigest)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("delivery %d: status = %d, want 200", i, rec.Code)
+		}
+		if got := strings.TrimSpace(rec.Body.String()); got == outcomeDuplicate {
+			t.Fatalf("delivery %d was suppressed as a duplicate on an empty digest", i)
+		}
+	}
+
+	if got := h.github.count(); got != 3 {
+		t.Errorf("dispatch calls = %d, want 3: an empty digest must disable dedup", got)
+	}
+	// Nothing is remembered, so nothing can wrongly suppress a later event.
+	if got := testutil.ToFloat64(h.metrics.DedupEntries); got != 0 {
+		t.Errorf("dedup_entries = %v, want 0 when dedup is skipped", got)
+	}
+}
+
+// TestConcurrentIdenticalEventsDispatchOnce is the regression test for the
+// check-then-act window between the dedup lookup and the record. The dispatch
+// is held open so every request is inside that window simultaneously.
+func TestConcurrentIdenticalEventsDispatchOnce(t *testing.T) {
+	h := newHarness(t)
+	h.github.setDispatchDelay(50 * time.Millisecond)
+
+	const deliveries = 16
+	var wg sync.WaitGroup
+	codes := make([]int, deliveries)
+	bodies := make([]string, deliveries)
+
+	for i := range deliveries {
+		wg.Go(func() {
+			rec := h.post(successEvent())
+			codes[i] = rec.Code
+			bodies[i] = strings.TrimSpace(rec.Body.String())
+		})
+	}
+	wg.Wait()
+
+	if got := h.github.count(); got != 1 {
+		t.Errorf("dispatch calls = %d, want 1: concurrent duplicates must collapse", got)
+	}
+
+	dispatched, duplicates := 0, 0
+	for i := range deliveries {
+		if codes[i] != http.StatusOK {
+			t.Errorf("delivery %d: status = %d, want 200", i, codes[i])
+		}
+		switch bodies[i] {
+		case outcomeDispatched:
+			dispatched++
+		case outcomeDuplicate:
+			duplicates++
+		}
+	}
+	if dispatched != 1 {
+		t.Errorf("dispatched outcomes = %d, want 1", dispatched)
+	}
+	if duplicates != deliveries-1 {
+		t.Errorf("duplicate outcomes = %d, want %d", duplicates, deliveries-1)
+	}
+}
+
+// TestInvalidDispatchEventIsRejected covers a dispatch_event that would reach
+// GitHub and three Prometheus labels unbounded.
+func TestInvalidDispatchEventIsRejected(t *testing.T) {
+	tests := []struct {
+		name         string
+		event        string
+		wantDispatch bool
+	}{
+		{"newline", "deploy\nInjected", false},
+		{"over length limit", strings.Repeat("a", 101), false},
+		{"space", "flux deploy", false},
+		{"legal name", "flux-deploy", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(t)
+			rec := h.post(buildEvent(eventOptions{
+				reason:        "ReconciliationSucceeded",
+				revision:      "at23@sha256:aabbccdd",
+				product:       "dialogporten",
+				env:           "at23",
+				dispatchRepo:  "Altinn/dialogporten",
+				dispatchEvent: tt.event,
+			}))
+
+			if rec.Code != http.StatusOK {
+				t.Errorf("status = %d, want 200", rec.Code)
+			}
+			want := 0
+			if tt.wantDispatch {
+				want = 1
+			}
+			if got := h.github.count(); got != want {
+				t.Errorf("dispatch calls = %d, want %d", got, want)
+			}
+			if !tt.wantDispatch {
+				if got := strings.TrimSpace(rec.Body.String()); got != outcomeInvalidEvent {
+					t.Errorf("outcome = %q, want %q", got, outcomeInvalidEvent)
+				}
+			}
+		})
+	}
+}
+
+// TestUnknownReasonIsBucketed keeps an unrecognised reason from minting a
+// permanent metric series. Reasons arrive verbatim in the request body and a
+// CounterVec never evicts a child.
+func TestUnknownReasonIsBucketed(t *testing.T) {
+	h := newHarness(t)
+
+	for i := range 5 {
+		h.post(buildEvent(eventOptions{
+			reason:       fmt.Sprintf("SomethingNew%d", i),
+			revision:     "at23@sha256:aabbccdd",
+			product:      "dialogporten",
+			env:          "at23",
+			dispatchRepo: "Altinn/dialogporten",
+		}))
+	}
+
+	if got := testutil.ToFloat64(h.metrics.EventsReceived.WithLabelValues("other")); got != 5 {
+		t.Errorf(`events_received_total{reason="other"} = %v, want 5`, got)
+	}
+	if got := testutil.CollectAndCount(h.metrics.EventsReceived); got != 1 {
+		t.Errorf("events_received series = %d, want 1: unknown reasons must share one label", got)
+	}
 }

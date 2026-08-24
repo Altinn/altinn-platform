@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -37,17 +38,17 @@ func (c *clock) Advance(d time.Duration) {
 	c.now = c.now.Add(d)
 }
 
-func newTestTracker(t *testing.T, ttl time.Duration, maxEntries int) (*Tracker, *clock, prometheus.Gauge) {
+func newTestTracker(t *testing.T, maxEntries int) (*Tracker, *clock, prometheus.Gauge) {
 	t.Helper()
 	gauge := newTestGauge()
-	tr := New(ttl, maxEntries, gauge)
+	tr := New(time.Hour, maxEntries, gauge)
 	c := &clock{now: time.Date(2026, 3, 5, 12, 0, 0, 0, time.UTC)}
 	tr.now = c.Now
 	return tr, c, gauge
 }
 
 func TestKey(t *testing.T) {
-	tr, _, _ := newTestTracker(t, time.Hour, 10)
+	tr, _, _ := newTestTracker(t, 10)
 
 	got := tr.Key("dialogporten", "at23", "ReconciliationSucceeded", "sha256:aabbccdd", "Altinn/dialogporten")
 	want := "dialogporten/at23/ReconciliationSucceeded/sha256:aabbccdd/Altinn/dialogporten"
@@ -57,7 +58,7 @@ func TestKey(t *testing.T) {
 }
 
 func TestSeenAfterRecord(t *testing.T) {
-	tr, _, gauge := newTestTracker(t, time.Hour, 10)
+	tr, _, gauge := newTestTracker(t, 10)
 
 	key := tr.Key("dialogporten", "at23", "ReconciliationSucceeded", "sha256:aabbccdd", "Altinn/dialogporten")
 	if tr.Seen(key) {
@@ -87,7 +88,7 @@ func TestSeenAfterRecord(t *testing.T) {
 // a success for the same digest are distinct events, and the same Kustomization
 // dispatching to two repos must not deduplicate the second dispatch.
 func TestKeyComponentsAreDistinguishing(t *testing.T) {
-	tr, _, _ := newTestTracker(t, time.Hour, 100)
+	tr, _, _ := newTestTracker(t, 100)
 
 	base := tr.Key("dialogporten", "at23", "ReconciliationSucceeded", "sha256:aabbccdd", "Altinn/dialogporten")
 	tr.Record(base)
@@ -107,7 +108,7 @@ func TestKeyComponentsAreDistinguishing(t *testing.T) {
 }
 
 func TestRecordEvictsOldestAtCapacity(t *testing.T) {
-	tr, c, gauge := newTestTracker(t, time.Hour, 2)
+	tr, c, gauge := newTestTracker(t, 2)
 
 	first := "a"
 	second := "b"
@@ -139,7 +140,7 @@ func TestRecordEvictsOldestAtCapacity(t *testing.T) {
 }
 
 func TestExpiredEntriesAreNotSeen(t *testing.T) {
-	tr, c, _ := newTestTracker(t, time.Hour, 10)
+	tr, c, _ := newTestTracker(t, 10)
 
 	tr.Record("key")
 	c.Advance(30 * time.Minute)
@@ -154,7 +155,7 @@ func TestExpiredEntriesAreNotSeen(t *testing.T) {
 }
 
 func TestEvictExpiredSweepsAndUpdatesGauge(t *testing.T) {
-	tr, c, gauge := newTestTracker(t, time.Hour, 10)
+	tr, c, gauge := newTestTracker(t, 10)
 
 	tr.Record("old")
 	c.Advance(90 * time.Minute)
@@ -178,12 +179,12 @@ func TestEvictExpiredSweepsAndUpdatesGauge(t *testing.T) {
 }
 
 func TestStartEvictionSweepsInBackground(t *testing.T) {
-	tr, c, gauge := newTestTracker(t, time.Hour, 10)
+	tr, c, gauge := newTestTracker(t, 10)
 
 	tr.Record("old")
 	c.Advance(90 * time.Minute)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	tr.StartEviction(ctx, time.Millisecond)
 
@@ -197,7 +198,7 @@ func TestStartEvictionSweepsInBackground(t *testing.T) {
 }
 
 func TestStartEvictionStopsOnContextCancel(t *testing.T) {
-	tr, c, gauge := newTestTracker(t, time.Hour, 10)
+	tr, c, gauge := newTestTracker(t, 10)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	tr.StartEviction(ctx, time.Millisecond)
@@ -215,9 +216,9 @@ func TestStartEvictionStopsOnContextCancel(t *testing.T) {
 }
 
 func TestConcurrentSeenAndRecord(t *testing.T) {
-	tr, _, _ := newTestTracker(t, time.Hour, 64)
+	tr, _, _ := newTestTracker(t, 64)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	tr.StartEviction(ctx, time.Millisecond)
 
@@ -237,4 +238,93 @@ func TestConcurrentSeenAndRecord(t *testing.T) {
 		}(worker)
 	}
 	wg.Wait()
+}
+
+// TestClaimBlocksConcurrentDuplicate covers the reservation that closes the
+// window between the dedup lookup and the record.
+func TestClaimBlocksConcurrentDuplicate(t *testing.T) {
+	tracker := New(time.Hour, 100, nil)
+
+	if !tracker.Claim("k") {
+		t.Fatal("first Claim = false, want true")
+	}
+	if tracker.Claim("k") {
+		t.Error("second Claim = true, want false while the first is in flight")
+	}
+	if !tracker.Seen("k") {
+		t.Error("Seen = false, want true for a claimed key")
+	}
+}
+
+// TestReleaseAllowsRetry covers a dispatch that failed: the claim must not
+// suppress the redelivery.
+func TestReleaseAllowsRetry(t *testing.T) {
+	tracker := New(time.Hour, 100, nil)
+
+	if !tracker.Claim("k") {
+		t.Fatal("Claim = false, want true")
+	}
+	tracker.Release("k")
+
+	if tracker.Seen("k") {
+		t.Error("Seen = true after Release, want false")
+	}
+	if !tracker.Claim("k") {
+		t.Error("Claim after Release = false, want true")
+	}
+}
+
+// TestReleaseAfterRecordIsNoop guards the confirmed case: once a dispatch has
+// succeeded, a stray Release must not un-deduplicate it.
+func TestReleaseAfterRecordIsNoop(t *testing.T) {
+	tracker := New(time.Hour, 100, nil)
+
+	tracker.Claim("k")
+	tracker.Record("k")
+	tracker.Release("k")
+
+	if !tracker.Seen("k") {
+		t.Error("Seen = false after Record, want true: Release must not drop a confirmed entry")
+	}
+}
+
+// TestClaimTakesOverExpiredEntry covers an entry past its TTL that the sweeper
+// has not reached yet.
+func TestClaimTakesOverExpiredEntry(t *testing.T) {
+	now := time.Now()
+	tracker := New(time.Hour, 100, nil)
+	tracker.now = func() time.Time { return now }
+
+	tracker.Record("k")
+	now = now.Add(2 * time.Hour)
+
+	if !tracker.Claim("k") {
+		t.Error("Claim = false on an expired entry, want true")
+	}
+}
+
+// TestConcurrentClaimYieldsSingleWinner is the property the handler depends on:
+// exactly one caller may own a key at a time.
+func TestConcurrentClaimYieldsSingleWinner(t *testing.T) {
+	tracker := New(time.Hour, 1000, nil)
+
+	const goroutines = 64
+	var wg sync.WaitGroup
+	var winners atomic.Int64
+
+	start := make(chan struct{})
+	for range goroutines {
+		wg.Go(func() {
+			<-start
+			if tracker.Claim("contended") {
+				winners.Add(1)
+			}
+		})
+	}
+	close(start)
+	wg.Wait()
+
+	if got := winners.Load(); got != 1 {
+		t.Errorf("winners = %d, want exactly 1", got)
+	}
 }

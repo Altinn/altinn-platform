@@ -28,14 +28,27 @@ eventMetadata:
 3. Ignore unrecognised reconciliation reasons.
 4. Require `dispatch_repo`, and require it to match
    `^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$` and start with `Altinn/`.
-5. Route by reason: a `dispatch_event` ending in `-failed` receives failure
+5. Require `dispatch_event` to match `^[a-zA-Z0-9._-]+$` and be at most 100
+   characters. It reaches both GitHub and three Prometheus labels, so it is
+   bounded the same way `dispatch_repo` is.
+6. Route by reason: a `dispatch_event` ending in `-failed` receives failure
    reasons only, any other value receives success reasons only. Flux's
    `eventSeverity: info` forwards errors too, so this filter is what keeps a
    failure from arriving as a success event.
-6. Skip events already dispatched for the same
-   `{product}/{env}/{reason}/{digest}/{dispatch_repo}`.
-7. Authenticate as the GitHub App (cached installation token) and
+7. Skip events already dispatched for the same
+   `{product}/{env}/{reason}/{digest}/{dispatch_repo}`. The key is claimed
+   before the dispatch and confirmed after it, so two concurrent deliveries of
+   one event cannot both dispatch; a failed dispatch releases the claim so the
+   redelivery is not suppressed.
+8. Authenticate as the GitHub App (cached installation token) and
    `POST /repos/{dispatch_repo}/dispatches`.
+
+An event carrying no artifact digest (no `kustomize.toolkit.fluxcd.io/revision`
+metadata) is dispatched **without** deduplication and logged with
+`outcome=no_digest`. Such events have no identity to deduplicate on, and
+treating the empty digest as one would collapse every event for a given
+product, env, reason and repo onto a single key — the first delivery would then
+suppress every later one for the whole `DEDUP_TTL`.
 
 The endpoint itself is not authenticated at the HTTP layer. Access control is
 enforced by the `flux-dispatch-allow-webhook-traffic` NetworkPolicy, which
@@ -49,7 +62,27 @@ namespace that ever calls this service (notification-controller). See RFC
 |---|---|
 | `200` | Dispatched, deduplicated, ignored, unparseable, or rejected for a config reason — retrying cannot help |
 | `413` | Body larger than 64 KB |
-| `502` | Transient GitHub failure (5xx, timeout, auth outage) — Flux retries with backoff |
+| `502` | Transient GitHub failure (5xx, rate limit, timeout, auth outage) — Flux retries with backoff |
+
+The split that matters is transient versus permanent, not success versus
+failure:
+
+- A GitHub **rate limit** (`429`, or `403` carrying `Retry-After`, an exhausted
+  `X-RateLimit-Remaining`, or a rate-limit message) is transient and answers
+  `502`. Treating it as permanent would acknowledge the event and lose the
+  deploy signal for good.
+- A **rejected credential** — a malformed private key, or an App or
+  installation ID GitHub refuses — is permanent and answers `200` with
+  `outcome=github_auth_rejected`. No retry can fix it, so making Flux exhaust
+  its retries would only delay dropping the event. The signal lives in
+  `flux_dispatch_github_auth_errors_total` and an error log; alert on that
+  counter.
+- A **GitHub outage** on the token exchange is transient and answers `502` with
+  `outcome=github_auth_failed`.
+
+A `401` on the dispatch itself is retried once with a freshly minted token
+before being classified, because GitHub revokes installation tokens on key
+rotation without warning.
 
 `413` is the only non-2xx answer to a delivered request. An unparseable body
 is acknowledged with `200` and a warning log carrying

@@ -7,10 +7,12 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -48,6 +50,9 @@ type fakeGitHub struct {
 	tokenTTL  time.Duration
 	status    int
 	tokenName string
+	// delay holds the exchange open, so a test can observe what concurrent
+	// callers do while one is in flight.
+	delay time.Duration
 }
 
 func newFakeGitHub(t *testing.T, tokenName string, tokenTTL time.Duration, status int) *fakeGitHub {
@@ -57,6 +62,10 @@ func newFakeGitHub(t *testing.T, tokenName string, tokenTTL time.Duration, statu
 		f.hits.Add(1)
 		f.lastAuth.Store(r.Header.Get("Authorization"))
 		f.lastPath.Store(r.URL.Path)
+
+		if f.delay > 0 {
+			time.Sleep(f.delay)
+		}
 
 		if f.status != http.StatusCreated {
 			w.WriteHeader(f.status)
@@ -225,5 +234,184 @@ func TestTokenHonoursContextCancellation(t *testing.T) {
 
 	if _, err := app.Token(ctx); err == nil {
 		t.Fatal("Token() with a cancelled context returned no error")
+	}
+}
+
+// TestTokenErrorPermanence pins the split the return-code contract rests on: a
+// credential GitHub rejects can never be retried into working, while an outage
+// or a rate limit can.
+func TestTokenErrorPermanence(t *testing.T) {
+	tests := []struct {
+		name          string
+		status        int
+		wantPermanent bool
+	}{
+		{"unauthorized", http.StatusUnauthorized, true},
+		{"forbidden", http.StatusForbidden, true},
+		{"installation not found", http.StatusNotFound, true},
+		{"unprocessable", http.StatusUnprocessableEntity, true},
+
+		{"server error", http.StatusInternalServerError, false},
+		{"bad gateway", http.StatusBadGateway, false},
+		{"rate limited", http.StatusTooManyRequests, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, keyPEM := newTestKey(t)
+			github := newFakeGitHub(t, "ghs_token", time.Hour, tt.status)
+			app := New(testAppID, testInstallationID, keyPEM, github.server.URL, github.server.Client())
+
+			_, err := app.Token(context.Background())
+			if err == nil {
+				t.Fatalf("Token() error = nil, want an error for status %d", tt.status)
+			}
+
+			var tokenErr *TokenError
+			if !errors.As(err, &tokenErr) {
+				t.Fatalf("Token() error = %T, want *TokenError", err)
+			}
+			if tokenErr.Permanent() != tt.wantPermanent {
+				t.Errorf("Permanent() = %v, want %v for status %d",
+					tokenErr.Permanent(), tt.wantPermanent, tt.status)
+			}
+			if tokenErr.Status != tt.status {
+				t.Errorf("Status = %d, want %d", tokenErr.Status, tt.status)
+			}
+		})
+	}
+}
+
+// TestMalformedKeyIsPermanent covers a key that never parsed: no retry can make
+// an unparseable PEM sign a JWT.
+func TestMalformedKeyIsPermanent(t *testing.T) {
+	github := newFakeGitHub(t, "ghs_token", time.Hour, http.StatusCreated)
+	app := New(testAppID, testInstallationID, []byte("not a pem"), github.server.URL, github.server.Client())
+
+	_, err := app.Token(context.Background())
+	if err == nil {
+		t.Fatal("Token() error = nil, want an error for a malformed key")
+	}
+
+	var tokenErr *TokenError
+	if !errors.As(err, &tokenErr) {
+		t.Fatalf("Token() error = %T, want *TokenError", err)
+	}
+	if !tokenErr.Permanent() {
+		t.Error("Permanent() = false, want true for a malformed private key")
+	}
+	if got := github.hits.Load(); got != 0 {
+		t.Errorf("token exchanges = %d, want 0: a bad key must not reach GitHub", got)
+	}
+}
+
+// TestInvalidateTokenForcesRefresh covers a token GitHub revoked before its
+// nominal expiry, as happens on an App key rotation.
+func TestInvalidateTokenForcesRefresh(t *testing.T) {
+	_, keyPEM := newTestKey(t)
+	github := newFakeGitHub(t, "ghs_token", time.Hour, http.StatusCreated)
+	app := New(testAppID, testInstallationID, keyPEM, github.server.URL, github.server.Client())
+
+	first, err := app.Token(context.Background())
+	if err != nil {
+		t.Fatalf("Token() error = %v", err)
+	}
+	if _, err := app.Token(context.Background()); err != nil {
+		t.Fatalf("cached Token() error = %v", err)
+	}
+	if got := github.hits.Load(); got != 1 {
+		t.Fatalf("token exchanges = %d, want 1 before invalidation", got)
+	}
+
+	app.InvalidateToken(first)
+
+	if _, err := app.Token(context.Background()); err != nil {
+		t.Fatalf("Token() after invalidation error = %v", err)
+	}
+	if got := github.hits.Load(); got != 2 {
+		t.Errorf("token exchanges = %d, want 2 after invalidation", got)
+	}
+}
+
+// TestInvalidateTokenIgnoresSupersededToken guards against a caller holding a
+// stale token evicting a newer one another caller just minted.
+func TestInvalidateTokenIgnoresSupersededToken(t *testing.T) {
+	_, keyPEM := newTestKey(t)
+	github := newFakeGitHub(t, "ghs_token", time.Hour, http.StatusCreated)
+	app := New(testAppID, testInstallationID, keyPEM, github.server.URL, github.server.Client())
+
+	if _, err := app.Token(context.Background()); err != nil {
+		t.Fatalf("Token() error = %v", err)
+	}
+
+	app.InvalidateToken("ghs_some_older_token")
+
+	if _, err := app.Token(context.Background()); err != nil {
+		t.Fatalf("Token() error = %v", err)
+	}
+	if got := github.hits.Load(); got != 1 {
+		t.Errorf("token exchanges = %d, want 1: an unrelated token must not evict the cache", got)
+	}
+}
+
+// TestConcurrentTokenSingleFlight covers the refresh stampede: many callers
+// arriving with a cold cache must produce one exchange, not one each.
+func TestConcurrentTokenSingleFlight(t *testing.T) {
+	_, keyPEM := newTestKey(t)
+	github := newFakeGitHub(t, "ghs_token", time.Hour, http.StatusCreated)
+	github.delay = 30 * time.Millisecond
+	app := New(testAppID, testInstallationID, keyPEM, github.server.URL, github.server.Client())
+
+	const callers = 32
+	var wg sync.WaitGroup
+	errs := make([]error, callers)
+
+	for i := range callers {
+		wg.Go(func() {
+			_, errs[i] = app.Token(context.Background())
+		})
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("caller %d: Token() error = %v", i, err)
+		}
+	}
+	if got := github.hits.Load(); got != 1 {
+		t.Errorf("token exchanges = %d, want 1: concurrent callers must share one exchange", got)
+	}
+}
+
+// TestTokenRespectsContextWhileWaiting covers a caller whose client already
+// disconnected: it must not stay queued behind an in-flight exchange.
+func TestTokenRespectsContextWhileWaiting(t *testing.T) {
+	_, keyPEM := newTestKey(t)
+	github := newFakeGitHub(t, "ghs_token", time.Hour, http.StatusCreated)
+	github.delay = 500 * time.Millisecond
+	app := New(testAppID, testInstallationID, keyPEM, github.server.URL, github.server.Client())
+
+	// Leader holds the exchange open.
+	go func() { _, _ = app.Token(context.Background()) }()
+
+	// Give the leader time to register itself as the in-flight fetcher.
+	time.Sleep(50 * time.Millisecond)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := app.Token(ctx)
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Error("Token() error = nil, want a context error")
+		}
+	case <-time.After(300 * time.Millisecond):
+		t.Error("Token() blocked on a cancelled context instead of returning")
 	}
 }

@@ -23,9 +23,10 @@ import (
 )
 
 const (
-	// githubTimeout bounds an outbound GitHub call. It sits below the server's
-	// 30s WriteTimeout so a slow GitHub surfaces as a 502 rather than a dropped
-	// connection.
+	// githubTimeout bounds a single outbound GitHub call. One request can make
+	// two of them — a token exchange and the dispatch — so this alone does not
+	// bound the handler; the server applies an overall budget below its write
+	// timeout, and this keeps any one call from consuming all of it.
 	githubTimeout = 15 * time.Second
 	// shutdownTimeout bounds graceful shutdown on SIGTERM.
 	shutdownTimeout = 15 * time.Second

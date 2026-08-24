@@ -7,6 +7,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"log/slog"
@@ -36,17 +37,26 @@ const (
 const (
 	outcomeDispatched          = "dispatched"
 	outcomeDuplicate           = "duplicate"
+	outcomeNoDigest            = "no_digest"
 	outcomeIgnoredReason       = "ignored_reason"
 	outcomeNotRouted           = "reason_not_routed"
 	outcomeMissingRepo         = "missing_dispatch_repo"
 	outcomeInvalidRepo         = "invalid_dispatch_repo"
 	outcomeBodyTooLarge        = "body_too_large"
 	outcomeInvalidPayload      = "invalid_payload"
+	outcomeInvalidEvent        = "invalid_dispatch_event"
 	outcomeDispatchRejected    = "dispatch_rejected"
 	outcomeDispatchUnavailable = "dispatch_unavailable"
 	outcomeAuthFailed          = "github_auth_failed"
+	outcomeAuthRejected        = "github_auth_rejected"
 	outcomeDryRun              = "dry_run"
 )
+
+// dispatchBudget bounds the whole outbound conversation with GitHub — a token
+// exchange plus the dispatch itself, each of which can take githubTimeout. It
+// sits below writeTimeout so an unresponsive GitHub surfaces as a 502 the
+// caller actually receives, rather than a dropped connection.
+const dispatchBudget = 25 * time.Second
 
 // Options configures a Server. Tracker, Dispatcher and Metrics are required for
 // the webhook handler; MetricsHandler and the *Server accessors work without.
@@ -172,7 +182,10 @@ func (s *Server) handleFluxEvent(w http.ResponseWriter, r *http.Request) {
 		"kustomization", e.InvolvedObject.Name,
 	)
 
-	s.opts.Metrics.EventsReceived.WithLabelValues(e.Reason).Inc()
+	// Bucket the label rather than passing the raw reason through: it arrives
+	// verbatim in the request body, and a Prometheus CounterVec never evicts a
+	// child, so an unfiltered value would pin a series for the process lifetime.
+	s.opts.Metrics.EventsReceived.WithLabelValues(validate.ReasonLabel(e.Reason)).Inc()
 
 	// Step 3: only act on recognised reconciliation reasons.
 	if !validate.KnownReason(e.Reason) {
@@ -199,6 +212,14 @@ func (s *Server) handleFluxEvent(w http.ResponseWriter, r *http.Request) {
 	if eventType == "" {
 		eventType = s.opts.DefaultDispatchEvent
 	}
+
+	// The dispatch_event reaches GitHub and three Prometheus labels, so it is
+	// bounded here the same way the dispatch_repo is.
+	if err := validate.DispatchEvent(eventType); err != nil {
+		log.Warn("rejecting dispatch_event", "outcome", outcomeInvalidEvent, "error", err)
+		writeAccepted(w, outcomeInvalidEvent)
+		return
+	}
 	log = log.With("event_type", eventType)
 
 	// Route by reason: an `eventSeverity: info` Alert also forwards errors, and
@@ -210,12 +231,51 @@ func (s *Server) handleFluxEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Step 7: skip events already dispatched for this artifact.
-	key := s.opts.Tracker.Key(product, env, e.Reason, e.Digest(), repo)
-	if s.opts.Tracker.Seen(key) {
-		s.opts.Metrics.DedupHits.WithLabelValues(e.Reason).Inc()
-		log.Info("skipping duplicate event", "outcome", outcomeDuplicate, "revision", e.Revision())
-		writeAccepted(w, outcomeDuplicate)
-		return
+	//
+	// The digest is the only part of the key that identifies the artifact. An
+	// event without one — anything not carrying kustomize-controller's revision
+	// metadata — would collapse onto a single key per product/env/reason/repo,
+	// so the first delivery would suppress every later one for the whole TTL.
+	// Dispatching without dedup risks a duplicate workflow run; deduplicating
+	// on an empty digest silently stops deploys. The former is recoverable.
+	digest := e.Digest()
+	var dedupKey string
+	dispatched := false
+
+	if digest == "" {
+		log.Warn("event carries no artifact digest, dispatching without deduplication",
+			"outcome", outcomeNoDigest)
+	} else {
+		dedupKey = s.opts.Tracker.Key(product, env, e.Reason, digest, repo)
+
+		// Claim is atomic. Checking Seen here and recording after the dispatch
+		// would leave the whole outbound call as a window in which a second
+		// delivery of the same event also sees "unseen" and dispatches too.
+		if !s.opts.Tracker.Claim(dedupKey) {
+			s.opts.Metrics.DedupHits.WithLabelValues(e.Reason).Inc()
+			log.Info("skipping duplicate event", "outcome", outcomeDuplicate, "revision", e.Revision())
+			writeAccepted(w, outcomeDuplicate)
+			return
+		}
+
+		// The claim suppresses duplicates only until this handler resolves it,
+		// so every path out of here must either confirm it (success) or release
+		// it. Deferred so a panic cannot strand the key for the whole TTL.
+		defer func() {
+			if !dispatched {
+				s.opts.Tracker.Release(dedupKey)
+			}
+		}()
+	}
+
+	// recordDispatch confirms the claim, so the event is deduplicated from here
+	// on. It is a no-op when dedup was skipped for a missing digest.
+	recordDispatch := func() {
+		if dedupKey == "" {
+			return
+		}
+		s.opts.Tracker.Record(dedupKey)
+		dispatched = true
 	}
 
 	// Steps 6, 8, 9, 10: build the URL, extract the commit SHA, authenticate as
@@ -233,7 +293,7 @@ func (s *Server) handleFluxEvent(w http.ResponseWriter, r *http.Request) {
 	if s.opts.DryRun {
 		// Dedup key recorded here too: observing dedup behaviour is a main
 		// purpose of dry-run. See README.md "DRY_RUN mode".
-		s.opts.Tracker.Record(key)
+		recordDispatch()
 		s.opts.Metrics.DryRunDispatches.WithLabelValues(repo, eventType, e.Reason).Inc()
 		log.Info("dry run: would have dispatched repository_dispatch",
 			"outcome", outcomeDryRun,
@@ -245,20 +305,37 @@ func (s *Server) handleFluxEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Bound the token exchange and the dispatch together, so the pair cannot
+	// outlast the server's write timeout and drop the response.
+	dispatchCtx, cancel := context.WithTimeout(r.Context(), dispatchBudget)
+	defer cancel()
+
 	start := time.Now()
-	dispatchErr := s.opts.Dispatcher.Send(r.Context(), repo, eventType, payload)
+	dispatchErr := s.opts.Dispatcher.Send(dispatchCtx, repo, eventType, payload)
 	elapsed := time.Since(start)
 
 	if errors.Is(dispatchErr, dispatch.ErrAuth) {
-		// No API call was made, so no latency to record — observing here would
-		// poison the histogram. The dispatch still failed, so it must also land
-		// in dispatch_errors_total: without that, a rotated App key fails 100%
-		// of dispatches while any error-rate alert reads a flat zero.
+		// No dispatch was attempted, so there is no latency to record —
+		// observing here would poison the histogram. It must still land in
+		// dispatch_errors_total: without that, a rotated App key fails 100% of
+		// dispatches while any error-rate alert reads a flat zero.
 		s.opts.Metrics.GitHubAuthErrors.Inc()
 		s.opts.Metrics.DispatchErrors.WithLabelValues(repo, eventType, dispatch.ErrorCode(dispatchErr)).Inc()
-		log.Error("could not authenticate as the GitHub App",
-			"outcome", outcomeAuthFailed, "error", dispatchErr)
-		http.Error(w, "github authentication unavailable", http.StatusBadGateway)
+
+		if errors.Is(dispatchErr, dispatch.ErrRetryable) {
+			log.Error("could not authenticate as the GitHub App",
+				"outcome", outcomeAuthFailed, "error", dispatchErr)
+			http.Error(w, "github authentication unavailable", http.StatusBadGateway)
+			return
+		}
+
+		// Permanent: a malformed key, or an App or installation ID GitHub
+		// rejects outright. No retry can fix it, so acknowledge instead of
+		// making Flux exhaust its retries and drop the event anyway. The signal
+		// lives in this log line and in github_auth_errors_total.
+		log.Error("github rejected the App credentials, retrying cannot help",
+			"outcome", outcomeAuthRejected, "error", dispatchErr)
+		writeAccepted(w, outcomeAuthRejected)
 		return
 	}
 
@@ -266,7 +343,7 @@ func (s *Server) handleFluxEvent(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case dispatchErr == nil:
-		s.opts.Tracker.Record(key)
+		recordDispatch()
 		s.opts.Metrics.Dispatches.WithLabelValues(repo, eventType, e.Reason).Inc()
 		log.Info("dispatched repository_dispatch",
 			"outcome", outcomeDispatched,

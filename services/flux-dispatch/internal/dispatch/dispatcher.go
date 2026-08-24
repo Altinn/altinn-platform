@@ -16,6 +16,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/Altinn/altinn-platform/services/flux-dispatch/internal/githubapi"
 )
 
 // maxMessageLen caps the Flux message forwarded to the workflow. GitHub limits
@@ -25,23 +27,33 @@ const maxMessageLen = 1024
 // maxErrorBody caps how much of a GitHub error response is quoted back.
 const maxErrorBody = 512
 
+// maxDrainBytes caps the successful response body read before the connection is
+// returned to the pool. repository_dispatch answers 204 with no body, so this
+// only needs to be comfortably larger than anything GitHub actually sends.
+const maxDrainBytes = 64 * 1024
+
 // Error classes. Send always wraps one of these so the HTTP handler can decide
 // between 200 (nothing to retry) and 502 (Flux should retry).
 var (
-	// ErrRetryable marks a transient failure — GitHub 5xx, timeout, transport.
+	// ErrRetryable marks a transient failure — GitHub 5xx, rate limit, timeout,
+	// transport.
 	ErrRetryable = errors.New("retryable dispatch failure")
-	// ErrNonRetryable marks a permanent failure — GitHub 4xx, bad target repo.
+	// ErrNonRetryable marks a permanent failure — GitHub 4xx, bad target repo,
+	// misconfigured GitHub App.
 	ErrNonRetryable = errors.New("non-retryable dispatch failure")
 	// ErrAuth marks a failure to obtain a GitHub App installation token. It is
-	// also retryable; the handler counts it separately.
+	// counted separately; whether it is retryable depends on the cause.
 	ErrAuth = errors.New("github app authentication failure")
 )
 
 // Error carries the metric label for a failed dispatch alongside its class.
 type Error struct {
 	// Code is the flux_dispatch_dispatch_errors_total error_code label: the
-	// HTTP status, "timeout", or "transport".
+	// HTTP status, "timeout", "transport", or an auth label.
 	Code string
+	// Status is the HTTP status GitHub returned, or 0 when the failure
+	// happened before or outside an HTTP response.
+	Status int
 	// Class is ErrRetryable or ErrNonRetryable.
 	Class error
 	// Reason is the human-readable detail.
@@ -68,6 +80,21 @@ func ErrorCode(err error) string {
 // TokenSource provides the GitHub App installation token used to authenticate.
 type TokenSource interface {
 	Token(ctx context.Context) (string, error)
+}
+
+// TokenInvalidator is implemented by a TokenSource whose tokens GitHub can
+// revoke before they expire — after a key rotation, for example. Send uses it
+// to drop a token GitHub has just rejected instead of presenting it again for
+// the rest of its nominal lifetime.
+type TokenInvalidator interface {
+	InvalidateToken(token string)
+}
+
+// permanentError is implemented by errors that know a retry cannot help. It is
+// duck-typed on purpose, so this package does not depend on the token source's
+// concrete implementation.
+type permanentError interface {
+	Permanent() bool
 }
 
 // Dispatcher posts repository_dispatch events to GitHub.
@@ -108,21 +135,17 @@ type requestBody struct {
 }
 
 // Send posts a repository_dispatch event of type eventType to repo. It returns
-// nil on GitHub 2xx, an error wrapping ErrNonRetryable on 4xx, and an error
-// wrapping ErrRetryable on 5xx, timeout, or transport failure.
+// nil on GitHub 2xx, an error wrapping ErrNonRetryable on a permanent failure,
+// and an error wrapping ErrRetryable on 5xx, a rate limit, a timeout, or a
+// transport failure.
+//
+// A 401 is retried once with a freshly minted token: GitHub revokes
+// installation tokens on key rotation without warning, and the cached one would
+// otherwise keep failing until its nominal expiry.
 func (d *Dispatcher) Send(ctx context.Context, repo, eventType string, p Payload) error {
 	endpoint, err := dispatchURL(d.apiBase, repo)
 	if err != nil {
 		return &Error{Code: "invalid_repo", Class: ErrNonRetryable, Reason: err.Error()}
-	}
-
-	token, err := d.tokens.Token(ctx)
-	if err != nil {
-		return &Error{
-			Code:   "auth",
-			Class:  errors.Join(ErrRetryable, ErrAuth),
-			Reason: err.Error(),
-		}
 	}
 
 	// Truncate on a copy: the caller's payload (and its log fields) stay intact.
@@ -133,6 +156,40 @@ func (d *Dispatcher) Send(ctx context.Context, repo, eventType string, p Payload
 		return &Error{Code: "encode", Class: ErrNonRetryable, Reason: err.Error()}
 	}
 
+	token, err := d.tokens.Token(ctx)
+	if err != nil {
+		return authError(err)
+	}
+
+	sendErr := d.attempt(ctx, endpoint, token, body)
+	if sendErr == nil || sendErr.Status != http.StatusUnauthorized {
+		return orNil(sendErr)
+	}
+
+	invalidator, ok := d.tokens.(TokenInvalidator)
+	if !ok {
+		return sendErr
+	}
+	invalidator.InvalidateToken(token)
+
+	token, err = d.tokens.Token(ctx)
+	if err != nil {
+		return authError(err)
+	}
+	return orNil(d.attempt(ctx, endpoint, token, body))
+}
+
+// orNil converts a typed-nil *Error into an untyped nil, so callers comparing
+// against nil behave as expected.
+func orNil(err *Error) error {
+	if err == nil {
+		return nil
+	}
+	return err
+}
+
+// attempt performs one repository_dispatch POST.
+func (d *Dispatcher) attempt(ctx context.Context, endpoint, token string, body []byte) *Error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return &Error{Code: "request", Class: ErrNonRetryable, Reason: err.Error()}
@@ -150,20 +207,38 @@ func (d *Dispatcher) Send(ctx context.Context, repo, eventType string, p Payload
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		// Drain so the connection can be reused.
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxErrorBody))
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxDrainBytes))
 		return nil
 	}
 
 	detail, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
 	class := ErrNonRetryable
-	if resp.StatusCode >= 500 {
+	if githubapi.Retryable(resp.StatusCode, resp.Header, detail) {
 		class = ErrRetryable
 	}
 	return &Error{
 		Code:   strconv.Itoa(resp.StatusCode),
+		Status: resp.StatusCode,
 		Class:  class,
 		Reason: fmt.Sprintf("github returned %d: %s", resp.StatusCode, strings.TrimSpace(string(detail))),
 	}
+}
+
+// authError wraps a token-source failure, preserving whether it is permanent.
+// A GitHub outage is worth a retry; a malformed key or a wrong App ID is not,
+// and answering 502 for those makes Flux retry until it gives up and drops the
+// event.
+func authError(err error) *Error {
+	class := errors.Join(ErrRetryable, ErrAuth)
+	code := "auth"
+
+	var permanent permanentError
+	if errors.As(err, &permanent) && permanent.Permanent() {
+		class = errors.Join(ErrNonRetryable, ErrAuth)
+		code = "auth_permanent"
+	}
+
+	return &Error{Code: code, Class: class, Reason: err.Error()}
 }
 
 // dispatchURL builds {apiBase}/repos/{owner}/{repo}/dispatches. The repo is

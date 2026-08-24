@@ -10,6 +10,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+// Label names shared by the collectors below.
+const (
+	labelReason    = "reason"
+	labelRepo      = "repo"
+	labelEventType = "event_type"
+	labelErrorCode = "error_code"
+)
+
 // Metrics holds the eight collectors from RFC 0010 §"Prometheus metrics".
 type Metrics struct {
 	// Registry is the dedicated registry these collectors are registered on.
@@ -43,22 +51,22 @@ func New() *Metrics {
 		EventsReceived: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "flux_dispatch_events_received_total",
 			Help: "Total webhook events received from Flux, by reconciliation reason.",
-		}, []string{"reason"}),
+		}, []string{labelReason}),
 
 		Dispatches: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "flux_dispatch_dispatches_total",
 			Help: "Successful repository_dispatch calls to GitHub.",
-		}, []string{"repo", "event_type", "reason"}),
+		}, []string{labelRepo, labelEventType, labelReason}),
 
 		DispatchErrors: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "flux_dispatch_dispatch_errors_total",
 			Help: "Failed repository_dispatch calls, labelled with the HTTP status or timeout.",
-		}, []string{"repo", "event_type", "error_code"}),
+		}, []string{labelRepo, labelEventType, labelErrorCode}),
 
 		DedupHits: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "flux_dispatch_dedup_hits_total",
 			Help: "Events skipped by deduplication.",
-		}, []string{"reason"}),
+		}, []string{labelReason}),
 
 		DedupEntries: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "flux_dispatch_dedup_entries",
@@ -74,12 +82,12 @@ func New() *Metrics {
 			Name:    "flux_dispatch_dispatch_duration_seconds",
 			Help:    "Latency of outbound repository_dispatch API calls.",
 			Buckets: prometheus.DefBuckets,
-		}, []string{"repo"}),
+		}, []string{labelRepo}),
 
 		DryRunDispatches: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "flux_dispatch_dryrun_dispatches_total",
 			Help: "Dispatches that would have been sent to GitHub, recorded while DRY_RUN is enabled.",
-		}, []string{"repo", "event_type", "reason"}),
+		}, []string{labelRepo, labelEventType, labelReason}),
 	}
 
 	m.Registry.MustRegister(

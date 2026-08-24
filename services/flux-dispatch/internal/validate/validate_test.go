@@ -1,6 +1,9 @@
 package validate
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestRepoAllowed(t *testing.T) {
 	tests := []struct {
@@ -140,6 +143,75 @@ func TestShouldDispatch(t *testing.T) {
 		t.Run(tt.reason+"/"+tt.dispatchEvent, func(t *testing.T) {
 			if got := ShouldDispatch(tt.reason, tt.dispatchEvent); got != tt.want {
 				t.Errorf("ShouldDispatch(%q, %q) = %v, want %v", tt.reason, tt.dispatchEvent, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestReasonLabel(t *testing.T) {
+	tests := []struct{ reason, want string }{
+		{"ReconciliationSucceeded", "ReconciliationSucceeded"},
+		{"ReconciliationFailed", "ReconciliationFailed"},
+		{"HealthCheckFailed", "HealthCheckFailed"},
+		// Anything unrecognised shares one bucket, so a hostile or misconfigured
+		// Alert cannot mint an unbounded number of metric series.
+		{"SomethingBrandNew", OtherReasonLabel},
+		{"", OtherReasonLabel},
+		{"../../etc/passwd", OtherReasonLabel},
+	}
+
+	for _, tt := range tests {
+		if got := ReasonLabel(tt.reason); got != tt.want {
+			t.Errorf("ReasonLabel(%q) = %q, want %q", tt.reason, got, tt.want)
+		}
+	}
+}
+
+func TestDispatchEvent(t *testing.T) {
+	tests := []struct {
+		name          string
+		dispatchEvent string
+		wantErr       bool
+	}{
+		{"typical", "flux-deploy", false},
+		{"failure channel", "flux-deploy-failed", false},
+		{"dots and underscores", "flux_deploy.v2", false},
+		{"at the length limit", strings.Repeat("a", 100), false},
+
+		{"empty", "", true},
+		{"over the length limit", strings.Repeat("a", 101), true},
+		{"newline", "flux-deploy\nX-Injected: 1", true},
+		{"space", "flux deploy", true},
+		{"slash", "flux/deploy", true},
+		{"quote", `flux"deploy`, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := DispatchEvent(tt.dispatchEvent)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("DispatchEvent(%q) error = %v, wantErr %v", tt.dispatchEvent, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestRepoAllowedRejectsOverlongNames(t *testing.T) {
+	tests := []struct {
+		name    string
+		repo    string
+		wantErr bool
+	}{
+		{"normal", "Altinn/dialogporten", false},
+		{"at the repo name limit", "Altinn/" + strings.Repeat("a", 100), false},
+		{"over the repo name limit", "Altinn/" + strings.Repeat("a", 101), true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := RepoAllowed(tt.repo)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("RepoAllowed(%q) error = %v, wantErr %v", tt.repo, err, tt.wantErr)
 			}
 		})
 	}

@@ -19,6 +19,11 @@ import (
 type entry struct {
 	key        string
 	recordedAt time.Time
+
+	// claimed marks an entry reserved by an in-flight dispatch that has not
+	// completed yet. It blocks a concurrent duplicate the same way a recorded
+	// entry does, but Release drops it so a failed dispatch is not suppressed.
+	claimed bool
 }
 
 // Tracker is a bounded, TTL'd set of dedup keys. It is safe for concurrent use.
@@ -68,8 +73,53 @@ func (t *Tracker) Seen(key string) bool {
 	return !t.expired(element.Value.(*entry), t.now())
 }
 
+// Claim atomically reserves key for the caller when no live entry exists for
+// it. It returns true when the caller owns the dispatch and false when the key
+// is already recorded or claimed by another in-flight request.
+//
+// Checking Seen and then calling Record around a network call would leave a
+// window in which two concurrent deliveries of the same event both observe
+// "unseen" and both dispatch — the duplicate this tracker exists to prevent.
+// The caller must pair a successful Claim with exactly one Record (on success)
+// or Release (on failure).
+func (t *Tracker) Claim(key string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	now := t.now()
+
+	if element, ok := t.entries[key]; ok {
+		if !t.expired(element.Value.(*entry), now) {
+			return false
+		}
+		// Expired but not yet swept: drop it and take the claim below.
+		t.removeElement(element)
+	}
+
+	t.insert(&entry{key: key, recordedAt: now, claimed: true})
+	return true
+}
+
+// Release drops a claim taken by Claim, so a dispatch that failed is retried
+// rather than suppressed. It is a no-op for a key that was already confirmed by
+// Record or evicted in the meantime.
+func (t *Tracker) Release(key string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	element, ok := t.entries[key]
+	if !ok {
+		return
+	}
+	if !element.Value.(*entry).claimed {
+		return
+	}
+	t.removeElement(element)
+	t.setGauge()
+}
+
 // Record marks key as dispatched, evicting the oldest entry when the tracker is
-// at capacity.
+// at capacity. It also confirms a claim taken earlier by Claim.
 func (t *Tracker) Record(key string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -78,17 +128,25 @@ func (t *Tracker) Record(key string) {
 
 	if element, ok := t.entries[key]; ok {
 		// Refresh in place and move to the back: this key is the newest again.
-		element.Value.(*entry).recordedAt = now
+		recorded := element.Value.(*entry)
+		recorded.recordedAt = now
+		recorded.claimed = false
 		t.order.MoveToBack(element)
 		t.setGauge()
 		return
 	}
 
+	t.insert(&entry{key: key, recordedAt: now})
+	t.setGauge()
+}
+
+// insert adds e, first evicting the oldest entries to stay within capacity.
+// Caller holds the lock.
+func (t *Tracker) insert(e *entry) {
 	for t.maxEntries > 0 && t.order.Len() >= t.maxEntries {
 		t.removeElement(t.order.Front())
 	}
-
-	t.entries[key] = t.order.PushBack(&entry{key: key, recordedAt: now})
+	t.entries[e.key] = t.order.PushBack(e)
 	t.setGauge()
 }
 

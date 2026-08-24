@@ -28,16 +28,62 @@ var failureReasons = map[string]bool{
 // characters, so the value can never escape the /repos/{repo}/dispatches path.
 var repoRe = regexp.MustCompile(`^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$`)
 
+// dispatchEventRe bounds the product-supplied dispatch_event. The value is used
+// verbatim as a Prometheus label, so it must not be unbounded in length or
+// contain newlines; the character class also matches what GitHub accepts for
+// an event_type.
+var dispatchEventRe = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+
 // orgPrefix is the only GitHub organisation the service will dispatch to.
 const orgPrefix = "Altinn/"
 
 // failedEventSuffix marks a dispatch_event as a failure channel.
 const failedEventSuffix = "-failed"
 
+// GitHub's own limits on the values this service forwards. Rejecting here keeps
+// a malformed Alert from becoming a permanent high-cardinality metric series.
+const (
+	maxOwnerLen         = 39
+	maxRepoNameLen      = 100
+	maxDispatchEventLen = 100
+)
+
+// OtherReasonLabel is the bucket every unrecognised reason is counted under.
+// Reasons arrive verbatim in the webhook body, so using them as a metric label
+// unfiltered would let one malformed Alert pin an unbounded number of series in
+// memory for the lifetime of the process.
+const OtherReasonLabel = "other"
+
 // KnownReason reports whether reason is a reconciliation event the service
 // acts on. Anything else is acknowledged and ignored.
 func KnownReason(reason string) bool {
 	return successReasons[reason] || failureReasons[reason]
+}
+
+// ReasonLabel returns the value to use as a metric label for reason: the reason
+// itself when recognised, and OtherReasonLabel otherwise. This keeps
+// flux_dispatch_events_received_total countable across every delivery while
+// bounding its cardinality to the known vocabulary plus one.
+func ReasonLabel(reason string) string {
+	if KnownReason(reason) {
+		return reason
+	}
+	return OtherReasonLabel
+}
+
+// DispatchEvent checks a product-supplied dispatch_event. The value reaches
+// both GitHub and a Prometheus label, so it is bounded in length and charset.
+func DispatchEvent(dispatchEvent string) error {
+	if dispatchEvent == "" {
+		return fmt.Errorf("dispatch_event is empty")
+	}
+	if len(dispatchEvent) > maxDispatchEventLen {
+		return fmt.Errorf("dispatch_event is %d characters, over the %d limit", len(dispatchEvent), maxDispatchEventLen)
+	}
+	if !dispatchEventRe.MatchString(dispatchEvent) {
+		return fmt.Errorf("dispatch_event %q contains characters outside [a-zA-Z0-9._-]", dispatchEvent)
+	}
+	return nil
 }
 
 // RepoAllowed checks a product-supplied dispatch_repo: strict owner/repo form
@@ -59,6 +105,11 @@ func RepoAllowed(repo string) error {
 		if strings.Trim(segment, ".") == "" {
 			return fmt.Errorf("dispatch_repo %q contains a path-traversal segment", repo)
 		}
+	}
+	// The repo becomes a Prometheus label, so bound it to what GitHub itself
+	// accepts rather than letting an Alert mint arbitrarily long series names.
+	if len(owner) > maxOwnerLen || len(name) > maxRepoNameLen {
+		return fmt.Errorf("dispatch_repo %q is longer than GitHub allows", repo)
 	}
 	if !strings.HasPrefix(repo, orgPrefix) {
 		return fmt.Errorf("dispatch_repo %q is not in the %s organisation", repo, strings.TrimSuffix(orgPrefix, "/"))
