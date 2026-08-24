@@ -108,7 +108,7 @@ func newFluxDispatchChart(scope constructs.Construct, id string) cdk8s.Chart {
 }
 
 // newDeployment defines the single-replica flux-dispatch Deployment. Env vars
-// mirror internal/config/config.go exactly: the four required variables (no
+// mirror internal/config/config.go exactly: the three required variables (no
 // default, Load fails loudly if unset) get values here; optional variables
 // whose defaults already match RFC 0010 (GITHUB_API_URL, DEDUP_TTL,
 // DEDUP_MAX_ENTRIES, DEFAULT_DISPATCH_EVENT) are left unset.
