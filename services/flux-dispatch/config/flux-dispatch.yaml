@@ -47,8 +47,6 @@ spec:
               value: ${GITHUB_INSTALLATION_ID}
             - name: GITHUB_PRIVATE_KEY_PATH
               value: /etc/flux-dispatch/secrets/github-app/private-key.pem
-            - name: HMAC_TOKEN_PATH
-              value: /etc/flux-dispatch/secrets/hmac/token
           image: flux-dispatch:latest
           livenessProbe:
             httpGet:
@@ -78,9 +76,6 @@ spec:
             - mountPath: /etc/flux-dispatch/secrets/github-app
               name: github-app-key
               readOnly: true
-            - mountPath: /etc/flux-dispatch/secrets/hmac
-              name: hmac-token
-              readOnly: true
       enableServiceLinks: false
       securityContext:
         runAsNonRoot: true
@@ -91,9 +86,6 @@ spec:
         - name: github-app-key
           secret:
             secretName: flux-dispatch-github-app-key
-        - name: hmac-token
-          secret:
-            secretName: flux-dispatch-hmac-token
 ---
 apiVersion: v1
 kind: Service
@@ -236,24 +228,3 @@ spec:
   target:
     creationPolicy: Owner
     name: flux-dispatch-github-app-key
----
-apiVersion: external-secrets.io/v1
-kind: ExternalSecret
-metadata:
-  labels:
-    app: flux-dispatch
-    owner: platform
-  name: flux-dispatch-hmac-token-external-secret
-  namespace: dis-platform
-spec:
-  data:
-    - remoteRef:
-        key: ${KV_SECRET_NAME_HMAC_TOKEN}
-      secretKey: token
-  refreshInterval: 1h
-  secretStoreRef:
-    kind: SecretStore
-    name: flux-dispatch-kv-store
-  target:
-    creationPolicy: Owner
-    name: flux-dispatch-hmac-token

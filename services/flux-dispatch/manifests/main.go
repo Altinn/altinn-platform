@@ -25,23 +25,12 @@ const (
 	monitoringNamespace = "monitoring"
 	kubeSystemNamespace = "kube-system"
 
-	// Secret names match the platform-provided Provider manifest from RFC 0010
-	// §"Platform-provided base Provider" (flux-dispatch-hmac-token is shared
-	// between the Flux Provider and this Deployment) and the brief's Task 4a
-	// naming (flux-dispatch-github-app-key).
+	// Secret name matches the brief's Task 4a naming (flux-dispatch-github-app-key).
 	githubAppKeySecretName = "flux-dispatch-github-app-key"
-	hmacTokenSecretName    = "flux-dispatch-hmac-token"
 
 	githubAppKeyMountPath = "/etc/flux-dispatch/secrets/github-app"
-	hmacTokenMountPath    = "/etc/flux-dispatch/secrets/hmac"
 
 	githubAppKeyDataKey = "private-key.pem"
-	// hmacTokenDataKey MUST be "token": Flux's generic-hmac Provider always reads
-	// that literal key out of its secretRef Secret to sign webhook bodies. Any
-	// other key name here means the Provider signs with an empty/missing value,
-	// and every webhook this service receives fails HMAC verification with a
-	// silent 401 — the single most common way this integration breaks.
-	hmacTokenDataKey = "token"
 
 	// scalingNoteAnnotation documents why replicas is pinned to 1. cdk8s
 	// synthesizes YAML from JSON patches, which has no comment support, so this
@@ -163,12 +152,6 @@ func newDeployment(chart cdk8s.Chart, sa cdk8s.ApiObject, labels, podLabels *map
 								SecretName: _jsii_.String(githubAppKeySecretName),
 							},
 						},
-						{
-							Name: _jsii_.String("hmac-token"),
-							Secret: &k8s.SecretVolumeSource{
-								SecretName: _jsii_.String(hmacTokenSecretName),
-							},
-						},
 					},
 					Containers: &[]*k8s.Container{
 						{
@@ -205,20 +188,11 @@ func newDeployment(chart cdk8s.Chart, sa cdk8s.ApiObject, labels, podLabels *map
 									Name:  _jsii_.String("GITHUB_PRIVATE_KEY_PATH"),
 									Value: _jsii_.String(githubAppKeyMountPath + "/" + githubAppKeyDataKey),
 								},
-								{
-									Name:  _jsii_.String("HMAC_TOKEN_PATH"),
-									Value: _jsii_.String(hmacTokenMountPath + "/" + hmacTokenDataKey),
-								},
 							},
 							VolumeMounts: &[]*k8s.VolumeMount{
 								{
 									Name:      _jsii_.String("github-app-key"),
 									MountPath: _jsii_.String(githubAppKeyMountPath),
-									ReadOnly:  _jsii_.Bool(true),
-								},
-								{
-									Name:      _jsii_.String("hmac-token"),
-									MountPath: _jsii_.String(hmacTokenMountPath),
 									ReadOnly:  _jsii_.Bool(true),
 								},
 							},
@@ -399,9 +373,8 @@ func newPodMonitor(chart cdk8s.Chart, labels *map[string]*string) {
 	}))
 }
 
-// newExternalSecrets defines the namespaced SecretStore and the two
-// ExternalSecrets that materialize the GitHub App private key and the HMAC
-// token as Kubernetes Secrets.
+// newExternalSecrets defines the namespaced SecretStore and the ExternalSecret
+// that materializes the GitHub App private key as a Kubernetes Secret.
 //
 // ASSUMPTION (flagged per the task brief — this is the "known-open decision"
 // from plan Task 3 Step 5, genuinely unresolved as of this writing): no
@@ -418,7 +391,7 @@ func newPodMonitor(chart cdk8s.Chart, labels *map[string]*string) {
 // same-namespace ServiceAccount, then an ExternalSecret with a
 // ${KV_...}-templated remoteRef.key. This mirrors that pattern exactly:
 // vaultUrl is left as the same ${KV_URI} placeholder otel-collector uses, and
-// the two remote secret names are new placeholders following the
+// the remote secret name is a new placeholder following the
 // ${KV_SECRET_NAME_*} convention dis-tls-cert's ExternalSecret uses. A
 // dis-vault-operator also exists in this repo (services/dis-vault-operator)
 // with a Vault CRD whose spec has an `externalSecrets: true` flag that would
@@ -430,8 +403,8 @@ func newPodMonitor(chart cdk8s.Chart, labels *map[string]*string) {
 // SecretStore name and a new Azure resource with no precedent backing either
 // — exactly what the brief said not to do. The raw SecretStore/ExternalSecret
 // route below is the closest pattern with actual working precedent; whoever
-// resolves plan Task 3 Step 5 should confirm vaultUrl and the two secret
-// names (and may prefer the Vault CRD instead — see task-6-report.md).
+// resolves plan Task 3 Step 5 should confirm vaultUrl and the secret name
+// (and may prefer the Vault CRD instead — see task-6-report.md).
 func newExternalSecrets(chart cdk8s.Chart, labels *map[string]*string) {
 	store := cdk8s.NewApiObject(chart, _jsii_.String("kv-store"), &cdk8s.ApiObjectProps{
 		ApiVersion: _jsii_.String("external-secrets.io/v1"),
@@ -457,8 +430,6 @@ func newExternalSecrets(chart cdk8s.Chart, labels *map[string]*string) {
 
 	newExternalSecret(chart, githubAppKeySecretName, labels,
 		githubAppKeyDataKey, "${KV_SECRET_NAME_GITHUB_APP_KEY}")
-	newExternalSecret(chart, hmacTokenSecretName, labels,
-		hmacTokenDataKey, "${KV_SECRET_NAME_HMAC_TOKEN}")
 }
 
 // newExternalSecret derives both the cdk8s construct id and the object's
