@@ -34,6 +34,11 @@ type Config struct {
 	MetricsAddr string
 	// DefaultDispatchEvent is used when an Alert omits dispatch_event.
 	DefaultDispatchEvent string
+	// DryRun, when true, runs the full request flow but skips the outbound
+	// GitHub call: it logs the dispatch it would have sent and returns 200,
+	// so the service can be deployed and validated before any GitHub App
+	// exists. See DECISION-dry-run.md "Behaviour".
+	DryRun bool
 }
 
 // Defaults applied when the corresponding environment variable is unset.
@@ -59,6 +64,14 @@ func Load() (Config, error) {
 		DefaultDispatchEvent: envOr("DEFAULT_DISPATCH_EVENT", defaultDefaultDispatchEvent),
 	}
 
+	if raw := os.Getenv("DRY_RUN"); raw != "" {
+		dryRun, err := strconv.ParseBool(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("invalid DRY_RUN %q: %w", raw, err)
+		}
+		cfg.DryRun = dryRun
+	}
+
 	for _, required := range []struct {
 		name string
 		dst  *string
@@ -69,6 +82,11 @@ func Load() (Config, error) {
 	} {
 		value := os.Getenv(required.name)
 		if value == "" {
+			if cfg.DryRun {
+				// DRY_RUN=true: no GitHub App exists yet, so these have
+				// nothing to point at. That is the point of the mode.
+				continue
+			}
 			return Config{}, fmt.Errorf("required environment variable %s is not set", required.name)
 		}
 		*required.dst = value
@@ -94,6 +112,19 @@ func Load() (Config, error) {
 			return Config{}, fmt.Errorf("invalid DEDUP_MAX_ENTRIES %q: must be positive", raw)
 		}
 		cfg.DedupMaxEntries = maxEntries
+	}
+
+	// The private key is read for real once at process startup and signed
+	// with on every token refresh after that; a bad mount must fail here,
+	// loudly, rather than surface as a confusing error on the first webhook
+	// delivery. DRY_RUN skips this: it exists precisely so the service can
+	// run before the key exists. See DECISION-dry-run.md "Config".
+	if !cfg.DryRun {
+		f, err := os.Open(cfg.GitHubPrivateKeyPath)
+		if err != nil {
+			return Config{}, fmt.Errorf("GITHUB_PRIVATE_KEY_PATH %q is not readable: %w", cfg.GitHubPrivateKeyPath, err)
+		}
+		_ = f.Close()
 	}
 
 	return cfg, nil
