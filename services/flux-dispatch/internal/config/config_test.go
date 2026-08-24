@@ -13,7 +13,6 @@ func requiredEnv(t *testing.T) {
 	t.Setenv("GITHUB_APP_ID", "123456")
 	t.Setenv("GITHUB_INSTALLATION_ID", "7891011")
 	t.Setenv("GITHUB_PRIVATE_KEY_PATH", "/etc/flux-dispatch/github-app.pem")
-	t.Setenv("HMAC_TOKEN_PATH", "/etc/flux-dispatch/hmac-token")
 }
 
 func TestLoadDefaults(t *testing.T) {
@@ -32,9 +31,6 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	if cfg.GitHubPrivateKeyPath != "/etc/flux-dispatch/github-app.pem" {
 		t.Errorf("GitHubPrivateKeyPath = %q", cfg.GitHubPrivateKeyPath)
-	}
-	if cfg.HMACTokenPath != "/etc/flux-dispatch/hmac-token" {
-		t.Errorf("HMACTokenPath = %q", cfg.HMACTokenPath)
 	}
 	if cfg.GitHubAPIURL != "https://api.github.com" {
 		t.Errorf("GitHubAPIURL = %q, want %q", cfg.GitHubAPIURL, "https://api.github.com")
@@ -95,7 +91,6 @@ func TestLoadMissingRequired(t *testing.T) {
 		"GITHUB_APP_ID",
 		"GITHUB_INSTALLATION_ID",
 		"GITHUB_PRIVATE_KEY_PATH",
-		"HMAC_TOKEN_PATH",
 	} {
 		t.Run(name, func(t *testing.T) {
 			requiredEnv(t)

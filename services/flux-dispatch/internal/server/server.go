@@ -1,7 +1,8 @@
 // Package server wires the request flow from RFC 0010 into one HTTP handler:
-// verify, parse, validate, deduplicate, dispatch. The return codes follow the
-// RFC's contract — 2xx whenever retrying cannot help, 502 only for transient
-// GitHub failures, 401 for a bad signature and 413 for an oversized body.
+// parse, validate, deduplicate, dispatch. The return codes follow the RFC's
+// contract — 2xx whenever retrying cannot help, 502 only for transient GitHub
+// failures, 413 for an oversized body. Access control is enforced entirely by
+// the NetworkPolicy restricting ingress on this port to flux-system.
 package server
 
 import (
@@ -15,7 +16,6 @@ import (
 	"github.com/Altinn/altinn-platform/services/flux-dispatch/internal/dedup"
 	"github.com/Altinn/altinn-platform/services/flux-dispatch/internal/dispatch"
 	"github.com/Altinn/altinn-platform/services/flux-dispatch/internal/event"
-	"github.com/Altinn/altinn-platform/services/flux-dispatch/internal/hmacsig"
 	"github.com/Altinn/altinn-platform/services/flux-dispatch/internal/metrics"
 	"github.com/Altinn/altinn-platform/services/flux-dispatch/internal/validate"
 )
@@ -31,9 +31,6 @@ const (
 	maxHeaderBytes    = 1 << 16 // 64 KB
 )
 
-// signatureHeader is where Flux's generic-hmac provider puts the signature.
-const signatureHeader = "X-Signature"
-
 // Outcome values used in the structured logs and as the handler's summary of
 // what happened to an event.
 const (
@@ -43,7 +40,6 @@ const (
 	outcomeNotRouted           = "reason_not_routed"
 	outcomeMissingRepo         = "missing_dispatch_repo"
 	outcomeInvalidRepo         = "invalid_dispatch_repo"
-	outcomeInvalidSignature    = "invalid_signature"
 	outcomeBodyTooLarge        = "body_too_large"
 	outcomeInvalidPayload      = "invalid_payload"
 	outcomeDispatchRejected    = "dispatch_rejected"
@@ -57,7 +53,6 @@ type Options struct {
 	ListenAddr           string
 	MetricsAddr          string
 	DefaultDispatchEvent string
-	HMACToken            []byte
 	Tracker              *dedup.Tracker
 	Dispatcher           *dispatch.Dispatcher
 	Metrics              *metrics.Metrics
@@ -129,7 +124,8 @@ func handleHealth(w http.ResponseWriter, _ *http.Request) {
 
 // handleFluxEvent implements RFC 0010 §"Request flow", steps 1-10 in order.
 func (s *Server) handleFluxEvent(w http.ResponseWriter, r *http.Request) {
-	// Step 2 (limit first): cap the body before anything reads it.
+	// Cap the body before anything reads it. This must stay first: it bounds
+	// the read itself, so nothing downstream can be handed an unbounded body.
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 	if err != nil {
 		var tooLarge *http.MaxBytesError
@@ -142,14 +138,6 @@ func (s *Server) handleFluxEvent(w http.ResponseWriter, r *http.Request) {
 		s.log.Warn("reading webhook body failed",
 			"outcome", outcomeInvalidPayload, "error", err)
 		writeAccepted(w, outcomeInvalidPayload)
-		return
-	}
-
-	// Step 1: HMAC-SHA256 over the raw body.
-	if !hmacsig.Verify(body, r.Header.Get(signatureHeader), s.opts.HMACToken) {
-		s.log.Warn("rejecting webhook with invalid signature",
-			"outcome", outcomeInvalidSignature)
-		http.Error(w, "invalid signature", http.StatusUnauthorized)
 		return
 	}
 

@@ -23,33 +23,36 @@ eventMetadata:
 
 1. Read the body behind a 64 KB `http.MaxBytesReader` — oversized bodies get
    `413` with no parsing attempted.
-2. Verify the HMAC-SHA256 `X-Signature` over the raw body — `401` if it does
-   not match.
-3. Parse the Flux event — `200` if the body is not a Flux event; retrying
+2. Parse the Flux event — `200` if the body is not a Flux event; retrying
    cannot help, so Flux is not told to resend it.
-4. Ignore unrecognised reconciliation reasons.
-5. Require `dispatch_repo`, and require it to match
+3. Ignore unrecognised reconciliation reasons.
+4. Require `dispatch_repo`, and require it to match
    `^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$` and start with `Altinn/`.
-6. Route by reason: a `dispatch_event` ending in `-failed` receives failure
+5. Route by reason: a `dispatch_event` ending in `-failed` receives failure
    reasons only, any other value receives success reasons only. Flux's
    `eventSeverity: info` forwards errors too, so this filter is what keeps a
    failure from arriving as a success event.
-7. Skip events already dispatched for the same
+6. Skip events already dispatched for the same
    `{product}/{env}/{reason}/{digest}/{dispatch_repo}`.
-8. Authenticate as the GitHub App (cached installation token) and
+7. Authenticate as the GitHub App (cached installation token) and
    `POST /repos/{dispatch_repo}/dispatches`.
+
+The endpoint itself is not authenticated at the HTTP layer. Access control is
+enforced by the `flux-dispatch-allow-webhook-traffic` NetworkPolicy, which
+only permits ingress to port 8080 from the `flux-system` namespace — the only
+namespace that ever calls this service (notification-controller). See RFC
+0010 for the full rationale.
 
 ### Return codes
 
 | Code | When |
 |---|---|
 | `200` | Dispatched, deduplicated, ignored, unparseable, or rejected for a config reason — retrying cannot help |
-| `401` | Missing or invalid HMAC signature |
 | `413` | Body larger than 64 KB |
 | `502` | Transient GitHub failure (5xx, timeout, auth outage) — Flux retries with backoff |
 
-`401` and `413` are the only non-2xx answers to a delivered request. An
-unparseable body is acknowledged with `200` and a warning log carrying
+`413` is the only non-2xx answer to a delivered request. An unparseable body
+is acknowledged with `200` and a warning log carrying
 `outcome=invalid_payload`: Flux collapses every non-2xx into a single "failed
 to send notification" class, so a `4xx` would be indistinguishable from a real
 outage on its side while the log already carries the full diagnostic.
@@ -78,7 +81,6 @@ kustomize-controller v1 event reasons (`fluxcd/pkg/apis/meta`):
 | `GITHUB_APP_ID` | yes | | GitHub App ID |
 | `GITHUB_INSTALLATION_ID` | yes | | App installation ID |
 | `GITHUB_PRIVATE_KEY_PATH` | yes | | Path to the PEM private key |
-| `HMAC_TOKEN_PATH` | yes | | Path to the token shared with the Flux Provider |
 | `GITHUB_API_URL` | no | `https://api.github.com` | GitHub API base |
 | `DEDUP_TTL` | no | `24h` | How long a dispatched event is remembered |
 | `DEDUP_MAX_ENTRIES` | no | `10000` | Dedup tracker cap; oldest is evicted |

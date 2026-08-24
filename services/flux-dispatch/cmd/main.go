@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -52,10 +51,6 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
-	hmacToken, err := readSecretFile(cfg.HMACTokenPath)
-	if err != nil {
-		return fmt.Errorf("read HMAC token: %w", err)
-	}
 	privateKey, err := os.ReadFile(cfg.GitHubPrivateKeyPath)
 	if err != nil {
 		return fmt.Errorf("read GitHub App private key: %w", err)
@@ -77,7 +72,6 @@ func run(logger *slog.Logger) error {
 		ListenAddr:           cfg.ListenAddr,
 		MetricsAddr:          cfg.MetricsAddr,
 		DefaultDispatchEvent: cfg.DefaultDispatchEvent,
-		HMACToken:            hmacToken,
 		Tracker:              tracker,
 		Dispatcher:           dispatcher,
 		Metrics:              m,
@@ -124,16 +118,6 @@ func run(logger *slog.Logger) error {
 	wg.Wait()
 
 	return runErr
-}
-
-// readSecretFile reads a mounted secret, trimming the trailing newline editors
-// and Kubernetes tooling tend to add.
-func readSecretFile(path string) ([]byte, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	return []byte(strings.TrimRight(string(raw), "\r\n")), nil
 }
 
 // sweepInterval keeps the dedup sweep proportional to the TTL, within bounds.

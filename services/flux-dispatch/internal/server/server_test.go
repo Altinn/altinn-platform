@@ -3,12 +3,9 @@ package server
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/x509"
-	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -29,10 +26,7 @@ import (
 	"github.com/Altinn/altinn-platform/services/flux-dispatch/internal/metrics"
 )
 
-const (
-	testHMACToken      = "shared-flux-token"
-	testInstallationID = "7891011"
-)
+const testInstallationID = "7891011"
 
 // recordedDispatch is one repository_dispatch call the fake GitHub received.
 type recordedDispatch struct {
@@ -153,7 +147,6 @@ func newHarness(t *testing.T) *harness {
 		ListenAddr:           ":8080",
 		MetricsAddr:          ":9090",
 		DefaultDispatchEvent: "flux-deploy",
-		HMACToken:            []byte(testHMACToken),
 		Tracker:              tracker,
 		Dispatcher:           dispatcher,
 		Metrics:              m,
@@ -163,27 +156,13 @@ func newHarness(t *testing.T) *harness {
 	return &harness{t: t, github: github, metrics: m, handler: srv.Handler(), logs: logs}
 }
 
-// post signs body with the shared token and runs it through the handler.
+// post runs body through the handler.
 func (h *harness) post(body string) *httptest.ResponseRecorder {
 	h.t.Helper()
-	return h.postSigned(body, signBody([]byte(body), testHMACToken))
-}
-
-func (h *harness) postSigned(body, signature string) *httptest.ResponseRecorder {
-	h.t.Helper()
 	req := httptest.NewRequest(http.MethodPost, "/flux-events", strings.NewReader(body))
-	if signature != "" {
-		req.Header.Set("X-Signature", signature)
-	}
 	rec := httptest.NewRecorder()
 	h.handler.ServeHTTP(rec, req)
 	return rec
-}
-
-func signBody(body []byte, token string) string {
-	mac := hmac.New(sha256.New, []byte(token))
-	mac.Write(body)
-	return "sha256=" + hex.EncodeToString(mac.Sum(nil))
 }
 
 // eventOptions describes a webhook body to build.
@@ -261,7 +240,6 @@ func TestCornerCases(t *testing.T) {
 	tests := []struct {
 		name          string
 		body          string
-		signature     string // "" means sign correctly
 		githubStatus  int
 		wantStatus    int
 		wantDispatch  int
@@ -401,20 +379,6 @@ func TestCornerCases(t *testing.T) {
 			wantDispatch: 0,
 		},
 		{
-			name:         "bad HMAC signature",
-			body:         successEvent(),
-			signature:    "sha256=" + strings.Repeat("00", 32),
-			wantStatus:   http.StatusUnauthorized,
-			wantDispatch: 0,
-		},
-		{
-			name:         "missing HMAC signature",
-			body:         successEvent(),
-			signature:    "none",
-			wantStatus:   http.StatusUnauthorized,
-			wantDispatch: 0,
-		},
-		{
 			name: "body over 64 KB",
 			body: buildEvent(eventOptions{
 				reason:       "ReconciliationSucceeded",
@@ -456,16 +420,7 @@ func TestCornerCases(t *testing.T) {
 				h.github.setDispatchStatus(tt.githubStatus)
 			}
 
-			var rec *httptest.ResponseRecorder
-			switch tt.signature {
-			case "":
-				rec = h.post(tt.body)
-			case "none":
-				rec = h.postSigned(tt.body, "")
-			default:
-				rec = h.postSigned(tt.body, tt.signature)
-			}
-
+			rec := h.post(tt.body)
 			if rec.Code != tt.wantStatus {
 				t.Errorf("status = %d, want %d (body %q)", rec.Code, tt.wantStatus, rec.Body.String())
 			}
@@ -933,7 +888,6 @@ func TestContextIsPropagated(t *testing.T) {
 
 	body := successEvent()
 	req := httptest.NewRequest(http.MethodPost, "/flux-events", strings.NewReader(body))
-	req.Header.Set("X-Signature", signBody([]byte(body), testHMACToken))
 
 	ctx, cancel := context.WithCancel(req.Context())
 	cancel()

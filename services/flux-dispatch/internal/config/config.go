@@ -22,8 +22,6 @@ type Config struct {
 	// GitHubPrivateKeyPath points at the PEM-encoded RSA private key of the App
 	// (mounted from a Kubernetes Secret).
 	GitHubPrivateKeyPath string
-	// HMACTokenPath points at the shared secret Flux signs webhook bodies with.
-	HMACTokenPath string
 	// GitHubAPIURL is the API base, overridable for GitHub Enterprise and tests.
 	GitHubAPIURL string
 	// DedupTTL is how long a dispatched event key is remembered.
@@ -68,7 +66,6 @@ func Load() (Config, error) {
 		{"GITHUB_APP_ID", &cfg.GitHubAppID},
 		{"GITHUB_INSTALLATION_ID", &cfg.GitHubInstallationID},
 		{"GITHUB_PRIVATE_KEY_PATH", &cfg.GitHubPrivateKeyPath},
-		{"HMAC_TOKEN_PATH", &cfg.HMACTokenPath},
 	} {
 		value := os.Getenv(required.name)
 		if value == "" {
