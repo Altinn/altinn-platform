@@ -340,6 +340,16 @@ Flux can re-emit success events for an unchanged revision — interval reconcile
 
 **Security boundary:** The GitHub App is installed on specific repos. A product setting `dispatch_repo: Altinn/some-other-repo` will get a 404 from GitHub if the app isn't installed there.
 
+## Configuration
+
+New env var **`DRY_RUN`** (bool, default `false`). When `true`, the handler still runs every
+validation, routing, and dedup step normally — including recording the dedup key — but instead of
+authenticating to GitHub and sending `repository_dispatch`, it logs the dispatch it would have sent
+(`outcome=dry_run`) and returns 200. `GITHUB_APP_ID`, `GITHUB_INSTALLATION_ID`, and
+`GITHUB_PRIVATE_KEY_PATH` become optional in this mode — its purpose is letting the Flux → service
+half of this design be verified before any GitHub App is provisioned. When `DRY_RUN=false` (the
+default), all three remain required.
+
 ## Platform-provided base Provider
 
 The platform provides a Provider manifest that all products include via their syncroot's kustomization:
@@ -371,6 +381,11 @@ The service exposes metrics on `GET /metrics` (port 9090) using the standard Pro
 | `flux_dispatch_dedup_entries` | Gauge | | Current number of entries in the dedup tracker |
 | `flux_dispatch_github_auth_errors_total` | Counter | | Failures obtaining GitHub App installation token |
 | `flux_dispatch_dispatch_duration_seconds` | Histogram | `repo` | Latency of outbound `repository_dispatch` API calls |
+| `flux_dispatch_dryrun_dispatches_total` | Counter | `repo`, `event_type`, `reason` | Dispatches that would have been sent, logged instead of sent (see [Configuration](#configuration)) |
+
+In dry-run mode, `flux_dispatch_dryrun_dispatches_total` increments instead of
+`flux_dispatch_dispatches_total` — the latter does **not** move, so a dashboard built on it does not
+report dispatches that never happened.
 
 **Why not a separate metrics service or Flux built-in metrics?**
 

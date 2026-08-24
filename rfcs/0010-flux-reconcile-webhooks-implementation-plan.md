@@ -15,11 +15,12 @@
 
 ## Rollout order
 
-1. **Service** — build `flux-dispatch` in `altinn-platform` (Tasks 3–6): GitHub App + secrets, the Go service, CI, and Kubernetes manifests.
-2. **Deploy to the test cluster, at23 first** — ship via `gitops-manifests` (Task 7); the ring mechanics promote outward from `at_ring1` once verified.
-3. **Pilot dialogporten** — finish the dialogporten-manifests wiring and run the end-to-end pilot at at23 (Tasks 8, 10), including the failure path.
-4. **Docs** — rewrite the core-repo product guide once the design is proven in the pilot (Task 9).
-5. **Remaining envs** — promote dialogporten's Alerts (and onboard further products) to tt02, yt01, and prod once the at23 pilot is verified end to end.
+1. **Service** — build `flux-dispatch` in `altinn-platform` (Tasks 4–6): the Go service, CI, and Kubernetes manifests. Task 3 (GitHub App) is not needed yet — see step 3 below.
+2. **Deploy to the test cluster with `DRY_RUN=true`, at23 first** — ship via `gitops-manifests` (Task 7); the ring mechanics promote outward from `at_ring1` once verified. This validates the Flux → service half end-to-end before any GitHub App exists.
+3. **Dry-run validation, then enable dispatching** — confirm events arrive from dialogporten's Alert, validation and `-failed` routing behave, and dedup behaves across reconcile intervals, all by reading logs and `flux_dispatch_dryrun_dispatches_total` (Task 10 Step 0). Then complete Task 3 (GitHub App registration + secrets) and flip `DRY_RUN=false`.
+4. **Pilot dialogporten** — finish the dialogporten-manifests wiring and run the end-to-end pilot at at23 with dispatching enabled (Tasks 8, 10), including the failure path.
+5. **Docs** — rewrite the core-repo product guide once the design is proven in the pilot (Task 9).
+6. **Remaining envs** — promote dialogporten's Alerts (and onboard further products) to tt02, yt01, and prod once the at23 pilot is verified end to end.
 
 ## Repos
 
@@ -74,7 +75,7 @@ This document. Committed alongside RFC 0010 so reviewers of [PR #3220](https://g
 
 ### Task 3: GitHub App registration + secrets (GitHub org + Azure Key Vault — no single repo)
 
-This task is mostly clicking in GitHub/Azure; the deliverable is a checklist the platform team executes. Record outcomes (App ID, installation ID) below once executed.
+This task is mostly clicking in GitHub/Azure; the deliverable is a checklist the platform team executes. **Not a blocker for the first deploy:** `DRY_RUN=true` (see Rollout order) lets `flux-dispatch` ship and be validated end-to-end without a GitHub App; this task is required before the *dispatching* phase — i.e. before flipping `DRY_RUN=false` — not before deployment. Record outcomes (App ID, installation ID) below once executed.
 
 - [ ] **Step 1:** Create GitHub App in the `Altinn` org: name **`dis-flux-dispatch`** (confirmed 2026-08-07). Permissions: **Contents: Read & write** (required for `repository_dispatch`). Webhook: disabled. Where can it be installed: Only this org.
 - [ ] **Step 2:** Generate a private key (PEM). Note the **App ID**.
@@ -244,6 +245,8 @@ Work in `dis-way/core`, on the existing feature branch that carries the flux-rec
 - [ ] **Step 2:** `git add FLUX-RECONCILE-WEBHOOKS.md README.md && git commit -m "docs: add flux deploy webhook product guide"`; push and open a PR to `main` (include affected path per repo convention).
 
 ### Task 10: End-to-end pilot verification (dialogporten @ at23) (`Altinn/dialogporten-manifests` + `Altinn/dialogporten`)
+
+**Precondition:** the dry-run phase (Rollout order step 3) already deployed `flux-dispatch` with `DRY_RUN=true` and confirmed events arrive, validation/`-failed` routing behaves, and dedup behaves across reconcile intervals — without GitHub in the loop. This task re-runs the same checks with `DRY_RUN=false` and a live GitHub App, so it assumes dispatching already works end-to-end at the transport level rather than starting from a standing start.
 
 - [ ] **Step 0 — verify the dedup premise:** with the success Alert live, watch two-plus no-op reconcile intervals (`flux events --for Kustomization/dialogporten-apps -n product-dialogporten`, or the service's `events_received_total`) and record whether Flux actually re-emits `ReconciliationSucceeded` when nothing changed (notification-controller also rate-limits identical payloads, ~5m window). This validates locked decision 2's cadence assumption; if no-op intervals do not re-emit, dedup still guards restarts/re-applies/redeliveries, but the dedup-hit assertions below become best-effort.
 - [ ] **Step 1:** Merge a trivial workflow into `Altinn/dialogporten` default branch: `on: repository_dispatch: types: [flux-deploy]`, one job echoing `github.event.client_payload` (RFC has the exact YAML — §"Add a GitHub Actions workflow"). (`repository_dispatch` only triggers workflows on the default branch.)
