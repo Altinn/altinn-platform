@@ -45,6 +45,7 @@ const (
 	outcomeDispatchRejected    = "dispatch_rejected"
 	outcomeDispatchUnavailable = "dispatch_unavailable"
 	outcomeAuthFailed          = "github_auth_failed"
+	outcomeDryRun              = "dry_run"
 )
 
 // Options configures a Server. Tracker, Dispatcher and Metrics are required for
@@ -53,10 +54,14 @@ type Options struct {
 	ListenAddr           string
 	MetricsAddr          string
 	DefaultDispatchEvent string
-	Tracker              *dedup.Tracker
-	Dispatcher           *dispatch.Dispatcher
-	Metrics              *metrics.Metrics
-	Logger               *slog.Logger
+	// DryRun, when true, runs the handler through every step exactly as
+	// normal and then logs the dispatch it would have sent instead of
+	// calling GitHub. See DECISION-dry-run.md "Behaviour".
+	DryRun     bool
+	Tracker    *dedup.Tracker
+	Dispatcher *dispatch.Dispatcher
+	Metrics    *metrics.Metrics
+	Logger     *slog.Logger
 }
 
 // Server serves the webhook endpoint, the health endpoints and the metrics
@@ -123,6 +128,9 @@ func handleHealth(w http.ResponseWriter, _ *http.Request) {
 }
 
 // handleFluxEvent implements RFC 0010 §"Request flow", steps 1-10 in order.
+// When Options.DryRun is true, every step still runs; only the final GitHub
+// call (steps 8-10) is replaced with a log line. See DECISION-dry-run.md
+// "Behaviour".
 func (s *Server) handleFluxEvent(w http.ResponseWriter, r *http.Request) {
 	// Cap the body before anything reads it. This must stay first: it bounds
 	// the read itself, so nothing downstream can be handed an unbounded body.
@@ -221,6 +229,23 @@ func (s *Server) handleFluxEvent(w http.ResponseWriter, r *http.Request) {
 		KustomizationName: e.InvolvedObject.Name,
 		Reason:            e.Reason,
 		Message:           e.Message,
+	}
+
+	if s.opts.DryRun {
+		// DECISION-dry-run.md "Behaviour": every step above ran exactly as
+		// normal; only the outbound GitHub call is skipped. The dedup key is
+		// still recorded, exactly as a successful dispatch would, so dedup
+		// behaviour stays observable in this mode.
+		s.opts.Tracker.Record(key)
+		s.opts.Metrics.DryRunDispatches.WithLabelValues(repo, eventType, e.Reason).Inc()
+		log.Info("dry run: would have dispatched repository_dispatch",
+			"outcome", outcomeDryRun,
+			"commit_sha", payload.CommitSHA,
+			"revision", payload.Revision,
+			"kustomization_name", payload.KustomizationName,
+			"message", dispatch.TruncateMessage(payload.Message))
+		writeAccepted(w, outcomeDryRun)
+		return
 	}
 
 	start := time.Now()

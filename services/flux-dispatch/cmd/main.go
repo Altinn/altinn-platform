@@ -51,9 +51,16 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
-	privateKey, err := os.ReadFile(cfg.GitHubPrivateKeyPath)
-	if err != nil {
-		return fmt.Errorf("read GitHub App private key: %w", err)
+	// In DRY_RUN mode there may be no key on disk at all — that is the point
+	// of the mode (see DECISION-dry-run.md "Behaviour"). config.Load already
+	// enforced readability when DRY_RUN is false, so this only ever runs
+	// against a path confirmed to exist.
+	var privateKey []byte
+	if !cfg.DryRun {
+		privateKey, err = os.ReadFile(cfg.GitHubPrivateKeyPath)
+		if err != nil {
+			return fmt.Errorf("read GitHub App private key: %w", err)
+		}
 	}
 
 	m := metrics.New()
@@ -72,6 +79,7 @@ func run(logger *slog.Logger) error {
 		ListenAddr:           cfg.ListenAddr,
 		MetricsAddr:          cfg.MetricsAddr,
 		DefaultDispatchEvent: cfg.DefaultDispatchEvent,
+		DryRun:               cfg.DryRun,
 		Tracker:              tracker,
 		Dispatcher:           dispatcher,
 		Metrics:              m,
@@ -87,7 +95,8 @@ func run(logger *slog.Logger) error {
 		"github_api_url", cfg.GitHubAPIURL,
 		"default_dispatch_event", cfg.DefaultDispatchEvent,
 		"dedup_ttl", cfg.DedupTTL.String(),
-		"dedup_max_entries", cfg.DedupMaxEntries)
+		"dedup_max_entries", cfg.DedupMaxEntries,
+		"dry_run", cfg.DryRun)
 
 	errCh := make(chan error, 2)
 	var wg sync.WaitGroup

@@ -123,6 +123,18 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
+	return buildHarness(t, false)
+}
+
+// newDryRunHarness is newHarness with DRY_RUN semantics: the handler is wired
+// to a live fake GitHub so dry-run tests can assert it receives zero calls.
+func newDryRunHarness(t *testing.T) *harness {
+	t.Helper()
+	return buildHarness(t, true)
+}
+
+func buildHarness(t *testing.T, dryRun bool) *harness {
+	t.Helper()
 
 	github := newFakeGitHub(t)
 	m := metrics.New()
@@ -147,6 +159,7 @@ func newHarness(t *testing.T) *harness {
 		ListenAddr:           ":8080",
 		MetricsAddr:          ":9090",
 		DefaultDispatchEvent: "flux-deploy",
+		DryRun:               dryRun,
 		Tracker:              tracker,
 		Dispatcher:           dispatcher,
 		Metrics:              m,
@@ -484,20 +497,7 @@ func TestHappyPathPayloadAndMetrics(t *testing.T) {
 	}
 
 	// Structured logs carry the fields operators filter on.
-	var record map[string]any
-	found := false
-	for line := range strings.SplitSeq(strings.TrimSpace(h.logs.String()), "\n") {
-		if err := json.Unmarshal([]byte(line), &record); err != nil {
-			continue
-		}
-		if record["outcome"] == "dispatched" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("no log record with outcome=dispatched; logs:\n%s", h.logs.String())
-	}
+	record := findLogRecord(t, h.logs.String(), "dispatched")
 	for field, want := range map[string]any{
 		"product": "dialogporten",
 		"env":     "at23",
@@ -899,4 +899,179 @@ func TestContextIsPropagated(t *testing.T) {
 	if rec.Code == http.StatusOK {
 		t.Errorf("status = 200, want a failure after the client went away")
 	}
+}
+
+// TestDryRunHappyPathSkipsGitHub covers DECISION-dry-run.md "Behaviour": every
+// step of the request flow runs as normal, but the outbound GitHub call is
+// skipped and flux_dispatch_dryrun_dispatches_total increments instead of
+// flux_dispatch_dispatches_total, which must not move at all in this mode.
+func TestDryRunHappyPathSkipsGitHub(t *testing.T) {
+	h := newDryRunHarness(t)
+
+	rec := h.post(successEvent())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %q)", rec.Code, rec.Body.String())
+	}
+	if got := h.github.count(); got != 0 {
+		t.Errorf("github dispatch calls = %d, want 0", got)
+	}
+	if got := testutil.ToFloat64(h.metrics.DryRunDispatches.WithLabelValues(
+		"Altinn/dialogporten", "flux-deploy", "ReconciliationSucceeded")); got != 1 {
+		t.Errorf("flux_dispatch_dryrun_dispatches_total = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(h.metrics.Dispatches.WithLabelValues(
+		"Altinn/dialogporten", "flux-deploy", "ReconciliationSucceeded")); got != 0 {
+		t.Errorf("flux_dispatch_dispatches_total = %v, want 0 (must not move in dry run)", got)
+	}
+	if got := testutil.ToFloat64(h.metrics.EventsReceived.WithLabelValues("ReconciliationSucceeded")); got != 1 {
+		t.Errorf("events_received_total = %v, want 1", got)
+	}
+}
+
+// TestDryRunDuplicateDigestIsSkipped proves dedup is fully observable in
+// DRY_RUN mode, per the DECISION doc's explicit reason for the mode: the dedup
+// key is recorded exactly as a successful dispatch would, so a repeat
+// delivery of the same digest is a dedup hit with no second dry-run dispatch.
+func TestDryRunDuplicateDigestIsSkipped(t *testing.T) {
+	h := newDryRunHarness(t)
+
+	if rec := h.post(successEvent()); rec.Code != http.StatusOK {
+		t.Fatalf("first request status = %d, want 200", rec.Code)
+	}
+	if rec := h.post(successEvent()); rec.Code != http.StatusOK {
+		t.Fatalf("second request status = %d, want 200", rec.Code)
+	}
+
+	if got := h.github.count(); got != 0 {
+		t.Errorf("github dispatch calls = %d, want 0", got)
+	}
+	if got := testutil.ToFloat64(h.metrics.DedupHits.WithLabelValues("ReconciliationSucceeded")); got != 1 {
+		t.Errorf("dedup_hits_total = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(h.metrics.DryRunDispatches.WithLabelValues(
+		"Altinn/dialogporten", "flux-deploy", "ReconciliationSucceeded")); got != 1 {
+		t.Errorf("flux_dispatch_dryrun_dispatches_total = %v, want 1 (second delivery is a duplicate)", got)
+	}
+}
+
+// TestDryRunStillRejectsMissingRepo confirms everything a product team can
+// get wrong is still exercised in DRY_RUN mode: only the outbound GitHub call
+// is skipped, per DECISION-dry-run.md "Behaviour".
+func TestDryRunStillRejectsMissingRepo(t *testing.T) {
+	h := newDryRunHarness(t)
+
+	body := buildEvent(eventOptions{
+		reason:   "ReconciliationSucceeded",
+		revision: "at23@sha256:aabbccdd",
+		product:  "dialogporten",
+		env:      "at23",
+	})
+	rec := h.post(body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if got := h.github.count(); got != 0 {
+		t.Errorf("github dispatch calls = %d, want 0", got)
+	}
+	if got := testutil.CollectAndCount(h.metrics.DryRunDispatches); got != 0 {
+		t.Errorf("flux_dispatch_dryrun_dispatches_total series = %d, want 0", got)
+	}
+}
+
+// TestDryRunStillRejectsNonAltinnRepo is TestDryRunStillRejectsMissingRepo's
+// companion for the other rejection a product team can trigger.
+func TestDryRunStillRejectsNonAltinnRepo(t *testing.T) {
+	h := newDryRunHarness(t)
+
+	body := buildEvent(eventOptions{
+		reason:       "ReconciliationSucceeded",
+		revision:     "at23@sha256:aabbccdd",
+		product:      "dialogporten",
+		env:          "at23",
+		dispatchRepo: "Evil/repo",
+	})
+	rec := h.post(body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if got := h.github.count(); got != 0 {
+		t.Errorf("github dispatch calls = %d, want 0", got)
+	}
+	if got := testutil.CollectAndCount(h.metrics.DryRunDispatches); got != 0 {
+		t.Errorf("flux_dispatch_dryrun_dispatches_total series = %d, want 0", got)
+	}
+}
+
+// TestDryRunLogsStructuredFields pins the exact field set DECISION-dry-run.md
+// "Behaviour" specifies for the dry-run log line: outcome=dry_run plus repo,
+// event_type, product, env, reason, commit_sha, revision, kustomization_name
+// and the truncated message.
+func TestDryRunLogsStructuredFields(t *testing.T) {
+	h := newDryRunHarness(t)
+
+	rec := h.post(successEvent())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	record := findLogRecord(t, h.logs.String(), "dry_run")
+	for field, want := range map[string]any{
+		"product":            "dialogporten",
+		"env":                "at23",
+		"repo":               "Altinn/dialogporten",
+		"reason":             "ReconciliationSucceeded",
+		"event_type":         "flux-deploy",
+		"outcome":            "dry_run",
+		"commit_sha":         "abc1234def5678",
+		"revision":           "at23@sha256:aabbccdd",
+		"kustomization_name": "dialogporten-apps",
+		"message":            "Applied revision at23@sha256:aabbccdd",
+	} {
+		if got := record[field]; got != want {
+			t.Errorf("log field %q = %v, want %v", field, got, want)
+		}
+	}
+}
+
+// TestDryRunLongMessageIsTruncatedInLog matches TestLongMessageIsTruncated:
+// the dry-run log must carry the same truncated message a real dispatch
+// would have sent, not the raw Flux message.
+func TestDryRunLongMessageIsTruncatedInLog(t *testing.T) {
+	h := newDryRunHarness(t)
+
+	body := buildEvent(eventOptions{
+		reason:        "ReconciliationFailed",
+		revision:      "at23@sha256:aabbccdd",
+		product:       "dialogporten",
+		env:           "at23",
+		dispatchRepo:  "Altinn/dialogporten",
+		dispatchEvent: "flux-deploy-failed",
+		message:       strings.Repeat("e", 8000),
+	})
+	if rec := h.post(body); rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	record := findLogRecord(t, h.logs.String(), "dry_run")
+	message, _ := record["message"].(string)
+	if len(message) != 1024 {
+		t.Errorf("logged message length = %d, want 1024", len(message))
+	}
+}
+
+// findLogRecord returns the first JSON log line whose outcome field matches
+// wantOutcome, failing the test if none is found.
+func findLogRecord(t *testing.T, logs, wantOutcome string) map[string]any {
+	t.Helper()
+	var record map[string]any
+	for line := range strings.SplitSeq(strings.TrimSpace(logs), "\n") {
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			continue
+		}
+		if record["outcome"] == wantOutcome {
+			return record
+		}
+	}
+	t.Fatalf("no log record with outcome=%s; logs:\n%s", wantOutcome, logs)
+	return nil
 }
