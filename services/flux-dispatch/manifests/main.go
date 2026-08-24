@@ -109,13 +109,10 @@ func newFluxDispatchChart(scope constructs.Construct, id string) cdk8s.Chart {
 
 // newDeployment defines the single-replica flux-dispatch Deployment. Env vars
 // mirror internal/config/config.go exactly: the three GitHub App variables
-// (no default, Load fails loudly if unset — unless DRY_RUN is true) get
-// values here, as does DRY_RUN itself (default false in code, but this
-// Deployment always sets it explicitly via the ${DRY_RUN} postBuild
-// placeholder so an environment's gitops values are the single source of
-// truth for the mode — see DECISION-dry-run.md "Manifests"); optional
-// variables whose defaults already match RFC 0010 (GITHUB_API_URL,
-// DEDUP_TTL, DEDUP_MAX_ENTRIES, DEFAULT_DISPATCH_EVENT) are left unset.
+// and DRY_RUN get values here via ${...} postBuild placeholders (see
+// README.md "DRY_RUN mode" for why DRY_RUN is always set explicitly rather
+// than relying on its code default); optional variables whose defaults
+// already match RFC 0010 are left unset.
 func newDeployment(chart cdk8s.Chart, sa cdk8s.ApiObject, labels, podLabels *map[string]*string) {
 	k8scompat.NewKubeDeployment(chart, _jsii_.String("deployment"), &k8s.KubeDeploymentProps{
 		Metadata: &k8s.ObjectMeta{
@@ -154,16 +151,10 @@ func newDeployment(chart cdk8s.Chart, sa cdk8s.ApiObject, labels, podLabels *map
 							Name: _jsii_.String("github-app-key"),
 							Secret: &k8s.SecretVolumeSource{
 								SecretName: _jsii_.String(githubAppKeySecretName),
-								// Optional: the ExternalSecret below cannot
-								// materialize this Secret until the GitHub App
-								// and its Key Vault entry exist. Marking the
-								// volume optional lets the pod start (with an
-								// empty mount) before that happens, which is
-								// what the DRY_RUN rollout needs. Production
-								// still fails fast: config.Load's startup
-								// check requires the mounted file to exist and
-								// be readable whenever DRY_RUN=false. See
-								// DECISION-dry-run.md "Manifests".
+								// Optional: lets the pod start before the
+								// ExternalSecret can materialize this
+								// Secret. See README.md "DRY_RUN mode" —
+								// paired with the config.Load startup check.
 								Optional: _jsii_.Bool(true),
 							},
 						},
@@ -392,38 +383,11 @@ func newPodMonitor(chart cdk8s.Chart, labels *map[string]*string) {
 	}))
 }
 
-// newExternalSecrets defines the namespaced SecretStore and the ExternalSecret
-// that materializes the GitHub App private key as a Kubernetes Secret.
-//
-// ASSUMPTION (flagged per the task brief — this is the "known-open decision"
-// from plan Task 3 Step 5, genuinely unresolved as of this writing): no
-// dis-platform SecretStore exists anywhere yet, and none of the operators
-// this brief pointed at (dis-apim-operator, dis-identity-operator,
-// dis-pgsql-operator) consume Key Vault secrets via ExternalSecret at all —
-// they are cluster-scoped controllers that talk to Azure directly over
-// workload identity, not consumers of namespaced secrets. The closest real,
-// already-working precedent in any of these repos is gitops-manifests'
-// otel-collector (oci/otel-collector/base/external-secrets.yaml) and
-// dis-tls-cert/traefik (oci/traefik/apps/post-deploy/ssl-cert-external-secret.yaml):
-// both provision a namespaced external-secrets.io/v1 SecretStore with
-// provider.azurekv, authType: WorkloadIdentity, and a serviceAccountRef to a
-// same-namespace ServiceAccount, then an ExternalSecret with a
-// ${KV_...}-templated remoteRef.key. This mirrors that pattern exactly:
-// vaultUrl is left as the same ${KV_URI} placeholder otel-collector uses, and
-// the remote secret name is a new placeholder following the
-// ${KV_SECRET_NAME_*} convention dis-tls-cert's ExternalSecret uses. A
-// dis-vault-operator also exists in this repo (services/dis-vault-operator)
-// with a Vault CRD whose spec has an `externalSecrets: true` flag that would
-// have the operator provision a *new* dedicated Key Vault and manage the
-// SecretStore itself — but grepping every deploy/ and gitops-manifests
-// directory turns up zero uses of `kind: Vault` outside the operator's own
-// CRD/sample files, so there is no live evidence that path is wired up or
-// how naming would resolve. Using it here would mean inventing both a
-// SecretStore name and a new Azure resource with no precedent backing either
-// — exactly what the brief said not to do. The raw SecretStore/ExternalSecret
-// route below is the closest pattern with actual working precedent; whoever
-// resolves plan Task 3 Step 5 should confirm vaultUrl and the secret name
-// (and may prefer the Vault CRD instead — see task-6-report.md).
+// newExternalSecrets defines the namespaced SecretStore and the
+// ExternalSecret that materializes the GitHub App private key as a
+// Kubernetes Secret. See README.md "Secret management" for why this shape
+// (rather than dis-vault-operator's Vault CRD) and for vaultUrl/the secret
+// name, which are placeholders pending Key Vault provisioning.
 func newExternalSecrets(chart cdk8s.Chart, labels *map[string]*string) {
 	store := cdk8s.NewApiObject(chart, _jsii_.String("kv-store"), &cdk8s.ApiObjectProps{
 		ApiVersion: _jsii_.String("external-secrets.io/v1"),

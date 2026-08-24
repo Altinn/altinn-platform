@@ -10,8 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// Metrics holds the eight collectors the service publishes: the seven from
-// RFC 0010 plus DryRunDispatches (DECISION-dry-run.md "Metrics").
+// Metrics holds the eight collectors from RFC 0010 §"Prometheus metrics".
 type Metrics struct {
 	// Registry is the dedicated registry these collectors are registered on.
 	Registry *prometheus.Registry
@@ -31,11 +30,8 @@ type Metrics struct {
 	// DispatchDuration measures outbound repository_dispatch latency.
 	DispatchDuration *prometheus.HistogramVec
 
-	// DryRunDispatches counts dispatches that would have been sent while
-	// DRY_RUN is enabled. It is deliberately separate from Dispatches so a
-	// dashboard built on flux_dispatch_dispatches_total never reports a
-	// dispatch that did not actually happen. See DECISION-dry-run.md
-	// "Metrics".
+	// DryRunDispatches is separate from Dispatches: the latter must never
+	// move in dry-run. See README.md "Metrics".
 	DryRunDispatches *prometheus.CounterVec
 }
 

@@ -89,11 +89,29 @@ kustomize-controller v1 event reasons (`fluxcd/pkg/apis/meta`):
 | `METRICS_ADDR` | no | `:9090` | Prometheus listener |
 | `DEFAULT_DISPATCH_EVENT` | no | `flux-deploy` | Used when the Alert omits `dispatch_event` |
 
-Set `DRY_RUN=true` to deploy and validate the Flux → service half of this
-service end-to-end before a GitHub App exists: every step of the request flow
-still runs, but the outbound `repository_dispatch` call is replaced with a log
-line, so no GitHub App, private key, or Key Vault secret is needed for the
-first rollout.
+### DRY_RUN mode
+
+`DRY_RUN=true` runs the full request flow — validation, routing, and dedup —
+and replaces only the outbound `repository_dispatch` call with a log line
+(`outcome=dry_run`, `200`). Dedup is still recorded: observing dedup
+behaviour is a main purpose of the mode, not a side effect skipped along with
+the GitHub call. This lets the Flux → service half of the design be deployed
+and validated before any GitHub App exists — `GITHUB_APP_ID`,
+`GITHUB_INSTALLATION_ID`, and `GITHUB_PRIVATE_KEY_PATH` all become optional,
+and the Deployment mounts the private key volume with `optional: true` so the
+pod can start before the Secret does.
+
+The code default is `false`, and the Deployment always sets `DRY_RUN`
+explicitly via the `${DRY_RUN}` gitops placeholder rather than relying on
+that default. This is deliberate: defaulting to `true` in code would let a
+production deploy that forgot to override the flag silently stop
+dispatching; defaulting to `false` means a forgotten flag fails toward real
+dispatch instead of toward silence.
+
+When `DRY_RUN=false`, all three GitHub variables are required again, and
+`config.Load`'s startup check requires the private key file to exist and be
+readable — so a bad mount fails the pod at startup instead of surfacing as a
+confusing error on the first webhook delivery.
 
 ## Endpoints
 
@@ -119,6 +137,21 @@ first rollout.
 built on it never reports a dispatch that did not happen.
 
 They live on a dedicated registry, so the metrics port exposes only these.
+
+## Secret management
+
+The GitHub App private key reaches the pod as a Kubernetes Secret populated by
+an `external-secrets.io` `SecretStore`/`ExternalSecret` pair (Azure Key Vault,
+`WorkloadIdentity` auth) — the same convention `otel-collector` and
+`dis-tls-cert`/`traefik` use elsewhere in `dis-way/gitops-manifests`.
+`dis-vault-operator`'s `Vault` CRD was considered instead (it can provision
+and own a Key Vault directly), but has no live usage anywhere in the
+platform, so there is no working precedent to follow; the SecretStore route
+does. `vaultUrl` and the remote secret name are gitops placeholders pending
+Key Vault provisioning.
+
+The Deployment mounts the resulting Secret as `optional: true` so the pod can
+start before it exists — see "DRY_RUN mode" above.
 
 ## Development
 

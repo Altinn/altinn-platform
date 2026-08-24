@@ -56,7 +56,7 @@ type Options struct {
 	DefaultDispatchEvent string
 	// DryRun, when true, runs the handler through every step exactly as
 	// normal and then logs the dispatch it would have sent instead of
-	// calling GitHub. See DECISION-dry-run.md "Behaviour".
+	// calling GitHub. See README.md "Configuration".
 	DryRun     bool
 	Tracker    *dedup.Tracker
 	Dispatcher *dispatch.Dispatcher
@@ -129,8 +129,7 @@ func handleHealth(w http.ResponseWriter, _ *http.Request) {
 
 // handleFluxEvent implements RFC 0010 §"Request flow", steps 1-10 in order.
 // When Options.DryRun is true, every step still runs; only the final GitHub
-// call (steps 8-10) is replaced with a log line. See DECISION-dry-run.md
-// "Behaviour".
+// call (steps 8-10) is replaced with a log line.
 func (s *Server) handleFluxEvent(w http.ResponseWriter, r *http.Request) {
 	// Cap the body before anything reads it. This must stay first: it bounds
 	// the read itself, so nothing downstream can be handed an unbounded body.
@@ -232,10 +231,8 @@ func (s *Server) handleFluxEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if s.opts.DryRun {
-		// DECISION-dry-run.md "Behaviour": every step above ran exactly as
-		// normal; only the outbound GitHub call is skipped. The dedup key is
-		// still recorded, exactly as a successful dispatch would, so dedup
-		// behaviour stays observable in this mode.
+		// Dedup key recorded here too: observing dedup behaviour is a main
+		// purpose of dry-run. See README.md "DRY_RUN mode".
 		s.opts.Tracker.Record(key)
 		s.opts.Metrics.DryRunDispatches.WithLabelValues(repo, eventType, e.Reason).Inc()
 		log.Info("dry run: would have dispatched repository_dispatch",

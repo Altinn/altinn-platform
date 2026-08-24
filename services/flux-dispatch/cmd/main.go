@@ -51,10 +51,8 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
-	// In DRY_RUN mode there may be no key on disk at all — that is the point
-	// of the mode (see DECISION-dry-run.md "Behaviour"). config.Load already
-	// enforced readability when DRY_RUN is false, so this only ever runs
-	// against a path confirmed to exist.
+	// DRY_RUN leaves privateKey nil; config.Load already validated the path
+	// is readable whenever DryRun is false. See README.md "Configuration".
 	var privateKey []byte
 	if !cfg.DryRun {
 		privateKey, err = os.ReadFile(cfg.GitHubPrivateKeyPath)

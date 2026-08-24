@@ -901,10 +901,9 @@ func TestContextIsPropagated(t *testing.T) {
 	}
 }
 
-// TestDryRunHappyPathSkipsGitHub covers DECISION-dry-run.md "Behaviour": every
-// step of the request flow runs as normal, but the outbound GitHub call is
-// skipped and flux_dispatch_dryrun_dispatches_total increments instead of
-// flux_dispatch_dispatches_total, which must not move at all in this mode.
+// TestDryRunHappyPathSkipsGitHub pins the dry-run contract: the outbound
+// GitHub call is skipped, and flux_dispatch_dryrun_dispatches_total
+// increments while flux_dispatch_dispatches_total must not move at all.
 func TestDryRunHappyPathSkipsGitHub(t *testing.T) {
 	h := newDryRunHarness(t)
 
@@ -954,9 +953,8 @@ func TestDryRunDuplicateDigestIsSkipped(t *testing.T) {
 	}
 }
 
-// TestDryRunStillRejectsMissingRepo confirms everything a product team can
-// get wrong is still exercised in DRY_RUN mode: only the outbound GitHub call
-// is skipped, per DECISION-dry-run.md "Behaviour".
+// TestDryRunStillRejectsMissingRepo confirms product-team misconfiguration
+// is still caught in DRY_RUN mode: only the outbound GitHub call is skipped.
 func TestDryRunStillRejectsMissingRepo(t *testing.T) {
 	h := newDryRunHarness(t)
 
@@ -1002,10 +1000,9 @@ func TestDryRunStillRejectsNonAltinnRepo(t *testing.T) {
 	}
 }
 
-// TestDryRunLogsStructuredFields pins the exact field set DECISION-dry-run.md
-// "Behaviour" specifies for the dry-run log line: outcome=dry_run plus repo,
-// event_type, product, env, reason, commit_sha, revision, kustomization_name
-// and the truncated message.
+// TestDryRunLogsStructuredFields pins the exact field set the dry-run log
+// line carries: outcome=dry_run plus repo, event_type, product, env, reason,
+// commit_sha, revision, kustomization_name and the truncated message.
 func TestDryRunLogsStructuredFields(t *testing.T) {
 	h := newDryRunHarness(t)
 

@@ -160,9 +160,8 @@ func TestLoadInvalidDedupMaxEntries(t *testing.T) {
 	}
 }
 
-// TestLoadDryRunParsing covers DECISION-dry-run.md "Config": DRY_RUN parses
-// with strconv.ParseBool, so both "true" and "1" (and their false-y
-// counterparts) are accepted.
+// TestLoadDryRunParsing pins DRY_RUN's parsing to strconv.ParseBool: "true"
+// and "1" (and their false-y counterparts) are both accepted.
 func TestLoadDryRunParsing(t *testing.T) {
 	tests := []struct {
 		value string
@@ -244,10 +243,9 @@ func TestLoadDryRunFalseStillRequiresGitHubVars(t *testing.T) {
 	}
 }
 
-// TestLoadPrivateKeyMustExistAndBeReadable covers the startup check from
-// DECISION-dry-run.md "Config": when DRY_RUN=false, the private key file must
-// exist and be readable at Load time, not just wired as a non-empty string —
-// so a bad mount fails the pod at startup instead of on the first webhook.
+// TestLoadPrivateKeyMustExistAndBeReadable pins the startup check: when
+// DRY_RUN=false, the key file must exist and be readable at Load time, not
+// just wired as a non-empty string.
 func TestLoadPrivateKeyMustExistAndBeReadable(t *testing.T) {
 	t.Run("nonexistent", func(t *testing.T) {
 		requiredEnv(t)
@@ -283,9 +281,8 @@ func TestLoadPrivateKeyMustExistAndBeReadable(t *testing.T) {
 	})
 }
 
-// TestLoadDryRunSkipsPrivateKeyReadabilityCheck is the other half of
-// DECISION-dry-run.md's startup-check paragraph: DRY_RUN=true does not care
-// whether the key file exists at all.
+// TestLoadDryRunSkipsPrivateKeyReadabilityCheck is
+// TestLoadPrivateKeyMustExistAndBeReadable's DRY_RUN=true counterpart.
 func TestLoadDryRunSkipsPrivateKeyReadabilityCheck(t *testing.T) {
 	t.Setenv("DRY_RUN", "true")
 	t.Setenv("GITHUB_APP_ID", "")

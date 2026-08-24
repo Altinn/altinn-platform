@@ -35,9 +35,8 @@ type Config struct {
 	// DefaultDispatchEvent is used when an Alert omits dispatch_event.
 	DefaultDispatchEvent string
 	// DryRun, when true, runs the full request flow but skips the outbound
-	// GitHub call: it logs the dispatch it would have sent and returns 200,
-	// so the service can be deployed and validated before any GitHub App
-	// exists. See DECISION-dry-run.md "Behaviour".
+	// GitHub call, logging the dispatch it would have sent instead. See
+	// README.md "Configuration".
 	DryRun bool
 }
 
@@ -114,11 +113,9 @@ func Load() (Config, error) {
 		cfg.DedupMaxEntries = maxEntries
 	}
 
-	// The private key is read for real once at process startup and signed
-	// with on every token refresh after that; a bad mount must fail here,
-	// loudly, rather than surface as a confusing error on the first webhook
-	// delivery. DRY_RUN skips this: it exists precisely so the service can
-	// run before the key exists. See DECISION-dry-run.md "Config".
+	// Fail here, loudly, rather than surface a bad mount as a confusing
+	// error on the first webhook delivery. Skipped when DryRun is true —
+	// see README.md "Configuration".
 	if !cfg.DryRun {
 		f, err := os.Open(cfg.GitHubPrivateKeyPath)
 		if err != nil {
