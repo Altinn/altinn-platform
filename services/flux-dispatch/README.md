@@ -78,15 +78,22 @@ kustomize-controller v1 event reasons (`fluxcd/pkg/apis/meta`):
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `GITHUB_APP_ID` | yes | | GitHub App ID |
-| `GITHUB_INSTALLATION_ID` | yes | | App installation ID |
-| `GITHUB_PRIVATE_KEY_PATH` | yes | | Path to the PEM private key |
+| `DRY_RUN` | no | `false` | Log-only mode: run the full request flow but skip the outbound GitHub call |
+| `GITHUB_APP_ID` | yes, unless `DRY_RUN=true` | | GitHub App ID |
+| `GITHUB_INSTALLATION_ID` | yes, unless `DRY_RUN=true` | | App installation ID |
+| `GITHUB_PRIVATE_KEY_PATH` | yes, unless `DRY_RUN=true` | | Path to the PEM private key; must exist and be readable at startup unless `DRY_RUN=true` |
 | `GITHUB_API_URL` | no | `https://api.github.com` | GitHub API base |
 | `DEDUP_TTL` | no | `24h` | How long a dispatched event is remembered |
 | `DEDUP_MAX_ENTRIES` | no | `10000` | Dedup tracker cap; oldest is evicted |
 | `LISTEN_ADDR` | no | `:8080` | Webhook listener |
 | `METRICS_ADDR` | no | `:9090` | Prometheus listener |
 | `DEFAULT_DISPATCH_EVENT` | no | `flux-deploy` | Used when the Alert omits `dispatch_event` |
+
+Set `DRY_RUN=true` to deploy and validate the Flux → service half of this
+service end-to-end before a GitHub App exists: every step of the request flow
+still runs, but the outbound `repository_dispatch` call is replaced with a log
+line, so no GitHub App, private key, or Key Vault secret is needed for the
+first rollout.
 
 ## Endpoints
 
@@ -104,7 +111,12 @@ kustomize-controller v1 event reasons (`fluxcd/pkg/apis/meta`):
 `flux_dispatch_dispatch_errors_total{repo,event_type,error_code}`,
 `flux_dispatch_dedup_hits_total{reason}`, `flux_dispatch_dedup_entries`,
 `flux_dispatch_github_auth_errors_total`,
-`flux_dispatch_dispatch_duration_seconds{repo}`.
+`flux_dispatch_dispatch_duration_seconds{repo}`,
+`flux_dispatch_dryrun_dispatches_total{repo,event_type,reason}`.
+
+`flux_dispatch_dryrun_dispatches_total` only increments while `DRY_RUN=true`;
+`flux_dispatch_dispatches_total` does not move in that mode, so a dashboard
+built on it never reports a dispatch that did not happen.
 
 They live on a dedicated registry, so the metrics port exposes only these.
 
