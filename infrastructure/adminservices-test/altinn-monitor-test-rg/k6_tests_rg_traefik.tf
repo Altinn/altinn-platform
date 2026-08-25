@@ -8,7 +8,7 @@ resource "helm_release" "traefik" {
   create_namespace = true
   repository       = "https://traefik.github.io/charts"
   chart            = "traefik"
-  version          = "41.0.2"
+  version          = "41.3.0"
   values = [
     "${templatefile("${path.module}/k6_tests_rg_traefik_values.tftpl", {})}"
   ]

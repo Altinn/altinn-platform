@@ -9,7 +9,7 @@ resource "helm_release" "prometheus_push_gateway" {
   repository       = "https://prometheus-community.github.io/helm-charts"
   chart            = "prometheus-pushgateway"
   skip_crds        = true
-  version          = "3.6.1"
+  version          = "3.8.0"
 
   values = [
     "${templatefile(
