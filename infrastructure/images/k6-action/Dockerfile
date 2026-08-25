@@ -55,7 +55,7 @@ RUN go build . && \
     chmod +x generate-k6-manifests && \
     mv generate-k6-manifests /usr/local/bin
 
-FROM ghcr.io/altinn/altinn-platform/k6-image:v2.0.0@sha256:75fd58ab7dbaa068a0c1079b64756f9df886c217f6323e30b5144324cbc4b9da AS k6image
+FROM ghcr.io/altinn/altinn-platform/k6-image:v2.2.0@sha256:31b45631fe80a14855d9bcacdd0a645c9502d4a8637ae4dbb3788c8e921d86e8 AS k6image
 
 # Final image with the needed binaries and helper files
 FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
