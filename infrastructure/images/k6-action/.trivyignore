@@ -121,3 +121,33 @@ CVE-2026-42506
 
 # https://avd.aquasec.com/nvd/cve-2026-27145
 CVE-2026-27145
+
+# https://avd.aquasec.com/nvd/cve-2026-46600
+CVE-2026-46600
+
+# https://avd.aquasec.com/nvd/cve-2026-56852
+CVE-2026-56852
+
+# gRPC-Go: xDS RBAC and HTTP/2 Vulnerabilities
+GHSA-hrxh-6v49-42gf
+
+# https://avd.aquasec.com/nvd/cve-2026-33818
+CVE-2026-33818
+
+# https://avd.aquasec.com/nvd/cve-2026-39822
+CVE-2026-39822
+
+# https://avd.aquasec.com/nvd/cve-2026-56853
+CVE-2026-56853
+
+# https://avd.aquasec.com/nvd/cve-2026-56858
+CVE-2026-56858
+
+# https://avd.aquasec.com/nvd/cve-2026-56859
+CVE-2026-56859
+
+# https://avd.aquasec.com/nvd/cve-2026-56860
+CVE-2026-56860
+
+# https://avd.aquasec.com/nvd/cve-2026-56862
+CVE-2026-56862
