@@ -40,7 +40,7 @@ prometheus:
     nodeSelector:
       prometheus: "true"
     priorityClassName: "system-cluster-critical"
-    retention: 8d
+    retention: 30d
     storageSpec:
       volumeClaimTemplate:
         spec:
