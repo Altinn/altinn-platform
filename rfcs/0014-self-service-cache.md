@@ -49,12 +49,12 @@ spec:
 
 The operator then:
 
-1. Creates a `ValkeyCluster` resource in the team namespace. The official valkey-operator owns this resource type.
+1. Creates a `ValkeyCluster` resource in the team namespace, plus a TLS `Certificate`, a NetworkPolicy, and a password Secret.
 2. The valkey-operator creates the Valkey pods, the service, and the related objects.
 3. The operator waits until the Valkey instance is ready.
 4. The operator writes the connection values to `status`: `host`, `port`, and the `Ready` condition.
 
-The application connects to `host:port` inside the cluster. The platform sets safe defaults for access control and transport. The exact defaults are open questions (see Unresolved questions).
+The application connects to `host:port` inside the cluster, with TLS and a password. The password is in a Secret in the team namespace. Only pods in the same namespace can reach the cache (see Access control).
 
 # Reference-level explanation
 
@@ -68,7 +68,7 @@ The application connects to `host:port` inside the cluster. The platform sets sa
 
 The spec starts small on purpose. We can add fields later. We cannot remove fields later without breaking teams.
 
-The spec has no identity references. Valkey does not use Entra ID for data access. Access control uses Valkey's own mechanisms (see Unresolved questions).
+The spec has no identity references. Valkey does not use Entra ID for data access. See Access control below.
 
 ### Status (v1alpha1)
 
@@ -84,7 +84,7 @@ Facts at the time of writing (2026-08-28):
 - Repository: `github.com/valkey-io/valkey-operator`. It is part of the Valkey project.
 - Latest release: v0.5.0 (2026-08-11). Development is very active. An official Helm chart exists.
 - Resource types: `ValkeyCluster` and `ValkeyNode`, in the API group `valkey.io`, version `v1alpha1`.
-- Features: failover, scaling, rolling upgrades, TLS, and access control.
+- Features: failover, scaling, rolling upgrades, TLS, and access control. The API has `users[]` for ACL users with password Secrets, and `networking.tls` for a server certificate from a Secret.
 - Maturity: the project says it is not ready for production. The `v1alpha1` API can change.
 
 We choose it although it is alpha. The reasons are:
@@ -94,6 +94,27 @@ We choose it although it is alpha. The reasons are:
 - The platform pins the upstream operator version and updates it on its own schedule.
 
 The upstream operator runs in the platform-system layer on each cluster. The platform installs it. Teams never create `ValkeyCluster` resources directly. Only the `Cache` CRD is part of the tenant contract.
+
+## Access control
+
+Valkey does not use Entra ID. The operator uses Kubernetes tools instead, in three layers:
+
+1. **Network.** The operator creates a NetworkPolicy. Only pods in the same namespace can connect to the cache. In DIS, the namespace is the team boundary.
+2. **Password.** The operator generates a random password and stores it in a Secret in the team namespace. It configures a Valkey ACL user with this password, through the upstream `users[].passwordSecret` field. The app reads the Secret. Rotation is a new password in the Secret.
+3. **TLS, on by default.** The clusters run cert-manager. The operator creates a `Certificate` for the Valkey service names. cert-manager writes the TLS Secret (`ca.crt`, `tls.crt`, `tls.key`). The operator points the `ValkeyCluster` at that Secret (`networking.tls.certificates.server.secretName`). The upstream project uses the same flow in its own end-to-end tests.
+
+Client certificates (mTLS) are not possible yet: the upstream TLS API only has a server certificate slot. Client authentication is the password. Later, we can add per-application ACL users with command and key restrictions; the upstream API supports this.
+
+## One cache per application
+
+Each `Cache` resource becomes its own small `ValkeyCluster`: one shard, and replicas for failover. We do not share one big Valkey cluster between teams. The reasons:
+
+- Valkey sets memory limits and the eviction policy per instance, not per user. Teams with different needs cannot share one instance.
+- A cache per namespace keeps the team boundary: the NetworkPolicy closes it, and a leaked password only exposes one cache.
+- Teams create, resize, and delete their caches without risk to other teams.
+- A small Valkey instance is cheap. The isolation is worth the extra pods.
+
+Valkey cluster mode with many shards stays a scale-up option for one team's large workload (see Future possibilities). It is not a way to share hardware between teams.
 
 ## Reconciliation flow
 
@@ -106,6 +127,7 @@ participant valkeyop as valkey-operator
 
 dev->>kapi: Create or update Cache CR
 kapi->>cacheop: Reconcile Cache
+cacheop->>kapi: Create Certificate, NetworkPolicy, password Secret
 cacheop->>kapi: Create or update ValkeyCluster
 kapi->>valkeyop: Reconcile ValkeyCluster
 valkeyop->>kapi: Create pods, service, config
@@ -149,7 +171,7 @@ Teams keep building their own cache setups, and the platform keeps missing the s
 
 # Unresolved questions
 
-- Access control defaults: a password in a Secret? TLS on by default? A NetworkPolicy that limits access to the namespace? Decide during the controller implementation.
+- Certificate rotation: confirm that the valkey-operator loads a renewed certificate without manual steps.
 - The exact CPU, memory, and replica values for each `size`.
 - Capacity limits per team.
 - Backup and restore: out of scope for v1.
