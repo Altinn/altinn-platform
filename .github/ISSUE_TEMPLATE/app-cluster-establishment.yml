@@ -55,8 +55,6 @@ body:
           required: false
         - label: "Run pipeline with apply"
           required: false
-        - label: "Add DNS record for cluster"
-          required: false
         - label: "Assign CRM ticket to \"Altinn servicedesk\""
           required: false
 
