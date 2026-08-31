@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.10](https://github.com/Altinn/altinn-platform/compare/azdevops-agent-1.2.9...azdevops-agent-1.2.10) (2026-08-31)
+
+
+### Dependency Updates
+
+* upgrade pinned sha of official ubuntu 24.04 to latest sha ([#3960](https://github.com/Altinn/altinn-platform/issues/3960)) ([45a8768](https://github.com/Altinn/altinn-platform/commit/45a8768d0ea6dd58ab7c1210e6cdeb8c30bb242b))
+
 ## [1.2.9](https://github.com/Altinn/altinn-platform/compare/azdevops-agent-1.2.8...azdevops-agent-1.2.9) (2026-06-09)
 
 
