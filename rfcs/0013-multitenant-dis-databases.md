@@ -289,11 +289,7 @@ environment at fleet size.
 
 Azure VNet peering requires non-overlapping address spaces across all peers of
 a VNet. One shared DBs VNet can therefore peer with at most one environment
-per organization, ever. The first onboarded tenant environment consumed the
-only peering slot for its organization; the second failed with
-`VnetAddressSpaceOverlapsWithAlreadyPeeredVnet`. A single shared DBs VNet
-cannot serve the fleet (127 organization-environment clusters at the time of
-writing).
+per organization. A single shared DBs VNet cannot serve the fleet.
 
 The model is therefore one multitenant DBs VNet per tenant environment. Each
 environment VNet holds that environment's shared `DatabaseServer` resources in
@@ -305,19 +301,15 @@ DBs VNet, so the operator and its provisioner jobs reach every server.
 Scaling properties:
 
 - Servers scale with the number of environments (about six per product), not
-  with the number of clusters (127).
+  with the number of clusters.
 - Databases are unchanged: one per organization per environment, hosted on
   that environment's shared server.
 - Peerings per environment DBs VNet equal the number of organizations in that
-  environment (at most 69 today; the Azure limit is 500 per VNet).
+  environment, well below the Azure limit of 500 per VNet.
 
-Two hard prerequisites follow:
-
-- Organization address allocations MUST be unique across the fleet. The
-  allocation ledger is platform infrastructure and needs an owner.
-- Admin-side names for peerings and private DNS zone links MUST derive from
-  organization and environment, not from the tenant VNet name. Tenant VNet
-  names are cloned per environment and are not unique.
+Admin-side names for peerings and private DNS zone links MUST derive from
+organization and environment, not from the tenant VNet name. Tenant VNet
+names are cloned per environment and are not unique.
 
 The database server is created in a delegated subnet in its environment DBs VNet. Tenant AKS VNets reach it through VNet peering. Private DNS zone links let workloads resolve the Database endpoint to the server private address.
 
@@ -393,7 +385,7 @@ Alternatives:
 - Use one shared Private Endpoint per `DatabaseServer`: possible later if the platform chooses that connectivity model.
 - Keep one server per product app: simplest isolation, but too costly and heavy for multitenant use cases.
 - Keep one shared DBs VNet for all environments: rejected. Tenant environments clone one address plan per organization, and Azure VNet peering rejects overlapping peers. One VNet can serve only one environment per organization (observed as `VnetAddressSpaceOverlapsWithAlreadyPeeredVnet`).
-- Private Endpoints in each consumer VNet, or Private Link Service with a proxy: valid for overlapping consumers, rejected on cost. The price scales with servers times consumer clusters (127 clusters and growing).
+- Private Endpoints in each consumer VNet, or Private Link Service with a proxy: valid for overlapping consumers, rejected on cost. The price scales with servers times consumer clusters.
 - Public network access with firewall allowlists and Entra-only auth: viable fallback. Traffic between Azure services stays on the Microsoft backbone, and tenant clusters have small, stable egress prefixes. Not chosen for v1, to keep the private access posture.
 - Azure VPN Gateway NAT: supports overlapping networks, but only over IPsec cross-premises connections, and it needs a paid gateway per VNet. Rejected on transport and cost.
 - Azure subnet peering: the peered subnets must be unique across the address spaces of all peering links, and cloned environment subnets are not. Rejected.
@@ -416,8 +408,6 @@ Alternatives:
 - Should status be copied back to workload clusters and how?
 - What is the long-term cleanup process for retained databases?
 - What are the shared `DatabaseServer` profiles for database count, PgBouncer, HA, backup, and storage?
-- Who owns the organization address allocation ledger, and how is uniqueness enforced?
-- What is the migration sequence for shared servers that already exist under the single-VNet model?
 
 # Future possibilities
 [future-possibilities]: #future-possibilities
