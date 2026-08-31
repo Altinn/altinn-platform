@@ -276,11 +276,54 @@ and pruned when its principal is removed from `spec.access.principals`.
 Shared `DatabaseServer` networking uses private access with VNet integration in
 v1.
 
-The database server is created in a delegated subnet in an admin multitenant DBs VNet. Tenant AKS VNets reach it through VNet peering or the existing platform network. Private DNS zone links let workloads resolve the Database endpoint to the server private address.
+### One multitenant DBs VNet per tenant environment
+
+The tenant address plans forced a change to the original single-VNet model.
+
+Each serviceowner organization is allocated one private /16 address space. All
+of that organization's environment clusters (at22, at23, at24, yt01, tt02,
+production) clone the same address plan: separate VNets, same VNet name, same
+address space. This is deliberate. Environment clusters are isolated replicas,
+and private IPv4 space cannot hold a unique /16 per organization per
+environment at fleet size.
+
+Azure VNet peering requires non-overlapping address spaces across all peers of
+a VNet. One shared DBs VNet can therefore peer with at most one environment
+per organization, ever. The first onboarded tenant environment consumed the
+only peering slot for its organization; the second failed with
+`VnetAddressSpaceOverlapsWithAlreadyPeeredVnet`. A single shared DBs VNet
+cannot serve the fleet (127 organization-environment clusters at the time of
+writing).
+
+The model is therefore one multitenant DBs VNet per tenant environment. Each
+environment VNet holds that environment's shared `DatabaseServer` resources in
+delegated subnets. An organization's cluster for environment E peers only the
+environment E DBs VNet. Organization address spaces do not overlap each other,
+so these peerings are always valid. The admin AKS VNet peers every environment
+DBs VNet, so the operator and its provisioner jobs reach every server.
+
+Scaling properties:
+
+- Servers scale with the number of environments (about six per product), not
+  with the number of clusters (127).
+- Databases are unchanged: one per organization per environment, hosted on
+  that environment's shared server.
+- Peerings per environment DBs VNet equal the number of organizations in that
+  environment (at most 69 today; the Azure limit is 500 per VNet).
+
+Two hard prerequisites follow:
+
+- Organization address allocations MUST be unique across the fleet. The
+  allocation ledger is platform infrastructure and needs an owner.
+- Admin-side names for peerings and private DNS zone links MUST derive from
+  organization and environment, not from the tenant VNet name. Tenant VNet
+  names are cloned per environment and are not unique.
+
+The database server is created in a delegated subnet in its environment DBs VNet. Tenant AKS VNets reach it through VNet peering. Private DNS zone links let workloads resolve the Database endpoint to the server private address.
 
 `dis-pgsql` does not create the peering or private DNS links for this mode. Those are tenant infrastructure prerequisites and can stay in Terraform or equivalent automation.
 
-This is closest to the current `dis-pgsql` model. It also avoids one private
+This stays close to the current `dis-pgsql` model. It also avoids one private
 endpoint per product app or per database.
 
 The shared `DatabaseServer` should reference or be configured with the existing
@@ -288,11 +331,12 @@ delegated subnet and private DNS zone needed for private access.
 
 Operator-managed peering or DNS links can be considered later for tenants that do not use the current infrastructure pipelines.
 
-Server-level Private Endpoint remains an alternative.
+Shared servers that already exist under the single-VNet model migrate per
+environment: create the environment servers, move each environment's databases
+to its environment server, then retire the old server and its peering.
 
-A shared private endpoint in the admin multitenant DBs VNet could be added
-later if the platform chooses that model. It still should not create one
-private endpoint per `Database`.
+Server-level Private Endpoint and public access with firewall allowlists
+remain fallbacks (see Rationale and alternatives).
 
 In both models, network reachability only decides whether traffic can reach the server. Entra auth and PostgreSQL grants still decide who can log in and what they can access.
 
@@ -325,6 +369,7 @@ Both APIs can exist side by side:
 [drawbacks]: #drawbacks
 
 - Shared `DatabaseServer` resources depend on Terraform or equivalent automation creating network prerequisites first.
+- One shared `DatabaseServer` per tenant environment raises the server count per product (about six instead of two). The three at-environments serve one organization each and can use the smallest profile.
 - Shared `DatabaseServer` resources need capacity planning and database isolation discipline.
 - Backup, HA, PgBouncer, and failover are server-level decisions.
 - Per-database restore and cleanup are harder than deleting a dedicated server.
@@ -347,6 +392,12 @@ Alternatives:
 - Let `dis-pgsql` own tenant VNet peering and private DNS links: possible later, but v1 keeps those prerequisites in Terraform or equivalent infrastructure automation.
 - Use one shared Private Endpoint per `DatabaseServer`: possible later if the platform chooses that connectivity model.
 - Keep one server per product app: simplest isolation, but too costly and heavy for multitenant use cases.
+- Keep one shared DBs VNet for all environments: rejected. Tenant environments clone one address plan per organization, and Azure VNet peering rejects overlapping peers. One VNet can serve only one environment per organization (observed as `VnetAddressSpaceOverlapsWithAlreadyPeeredVnet`).
+- Private Endpoints in each consumer VNet, or Private Link Service with a proxy: valid for overlapping consumers, rejected on cost. The price scales with servers times consumer clusters (127 clusters and growing).
+- Public network access with firewall allowlists and Entra-only auth: viable fallback. Traffic between Azure services stays on the Microsoft backbone, and tenant clusters have small, stable egress prefixes. Not chosen for v1, to keep the private access posture.
+- Azure VPN Gateway NAT: supports overlapping networks, but only over IPsec cross-premises connections, and it needs a paid gateway per VNet. Rejected on transport and cost.
+- Azure subnet peering: the peered subnets must be unique across the address spaces of all peering links, and cloned environment subnets are not. Rejected.
+- Re-address tenant clusters with a unique space per environment: fixes peering at the root and fits inside each organization's /16, but requires a rebuild of the network stack of more than 100 live clusters. Rejected as a migration path. It can become the template default for new organizations.
 
 # Prior art
 [prior-art]: #prior-art
@@ -365,6 +416,8 @@ Alternatives:
 - Should status be copied back to workload clusters and how?
 - What is the long-term cleanup process for retained databases?
 - What are the shared `DatabaseServer` profiles for database count, PgBouncer, HA, backup, and storage?
+- Who owns the organization address allocation ledger, and how is uniqueness enforced?
+- What is the migration sequence for shared servers that already exist under the single-VNet model?
 
 # Future possibilities
 [future-possibilities]: #future-possibilities
