@@ -49,3 +49,64 @@ CVE-2026-46680
 CVE-2026-44431
 # https://avd.aquasec.com/nvd/cve-2026-44432
 CVE-2026-44432
+# golang library vulnerabilities in kubectl/helm binaries - will be resolved when upstream tools rebuild with fixed dependencies
+# https://avd.aquasec.com/nvd/cve-2026-25681
+CVE-2026-25681
+# https://avd.aquasec.com/nvd/cve-2026-27136
+CVE-2026-27136
+# https://avd.aquasec.com/nvd/cve-2026-27145
+CVE-2026-27145
+# https://avd.aquasec.com/nvd/cve-2026-33818
+CVE-2026-33818
+# https://avd.aquasec.com/nvd/cve-2026-39821
+CVE-2026-39821
+# https://avd.aquasec.com/nvd/cve-2026-39822
+CVE-2026-39822
+# https://avd.aquasec.com/nvd/cve-2026-39828
+CVE-2026-39828
+# https://avd.aquasec.com/nvd/cve-2026-39829
+CVE-2026-39829
+# https://avd.aquasec.com/nvd/cve-2026-39830
+CVE-2026-39830
+# https://avd.aquasec.com/nvd/cve-2026-39831
+CVE-2026-39831
+# https://avd.aquasec.com/nvd/cve-2026-39832
+CVE-2026-39832
+# https://avd.aquasec.com/nvd/cve-2026-39835
+CVE-2026-39835
+# https://avd.aquasec.com/nvd/cve-2026-42508
+CVE-2026-42508
+# https://avd.aquasec.com/nvd/cve-2026-46595
+CVE-2026-46595
+# https://avd.aquasec.com/nvd/cve-2026-46597
+CVE-2026-46597
+# https://avd.aquasec.com/nvd/cve-2026-46600
+CVE-2026-46600
+# https://avd.aquasec.com/nvd/cve-2026-50151
+CVE-2026-50151
+# https://avd.aquasec.com/nvd/cve-2026-50163
+CVE-2026-50163
+# https://avd.aquasec.com/nvd/cve-2026-56852
+CVE-2026-56852
+# https://avd.aquasec.com/nvd/cve-2026-56853
+CVE-2026-56853
+# https://avd.aquasec.com/nvd/cve-2026-56858
+CVE-2026-56858
+# https://avd.aquasec.com/nvd/cve-2026-56859
+CVE-2026-56859
+# https://avd.aquasec.com/nvd/cve-2026-56860
+CVE-2026-56860
+# https://avd.aquasec.com/nvd/cve-2026-56862
+CVE-2026-56862
+
+# python package vulnerabilities in the azure-cli bundle - will be resolved when upstream image ships updated az dependencies
+# https://avd.aquasec.com/nvd/cve-2025-47273
+CVE-2025-47273
+# https://avd.aquasec.com/nvd/cve-2026-69247
+CVE-2026-69247
+# https://avd.aquasec.com/nvd/cve-2026-69249
+CVE-2026-69249
+# https://github.com/advisories/GHSA-537c-gmf6-5ccf
+GHSA-537c-gmf6-5ccf
+# https://github.com/advisories/GHSA-6v7p-g79w-8964
+GHSA-6v7p-g79w-8964
