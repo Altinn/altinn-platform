@@ -3,3 +3,15 @@
 CVE-2026-44431
 # https://avd.aquasec.com/nvd/cve-2026-44432
 CVE-2026-44432
+
+# Azure cli installed dependencies
+# https://avd.aquasec.com/nvd/cve-2026-69247
+CVE-2026-69247
+# https://avd.aquasec.com/nvd/cve-2026-69249
+CVE-2026-69249
+# https://github.com/advisories/GHSA-537c-gmf6-5ccf
+GHSA-537c-gmf6-5ccf
+# https://github.com/advisories/GHSA-6v7p-g79w-8964
+GHSA-6v7p-g79w-8964
+# https://avd.aquasec.com/nvd/cve-2025-47273
+CVE-2025-47273
