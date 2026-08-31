@@ -282,10 +282,10 @@ The tenant address plans forced a change to the original single-VNet model.
 
 Each serviceowner organization is allocated one private /16 address space. All
 of that organization's environment clusters (at22, at23, at24, yt01, tt02,
-production) clone the same address plan: separate VNets, same VNet name, same
-address space. This is deliberate. Environment clusters are isolated replicas,
-and private IPv4 space cannot hold a unique /16 per organization per
-environment at fleet size.
+production) clone the same address plan. The clusters have separate VNets with
+the same VNet name and the same address space. This is deliberate. Environment
+clusters are isolated replicas. Private IPv4 space cannot hold a unique /16
+per organization per environment at fleet size.
 
 Azure VNet peering requires non-overlapping address spaces across all peers of
 a VNet. One shared DBs VNet can therefore peer with at most one environment
@@ -294,22 +294,23 @@ per organization. A single shared DBs VNet cannot serve the fleet.
 The model is therefore one multitenant DBs VNet per tenant environment. Each
 environment VNet holds that environment's shared `DatabaseServer` resources in
 delegated subnets. An organization's cluster for environment E peers only the
-environment E DBs VNet. Organization address spaces do not overlap each other,
-so these peerings are always valid. The admin AKS VNet peers every environment
-DBs VNet, so the operator and its provisioner jobs reach every server.
+environment E DBs VNet. Organization address spaces do not overlap each other.
+These peerings are always valid. The admin AKS VNet peers every environment
+DBs VNet. Through these peerings, the operator and its provisioner jobs reach
+every server.
 
 Scaling properties:
 
-- Servers scale with the number of environments (about six per product), not
-  with the number of clusters.
-- Databases are unchanged: one per organization per environment, hosted on
-  that environment's shared server.
+- Servers scale with the number of environments (about six per product). They
+  do not scale with the number of clusters.
+- Databases are unchanged. Each organization keeps one database per
+  environment, on that environment's shared server.
 - Peerings per environment DBs VNet equal the number of organizations in that
-  environment, well below the Azure limit of 500 per VNet.
+  environment. This is well below the Azure limit of 500 peerings per VNet.
 
 Admin-side names for peerings and private DNS zone links MUST derive from
-organization and environment, not from the tenant VNet name. Tenant VNet
-names are cloned per environment and are not unique.
+organization and environment. They must not derive from the tenant VNet name.
+Tenant VNet names are cloned per environment and are not unique.
 
 The database server is created in a delegated subnet in its environment DBs VNet. Tenant AKS VNets reach it through VNet peering. Private DNS zone links let workloads resolve the Database endpoint to the server private address.
 
@@ -324,8 +325,8 @@ delegated subnet and private DNS zone needed for private access.
 Operator-managed peering or DNS links can be considered later for tenants that do not use the current infrastructure pipelines.
 
 Shared servers that already exist under the single-VNet model migrate per
-environment: create the environment servers, move each environment's databases
-to its environment server, then retire the old server and its peering.
+environment. Create the environment servers. Move each environment's databases
+to its environment server. Then retire the old server and its peering.
 
 Server-level Private Endpoint and public access with firewall allowlists
 remain fallbacks (see Rationale and alternatives).
@@ -361,7 +362,7 @@ Both APIs can exist side by side:
 [drawbacks]: #drawbacks
 
 - Shared `DatabaseServer` resources depend on Terraform or equivalent automation creating network prerequisites first.
-- One shared `DatabaseServer` per tenant environment raises the server count per product (about six instead of two). The three at-environments serve one organization each and can use the smallest profile.
+- One shared `DatabaseServer` per tenant environment raises the server count per product (about six instead of two). The three at-environments serve one organization each. They can use the smallest profile.
 - Shared `DatabaseServer` resources need capacity planning and database isolation discipline.
 - Backup, HA, PgBouncer, and failover are server-level decisions.
 - Per-database restore and cleanup are harder than deleting a dedicated server.
