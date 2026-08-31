@@ -27,7 +27,7 @@ RUN mkdir -p -m 755 /etc/apt/keyrings && \
 
 # Install yq (the Go implementation from mikefarah/yq, not the unrelated python yq in apt)
 # renovate: datasource=github-releases depName=yq packageName=mikefarah/yq versioning=semver
-ARG YQ_VERSION=4.53.3
+ARG YQ_VERSION=4.53.6
 RUN curl -fsSL "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_$(dpkg --print-architecture)" -o /usr/local/bin/yq && \
     chmod 0755 /usr/local/bin/yq && \
     yq --version
