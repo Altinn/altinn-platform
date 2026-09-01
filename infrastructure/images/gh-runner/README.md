@@ -9,7 +9,7 @@ This image is meant to be as small and lightweight as possible so we keep the de
 
 If any team needs a custom image they are free to roll their own or extend this, but they will be responsible for maintaining this image.
 
-Example Dockerfile for an image that in addition to what is available in the base image installs netcat:
+Example Dockerfile for an image that in addition to what is available in the base image installs curl and jq:
 
 ```Dockerfile
 FROM ghcr.io/altinn/altinn-platform/gh-runner:v0.10.0 # Make sure to use the latest version 
