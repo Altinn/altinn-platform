@@ -276,43 +276,43 @@ and pruned when its principal is removed from `spec.access.principals`.
 Shared `DatabaseServer` networking uses private access with VNet integration in
 v1.
 
-### One multitenant DBs VNet per tenant environment
+### Tenant environment address spaces
 
-The tenant address plans forced a change to the original single-VNet model.
+The tenant address plans forced one addition to the single-VNet model.
 
-Each serviceowner organization is allocated one private /16 address space. All
-of that organization's environment clusters (at22, at23, at24, yt01, tt02,
-production) clone the same address plan. The clusters have separate VNets with
-the same VNet name and the same address space. This is deliberate. Environment
-clusters are isolated replicas. Private IPv4 space cannot hold a unique /16
-per organization per environment at fleet size.
+Each serviceowner organization is allocated one private /16 address space.
+Historically, all of that organization's environment clusters (at22, at23,
+at24, yt01, tt02, production) cloned the same address plan. The clusters have
+separate VNets with the same VNet name. Environment clusters are isolated
+replicas. Private IPv4 space cannot hold a unique /16 per organization per
+environment at fleet size.
 
 Azure VNet peering requires non-overlapping address spaces across all peers of
-a VNet. One shared DBs VNet can therefore peer with at most one environment
-per organization. A single shared DBs VNet cannot serve the fleet.
+a VNet. A conflict therefore occurs only when one organization has two or more
+environments on the same admin ring, because those clusters peer the same DBs
+VNet. Environments on different rings peer different DBs VNets. They do not
+conflict.
 
-The model is therefore one multitenant DBs VNet per tenant environment. Each
-environment VNet holds that environment's shared `DatabaseServer` resources in
-delegated subnets. An organization's cluster for environment E peers only the
-environment E DBs VNet. Organization address spaces do not overlap each other.
-These peerings are always valid. The admin AKS VNet peers every environment
-DBs VNet. Through these peerings, the operator and its provisioner jobs reach
-every server.
+The model stays one shared multitenant DBs VNet per admin ring. One
+requirement is added. An organization with two or more environments on the
+same ring MUST give those environment clusters non-overlapping address
+spaces. The organization subdivides its own address allocation per
+environment, for example into /19 blocks. Organizations with one environment
+per ring keep their address plan unchanged.
 
 Scaling properties:
 
-- Servers scale with the number of environments (about six per product). They
-  do not scale with the number of clusters.
+- Servers are unchanged. Each product keeps one shared server per admin ring.
 - Databases are unchanged. Each organization keeps one database per
-  environment, on that environment's shared server.
-- Peerings per environment DBs VNet equal the number of organizations in that
-  environment. This is well below the Azure limit of 500 peerings per VNet.
+  environment, on the ring's shared server.
+- Peerings per DBs VNet equal the number of tenant clusters on that ring.
+  This is well below the Azure limit of 500 peerings per VNet.
 
 Admin-side names for peerings and private DNS zone links MUST derive from
 organization and environment. They must not derive from the tenant VNet name.
 Tenant VNet names are cloned per environment and are not unique.
 
-The database server is created in a delegated subnet in its environment DBs VNet. Tenant AKS VNets reach it through VNet peering. Private DNS zone links let workloads resolve the Database endpoint to the server private address.
+The database server is created in a delegated subnet in the admin multitenant DBs VNet. Tenant AKS VNets reach it through VNet peering. Private DNS zone links let workloads resolve the Database endpoint to the server private address.
 
 `dis-pgsql` does not create the peering or private DNS links for this mode. Those are tenant infrastructure prerequisites and can stay in Terraform or equivalent automation.
 
@@ -324,9 +324,10 @@ delegated subnet and private DNS zone needed for private access.
 
 Operator-managed peering or DNS links can be considered later for tenants that do not use the current infrastructure pipelines.
 
-Shared servers that already exist under the single-VNet model migrate per
-environment. Create the environment servers. Move each environment's databases
-to its environment server. Then retire the old server and its peering.
+No server migration is needed. The affected organization moves its environment
+clusters to non-overlapping address spaces. A test cluster can be re-created.
+A cluster whose subnets already fit inside a smaller block can reduce its
+declared address space instead.
 
 Server-level Private Endpoint and public access with firewall allowlists
 remain fallbacks (see Rationale and alternatives).
@@ -362,7 +363,6 @@ Both APIs can exist side by side:
 [drawbacks]: #drawbacks
 
 - Shared `DatabaseServer` resources depend on Terraform or equivalent automation creating network prerequisites first.
-- One shared `DatabaseServer` per tenant environment raises the server count per product (about six instead of two). The three at-environments serve one organization each. They can use the smallest profile.
 - Shared `DatabaseServer` resources need capacity planning and database isolation discipline.
 - Backup, HA, PgBouncer, and failover are server-level decisions.
 - Per-database restore and cleanup are harder than deleting a dedicated server.
@@ -385,12 +385,12 @@ Alternatives:
 - Let `dis-pgsql` own tenant VNet peering and private DNS links: possible later, but v1 keeps those prerequisites in Terraform or equivalent infrastructure automation.
 - Use one shared Private Endpoint per `DatabaseServer`: possible later if the platform chooses that connectivity model.
 - Keep one server per product app: simplest isolation, but too costly and heavy for multitenant use cases.
-- Keep one shared DBs VNet for all environments: rejected. Tenant environments clone one address plan per organization, and Azure VNet peering rejects overlapping peers. One VNet can serve only one environment per organization (observed as `VnetAddressSpaceOverlapsWithAlreadyPeeredVnet`).
+- One DBs VNet per tenant environment: considered when the address overlap was found (observed as `VnetAddressSpaceOverlapsWithAlreadyPeeredVnet`). Rejected. Only organizations with several environments on one ring conflict. Subdividing their address blocks is cheaper than more VNets and servers.
 - Private Endpoints in each consumer VNet, or Private Link Service with a proxy: valid for overlapping consumers, rejected on cost. The price scales with servers times consumer clusters.
 - Public network access with firewall allowlists and Entra-only auth: viable fallback. Traffic between Azure services stays on the Microsoft backbone, and tenant clusters have small, stable egress prefixes. Not chosen for v1, to keep the private access posture.
 - Azure VPN Gateway NAT: supports overlapping networks, but only over IPsec cross-premises connections, and it needs a paid gateway per VNet. Rejected on transport and cost.
 - Azure subnet peering: the peered subnets must be unique across the address spaces of all peering links, and cloned environment subnets are not. Rejected.
-- Re-address tenant clusters with a unique space per environment: fixes peering at the root and fits inside each organization's /16, but requires a rebuild of the network stack of more than 100 live clusters. Rejected as a migration path. It can become the template default for new organizations.
+- Re-address all tenant clusters: rejected. Only organizations with two or more environments on the same ring need new address spaces. The chosen requirement scopes the change to those clusters.
 
 # Prior art
 [prior-art]: #prior-art
