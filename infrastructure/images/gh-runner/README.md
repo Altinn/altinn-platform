@@ -1,11 +1,11 @@
 # Altinn Github Runner Image
-Default image used for Altinns self-hosted github runners.
+Default image used for Altinn's self-hosted Github runners.
 
 This image is maintained by the platform team.
 
 ## Extending
 
-This image is ment to be as small and leightweight as possible so we keep the dependencies at a minum, to reduce the maintenance cost.
+This image is meant to be as small and lightweight as possible so we keep the dependencies at a minimum, to reduce the maintenance cost.
 
 If any team needs a custom image they are free to roll their own or extend this, but they will be responsible for maintaining this image.
 
