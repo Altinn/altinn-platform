@@ -9,7 +9,7 @@ module "gh_runners_altinn-access-management-frontend" {
   altinn_app_install_id         = var.altinn_app_install_id
   altinn_app_key                = var.altinn_app_key
   host_ip                       = var.host_ip
-  runner_image                  = "ghcr.io/altinn/gh-runner:latest"
+  runner_image                  = "ghcr.io/altinn/altinn-access-management-frontend/gh-runner:latest"
   runner_cpu                    = "4.0"
   runner_memory                 = "8Gi"
   tags = merge(local.tags, {
