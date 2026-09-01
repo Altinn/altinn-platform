@@ -12,7 +12,7 @@ If any team needs a custom image they are free to roll their own or extend this,
 Example Dockerfile for an image that in addition to what is available in the base image installs netcat:
 
 ```Dockerfile
-FROM ghcr.io/altinn/altinn-platform-gh-runner-base:1.0.0 ##TODO: Add actual image name when available
+FROM ghcr.io/altinn/altinn-platform/gh-runner:v0.10.0 # Make sure to use the latest version 
 
 USER root
 
