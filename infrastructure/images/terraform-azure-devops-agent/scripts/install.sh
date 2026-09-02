@@ -25,7 +25,7 @@ rm kubectl kubectl.sha256
 ###################################
 # Install dependencies
 apt-get update
-apt-get install -y wget
+apt-get install -y wget openssl
 # Get the version of Ubuntu
 source /etc/os-release
 

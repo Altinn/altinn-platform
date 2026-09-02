@@ -41,6 +41,8 @@ CVE-2026-39823
 CVE-2026-39825
 # https://avd.aquasec.com/nvd/cve-2026-39826
 CVE-2026-39826
+# https://avd.aquasec.com/nvd/cve-2026-56854
+CVE-2026-56854
 # containerd vulnerability - will be resolved when base image updates containerd
 # https://avd.aquasec.com/nvd/cve-2026-46680
 CVE-2026-46680
