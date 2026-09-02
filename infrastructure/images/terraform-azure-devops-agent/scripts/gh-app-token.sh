@@ -3,7 +3,8 @@
 # Request an ACCESS_TOKEN to be used by a GitHub APP
 # Environment variable that need to be set up:
 # * APP_ID, the GitHub's app ID
-# * APP_PRIVATE_KEY, the content of GitHub app's private key in PEM format.
+# * APP_PRIVATE_KEY, the content of GitHub app's private key in PEM format,
+#   or APP_PRIVATE_KEY_BASE64, the same key base64 encoded
 # * APP_LOGIN, the login name used to install GitHub's app
 #
 
@@ -41,11 +42,28 @@ die() {
     exit 1
 }
 
+# The private key can be handed to us base64 encoded, which is how it has to
+# travel through an Azure DevOps secret variable since those cannot hold
+# newlines. Whitespace is stripped before decoding, so a value that picked up
+# line breaks on the way still decodes.
+decode_private_key() {
+    local decoded
+    decoded=$(tr -d '[:space:]' <<< "${APP_PRIVATE_KEY_BASE64}" | base64 -d 2>/dev/null) \
+        || die "APP_PRIVATE_KEY_BASE64 does not hold valid base64"
+    [[ ${decoded} == *"-----BEGIN"*"PRIVATE KEY-----"* ]] \
+        || die "APP_PRIVATE_KEY_BASE64 did not decode to a PEM formatted private key"
+    printf '%s\n' "${decoded}"
+}
+
 validate_environment() {
     [ -n "${APP_ID}" ] || die "missing APP_ID environment variable"
     [[ ${APP_ID} =~ ^[0-9]+$ ]] || die "APP_ID must be a number, got '${APP_ID}'"
     [ -n "${APP_LOGIN}" ] || die "missing APP_LOGIN environment variable"
-    [ -n "${APP_PRIVATE_KEY}" ] || die "missing APP_PRIVATE_KEY environment variable"
+    if [ -z "${APP_PRIVATE_KEY}" ]; then
+        [ -n "${APP_PRIVATE_KEY_BASE64}" ] \
+            || die "missing APP_PRIVATE_KEY or APP_PRIVATE_KEY_BASE64 environment variable"
+        APP_PRIVATE_KEY=$(decode_private_key) || exit 1
+    fi
 }
 
 build_jwt_payload() {

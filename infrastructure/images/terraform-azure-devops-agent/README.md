@@ -9,15 +9,26 @@ The image wraps the base image entrypoint with `scripts/entrypoint.sh`. If the G
 | Variable | Required | Description |
 | --- | --- | --- |
 | `APP_ID` | yes | The GitHub app's ID |
-| `APP_PRIVATE_KEY` | yes | The content of the GitHub app's private key in PEM format |
+| `APP_PRIVATE_KEY` | yes* | The content of the GitHub app's private key in PEM format |
+| `APP_PRIVATE_KEY_BASE64` | yes* | The same private key, base64 encoded. Use this instead of `APP_PRIVATE_KEY` when the value comes from an Azure DevOps secret variable |
 | `APP_LOGIN` | yes | The login name (org) the app is installed on, e.g. `Altinn` |
 | `GITHUB_HOST` | no | Defaults to `github.com` |
 
-If none of `APP_ID`, `APP_PRIVATE_KEY` and `APP_LOGIN` are set, the wrapper does nothing and the agent starts as before. If only some of them are set, the container fails on startup so the misconfiguration is not silently ignored.
+\* Exactly one of `APP_PRIVATE_KEY` and `APP_PRIVATE_KEY_BASE64` is needed. If both are set, `APP_PRIVATE_KEY` wins.
+
+Azure DevOps secret variables cannot hold newlines, so a PEM pasted into one arrives mangled. Encode the key instead and set it as `APP_PRIVATE_KEY_BASE64`:
+
+```console
+base64 -w0 < altinn-app.private-key.pem
+```
+
+The wrapper strips whitespace from the value before decoding, so a base64 blob that picked up line breaks on the way still works. A value that is not valid base64, or that does not decode to a PEM private key, fails the container on startup with an explicit error.
+
+If none of `APP_ID`, the private key variables and `APP_LOGIN` are set, the wrapper does nothing and the agent starts as before. If only some of them are set, the container fails on startup so the misconfiguration is not silently ignored.
 
 Notes:
 * The token is written to `/azp/.github_token` (mode 0600) and handed to git by the `git-credential-gh-app` credential helper, so it never ends up in the git config.
-* `APP_PRIVATE_KEY` is unset before the agent is started, so it is not part of the environment of the pipeline jobs.
+* `APP_PRIVATE_KEY` and `APP_PRIVATE_KEY_BASE64` are unset before the agent is started, so they are not part of the environment of the pipeline jobs.
 * The token is requested once, when the container starts. Installation access tokens are valid for one hour, which covers a job on an agent started with `--once`.
 * Only https remotes are authenticated. `git@github.com:` remotes are left alone and still need an ssh key.
 

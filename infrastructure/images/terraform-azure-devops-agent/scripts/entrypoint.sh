@@ -9,7 +9,10 @@
 #
 # Environment variables:
 # * APP_ID, the GitHub app's ID
-# * APP_PRIVATE_KEY, the content of the GitHub app's private key in PEM format
+# * APP_PRIVATE_KEY, the content of the GitHub app's private key in PEM format,
+#   or APP_PRIVATE_KEY_BASE64, the same key base64 encoded. Use the latter when
+#   the value comes from an Azure DevOps secret variable, those cannot hold
+#   newlines
 # * APP_LOGIN, the login name (org) the GitHub app is installed on
 # * GITHUB_HOST, optional, defaults to github.com
 #
@@ -51,9 +54,10 @@ configure_git_github_app_auth() {
   echo "git configured to authenticate against https://${_GITHUB_HOST} as the GitHub App installation"
 }
 
-if [ -n "$APP_ID" ] || [ -n "$APP_PRIVATE_KEY" ] || [ -n "$APP_LOGIN" ]; then
-  if [ -z "$APP_ID" ] || [ -z "$APP_PRIVATE_KEY" ] || [ -z "$APP_LOGIN" ]; then
-    echo 1>&2 "error: APP_ID, APP_PRIVATE_KEY and APP_LOGIN must all be set to use GitHub App authentication"
+if [ -n "$APP_ID" ] || [ -n "$APP_PRIVATE_KEY" ] || [ -n "$APP_PRIVATE_KEY_BASE64" ] || [ -n "$APP_LOGIN" ]; then
+  if [ -z "$APP_ID" ] || [ -z "$APP_LOGIN" ] ||
+     { [ -z "$APP_PRIVATE_KEY" ] && [ -z "$APP_PRIVATE_KEY_BASE64" ]; }; then
+    echo 1>&2 "error: APP_ID, APP_LOGIN and one of APP_PRIVATE_KEY or APP_PRIVATE_KEY_BASE64 must all be set to use GitHub App authentication"
     exit 1
   fi
   configure_git_github_app_auth
@@ -62,6 +66,6 @@ else
 fi
 
 # Keep the private key out of the environment of the agent and its jobs
-unset APP_PRIVATE_KEY
+unset APP_PRIVATE_KEY APP_PRIVATE_KEY_BASE64
 
 exec "${SCRIPT_DIR}/start.sh" "$@"
