@@ -21,7 +21,11 @@ fi
 API_VERSION=v3
 API_HEADER="Accept: application/vnd.github.${API_VERSION}+json"
 CONTENT_LENGTH_HEADER="Content-Length: 0"
-APP_INSTALLATIONS_URI="${URI}/app/installations"
+APP_INSTALLATIONS_URI="${URI}/app/installations?per_page=100"
+
+# Bound both API calls so a hung connection cannot keep the agent from starting
+CURL_CONNECT_TIMEOUT=10
+CURL_MAX_TIME=30
 
 JWT_IAT_DRIFT=60
 JWT_EXP_DELTA=600
@@ -31,6 +35,18 @@ JWT_JOSE_HEADER='{
     "typ": "JWT"
 }'
 
+
+die() {
+    echo 1>&2 "error: $*"
+    exit 1
+}
+
+validate_environment() {
+    [ -n "${APP_ID}" ] || die "missing APP_ID environment variable"
+    [[ ${APP_ID} =~ ^[0-9]+$ ]] || die "APP_ID must be a number, got '${APP_ID}'"
+    [ -n "${APP_LOGIN}" ] || die "missing APP_LOGIN environment variable"
+    [ -n "${APP_PRIVATE_KEY}" ] || die "missing APP_PRIVATE_KEY environment variable"
+}
 
 build_jwt_payload() {
     now=$(date +%s)
@@ -53,30 +69,97 @@ base64url() {
     base64 | tr '+/' '-_' | tr -d '=\n'
 }
 
+# A PEM that has travelled through an environment variable or a secret store
+# can end up with its newlines as literal '\n' escapes, which openssl cannot
+# read. The base64 body of a PEM holds no other escapes, so expanding them is
+# safe.
+normalize_private_key() {
+    if [[ $1 == *'\n'* ]]; then
+        printf '%b\n' "$1"
+    else
+        printf '%s\n' "$1"
+    fi
+}
+
 rs256_sign() {
-    openssl dgst -binary -sha256 -sign <(echo "$1")
+    openssl dgst -binary -sha256 -sign <(normalize_private_key "$1")
+}
+
+# Runs curl and splits the response into HTTP_BODY and HTTP_STATUS. The
+# Authorization header is read from ${auth_header} and handed to curl through a
+# config file on stdin, so the JWT ends up neither in the process arguments nor
+# on disk.
+http_request() {
+    local response
+    response=$(printf 'header = "%s"\n' "${auth_header}" \
+        | curl -sS -w '\n%{http_code}' \
+            --connect-timeout "${CURL_CONNECT_TIMEOUT}" \
+            --max-time "${CURL_MAX_TIME}" \
+            --config - "$@") || return 1
+    HTTP_STATUS=${response##*$'\n'}
+    HTTP_BODY=${response%$'\n'*}
+}
+
+# The error text the API returned, falling back to the raw body when the
+# response is not the JSON we expect.
+api_message() {
+    local message
+    message=$(jq --raw-output '.message? // empty' <<< "${HTTP_BODY}" 2>/dev/null)
+    if [ -n "${message}" ]; then
+        printf '%s' "${message}"
+    else
+        printf '%s' "${HTTP_BODY:0:200}"
+    fi
 }
 
 request_access_token() {
     jwt_payload=$(build_jwt_payload)
     encoded_jwt_parts=$(base64url <<<"${JWT_JOSE_HEADER}").$(base64url <<<"${jwt_payload}")
-    encoded_mac=$(echo -n "${encoded_jwt_parts}" | rs256_sign "${APP_PRIVATE_KEY}" | base64url)
+    encoded_mac=$(echo -n "${encoded_jwt_parts}" | rs256_sign "${APP_PRIVATE_KEY}" | base64url) \
+        || die "could not sign the JWT, check that APP_PRIVATE_KEY holds a PEM formatted private key"
     generated_jwt="${encoded_jwt_parts}.${encoded_mac}"
 
     auth_header="Authorization: Bearer ${generated_jwt}"
 
-    app_installations_response=$(curl -sX GET \
-        -H "${auth_header}" \
+    http_request -X GET \
         -H "${API_HEADER}" \
         "${APP_INSTALLATIONS_URI}" \
-    )
-    access_token_url=$(echo "${app_installations_response}" | jq --raw-output '.[] | select (.account.login == "'"${APP_LOGIN}"'" and .app_id  == '"${APP_ID}"') .access_tokens_url')
-    curl -sX POST \
+        || die "could not reach ${APP_INSTALLATIONS_URI}"
+
+    [ "${HTTP_STATUS}" = "200" ] \
+        || die "listing the installations of app ${APP_ID} failed with HTTP ${HTTP_STATUS}: $(api_message)"
+
+    installations=${HTTP_BODY}
+    access_token_url=$(jq --raw-output \
+        --arg login "${APP_LOGIN}" \
+        --argjson app_id "${APP_ID}" \
+    '
+        map(select(
+            ((.account.login // "") | ascii_downcase) == ($login | ascii_downcase)
+            and .app_id == $app_id
+        ))
+        | .[0].access_tokens_url // empty
+    ' <<< "${installations}") || die "could not parse the app installations response: $(api_message)"
+
+    if [ -z "${access_token_url}" ]; then
+        available=$(jq --raw-output '[.[] | "\(.account.login // "?") (app_id \(.app_id))"] | join(", ")' <<< "${installations}" 2>/dev/null)
+        die "app ${APP_ID} is not installed on '${APP_LOGIN}' at ${_GITHUB_HOST}, available installations: ${available:-none}"
+    fi
+
+    http_request -X POST \
         -H "${CONTENT_LENGTH_HEADER}" \
-        -H "${auth_header}" \
         -H "${API_HEADER}" \
-        "${access_token_url}" | \
-        jq --raw-output .token
+        "${access_token_url}" \
+        || die "could not reach ${access_token_url}"
+
+    [ "${HTTP_STATUS}" = "201" ] \
+        || die "requesting an installation access token failed with HTTP ${HTTP_STATUS}: $(api_message)"
+
+    token=$(jq --raw-output '.token // empty' <<< "${HTTP_BODY}")
+    [ -n "${token}" ] || die "the installation access token response contained no token"
+
+    printf '%s\n' "${token}"
 }
 
+validate_environment
 request_access_token

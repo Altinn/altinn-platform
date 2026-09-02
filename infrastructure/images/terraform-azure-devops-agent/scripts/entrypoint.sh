@@ -30,12 +30,11 @@ print_header() {
 configure_git_github_app_auth() {
   print_header "Requesting GitHub App installation token for '${APP_LOGIN}' on ${_GITHUB_HOST}..."
 
+  # Keep the assignment separate from the local declaration, otherwise the
+  # exit status of the script is masked
   local token
-  token=$("${SCRIPT_DIR}/gh-app-token.sh")
-
-  if [ -z "$token" ] || [ "$token" == "null" ]; then
-    echo 1>&2 "error: could not obtain a GitHub App installation token"
-    echo 1>&2 "check that APP_ID, APP_PRIVATE_KEY and APP_LOGIN are correct and that the app is installed on '${APP_LOGIN}'"
+  if ! token=$("${SCRIPT_DIR}/gh-app-token.sh") || [ -z "$token" ] || [ "$token" == "null" ]; then
+    echo 1>&2 "error: could not obtain a GitHub App installation token, see the error above"
     exit 1
   fi
 
