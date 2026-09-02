@@ -100,6 +100,22 @@ http_request() {
     HTTP_BODY=${response%$'\n'*}
 }
 
+# The access token URL is taken from the API response, and the JWT is sent to
+# it. Require https on the same authority we queried, so a tampered response
+# cannot redirect the credential to another host. curl is not given -L, so it
+# does not follow redirects away from it either.
+validate_api_url() {
+    local url=$1
+    local expected=${URI#https://}
+    expected=${expected%%/*}
+
+    [[ ${url} == https://* ]] || return 1
+
+    local authority=${url#https://}
+    authority=${authority%%/*}
+    [ "${authority}" = "${expected}" ]
+}
+
 # The error text the API returned, falling back to the raw body when the
 # response is not the JSON we expect.
 api_message() {
@@ -145,6 +161,9 @@ request_access_token() {
         available=$(jq --raw-output '[.[] | "\(.account.login // "?") (app_id \(.app_id))"] | join(", ")' <<< "${installations}" 2>/dev/null)
         die "app ${APP_ID} is not installed on '${APP_LOGIN}' at ${_GITHUB_HOST}, available installations: ${available:-none}"
     fi
+
+    validate_api_url "${access_token_url}" \
+        || die "refusing to send the JWT to '${access_token_url}', expected an https URL on ${URI}"
 
     http_request -X POST \
         -H "${CONTENT_LENGTH_HEADER}" \
