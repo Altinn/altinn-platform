@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.0](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.9.6...tf-azdev-agent-0.10.0) (2026-09-02)
+
+
+### Features
+
+* **tf-azdev-agent:** authenticate git with a GitHub App token ([#3989](https://github.com/Altinn/altinn-platform/issues/3989)) ([1a8076d](https://github.com/Altinn/altinn-platform/commit/1a8076ddfa7bb6aeefab72a0dbd62f435ab3a586))
+
+
+### Dependency Updates
+
+* update dependency kubectl to v1.36.4 ([#3690](https://github.com/Altinn/altinn-platform/issues/3690)) ([0996654](https://github.com/Altinn/altinn-platform/commit/09966542a82c5f0c497a3d729d0fe99ac2a8f33b))
+* upgrade to latest version of azure-devops-agent ([#3962](https://github.com/Altinn/altinn-platform/issues/3962)) ([db2ec87](https://github.com/Altinn/altinn-platform/commit/db2ec8783c952312453fb03a53d77ddf74e48d01))
+
 ## [0.9.6](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.9.5...tf-azdev-agent-0.9.6) (2026-06-05)
 
 
