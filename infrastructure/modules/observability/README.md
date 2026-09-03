@@ -11,7 +11,7 @@ A lightweight Terraform module that bootstraps a **Log Analytics Workspace, Ap
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.9.0 |
 | <a name="requirement_azuread"></a> [azuread](#requirement\_azuread) | >= 3.6.0 |
-| <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) | >= 4.42.0 |
+| <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) | ~> 5.0 |
 | <a name="requirement_random"></a> [random](#requirement\_random) | >= 3.7.2 |
 
 ## Providers
@@ -19,7 +19,7 @@ A lightweight Terraform module that bootstraps a **Log Analytics Workspace, Ap
 | Name | Version |
 |------|---------|
 | <a name="provider_azuread"></a> [azuread](#provider\_azuread) | >= 3.6.0 |
-| <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | >= 4.42.0 |
+| <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | ~> 5.0 |
 | <a name="provider_random"></a> [random](#provider\_random) | >= 3.7.2 |
 
 ## Modules
