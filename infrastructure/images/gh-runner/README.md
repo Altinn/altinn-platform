@@ -20,6 +20,11 @@ RUN apt-get update && apt-get install -y curl jq && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+# If you need a WORKDIR command, make sure to set it to the expected WORKDIR in the end.
+# WORKDIR /<some_dir>
+# <...>
+# WORKDIR /home/runner 
+
 USER runner
 ```
 
