@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.10.0...ghrunner-0.10.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* the image actually installs curl and jq, not netcat ([#3973](https://github.com/Altinn/altinn-platform/issues/3973)) ([d64238f](https://github.com/Altinn/altinn-platform/commit/d64238f4d7e42b4122fbe50c7d9ada78cbedfd7a))
+
 ## [0.10.0](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.9.1...ghrunner-0.10.0) (2026-08-17)
 
 
