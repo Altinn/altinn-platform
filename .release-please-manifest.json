@@ -7,7 +7,7 @@
   "services/dis-console": "1.7.3",
   "services/dis-console-ui": "0.2.0",
   "infrastructure/images/azure-devops-agent": "1.2.10",
-  "infrastructure/images/gh-runner": "0.10.0",
+  "infrastructure/images/gh-runner": "0.10.1",
   "infrastructure/images/k6-action": "0.1.2",
   "infrastructure/images/k6-image": "1.5.2",
   "infrastructure/images/terraform-azure-devops-agent": "0.10.0"
