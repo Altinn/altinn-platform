@@ -1,0 +1,11 @@
+apiVersion: cache.dis.altinn.cloud/v1alpha1
+kind: Cache
+metadata:
+  labels:
+    app.kubernetes.io/name: dis-cache-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: cache-sample
+spec:
+  size: small
+  persistence: false
+  evictionPolicy: noeviction
