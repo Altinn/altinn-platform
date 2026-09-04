@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.4](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.7.3...dis-console-v1.7.4) (2026-09-04)
+
+
+### Bug Fixes
+
+* **deps:** bump golang builder images to 1.26.6 to clear Trivy stdlib HIGH CVEs ([#3946](https://github.com/Altinn/altinn-platform/issues/3946)) ([579cc6d](https://github.com/Altinn/altinn-platform/commit/579cc6d05c1abe07709ed9742124d0585c23adb8))
+
 ## [1.7.3](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.7.2...dis-console-v1.7.3) (2026-07-31)
 
 
