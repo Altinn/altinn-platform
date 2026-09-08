@@ -57,6 +57,9 @@ func TestBuildNetworkPolicy(t *testing.T) {
 	if got := operator.From[0].PodSelector.MatchLabels["app.kubernetes.io/name"]; got != operatorPodLabelValue {
 		t.Errorf("rule 2: want operator pods %s, got %q", operatorPodLabelValue, got)
 	}
+	if got := operator.From[0].PodSelector.MatchLabels["control-plane"]; got != "controller-manager" {
+		t.Errorf("rule 2: want control-plane controller-manager, got %q", got)
+	}
 	if len(operator.Ports) != 1 || operator.Ports[0].Port.IntValue() != 6379 {
 		t.Errorf("rule 2 ports: want [6379], got %+v", operator.Ports)
 	}

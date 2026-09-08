@@ -93,6 +93,7 @@ func BuildNetworkPolicy(cache *cachev1alpha1.Cache) *netv1.NetworkPolicy {
 							PodSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{
 									"app.kubernetes.io/name": operatorPodLabelValue,
+									"control-plane":          "controller-manager",
 								},
 							},
 						},
