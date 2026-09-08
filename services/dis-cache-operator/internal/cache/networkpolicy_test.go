@@ -51,6 +51,12 @@ func TestBuildNetworkPolicy(t *testing.T) {
 	if got := operator.From[0].NamespaceSelector.MatchLabels["kubernetes.io/metadata.name"]; got != operatorNamespace {
 		t.Errorf("rule 2: want namespace %s, got %q", operatorNamespace, got)
 	}
+	if operator.From[0].PodSelector == nil {
+		t.Fatal("rule 2: want a pod selector for the operator pods")
+	}
+	if got := operator.From[0].PodSelector.MatchLabels["app.kubernetes.io/name"]; got != operatorPodLabelValue {
+		t.Errorf("rule 2: want operator pods %s, got %q", operatorPodLabelValue, got)
+	}
 	if len(operator.Ports) != 1 || operator.Ports[0].Port.IntValue() != 6379 {
 		t.Errorf("rule 2 ports: want [6379], got %+v", operator.Ports)
 	}

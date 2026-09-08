@@ -30,6 +30,9 @@ const (
 	valkeyClusterLabel = "valkey.io/cluster"
 	// operatorNamespace is where the valkey-operator runs on the clusters.
 	operatorNamespace = "valkey-operator-system"
+	// operatorPodLabelValue is the app.kubernetes.io/name label value the
+	// valkey-operator Helm chart puts on the operator pods.
+	operatorPodLabelValue = "valkey-operator"
 
 	valkeyClientPort     = 6379
 	valkeyClusterBusPort = 16379
@@ -85,6 +88,11 @@ func BuildNetworkPolicy(cache *cachev1alpha1.Cache) *netv1.NetworkPolicy {
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{
 									corev1.LabelMetadataName: operatorNamespace,
+								},
+							},
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"app.kubernetes.io/name": operatorPodLabelValue,
 								},
 							},
 						},
