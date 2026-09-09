@@ -1,54 +1,140 @@
-/*
-Copyright 2026.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package controller
 
 import (
 	"context"
+	"reflect"
 
+	valkeyv1alpha1 "github.com/valkey-io/valkey-operator/api/v1alpha1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	cachev1alpha1 "github.com/Altinn/altinn-platform/services/dis-cache-operator/api/v1alpha1"
+	cachepkg "github.com/Altinn/altinn-platform/services/dis-cache-operator/internal/cache"
 )
+
+// fieldOwner is the server-side apply field manager of this operator.
+const fieldOwner = "dis-cache-operator"
 
 // CacheReconciler reconciles a Cache object.
 type CacheReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	// Images are the container images set on every ValkeyCluster.
+	Images cachepkg.Images
 }
 
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches/finalizers,verbs=update
+// +kubebuilder:rbac:groups=valkey.io,resources=valkeyclusters,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=valkey.io,resources=valkeyclusters/status,verbs=get
 
-// Reconcile is a placeholder: this scaffold only serves the CRD and registers
-// the controller. The provisioning logic lands in follow-up changes.
+// Reconcile creates the ValkeyCluster for a Cache and mirrors its readiness
+// into the Cache status. The access objects (Secret, NetworkPolicy, linkerd
+// policies) follow in later changes.
 func (r *CacheReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logf.FromContext(ctx).V(1).Info("reconcile is not implemented yet", "cache", req.NamespacedName)
+	logger := logf.FromContext(ctx).WithValues("cache", req.NamespacedName)
+
+	var cache cachev1alpha1.Cache
+	if err := r.Get(ctx, req.NamespacedName, &cache); err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
+	// Owner references delete everything the operator created.
+	if !cache.DeletionTimestamp.IsZero() {
+		return ctrl.Result{}, nil
+	}
+
+	desired := cachepkg.BuildValkeyCluster(&cache, r.Images)
+	if err := r.applyValkeyCluster(ctx, &cache, desired); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	current, err := r.getValkeyCluster(ctx, desired)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	specMismatch := current != nil && !usersMatch(desired.Spec.Users, current.Spec.Users)
+
+	if err := r.updateStatus(ctx, &cache, current, specMismatch); err != nil {
+		return ctrl.Result{}, err
+	}
+	logger.V(1).Info("reconciled", "valkeyCluster", desired.Name, "specMismatch", specMismatch)
 
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
+// applyValkeyCluster uses server-side apply: the upstream CRD defaults many
+// fields, and a read-modify-write would fight those defaults on every reconcile.
+func (r *CacheReconciler) applyValkeyCluster(ctx context.Context, owner *cachev1alpha1.Cache, desired *valkeyv1alpha1.ValkeyCluster) error {
+	desired.SetGroupVersionKind(valkeyv1alpha1.GroupVersion.WithKind("ValkeyCluster"))
+	if err := controllerutil.SetControllerReference(owner, desired, r.Scheme); err != nil {
+		return err
+	}
+
+	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(desired)
+	if err != nil {
+		return err
+	}
+	applied := &unstructured.Unstructured{Object: content}
+	// The typed conversion emits an empty status and a null creation
+	// timestamp; neither belongs in an apply configuration.
+	unstructured.RemoveNestedField(applied.Object, "status")
+	unstructured.RemoveNestedField(applied.Object, "metadata", "creationTimestamp")
+
+	return r.Apply(ctx, client.ApplyConfigurationFromUnstructured(applied), client.FieldOwner(fieldOwner), client.ForceOwnership)
+}
+
+func (r *CacheReconciler) getValkeyCluster(ctx context.Context, desired *valkeyv1alpha1.ValkeyCluster) (*valkeyv1alpha1.ValkeyCluster, error) {
+	current := &valkeyv1alpha1.ValkeyCluster{}
+	err := r.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, current)
+	if apierrors.IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return current, nil
+}
+
+// SetupWithManager sets up the controller with the Manager. Updates of the
+// owned ValkeyCluster only matter when its spec generation or its status
+// changes; metadata-only writes (for example managed fields after an apply)
+// must not trigger another reconcile.
 func (r *CacheReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&cachev1alpha1.Cache{}).
+		Owns(&valkeyv1alpha1.ValkeyCluster{}, builder.WithPredicates(valkeyClusterChanged())).
 		Named("cache").
 		Complete(r)
+}
+
+func valkeyClusterChanged() predicate.Funcs {
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			oldCluster, ok := e.ObjectOld.(*valkeyv1alpha1.ValkeyCluster)
+			if !ok {
+				return true
+			}
+			newCluster, ok := e.ObjectNew.(*valkeyv1alpha1.ValkeyCluster)
+			if !ok {
+				return true
+			}
+
+			return oldCluster.Generation != newCluster.Generation ||
+				!reflect.DeepEqual(oldCluster.Status, newCluster.Status)
+		},
+	}
 }

@@ -22,7 +22,9 @@ import (
 	"os"
 
 	cachev1alpha1 "github.com/Altinn/altinn-platform/services/dis-cache-operator/api/v1alpha1"
+	cachepkg "github.com/Altinn/altinn-platform/services/dis-cache-operator/internal/cache"
 	"github.com/Altinn/altinn-platform/services/dis-cache-operator/internal/controller"
+	valkeyv1alpha1 "github.com/valkey-io/valkey-operator/api/v1alpha1"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -48,6 +50,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(cachev1alpha1.AddToScheme(scheme))
+	utilruntime.Must(valkeyv1alpha1.AddToScheme(scheme))
 
 	// +kubebuilder:scaffold:scheme
 }
@@ -60,6 +63,7 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var valkeyImage, exporterImage string
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -78,6 +82,10 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.StringVar(&valkeyImage, "valkey-image", os.Getenv("DISCACHE_VALKEY_IMAGE"),
+		"Valkey image for the caches (optional; empty keeps the valkey-operator default)")
+	flag.StringVar(&exporterImage, "exporter-image", os.Getenv("DISCACHE_EXPORTER_IMAGE"),
+		"Metrics exporter image for the caches (optional; empty keeps the valkey-operator default)")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -164,6 +172,7 @@ func main() {
 	if err = (&controller.CacheReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Images: cachepkg.Images{Valkey: valkeyImage, Exporter: exporterImage},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Cache")
 		os.Exit(1)

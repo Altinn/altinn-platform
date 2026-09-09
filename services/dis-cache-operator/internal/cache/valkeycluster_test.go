@@ -220,6 +220,14 @@ func TestBuildValkeyClusterSecurityContext(t *testing.T) {
 	}
 }
 
+func TestValkeyServiceNameUsesUpstreamPrefix(t *testing.T) {
+	t.Parallel()
+
+	if got := ValkeyServiceName(newTestCache(nil)); got != "valkey-app-one-cache" {
+		t.Errorf("service name: want valkey-app-one-cache, got %q", got)
+	}
+}
+
 func TestBuildValkeyClusterEmptyEvictionPolicyFallsBack(t *testing.T) {
 	t.Parallel()
 

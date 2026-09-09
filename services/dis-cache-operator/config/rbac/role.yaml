@@ -30,3 +30,21 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - valkey.io
+  resources:
+  - valkeyclusters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - valkey.io
+  resources:
+  - valkeyclusters/status
+  verbs:
+  - get

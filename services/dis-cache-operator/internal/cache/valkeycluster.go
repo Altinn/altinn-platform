@@ -49,6 +49,10 @@ const (
 	serverContainerName   = "server"
 	exporterContainerName = "metrics-exporter"
 
+	// valkeyServicePrefix is the prefix the valkey-operator puts on the
+	// headless Service of a ValkeyCluster.
+	valkeyServicePrefix = "valkey-"
+
 	// Valkey ACL command categories.
 	aclAllCommands       = "@all"
 	aclAdminCommands     = "@admin"
@@ -67,6 +71,11 @@ type Images struct {
 // Kubernetes names are unique per namespace, so the Cache name is enough.
 func ValkeyClusterName(cache *cachev1alpha1.Cache) string {
 	return cache.Name
+}
+
+// ValkeyServiceName returns the name of the Valkey Service for a Cache.
+func ValkeyServiceName(cache *cachev1alpha1.Cache) string {
+	return valkeyServicePrefix + ValkeyClusterName(cache)
 }
 
 // Labels returns the labels for objects the operator creates for a Cache.
@@ -107,7 +116,7 @@ func BuildValkeyCluster(cache *cachev1alpha1.Cache, images Images) *valkeyv1alph
 			Resources:          profile.Resources(),
 			Config:             config,
 			Users:              valkeyUsers(cache),
-			Exporter:           valkeyv1alpha1.ExporterSpec{Image: images.Exporter},
+			Exporter:           valkeyv1alpha1.ExporterSpec{Image: images.Exporter, Enabled: true},
 			PodSecurityContext: podSecurityContext(),
 			Containers:         hardenedContainers(),
 		},
@@ -135,6 +144,7 @@ func valkeyUsers(cache *cachev1alpha1.Cache) []valkeyv1alpha1.UserAclSpec {
 	return []valkeyv1alpha1.UserAclSpec{
 		{
 			Name:      "default",
+			Enabled:   true,
 			ResetPass: true,
 			Commands:  valkeyv1alpha1.CommandsAclSpec{Deny: []string{aclAllCommands}},
 		},
