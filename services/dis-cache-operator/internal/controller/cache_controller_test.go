@@ -1,6 +1,9 @@
 package controller
 
 import (
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -8,9 +11,13 @@ import (
 	. "github.com/onsi/gomega"
 
 	valkeyv1alpha1 "github.com/valkey-io/valkey-operator/api/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/yaml"
 
 	cachev1alpha1 "github.com/Altinn/altinn-platform/services/dis-cache-operator/api/v1alpha1"
 	cachepkg "github.com/Altinn/altinn-platform/services/dis-cache-operator/internal/cache"
@@ -56,6 +63,20 @@ func getValkeyCluster(name string) *valkeyv1alpha1.ValkeyCluster {
 	Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: name}, &cluster)).To(Succeed())
 
 	return &cluster
+}
+
+func getSecret(name string) *corev1.Secret {
+	var secret corev1.Secret
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: name}, &secret)).To(Succeed())
+
+	return &secret
+}
+
+func getNetworkPolicy(name string) *netv1.NetworkPolicy {
+	var policy netv1.NetworkPolicy
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: name}, &policy)).To(Succeed())
+
+	return &policy
 }
 
 func readyOf(cache *cachev1alpha1.Cache) *metav1.Condition {
@@ -130,7 +151,39 @@ var _ = Describe("Cache reconciler", func() {
 		Expect(ready.Reason).To(Equal(ReasonProvisioning))
 	})
 
-	It("converges: repeated reconciles stop writing the ValkeyCluster and the status", func() {
+	It("creates the auth Secret owned by the Cache and keeps its password afterwards", func() {
+		cache := newCache("cache-secret", nil)
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+
+		reconcile("cache-secret")
+
+		secret := getSecret(cachepkg.AuthSecretName(cache))
+		Expect(metav1.IsControlledBy(secret, getCache("cache-secret"))).To(BeTrue())
+		Expect(string(secret.Data[cachepkg.AuthSecretUsernameKey])).To(Equal(cachepkg.AuthUsername))
+		password := secret.Data[cachepkg.AuthSecretPasswordKey]
+		Expect(password).NotTo(BeEmpty())
+
+		cluster := getValkeyCluster("cache-secret")
+		Expect(cluster.Spec.Users[1].PasswordSecret.Name).To(Equal(secret.Name))
+
+		reconcile("cache-secret")
+		Expect(getSecret(secret.Name).Data[cachepkg.AuthSecretPasswordKey]).To(Equal(password))
+	})
+
+	It("creates the NetworkPolicy owned by the Cache", func() {
+		cache := newCache("cache-netpol", nil)
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+
+		reconcile("cache-netpol")
+
+		policy := getNetworkPolicy(cachepkg.NetworkPolicyName(cache))
+		Expect(metav1.IsControlledBy(policy, getCache("cache-netpol"))).To(BeTrue())
+		Expect(policy.Spec.Ingress).NotTo(BeEmpty())
+	})
+
+	It("converges: repeated reconciles stop writing the owned objects and the status", func() {
 		cache := newCache("cache-twice", nil)
 		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
 		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
@@ -138,11 +191,13 @@ var _ = Describe("Cache reconciler", func() {
 		reconcile("cache-twice")
 		reconcile("cache-twice")
 		settled := getValkeyCluster("cache-twice")
+		settledPolicy := getNetworkPolicy(cachepkg.NetworkPolicyName(cache))
 		settledCache := getCache("cache-twice")
 		reconcile("cache-twice")
 		again := getValkeyCluster("cache-twice")
 		Expect(again.ResourceVersion).To(Equal(settled.ResourceVersion))
 		Expect(again.Generation).To(Equal(int64(1)))
+		Expect(getNetworkPolicy(settledPolicy.Name).ResourceVersion).To(Equal(settledPolicy.ResourceVersion))
 		Expect(getCache("cache-twice").ResourceVersion).To(Equal(settledCache.ResourceVersion))
 	})
 
@@ -218,5 +273,34 @@ func TestUsersMatch(t *testing.T) {
 	weakened[0].ResetPass = false
 	if usersMatch(desired, weakened) {
 		t.Error("an unlocked default user must be a mismatch")
+	}
+}
+
+// TestRoleGrantsNoSecretReads guards the generated ClusterRole: the operator
+// creates Secrets but must never be able to read them.
+func TestRoleGrantsNoSecretReads(t *testing.T) {
+	t.Parallel()
+
+	raw, err := os.ReadFile(filepath.Join("..", "..", "config", "rbac", "role.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var role rbacv1.ClusterRole
+	if err := yaml.Unmarshal(raw, &role); err != nil {
+		t.Fatal(err)
+	}
+
+	found := false
+	for _, rule := range role.Rules {
+		if !slices.Contains(rule.Resources, "secrets") {
+			continue
+		}
+		found = true
+		if !slices.Equal(rule.Verbs, []string{"create"}) {
+			t.Errorf("secrets verbs: want [create], got %v", rule.Verbs)
+		}
+	}
+	if !found {
+		t.Fatal("role.yaml has no rule for secrets")
 	}
 }
