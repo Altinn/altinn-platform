@@ -125,6 +125,18 @@ resource "kubernetes_cluster_role_v1" "sp_access" {
     resources  = ["pods/log"]
     verbs      = ["get", "list"]
   }
+  rule {
+    api_groups = ["batch"]
+    resources  = ["cronjobs"]
+    verbs      = ["create", "update", "delete", "get", "patch"]
+  }
+
+  rule {
+    api_groups = ["pyrra.dev"]
+    resources  = ["servicelevelobjectives"]
+    verbs      = ["create", "update", "delete", "get", "patch"]
+  }
+
 }
 
 variable "k8s_rbac" {
