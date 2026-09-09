@@ -2,9 +2,11 @@ package controller
 
 import (
 	"context"
+	"crypto/rand"
 	"reflect"
 
 	valkeyv1alpha1 "github.com/valkey-io/valkey-operator/api/v1alpha1"
+	netv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -12,6 +14,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -32,15 +35,20 @@ type CacheReconciler struct {
 	Images cachepkg.Images
 }
 
+// The operator only creates Secrets. It never reads one back, so it has no
+// get, list, or watch on Secrets, and the manager cache excludes them.
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=create
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches/finalizers,verbs=update
 // +kubebuilder:rbac:groups=valkey.io,resources=valkeyclusters,verbs=get;list;watch;create;patch
 // +kubebuilder:rbac:groups=valkey.io,resources=valkeyclusters/status,verbs=get
 
-// Reconcile creates the ValkeyCluster for a Cache and mirrors its readiness
-// into the Cache status. The access objects (Secret, NetworkPolicy, linkerd
-// policies) follow in later changes.
+// Reconcile creates the objects for a Cache and mirrors the ValkeyCluster
+// readiness into the Cache status. The Secret and the NetworkPolicy come
+// first, so the Valkey pods find the password and the network rules on their
+// first start. The linkerd policies follow in a later change.
 func (r *CacheReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := logf.FromContext(ctx).WithValues("cache", req.NamespacedName)
 
@@ -56,8 +64,15 @@ func (r *CacheReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, nil
 	}
 
+	if err := r.ensureAuthSecret(ctx, &cache); err != nil {
+		return ctrl.Result{}, err
+	}
+	if err := r.apply(ctx, &cache, cachepkg.BuildNetworkPolicy(&cache)); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	desired := cachepkg.BuildValkeyCluster(&cache, r.Images)
-	if err := r.applyValkeyCluster(ctx, &cache, desired); err != nil {
+	if err := r.apply(ctx, &cache, desired); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -75,15 +90,38 @@ func (r *CacheReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	return ctrl.Result{}, nil
 }
 
-// applyValkeyCluster uses server-side apply: the upstream CRD defaults many
-// fields, and a read-modify-write would fight those defaults on every reconcile.
-func (r *CacheReconciler) applyValkeyCluster(ctx context.Context, owner *cachev1alpha1.Cache, desired *valkeyv1alpha1.ValkeyCluster) error {
-	desired.SetGroupVersionKind(valkeyv1alpha1.GroupVersion.WithKind("ValkeyCluster"))
-	if err := controllerutil.SetControllerReference(owner, desired, r.Scheme); err != nil {
+// ensureAuthSecret creates the credentials Secret with a new random password.
+// When the Secret exists, the create fails with AlreadyExists and the stored
+// password stays. The operator does not read the Secret back, so a new
+// password is generated on every reconcile and dropped when it is not needed.
+func (r *CacheReconciler) ensureAuthSecret(ctx context.Context, owner *cachev1alpha1.Cache) error {
+	secret := cachepkg.BuildAuthSecret(owner, rand.Text())
+	if err := controllerutil.SetControllerReference(owner, secret, r.Scheme); err != nil {
 		return err
 	}
 
-	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(desired)
+	err := r.Create(ctx, secret)
+	if apierrors.IsAlreadyExists(err) {
+		return nil
+	}
+
+	return err
+}
+
+// apply writes obj with server-side apply and the Cache as its controller.
+// The upstream CRD defaults many fields, and a read-modify-write would fight
+// those defaults on every reconcile.
+func (r *CacheReconciler) apply(ctx context.Context, owner *cachev1alpha1.Cache, obj client.Object) error {
+	gvk, err := apiutil.GVKForObject(obj, r.Scheme)
+	if err != nil {
+		return err
+	}
+	obj.GetObjectKind().SetGroupVersionKind(gvk)
+	if err := controllerutil.SetControllerReference(owner, obj, r.Scheme); err != nil {
+		return err
+	}
+
+	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 	if err != nil {
 		return err
 	}
@@ -110,12 +148,13 @@ func (r *CacheReconciler) getValkeyCluster(ctx context.Context, desired *valkeyv
 }
 
 // SetupWithManager sets up the controller with the Manager. Updates of the
-// owned ValkeyCluster only matter when its spec generation or its status
+// owned objects only matter when their spec generation or their status
 // changes; metadata-only writes (for example managed fields after an apply)
-// must not trigger another reconcile.
+// must not trigger another reconcile. Secrets are not watched.
 func (r *CacheReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&cachev1alpha1.Cache{}).
+		Owns(&netv1.NetworkPolicy{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Owns(&valkeyv1alpha1.ValkeyCluster{}, builder.WithPredicates(valkeyClusterChanged())).
 		Named("cache").
 		Complete(r)
