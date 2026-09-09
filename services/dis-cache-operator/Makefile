@@ -12,6 +12,20 @@ include ../../Makefile.common
 
 ##@ Cache-specific
 
+VALKEY_OPERATOR_MODULE ?= github.com/valkey-io/valkey-operator
+VALKEY_CRD_DIR ?= $(LOCALBIN)/valkey-crds
+
+# The envtest controller suite needs the ValkeyCluster CRDs on disk. This
+# recipe-less rule adds them as a prerequisite of the shared setup-envtest
+# target without overriding its recipe.
+setup-envtest: valkey-crds
+
+.PHONY: valkey-crds
+valkey-crds: ## Copy the valkey-operator CRDs from the Go module cache for envtest.
+	@mkdir -p "$(VALKEY_CRD_DIR)"
+	@module_dir="$$(GOWORK=off go list -m -f '{{.Dir}}' $(VALKEY_OPERATOR_MODULE))"; \
+	cp -f "$$module_dir"/config/crd/bases/valkey.io_*.yaml "$(VALKEY_CRD_DIR)/" && chmod u+w "$(VALKEY_CRD_DIR)"/*.yaml
+
 WORKSPACE_ROOT ?= $(abspath $(CURDIR)/../..)
 
 # Local dev also initialises the go.work workspace so builds resolve this
