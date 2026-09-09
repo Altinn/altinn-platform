@@ -113,7 +113,7 @@ var _ = Describe("Cache reconciler", func() {
 		Expect(ready.Reason).To(Equal(ReasonProvisioning))
 	})
 
-	It("converges: repeated reconciles stop writing the ValkeyCluster", func() {
+	It("converges: repeated reconciles stop writing the ValkeyCluster and the status", func() {
 		cache := newCache("cache-twice", nil)
 		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
 		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
@@ -121,10 +121,12 @@ var _ = Describe("Cache reconciler", func() {
 		reconcile("cache-twice")
 		reconcile("cache-twice")
 		settled := getValkeyCluster("cache-twice")
+		settledCache := getCache("cache-twice")
 		reconcile("cache-twice")
 		again := getValkeyCluster("cache-twice")
 		Expect(again.ResourceVersion).To(Equal(settled.ResourceVersion))
 		Expect(again.Generation).To(Equal(int64(1)))
+		Expect(getCache("cache-twice").ResourceVersion).To(Equal(settledCache.ResourceVersion))
 	})
 
 	It("reports Ready with host and port when the upstream state is Ready", func() {

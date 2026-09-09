@@ -5,8 +5,10 @@ import (
 	"slices"
 
 	valkeyv1alpha1 "github.com/valkey-io/valkey-operator/api/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	cachev1alpha1 "github.com/Altinn/altinn-platform/services/dis-cache-operator/api/v1alpha1"
 	cachepkg "github.com/Altinn/altinn-platform/services/dis-cache-operator/internal/cache"
@@ -29,23 +31,26 @@ func (r *CacheReconciler) updateStatus(
 	cluster *valkeyv1alpha1.ValkeyCluster,
 	specMismatch bool,
 ) error {
+	orig := cache.DeepCopy()
+
 	condition := readyCondition(cache.Generation, cluster, specMismatch)
-	changed := meta.SetStatusCondition(&cache.Status.Conditions, condition)
+	meta.SetStatusCondition(&cache.Status.Conditions, condition)
 
-	host, port := "", int32(0)
+	cache.Status.Host, cache.Status.Port = "", 0
 	if condition.Status == metav1.ConditionTrue {
-		host = cachepkg.ValkeyServiceName(cache) + "." + cache.Namespace + ".svc.cluster.local"
-		port = valkeyClientPort
+		cache.Status.Host = cachepkg.ValkeyServiceName(cache) + "." + cache.Namespace + ".svc.cluster.local"
+		cache.Status.Port = valkeyClientPort
 	}
-	changed = setIfChanged(&cache.Status.Host, host) || changed
-	changed = setIfChanged(&cache.Status.Port, port) || changed
-	changed = setIfChanged(&cache.Status.ObservedGeneration, cache.Generation) || changed
+	cache.Status.ObservedGeneration = cache.Generation
 
-	if !changed {
+	// The client sends an empty patch too, so skip the round trip ourselves.
+	if equality.Semantic.DeepEqual(orig.Status, cache.Status) {
 		return nil
 	}
 
-	return r.Status().Update(ctx, cache)
+	// A merge patch carries no resourceVersion, so a concurrent edit of the
+	// Cache does not turn into a conflict and a retry.
+	return r.Status().Patch(ctx, cache, client.MergeFrom(orig))
 }
 
 // readyCondition maps the upstream ValkeyCluster state to the Cache Ready condition.
@@ -107,15 +112,6 @@ func usersMatch(desired, current []valkeyv1alpha1.UserAclSpec) bool {
 			return false
 		}
 	}
-
-	return true
-}
-
-func setIfChanged[T comparable](field *T, value T) bool {
-	if *field == value {
-		return false
-	}
-	*field = value
 
 	return true
 }
