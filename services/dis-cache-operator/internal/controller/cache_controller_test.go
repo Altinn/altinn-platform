@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -87,6 +88,22 @@ var _ = Describe("Cache CRD schema", func() {
 	It("rejects an unknown eviction policy", func() {
 		cache := newCache("cache-bad-eviction", func(c *cachev1alpha1.Cache) { c.Spec.EvictionPolicy = "evict-everything" })
 		Expect(k8sClient.Create(ctx, cache)).NotTo(Succeed())
+	})
+
+	It("admits a name at the length limit of the Valkey Service name", func() {
+		cache := newCache(strings.Repeat("c", cachev1alpha1.MaxCacheNameLength), nil)
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+	})
+
+	It("rejects a name that makes the Valkey Service name too long", func() {
+		cache := newCache(strings.Repeat("c", cachev1alpha1.MaxCacheNameLength+1), nil)
+		Expect(k8sClient.Create(ctx, cache)).To(MatchError(ContainSubstring("at most 56 characters")))
+	})
+
+	It("rejects a name with a dot", func() {
+		cache := newCache("cache.dotted", nil)
+		Expect(k8sClient.Create(ctx, cache)).To(MatchError(ContainSubstring("must not contain a dot")))
 	})
 })
 
@@ -186,7 +203,7 @@ func TestUsersMatch(t *testing.T) {
 
 	defaulted := make([]valkeyv1alpha1.UserAclSpec, len(desired))
 	copy(defaulted, desired)
-	defaulted[0].Enabled = true
+	defaulted[0].Enabled = !desired[0].Enabled
 	if !usersMatch(desired, defaulted) {
 		t.Error("a defaulted enabled flag must not count as a mismatch")
 	}

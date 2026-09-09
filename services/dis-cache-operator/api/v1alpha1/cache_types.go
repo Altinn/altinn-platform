@@ -85,6 +85,11 @@ type CacheStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
+// MaxCacheNameLength is the longest Cache name the CRD admits. The
+// valkey-operator names the headless Service valkey-<name>, and a Service
+// name is a DNS label of at most 63 characters.
+const MaxCacheNameLength = 56
+
 // ConditionType represents status condition type names used by Cache.
 type ConditionType string
 
@@ -99,6 +104,8 @@ const (
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].reason"
 // +kubebuilder:printcolumn:name="Host",type="string",JSONPath=".status.host"
+// +kubebuilder:validation:XValidation:rule="size(self.metadata.name) <= 56",message="metadata.name must be at most 56 characters: the Valkey Service is named valkey-<name> and a Service name has at most 63 characters"
+// +kubebuilder:validation:XValidation:rule="!self.metadata.name.contains('.')",message="metadata.name must not contain a dot: the Valkey Service is named valkey-<name> and a Service name is a single DNS label"
 
 // Cache is the Schema for the caches API.
 type Cache struct {
