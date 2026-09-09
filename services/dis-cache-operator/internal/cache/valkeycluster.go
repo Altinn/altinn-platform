@@ -19,7 +19,9 @@ package cache
 
 import (
 	valkeyv1alpha1 "github.com/valkey-io/valkey-operator/api/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	cachev1alpha1 "github.com/Altinn/altinn-platform/services/dis-cache-operator/api/v1alpha1"
 )
@@ -32,10 +34,34 @@ const (
 	// CacheNameLabel carries the name of the owning Cache resource.
 	CacheNameLabel = "cache.dis.altinn.cloud/cache"
 
-	// maxMemoryKey and maxMemoryPolicyKey are Valkey configuration parameters.
+	// Valkey configuration parameters.
 	maxMemoryKey       = "maxmemory"
 	maxMemoryPolicyKey = "maxmemory-policy"
+	saveKey            = "save"
+	appendOnlyKey      = "appendonly"
+
+	// valkeyUID is the uid and gid of the valkey user in the official image.
+	// The image entrypoint would switch to it, but the valkey-operator starts
+	// valkey-server directly, so the pod must set the user itself.
+	valkeyUID int64 = 999
+
+	// Container names the valkey-operator uses in the Valkey pods.
+	serverContainerName   = "server"
+	exporterContainerName = "metrics-exporter"
+
+	// Valkey ACL command categories.
+	aclAllCommands       = "@all"
+	aclAdminCommands     = "@admin"
+	aclDangerousCommands = "@dangerous"
 )
+
+// Images names the container images the operator sets on a ValkeyCluster.
+// The platform points them at the ACR pull-through cache. An empty value
+// keeps the upstream default, which pulls from Docker Hub.
+type Images struct {
+	Valkey   string
+	Exporter string
+}
 
 // ValkeyClusterName returns the name of the ValkeyCluster for a Cache.
 // Kubernetes names are unique per namespace, so the Cache name is enough.
@@ -52,10 +78,21 @@ func Labels(cache *cachev1alpha1.Cache) map[string]string {
 }
 
 // BuildValkeyCluster maps a Cache to the ValkeyCluster the valkey-operator
-// runs. The owner reference and the access objects (TLS, users) are set by
-// the controller.
-func BuildValkeyCluster(cache *cachev1alpha1.Cache) *valkeyv1alpha1.ValkeyCluster {
+// runs. The owner reference is set by the controller.
+func BuildValkeyCluster(cache *cachev1alpha1.Cache, images Images) *valkeyv1alpha1.ValkeyCluster {
 	profile := ProfileFor(cache.Spec.Size)
+
+	config := map[string]string{
+		maxMemoryKey:       profile.MaxMemory,
+		maxMemoryPolicyKey: evictionPolicy(cache),
+	}
+	if !cache.Spec.Persistence {
+		// Valkey keeps a built-in snapshot schedule unless save is cleared.
+		// Without this, a cache without persistence still writes its data
+		// to the node disk.
+		config[saveKey] = ""
+		config[appendOnlyKey] = "no"
+	}
 
 	cluster := &valkeyv1alpha1.ValkeyCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -64,13 +101,15 @@ func BuildValkeyCluster(cache *cachev1alpha1.Cache) *valkeyv1alpha1.ValkeyCluste
 			Labels:    Labels(cache),
 		},
 		Spec: valkeyv1alpha1.ValkeyClusterSpec{
-			Shards:    1,
-			Replicas:  profile.Replicas,
-			Resources: profile.Resources(),
-			Config: map[string]string{
-				maxMemoryKey:       profile.MaxMemory,
-				maxMemoryPolicyKey: evictionPolicy(cache),
-			},
+			Image:              images.Valkey,
+			Shards:             1,
+			Replicas:           profile.Replicas,
+			Resources:          profile.Resources(),
+			Config:             config,
+			Users:              valkeyUsers(cache),
+			Exporter:           valkeyv1alpha1.ExporterSpec{Image: images.Exporter},
+			PodSecurityContext: podSecurityContext(),
+			Containers:         hardenedContainers(),
 		},
 	}
 
@@ -83,6 +122,64 @@ func BuildValkeyCluster(cache *cachev1alpha1.Cache) *valkeyv1alpha1.ValkeyCluste
 	}
 
 	return cluster
+}
+
+// valkeyUsers returns the ACL users for a Cache: the locked built-in default
+// user and the app user.
+//
+// The valkey-operator does not disable the built-in default user, and its
+// `enabled` field is an omitempty bool with a CRD default of true, so
+// "enabled: false" cannot be sent from Go. The default user is locked with
+// resetpass (no password can match) and -@all (no permissions) instead.
+func valkeyUsers(cache *cachev1alpha1.Cache) []valkeyv1alpha1.UserAclSpec {
+	return []valkeyv1alpha1.UserAclSpec{
+		{
+			Name:      "default",
+			ResetPass: true,
+			Commands:  valkeyv1alpha1.CommandsAclSpec{Deny: []string{aclAllCommands}},
+		},
+		{
+			Name:    AuthUsername,
+			Enabled: true,
+			PasswordSecret: valkeyv1alpha1.PasswordSecretSpec{
+				Name: AuthSecretName(cache),
+				Keys: []string{AuthSecretPasswordKey},
+			},
+			Commands: valkeyv1alpha1.CommandsAclSpec{
+				Allow: []string{aclAllCommands},
+				Deny:  []string{aclAdminCommands, aclDangerousCommands},
+			},
+			Keys:     valkeyv1alpha1.KeysAclSpec{ReadWrite: []string{"*"}},
+			Channels: valkeyv1alpha1.ChannelsAclSpec{Patterns: []string{"*"}},
+		},
+	}
+}
+
+func podSecurityContext() *corev1.PodSecurityContext {
+	return &corev1.PodSecurityContext{
+		RunAsNonRoot:   ptr.To(true),
+		RunAsUser:      ptr.To(valkeyUID),
+		RunAsGroup:     ptr.To(valkeyUID),
+		FSGroup:        ptr.To(valkeyUID),
+		SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+	}
+}
+
+// hardenedContainers returns strategic-merge patches for the containers the
+// valkey-operator creates. Valkey writes only to /data, which is a volume.
+func hardenedContainers() []corev1.Container {
+	securityContext := func() *corev1.SecurityContext {
+		return &corev1.SecurityContext{
+			AllowPrivilegeEscalation: ptr.To(false),
+			ReadOnlyRootFilesystem:   ptr.To(true),
+			Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+		}
+	}
+
+	return []corev1.Container{
+		{Name: serverContainerName, SecurityContext: securityContext()},
+		{Name: exporterContainerName, SecurityContext: securityContext()},
+	}
 }
 
 // evictionPolicy returns the maxmemory-policy value for a Cache. An empty
