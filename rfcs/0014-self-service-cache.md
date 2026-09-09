@@ -103,22 +103,49 @@ Valkey does not use Entra ID. Workload identity does not help here either: it gi
 
 1. **Network.** Two policies, on two levels.
    - A Kubernetes NetworkPolicy on the Valkey pods. It works on IP and port, and it applies to every pod. It allows only: pods in the same namespace (port 6379), the Valkey pods themselves (6379 and 16379, for replication), and the valkey-operator pods (6379). In DIS, the namespace is the team boundary.
-   - Linkerd policies. The fleet runs linkerd with default inbound policy `deny`. A meshed pod rejects all traffic until a `Server` and an `AuthorizationPolicy` allow it. The operator creates a `Server` for ports 6379 and 16379 and an `AuthorizationPolicy` for the namespace's service accounts and the valkey-operator identity. This layer works on identity, not on IP.
+   - Linkerd policies. The DIS clusters run linkerd with default inbound policy `deny`. A meshed pod rejects all traffic until a `Server` and an `AuthorizationPolicy` allow it. The operator creates two `Server`s on the Valkey pods (6379 and 16379, both `opaque` so the proxy does not try to detect a protocol), one `MeshTLSAuthentication` (every service account in the namespace, plus the valkey-operator identity `valkey-operator.valkey-operator-system`), and one `AuthorizationPolicy` per `Server`. This layer works on identity, not on IP. The Valkey health probes are `exec` probes, so they never cross the proxy and need no rule. Never add a CIDR-based `NetworkAuthentication` to the cache Servers: it would let plaintext clients back in.
 2. **Encryption and identity: linkerd mTLS.** The Valkey pods and the app pods run in the mesh. Linkerd encrypts the traffic between them and checks both sides' identities. We do not create TLS certificates for Valkey. Two facts drive this:
-   - The valkey-operator API has no pod-annotation field, so injection comes from the namespace annotation `linkerd.io/inject: enabled`. The whole team namespace is meshed. The fleet already does this for other namespaces.
-   - The valkey-operator pod must be in the mesh too. It connects to the Valkey pods to load the ACL.
-3. **Password.** The operator generates a random password (`crypto/rand`) and stores it in a Secret in the team namespace, with the keys `username` and `password`. It configures a Valkey ACL user `app` with this password through the upstream `users[].passwordSecret` field. The app reads the Secret.
+   - The valkey-operator API has no pod-annotation field, so injection comes from the namespace annotation `linkerd.io/inject: enabled`. The whole team namespace is meshed. Team namespaces get this annotation from their syncroots.
+   - The valkey-operator pod must be in the mesh too. It connects to the Valkey pods to load the ACL. Its Helm chart has a `podAnnotations` value for this (a gitops-manifests change).
+   - Linkerd's post-upgrade job restarts every StatefulSet. It must skip the Valkey StatefulSets, or every linkerd upgrade empties every cache without persistence (another gitops-manifests change).
+3. **Password.** The operator generates a random password (`crypto/rand`) and stores it in a Secret in the team namespace, with the keys `username` and `password`. It configures a Valkey ACL user `app` with this password through the upstream `users[].passwordSecret` field. The `app` user gets `+@all -@admin -@dangerous` on all keys and channels: no `FLUSHALL`, `CONFIG`, `SHUTDOWN`, or `ACL` commands. The app reads the Secret.
 
-**Password rotation** has no downtime, because a Valkey user can have several valid passwords:
+**The built-in `default` user is locked.** Valkey always has a `default` user, and the valkey-operator sets `protected-mode no` and never disables it. Without action, any pod in the namespace can connect with no password and full access, and the `app` user changes nothing. The operator therefore adds `default` to `users[]` with `resetpass` (no password can ever match) and `-@all` (no permissions). It does not use `enabled: false`: that field is an `omitempty` bool with a CRD default of `true`, so a `false` sent from Go is dropped and turned back into `true`.
 
-1. The operator adds a new password key to the Secret. The old key stays.
-2. The operator updates the `ValkeyCluster` so the valkey-operator reloads the ACL. Both passwords are now valid.
+**Password rotation** has no downtime, because a Valkey user can have several valid passwords. The order matters:
+
+1. The operator adds a new key to the Secret. The old key stays.
+2. The operator adds the new key to `passwordSecret.keys` on the `ValkeyCluster`. This spec change makes the valkey-operator reload the ACL. Both passwords are now valid. (A changed value under an existing key is not seen until the next reconcile; a `keys` change always is.)
 3. The apps pick up the new value. Apps that mount the Secret as a file get it without a restart. Apps that read it as an environment variable need a restart.
-4. After a fixed wait, the operator removes the old key and updates the `ValkeyCluster` again.
+4. After a fixed wait, the operator removes the old key from `keys` first, and from the Secret after. In the other order the valkey-operator fails with "missing password key" and does not update the ACL.
 
 v1 rotates on request. A schedule can come later.
 
-**Why not cert-manager TLS.** The earlier version of this section used a cert-manager server certificate. We dropped it: the fleet has no internal CA issuer (only Let's Encrypt, which cannot sign cluster-internal names and gives no `ca.crt`), a CA key would be one more secret to protect, and the mesh already gives encryption and client identity at once.
+**Why not cert-manager TLS.** The earlier version of this section used a cert-manager server certificate. We dropped it: the DIS clusters have no internal CA issuer (only Let's Encrypt, which cannot sign cluster-internal names and gives no `ca.crt`), a CA key would be one more secret to protect, and the mesh already gives encryption and client identity at once.
+
+## Secrets in the team namespace
+
+Three Secrets with credentials exist next to a cache. Any pod in the namespace can mount them, Kyverno runs in audit mode, and etcd uses platform-managed keys.
+
+- `<cache>-cache-auth`: the `app` password, written by dis-cache-operator.
+- `internal-<name>-system-passwords`: the valkey-operator's own users. `_replication` can dump all data (`PSYNC`) and write everything, and it is also on the `valkey-server` command line. `_operator` and `_exporter` are the other two.
+- `internal-<name>-acl`: the ACL file with SHA-256 hashes of all passwords.
+
+We accept this for v1: every password is per cache, so the damage stays inside the team's own cache. The `_replication` command-line exposure is an upstream issue to file.
+
+## Operator permissions and safety
+
+- **Secrets.** dis-cache-operator gets `create` and `patch` on Secrets only — no `get`, `list`, or `watch` — and its informer cache is off for Secrets. It never reads a password back; it tracks which keys exist through `passwordSecret.keys`. A compromised operator can then overwrite Secrets but not read them. dis-pgsql and dis-vault have no Secret permissions at all; this operator is the first.
+- **Drift guard.** The upstream CRD upgrades with `CreateReplace`. If a chart bump renames `spec.users`, the API server prunes the field and the `default` user is open again. After every apply the operator reads the `ValkeyCluster` back and compares `spec.users`; on a mismatch it sets `Ready=False` with reason `UpstreamSpecMismatch`. The Helm chart and the Go module bump together in one PR.
+- **Linkerd types.** The operator uses the official `github.com/linkerd/linkerd2` API packages, pinned by pseudo-version to the linkerd chart version the clusters run (`edge-26.4.2`). Renovate cannot track edge tags, so this pin moves by hand with the chart. The versions match the served CRDs: `Server` v1beta3, `AuthorizationPolicy` and `MeshTLSAuthentication` v1alpha1.
+
+## Pod and data hardening
+
+- The valkey-operator starts `valkey-server` directly and skips the image entrypoint, so the pods would run as root. The operator sets a pod security context (non-root, uid/gid/fsGroup 999, seccomp `RuntimeDefault`) and per-container settings (no privilege escalation, read-only root filesystem, all capabilities dropped) for the `server` and `metrics-exporter` containers.
+- The upstream default images pull from Docker Hub. The operator sets both images to the ACR pull-through path, from its configuration.
+- With `persistence: false`, Valkey would still write snapshots to the node disk, because upstream sets no `save`. The operator sets `save ""` and `appendonly no`.
+- The metrics exporter sidecar cannot be turned off from Go (same `omitempty` problem), so it stays on and gets the same hardening.
+- Persistent volumes use platform-managed keys, like every disk on the clusters.
 
 ## One cache per application
 
@@ -163,7 +190,8 @@ Kubernetes names are unique per namespace. The operator derives the `ValkeyClust
 - The upstream operator is alpha, and its API can change. We accept this because our CRD protects the teams.
 - Caches use cluster CPU and memory. The platform needs capacity limits per team.
 - The platform gets one more operator to run, watch, and update.
-- A cache puts a stateful workload in the mesh. The fleet has one such case today (activemq). The whole team namespace gets meshed, not only the cache.
+- A cache puts a stateful workload in the mesh. The DIS clusters have one such case today (activemq). Linkerd upgrades restart StatefulSets unless the cache pods are excluded.
+- The first password on the platform. Every other DIS data path uses Entra ID. The password is the second layer behind the mesh identity, not the only one.
 
 # Rationale and alternatives
 
@@ -189,14 +217,15 @@ Teams keep building their own cache setups, and the platform keeps missing the s
 
 # Unresolved questions
 
-- Mesh injection: confirm that team namespaces get `linkerd.io/inject: enabled`, and who sets it (the platform when it creates the namespace, or the operator).
-- Mesh and Valkey: confirm that ports 6379 and 16379 are marked opaque, and that the cluster bus works through the proxy. Test with the first cache on at22.
+- Mesh and Valkey: test on at22 that the cluster bus (16379) works through the proxy with `deny`, and that ACL reloads do not drop the `app` user's connections.
+- Metrics: how the exporter sidecar is scraped under NetworkPolicy and `deny`, or whether v1 ships without cache metrics.
+- Per-team limits: a `ResourceQuota` per namespace and a cap on the number of `Cache` objects, reported as a status condition.
 - Password rotation: the trigger for v1 (an annotation or a spec field), and the wait before the old password is removed.
-- Security review: a threat-model review of this design is in progress. Its findings update this section.
+- Upstream requests to file: pod annotations on `ValkeyCluster`, a `serviceAccountName` for the Valkey pods (today they use the namespace `default` account, so the mesh identity is shared), `--primaryauth` off the command line, and `*bool` for `enabled`.
+- Kyverno: the linkerd exception keys on a namespace label, injection on an annotation. Team namespaces need both or every injected pod audits against `disallow-capabilities`.
 - The exact CPU, memory, and replica values for each `size`.
-- Capacity limits per team.
 - Backup and restore: out of scope for v1.
-- How the platform installs and pins the upstream operator on the fleet: platform-system artifact, image supply, and a security review.
+- How the platform installs and pins the upstream operator on the clusters: platform-system artifact, image supply, and a security review.
 
 # Future possibilities
 
