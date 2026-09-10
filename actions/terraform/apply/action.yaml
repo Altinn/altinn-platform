@@ -52,6 +52,14 @@ inputs:
 runs:
   using: composite
   steps:
+    # DEPRECATED: this action has moved to dis-way/actions.
+    # Remove this step together with the rest of the action once all
+    # consumers have migrated to the new location.
+    - name: Deprecation notice
+      shell: bash
+      run: |
+        echo "::warning title=Deprecated action::Altinn/altinn-platform/actions/terraform/apply has moved to dis-way/actions/altinn/terraform/apply. Update your workflow to the new location - this copy will be removed."
+
     - name: Terraform Init
       uses: Altinn/altinn-platform/actions/terraform/init@main
       with:
