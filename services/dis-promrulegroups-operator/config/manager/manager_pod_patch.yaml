@@ -1,0 +1,6 @@
+# This patch adds an Azure Workload Identity required label to the pod
+- op: add
+  path: /spec/template/metadata/labels
+  value:
+    control-plane: controller-manager
+    azure.workload.identity/use: "true"
