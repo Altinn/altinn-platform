@@ -9,6 +9,11 @@ variable "github_org_name" {
   default     = "Altinn"
 }
 
+variable "github_org_id" {
+  type        = string
+  description = "Immutable numeric id of the Github org, used in the immutable OIDC subject claim"
+}
+
 variable "github_environments" {
   type        = set(string)
   description = "Github action environments with matching federation"
