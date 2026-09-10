@@ -4,6 +4,7 @@
   "services/dis-apim-operator": "1.0.5",
   "services/dis-vault-operator": "1.4.9",
   "services/lakmus": "1.1.6",
+  "services/flux-dispatch": "0.0.0",
   "services/dis-console": "1.7.3",
   "services/dis-console-ui": "0.2.0",
   "infrastructure/images/azure-devops-agent": "1.2.10",

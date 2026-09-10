@@ -1,0 +1,37 @@
+module github.com/Altinn/altinn-platform/services/flux-dispatch
+
+go 1.25.3
+
+require (
+	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/prometheus/client_golang v1.23.2
+)
+
+require (
+	github.com/Masterminds/semver/v3 v3.5.0 // indirect
+	github.com/aws/constructs-go/constructs/v10 v10.6.0 // indirect
+	github.com/aws/jsii-runtime-go v1.132.0 // indirect
+	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/cdk8s-team/cdk8s-core-go/cdk8s/v2 v2.70.66 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/fatih/color v1.19.0 // indirect
+	github.com/kr/text v0.2.0 // indirect
+	github.com/kylelemons/godebug v1.1.0 // indirect
+	github.com/mattn/go-colorable v0.1.14 // indirect
+	github.com/mattn/go-isatty v0.0.22 // indirect
+	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/prometheus/client_model v0.6.2 // indirect
+	github.com/prometheus/common v0.66.1 // indirect
+	github.com/prometheus/procfs v0.16.1 // indirect
+	github.com/yuin/goldmark v1.7.16 // indirect
+	go.yaml.in/yaml/v2 v2.4.2 // indirect
+	golang.org/x/lint v0.0.0-20241112194109-818c5a804067 // indirect
+	golang.org/x/mod v0.36.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/telemetry v0.0.0-20260508192327-42602be52be6 // indirect
+	golang.org/x/tools v0.45.0 // indirect
+	golang.org/x/tools/cmd/godoc v0.1.0-deprecated // indirect
+	golang.org/x/tools/godoc v0.1.0-deprecated // indirect
+	google.golang.org/protobuf v1.36.8 // indirect
+)

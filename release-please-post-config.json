@@ -48,6 +48,11 @@
         {"filename": "lakmus-release.yml"}
       ]
     },
+    "services/flux-dispatch": {
+      "dispatch-pipelines": [
+        {"filename": "flux-dispatch-release.yml"}
+      ]
+    },
     "infrastructure/images/azure-devops-agent": {
       "dispatch-pipelines": [
         {"filename": "azdevops-agent-release.yml"}

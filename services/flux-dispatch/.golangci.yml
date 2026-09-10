@@ -1,0 +1,71 @@
+version: "2"
+run:
+  allow-parallel-runners: true
+linters:
+  default: none
+  enable:
+    - copyloopvar
+    - dupl
+    - errcheck
+    - goconst
+    - gocyclo
+    - govet
+    - ineffassign
+    - lll
+    - modernize
+    - misspell
+    - nakedret
+    - prealloc
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+  settings:
+    goconst:
+      ignore-tests: true
+    revive:
+      rules:
+        - name: comment-spacings
+        - name: import-shadowing
+    modernize:
+      disable:
+        - omitzero
+        - newexpr
+  exclusions:
+    generated: lax
+    rules:
+      - linters:
+          - dupl
+          - goconst
+          - lll
+        path: _test\.go
+      - linters:
+          - dupl
+          - lll
+        path: internal/.*
+      # manifests/ builds Kubernetes objects as map literals, so the repeated
+      # strings goconst flags are API field names ("name", "port", "TCP") and
+      # the long lines are single YAML values. Hoisting either out would hide
+      # the shape of the manifest being generated.
+      - linters:
+          - goconst
+          - lll
+        path: manifests/.*
+    paths:
+      # cdk8s emits these Kubernetes bindings; they are not ours to lint.
+      - imports/k8s
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - imports/k8s
+      - third_party$
+      - builtin$
+      - examples$

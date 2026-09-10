@@ -20,6 +20,10 @@
       "release-type": "simple",
       "component": "lakmus"
     },
+    "services/flux-dispatch": {
+      "release-type": "simple",
+      "component": "flux-dispatch"
+    },
     "services/dis-console": {
       "release-type": "simple",
       "component": "dis-console"
