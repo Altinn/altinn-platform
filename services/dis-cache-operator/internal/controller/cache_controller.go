@@ -35,7 +35,7 @@ type CacheReconciler struct {
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches/finalizers,verbs=update
-// +kubebuilder:rbac:groups=valkey.io,resources=valkeyclusters,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=valkey.io,resources=valkeyclusters,verbs=get;list;watch;create;patch
 // +kubebuilder:rbac:groups=valkey.io,resources=valkeyclusters/status,verbs=get
 
 // Reconcile creates the ValkeyCluster for a Cache and mirrors its readiness

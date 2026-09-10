@@ -36,11 +36,9 @@ rules:
   - valkeyclusters
   verbs:
   - create
-  - delete
   - get
   - list
   - patch
-  - update
   - watch
 - apiGroups:
   - valkey.io

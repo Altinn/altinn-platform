@@ -2,10 +2,12 @@ package cache
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	valkeyv1alpha1 "github.com/valkey-io/valkey-operator/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	cachev1alpha1 "github.com/Altinn/altinn-platform/services/dis-cache-operator/api/v1alpha1"
 )
@@ -237,5 +239,20 @@ func TestBuildValkeyClusterEmptyEvictionPolicyFallsBack(t *testing.T) {
 
 	if got := cluster.Spec.Config["maxmemory-policy"]; got != "noeviction" {
 		t.Errorf("maxmemory-policy: want noeviction, got %q", got)
+	}
+}
+
+func TestValkeyServiceNameFitsLongestAdmittedCacheName(t *testing.T) {
+	t.Parallel()
+
+	longest := newTestCache(func(c *cachev1alpha1.Cache) {
+		c.Name = strings.Repeat("a", cachev1alpha1.MaxCacheNameLength)
+	})
+	serviceName := ValkeyServiceName(longest)
+	if errs := validation.IsDNS1035Label(serviceName); len(errs) != 0 {
+		t.Errorf("service name %q for the longest admitted Cache name is not a valid Service name: %v", serviceName, errs)
+	}
+	if got := len(serviceName); got != validation.DNS1035LabelMaxLength {
+		t.Errorf("service name length: want %d so the CRD limit is not stricter than needed, got %d", validation.DNS1035LabelMaxLength, got)
 	}
 }

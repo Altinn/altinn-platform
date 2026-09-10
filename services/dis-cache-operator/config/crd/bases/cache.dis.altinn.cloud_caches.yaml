@@ -158,6 +158,13 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: 'metadata.name must be at most 56 characters: the Valkey Service
+            is named valkey-<name> and a Service name has at most 63 characters'
+          rule: size(self.metadata.name) <= 56
+        - message: 'metadata.name must not contain a dot: the Valkey Service is named
+            valkey-<name> and a Service name is a single DNS label'
+          rule: '!self.metadata.name.contains(''.'')'
     served: true
     storage: true
     subresources:
