@@ -26,41 +26,37 @@ locals {
 }
 
 resource "azurerm_federated_identity_credential" "syncroot_pusher_envs" {
-  for_each            = var.github_environments
-  name                = "${local.credential_name_prefix}-env-${each.value}"
-  resource_group_name = var.resource_group_name
-  parent_id           = azurerm_user_assigned_identity.syncroot_pusher.id
-  issuer              = "https://token.actions.githubusercontent.com"
-  audience            = ["api://AzureADTokenExchange"]
-  subject             = "${local.subject_repo}:environment:${each.value}"
+  for_each                  = var.github_environments
+  name                      = "${local.credential_name_prefix}-env-${each.value}"
+  user_assigned_identity_id = azurerm_user_assigned_identity.syncroot_pusher.id
+  issuer                    = "https://token.actions.githubusercontent.com"
+  audience                  = ["api://AzureADTokenExchange"]
+  subject                   = "${local.subject_repo}:environment:${each.value}"
 }
 
 resource "azurerm_federated_identity_credential" "syncroot_pusher_envs_immutable" {
-  for_each            = var.github_environments
-  name                = "${local.credential_name_prefix}-env-${each.value}-immutable"
-  resource_group_name = var.resource_group_name
-  parent_id           = azurerm_user_assigned_identity.syncroot_pusher.id
-  issuer              = "https://token.actions.githubusercontent.com"
-  audience            = ["api://AzureADTokenExchange"]
-  subject             = "${local.subject_repo_immutable}:environment:${each.value}"
+  for_each                  = var.github_environments
+  name                      = "${local.credential_name_prefix}-env-${each.value}-immutable"
+  user_assigned_identity_id = azurerm_user_assigned_identity.syncroot_pusher.id
+  issuer                    = "https://token.actions.githubusercontent.com"
+  audience                  = ["api://AzureADTokenExchange"]
+  subject                   = "${local.subject_repo_immutable}:environment:${each.value}"
 }
 
 resource "azurerm_federated_identity_credential" "syncroot_pusher_branches" {
-  for_each            = var.github_branches
-  name                = "${local.credential_name_prefix}-ref-${each.value}"
-  resource_group_name = var.resource_group_name
-  parent_id           = azurerm_user_assigned_identity.syncroot_pusher.id
-  issuer              = "https://token.actions.githubusercontent.com"
-  audience            = ["api://AzureADTokenExchange"]
-  subject             = "${local.subject_repo}:ref:refs/heads/${each.value}"
+  for_each                  = var.github_branches
+  name                      = "${local.credential_name_prefix}-ref-${each.value}"
+  user_assigned_identity_id = azurerm_user_assigned_identity.syncroot_pusher.id
+  issuer                    = "https://token.actions.githubusercontent.com"
+  audience                  = ["api://AzureADTokenExchange"]
+  subject                   = "${local.subject_repo}:ref:refs/heads/${each.value}"
 }
 
 resource "azurerm_federated_identity_credential" "syncroot_pusher_branches_immutable" {
-  for_each            = var.github_branches
-  name                = "${local.credential_name_prefix}-ref-${each.value}-immutable"
-  resource_group_name = var.resource_group_name
-  parent_id           = azurerm_user_assigned_identity.syncroot_pusher.id
-  issuer              = "https://token.actions.githubusercontent.com"
-  audience            = ["api://AzureADTokenExchange"]
-  subject             = "${local.subject_repo_immutable}:ref:refs/heads/${each.value}"
+  for_each                  = var.github_branches
+  name                      = "${local.credential_name_prefix}-ref-${each.value}-immutable"
+  user_assigned_identity_id = azurerm_user_assigned_identity.syncroot_pusher.id
+  issuer                    = "https://token.actions.githubusercontent.com"
+  audience                  = ["api://AzureADTokenExchange"]
+  subject                   = "${local.subject_repo_immutable}:ref:refs/heads/${each.value}"
 }
