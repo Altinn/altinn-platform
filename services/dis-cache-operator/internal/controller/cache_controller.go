@@ -37,8 +37,10 @@ type CacheReconciler struct {
 
 // The operator only creates Secrets. It never reads one back, so it has no
 // get, list, or watch on Secrets, and the manager cache excludes them.
+// Owned objects are written with server-side apply, which needs create and
+// patch; owner references delete them.
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=create
-// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;patch
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches/finalizers,verbs=update
@@ -94,23 +96,34 @@ func (r *CacheReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 // When the Secret exists, the create fails with AlreadyExists and the stored
 // password stays. The operator does not read the Secret back, so a new
 // password is generated on every reconcile and dropped when it is not needed.
+//
+// A Secret with the same name that someone else created is kept as it is: it
+// becomes the password source, it gets no owner reference, and the operator
+// cannot check its content. A missing password key shows up as a failed
+// ValkeyCluster.
 func (r *CacheReconciler) ensureAuthSecret(ctx context.Context, owner *cachev1alpha1.Cache) error {
 	secret := cachepkg.BuildAuthSecret(owner, rand.Text())
 	if err := controllerutil.SetControllerReference(owner, secret, r.Scheme); err != nil {
 		return err
 	}
 
-	err := r.Create(ctx, secret)
-	if apierrors.IsAlreadyExists(err) {
-		return nil
+	if err := r.Create(ctx, secret); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			return nil
+		}
+		return err
 	}
+	// This is the only signal that a password was generated; apps must read
+	// the Secret again after it.
+	logf.FromContext(ctx).Info("created the auth Secret", "secret", secret.Name)
 
-	return err
+	return nil
 }
 
 // apply writes obj with server-side apply and the Cache as its controller.
-// The upstream CRD defaults many fields, and a read-modify-write would fight
-// those defaults on every reconcile.
+// The API server and the CRDs default many fields; a read-modify-write would
+// fight those defaults on every reconcile, and a merge patch would not remove
+// fields that another writer added.
 func (r *CacheReconciler) apply(ctx context.Context, owner *cachev1alpha1.Cache, obj client.Object) error {
 	gvk, err := apiutil.GVKForObject(obj, r.Scheme)
 	if err != nil {
