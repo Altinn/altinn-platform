@@ -171,7 +171,22 @@ var _ = Describe("Cache reconciler", func() {
 		Expect(getSecret(secret.Name).Data[cachepkg.AuthSecretPasswordKey]).To(Equal(password))
 	})
 
-	It("creates the NetworkPolicy owned by the Cache", func() {
+	It("creates the Secret again with a new password after someone deletes it", func() {
+		cache := newCache("cache-secret-gone", nil)
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+		reconcile("cache-secret-gone")
+
+		secret := getSecret(cachepkg.AuthSecretName(cache))
+		Expect(k8sClient.Delete(ctx, secret)).To(Succeed())
+		reconcile("cache-secret-gone")
+
+		recreated := getSecret(secret.Name)
+		Expect(recreated.Data[cachepkg.AuthSecretPasswordKey]).NotTo(BeEmpty())
+		Expect(recreated.Data[cachepkg.AuthSecretPasswordKey]).NotTo(Equal(secret.Data[cachepkg.AuthSecretPasswordKey]))
+	})
+
+	It("creates the NetworkPolicy owned by the Cache and restores its rules", func() {
 		cache := newCache("cache-netpol", nil)
 		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
 		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
@@ -180,7 +195,14 @@ var _ = Describe("Cache reconciler", func() {
 
 		policy := getNetworkPolicy(cachepkg.NetworkPolicyName(cache))
 		Expect(metav1.IsControlledBy(policy, getCache("cache-netpol"))).To(BeTrue())
-		Expect(policy.Spec.Ingress).NotTo(BeEmpty())
+		want := len(cachepkg.BuildNetworkPolicy(cache).Spec.Ingress)
+		Expect(policy.Spec.Ingress).To(HaveLen(want))
+
+		policy.Spec.Ingress = nil
+		Expect(k8sClient.Update(ctx, policy)).To(Succeed())
+		reconcile("cache-netpol")
+
+		Expect(getNetworkPolicy(policy.Name).Spec.Ingress).To(HaveLen(want))
 	})
 
 	It("converges: repeated reconciles stop writing the owned objects and the status", func() {
@@ -292,10 +314,16 @@ func TestRoleGrantsNoSecretReads(t *testing.T) {
 
 	found := false
 	for _, rule := range role.Rules {
+		if slices.Contains(rule.APIGroups, "*") || slices.Contains(rule.Resources, "*") {
+			t.Errorf("wildcard rule grants Secret reads: %+v", rule)
+		}
 		if !slices.Contains(rule.Resources, "secrets") {
 			continue
 		}
 		found = true
+		if !slices.Equal(rule.APIGroups, []string{""}) {
+			t.Errorf("secrets apiGroups: want [\"\"], got %v", rule.APIGroups)
+		}
 		if !slices.Equal(rule.Verbs, []string{"create"}) {
 			t.Errorf("secrets verbs: want [create], got %v", rule.Verbs)
 		}
