@@ -10,6 +10,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	policyv1alpha1 "github.com/linkerd/linkerd2/controller/gen/apis/policy/v1alpha1"
+	serverv1beta3 "github.com/linkerd/linkerd2/controller/gen/apis/server/v1beta3"
 	valkeyv1alpha1 "github.com/valkey-io/valkey-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
@@ -17,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
 	cachev1alpha1 "github.com/Altinn/altinn-platform/services/dis-cache-operator/api/v1alpha1"
@@ -77,6 +80,10 @@ func getNetworkPolicy(name string) *netv1.NetworkPolicy {
 	Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: name}, &policy)).To(Succeed())
 
 	return &policy
+}
+
+func mustGet(name string, obj client.Object) {
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: name}, obj)).To(Succeed())
 }
 
 func readyOf(cache *cachev1alpha1.Cache) *metav1.Condition {
@@ -205,6 +212,36 @@ var _ = Describe("Cache reconciler", func() {
 		Expect(getNetworkPolicy(policy.Name).Spec.Ingress).To(HaveLen(want))
 	})
 
+	It("creates the linkerd policies owned by the Cache", func() {
+		cache := newCache("cache-mesh", nil)
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+
+		reconcile("cache-mesh")
+		owner := getCache("cache-mesh")
+
+		var clientServer, busServer serverv1beta3.Server
+		mustGet(cachepkg.ClientServerName(cache), &clientServer)
+		mustGet(cachepkg.BusServerName(cache), &busServer)
+		Expect(metav1.IsControlledBy(&clientServer, owner)).To(BeTrue())
+		Expect(clientServer.Spec.Port.IntValue()).To(Equal(6379))
+		Expect(clientServer.Spec.ProxyProtocol).To(Equal("opaque"))
+		Expect(busServer.Spec.Port.IntValue()).To(Equal(16379))
+
+		var authentication policyv1alpha1.MeshTLSAuthentication
+		mustGet(cachepkg.MeshAuthenticationName(cache), &authentication)
+		Expect(metav1.IsControlledBy(&authentication, owner)).To(BeTrue())
+		Expect(authentication.Spec.Identities).To(HaveLen(2))
+
+		for _, name := range []string{cachepkg.ClientServerName(cache), cachepkg.BusServerName(cache)} {
+			var authorization policyv1alpha1.AuthorizationPolicy
+			mustGet(name, &authorization)
+			Expect(metav1.IsControlledBy(&authorization, owner)).To(BeTrue())
+			Expect(string(authorization.Spec.TargetRef.Name)).To(Equal(name))
+			Expect(authorization.Spec.RequiredAuthenticationRefs).To(HaveLen(1))
+		}
+	})
+
 	It("converges: repeated reconciles stop writing the owned objects and the status", func() {
 		cache := newCache("cache-twice", nil)
 		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
@@ -214,12 +251,16 @@ var _ = Describe("Cache reconciler", func() {
 		reconcile("cache-twice")
 		settled := getValkeyCluster("cache-twice")
 		settledPolicy := getNetworkPolicy(cachepkg.NetworkPolicyName(cache))
+		var settledAuthorization, againAuthorization policyv1alpha1.AuthorizationPolicy
+		mustGet(cachepkg.ClientServerName(cache), &settledAuthorization)
 		settledCache := getCache("cache-twice")
 		reconcile("cache-twice")
 		again := getValkeyCluster("cache-twice")
 		Expect(again.ResourceVersion).To(Equal(settled.ResourceVersion))
 		Expect(again.Generation).To(Equal(int64(1)))
 		Expect(getNetworkPolicy(settledPolicy.Name).ResourceVersion).To(Equal(settledPolicy.ResourceVersion))
+		mustGet(settledAuthorization.Name, &againAuthorization)
+		Expect(againAuthorization.ResourceVersion).To(Equal(settledAuthorization.ResourceVersion))
 		Expect(getCache("cache-twice").ResourceVersion).To(Equal(settledCache.ResourceVersion))
 	})
 

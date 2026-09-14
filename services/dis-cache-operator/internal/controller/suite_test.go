@@ -31,6 +31,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	policyv1alpha1 "github.com/linkerd/linkerd2/controller/gen/apis/policy/v1alpha1"
+	serverv1beta3 "github.com/linkerd/linkerd2/controller/gen/apis/server/v1beta3"
 	valkeyv1alpha1 "github.com/valkey-io/valkey-operator/api/v1alpha1"
 
 	cachev1alpha1 "github.com/Altinn/altinn-platform/services/dis-cache-operator/api/v1alpha1"
@@ -59,6 +61,7 @@ var _ = BeforeSuite(func() {
 		CRDDirectoryPaths: []string{
 			filepath.Join("..", "..", "config", "crd", "bases"),
 			filepath.Join("..", "..", "bin", "valkey-crds"),
+			filepath.Join("..", "..", "bin", "linkerd-crds"),
 		},
 		ErrorIfCRDPathMissing: true,
 	}
@@ -70,6 +73,8 @@ var _ = BeforeSuite(func() {
 
 	Expect(cachev1alpha1.AddToScheme(scheme.Scheme)).To(Succeed())
 	Expect(valkeyv1alpha1.AddToScheme(scheme.Scheme)).To(Succeed())
+	Expect(serverv1beta3.AddToScheme(scheme.Scheme)).To(Succeed())
+	Expect(policyv1alpha1.AddToScheme(scheme.Scheme)).To(Succeed())
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())

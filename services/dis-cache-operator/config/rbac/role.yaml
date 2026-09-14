@@ -47,6 +47,18 @@ rules:
   - patch
   - watch
 - apiGroups:
+  - policy.linkerd.io
+  resources:
+  - authorizationpolicies
+  - meshtlsauthentications
+  - servers
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
   - valkey.io
   resources:
   - valkeyclusters

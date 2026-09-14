@@ -14,17 +14,28 @@ include ../../Makefile.common
 
 VALKEY_OPERATOR_MODULE ?= github.com/valkey-io/valkey-operator
 VALKEY_CRD_DIR ?= $(LOCALBIN)/valkey-crds
+LINKERD_MODULE ?= github.com/linkerd/linkerd2
+LINKERD_CRD_DIR ?= $(LOCALBIN)/linkerd-crds
+LINKERD_POLICY_CRDS ?= server authorization-policy meshtls-authentication
 
-# The envtest controller suite needs the ValkeyCluster CRDs on disk. This
-# recipe-less rule adds them as a prerequisite of the shared setup-envtest
-# target without overriding its recipe.
-setup-envtest: valkey-crds
+# The envtest controller suite needs the ValkeyCluster and linkerd policy
+# CRDs on disk. This rule has no recipe. It adds the CRD targets as
+# prerequisites of the shared setup-envtest target and keeps its recipe.
+setup-envtest: valkey-crds linkerd-crds
 
 .PHONY: valkey-crds
 valkey-crds: ## Copy the valkey-operator CRDs from the Go module cache for envtest.
 	@mkdir -p "$(VALKEY_CRD_DIR)"
 	@module_dir="$$(GOWORK=off go list -m -f '{{.Dir}}' $(VALKEY_OPERATOR_MODULE))"; \
 	cp -f "$$module_dir"/config/crd/bases/valkey.io_*.yaml "$(VALKEY_CRD_DIR)/" && chmod u+w "$(VALKEY_CRD_DIR)"/*.yaml
+
+.PHONY: linkerd-crds
+linkerd-crds: ## Copy the linkerd policy CRDs from the Go module cache for envtest.
+	@mkdir -p "$(LINKERD_CRD_DIR)"
+	@module_dir="$$(GOWORK=off go list -m -f '{{.Dir}}' $(LINKERD_MODULE))"; \
+	for crd in $(LINKERD_POLICY_CRDS); do \
+		grep -v '{{' "$$module_dir/charts/linkerd-crds/templates/policy/$$crd.yaml" > "$(LINKERD_CRD_DIR)/$$crd.yaml"; \
+	done
 
 WORKSPACE_ROOT ?= $(abspath $(CURDIR)/../..)
 
