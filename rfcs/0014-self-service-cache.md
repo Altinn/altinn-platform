@@ -72,9 +72,9 @@ The spec has no identity references. Valkey does not use Entra ID for data acces
 
 ### Status (v1alpha1)
 
-- `conditions[]`: `Ready`, plus more condition types when the implementation adds them.
-- `host`: the in-cluster DNS name of the Valkey service.
-- `port`: the Valkey port.
+- `conditions[]`: `Ready`, plus more condition types when the implementation adds them. The reasons of `Ready` are `Provisioning`, `ValkeyReady`, `ValkeyDegraded`, `ValkeyFailed`, `UpstreamSpecMismatch`, `SecretCreateFailed`, and `ApplyFailed`.
+- `host`: the in-cluster DNS name of the Valkey service, `valkey-<name>.<namespace>.svc.cluster.local`. Set only while `Ready` is true. It stays when an operator step fails, because the Valkey instance is untouched then.
+- `port`: the Valkey port, 6379. Same rule as `host`.
 - `observedGeneration`: the last generation the operator reconciled.
 
 ## The official valkey-operator
@@ -108,7 +108,7 @@ Valkey does not use Entra ID. Workload identity does not help here either: it gi
    - Linkerd policies. The DIS clusters run linkerd with default inbound policy `deny`. A meshed pod rejects all traffic until a `Server` and an `AuthorizationPolicy` allow it. The operator creates two `Server`s on the Valkey pods (6379 and 16379, both `opaque` so the proxy does not try to detect a protocol), one `MeshTLSAuthentication` (every service account in the namespace, plus the valkey-operator identity `valkey-operator.valkey-operator-system`), and one `AuthorizationPolicy` per `Server`. This layer works on identity, not on IP. The Valkey health probes are `exec` probes, so they never cross the proxy and need no rule. Never add a CIDR-based `NetworkAuthentication` to the cache Servers: it would let plaintext clients back in.
 2. **Encryption and identity: linkerd mTLS.** The Valkey pods and the app pods run in the mesh. Linkerd encrypts the traffic between them and checks both sides' identities. We do not create TLS certificates for Valkey. Two facts drive this:
    - The valkey-operator API has no pod-annotation field, so injection comes from the namespace annotation `linkerd.io/inject: enabled`. The whole team namespace is meshed. Team namespaces get this annotation from their syncroots.
-   - The valkey-operator pod must be in the mesh too. It connects to the Valkey pods to load the ACL. Its Helm chart has a `podAnnotations` value for this (a gitops-manifests change).
+   - The valkey-operator pod runs in the mesh too. It connects to the Valkey pods to load the ACL. The gitops-manifests package sets its pod annotations: inject the proxy, keep the metrics port 8443 outside the proxy (the Azure Monitor scraper is not meshed and the clusters deny inbound traffic by default; the port checks tokens itself), and keep the API server port 443 outside the proxy.
    - Linkerd's post-upgrade job restarts every StatefulSet. It must skip the Valkey StatefulSets, or every linkerd upgrade empties every cache without persistence (another gitops-manifests change).
 3. **Password.** The operator generates a random password (`crypto/rand`) and stores it in a Secret in the team namespace, with the keys `username` and `password`. It configures a Valkey ACL user `app` with this password through the upstream `users[].passwordSecret` field. The `app` user gets `+@all -@admin -@dangerous` on all keys and channels: no `FLUSHALL`, `CONFIG`, `SHUTDOWN`, or `ACL` commands. The app reads the Secret.
 
@@ -140,7 +140,9 @@ We accept this for v1: every password is per cache, so the damage stays inside t
 - **Secrets.** dis-cache-operator gets `create` on Secrets, and `patch` when rotation lands. It has no `get`, `list`, or `watch`, it does not watch Secrets, and its client cache excludes them. It never reads a password back; it tracks which keys exist through `passwordSecret.keys`. On every reconcile it generates a password and tries to create the Secret. When the Secret exists, the create fails and the stored password stays. A compromised operator can then overwrite Secrets but not read them. dis-pgsql and dis-vault have no Secret permissions at all; this operator is the first.
 - **Deleted Secret.** The operator does not see the deletion. The valkey-operator does: it reads the Secret every 30 seconds and sets its `ValkeyCluster` to state `Failed` when the Secret is gone. That status change triggers a reconcile, which creates the Secret with a new password. Apps then read the Secret again.
 - **Writes.** The NetworkPolicy, the linkerd policies, and the `ValkeyCluster` are written with server-side apply, with the field owner `dis-cache-operator` and force. The API server fills the CRD defaults, and a repeated apply with the same content writes nothing. A field that someone changed by hand goes back to the operator's value on the next reconcile. The operator reconciles an owned object again only when its spec generation or its status changed. The `Cache` status is written with a merge patch, and only when it changed.
-- **Drift guard.** The upstream CRD upgrades with `CreateReplace`. If a chart bump renames `spec.users`, the API server prunes the field and the `default` user is open again. After every apply the operator reads the `ValkeyCluster` back and compares `spec.users`; on a mismatch it sets `Ready=False` with reason `UpstreamSpecMismatch`. The Helm chart and the Go module bump together in one PR.
+- **Step failures.** When the Secret create or an apply fails, `Ready` becomes False with reason `SecretCreateFailed` or `ApplyFailed` and the error message. Without this a Cache that never reaches the `ValkeyCluster` step would show no status at all.
+- **Drift guard.** The upstream CRD upgrades with `CreateReplace`. If a chart bump renames `spec.users`, the API server prunes the field and the `default` user is open again. The apply response carries the stored `ValkeyCluster`; the operator compares `spec.users` from it, and on a mismatch it sets `Ready=False` with reason `UpstreamSpecMismatch`. It does not read the informer cache for this, because the cache can be one version behind the apply. The Helm chart and the Go module bump together in one PR.
+- **Permissions.** On `Cache`: `get`, `list`, `watch`; on its status: `patch`; on its finalizers: `update`, for clusters that run the owner-reference admission plugin. On the owned objects: `list` and `watch` for the informers, `create` and `patch` for server-side apply. No `update` or `delete` anywhere: owner references delete. On Secrets: `create` only.
 - **Linkerd types.** The operator uses the official `github.com/linkerd/linkerd2` API packages, pinned by pseudo-version to the linkerd chart version the clusters run (`edge-26.4.2`). Renovate cannot track edge tags, so this pin moves by hand with the chart. The versions match the served CRDs: `Server` v1beta3, `AuthorizationPolicy` and `MeshTLSAuthentication` v1alpha1.
 
 ## Pod and data hardening
@@ -153,12 +155,12 @@ We accept this for v1: every password is per cache, so the damage stays inside t
 
 ## Deployment of dis-cache-operator
 
-The operator follows the release path of the other DIS operators. release-please cuts the component `dis-cache`, starting at `0.1.0`. The tag builds the image on GitHub Container Registry and pushes a Kustomize artifact, `dis/kustomize/dis-cache-operator`, to altinncr. A package in gitops-manifests deploys the artifact with a Flux `Kustomization`, promoted ring by ring, and a Terraform flag per cluster creates the Flux configuration.
+The operator follows the release path of the other DIS operators. release-please cuts the component `dis-cache`; `v0.1.0` is the first release. The tag builds the image on GitHub Container Registry and pushes a Kustomize artifact, `dis/kustomize/dis-cache-operator`, to altinncr. The package `oci/dis-cache` in gitops-manifests deploys the artifact with a Flux `Kustomization`, promoted ring by ring through the release issue, and a Terraform flag per cluster creates the Flux configuration.
 
 Two rules for that package:
 
-- It must always set both image variables in `postBuild.substitute`, an empty string is allowed. Flux runs the substitution only when at least one variable is set. Without it, the placeholder text reaches the operator as the image name.
-- It must depend on the valkey-operator package. The operator watches `ValkeyCluster` and the linkerd policy kinds, so their CRDs must exist before the manager starts, or its cache never syncs and the pod exits.
+- Its `Kustomization` passes both image variables through as required variables, without defaults. The Terraform configuration must set both, an empty string is allowed. Flux runs the substitution only when at least one variable is set, so a forgotten value fails visibly instead of pulling from Docker Hub.
+- Its `multitenancy` overlay depends on the valkey-operator `Kustomization`. The operator watches `ValkeyCluster` and the linkerd policy kinds, so their CRDs must exist before the manager starts, or its cache never syncs and the pod exits about two minutes after start.
 
 ## One cache per application
 
