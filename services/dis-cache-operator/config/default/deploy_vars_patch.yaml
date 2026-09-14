@@ -1,0 +1,7 @@
+- op: add
+  path: /spec/template/spec/containers/0/env
+  value:
+    - name: DISCACHE_VALKEY_IMAGE
+      value: ${DISCACHE_VALKEY_IMAGE:=}
+    - name: DISCACHE_EXPORTER_IMAGE
+      value: ${DISCACHE_EXPORTER_IMAGE:=}
