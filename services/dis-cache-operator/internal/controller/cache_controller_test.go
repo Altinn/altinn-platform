@@ -227,6 +227,7 @@ var _ = Describe("Cache reconciler", func() {
 		Expect(clientServer.Spec.Port.IntValue()).To(Equal(6379))
 		Expect(clientServer.Spec.ProxyProtocol).To(Equal("opaque"))
 		Expect(busServer.Spec.Port.IntValue()).To(Equal(16379))
+		Expect(busServer.Spec.ProxyProtocol).To(Equal("opaque"))
 
 		var authentication policyv1alpha1.MeshTLSAuthentication
 		mustGet(cachepkg.MeshAuthenticationName(cache), &authentication)
@@ -240,6 +241,25 @@ var _ = Describe("Cache reconciler", func() {
 			Expect(string(authorization.Spec.TargetRef.Name)).To(Equal(name))
 			Expect(authorization.Spec.RequiredAuthenticationRefs).To(HaveLen(1))
 		}
+	})
+
+	It("removes an identity that someone added to the mesh authentication", func() {
+		cache := newCache("cache-mesh-drift", nil)
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+		reconcile("cache-mesh-drift")
+
+		var authentication policyv1alpha1.MeshTLSAuthentication
+		mustGet(cachepkg.MeshAuthenticationName(cache), &authentication)
+		authentication.Spec.Identities = append(authentication.Spec.Identities, "*")
+		Expect(k8sClient.Update(ctx, &authentication)).To(Succeed())
+		mustGet(authentication.Name, &authentication)
+		Expect(authentication.Spec.Identities).To(HaveLen(3))
+
+		reconcile("cache-mesh-drift")
+		mustGet(authentication.Name, &authentication)
+		Expect(authentication.Spec.Identities).To(HaveLen(2))
+		Expect(authentication.Spec.Identities).NotTo(ContainElement("*"))
 	})
 
 	It("converges: repeated reconciles stop writing the owned objects and the status", func() {
