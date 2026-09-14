@@ -3,16 +3,15 @@ package controller
 import (
 	"context"
 	"crypto/rand"
-	"reflect"
 
 	policyv1alpha1 "github.com/linkerd/linkerd2/controller/gen/apis/policy/v1alpha1"
 	serverv1beta3 "github.com/linkerd/linkerd2/controller/gen/apis/server/v1beta3"
 	valkeyv1alpha1 "github.com/valkey-io/valkey-operator/api/v1alpha1"
 	netv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -39,23 +38,25 @@ type CacheReconciler struct {
 
 // The operator only creates Secrets. It never reads one back, so it has no
 // get, list, or watch on Secrets, and the manager cache excludes them.
-// The other owned objects are written with server-side apply, which needs
-// create and patch. Owner references delete all of them.
+// The other owned objects are watched (list, watch) and written with
+// server-side apply (create, patch). Owner references delete all of them.
+// The finalizers permission is for clusters that run the
+// OwnerReferencesPermissionEnforcement admission plugin: it checks that
+// permission when an owner reference sets blockOwnerDeletion.
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=create
-// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;patch
-// +kubebuilder:rbac:groups=policy.linkerd.io,resources=servers;meshtlsauthentications;authorizationpolicies,verbs=get;list;watch;create;patch
-// +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=list;watch;create;patch
+// +kubebuilder:rbac:groups=policy.linkerd.io,resources=servers;meshtlsauthentications;authorizationpolicies,verbs=list;watch;create;patch
+// +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches,verbs=get;list;watch
+// +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches/status,verbs=patch
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches/finalizers,verbs=update
-// +kubebuilder:rbac:groups=valkey.io,resources=valkeyclusters,verbs=get;list;watch;create;patch
-// +kubebuilder:rbac:groups=valkey.io,resources=valkeyclusters/status,verbs=get
+// +kubebuilder:rbac:groups=valkey.io,resources=valkeyclusters,verbs=list;watch;create;patch
 
 // Reconcile creates the objects for a Cache and mirrors the ValkeyCluster
 // readiness into the Cache status. The Secret and the access policies come
 // first, so the Valkey pods find the password and the network rules on their
-// first start.
+// first start. An error in any step is recorded in the Ready condition.
 func (r *CacheReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := logf.FromContext(ctx).WithValues("cache", req.NamespacedName)
+	logger := logf.FromContext(ctx)
 
 	var cache cachev1alpha1.Cache
 	if err := r.Get(ctx, req.NamespacedName, &cache); err != nil {
@@ -70,27 +71,29 @@ func (r *CacheReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	if err := r.ensureAuthSecret(ctx, &cache); err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, r.failed(ctx, &cache, ReasonSecretCreateFailed, err)
 	}
-	if err := r.apply(ctx, &cache, cachepkg.BuildNetworkPolicy(&cache)); err != nil {
-		return ctrl.Result{}, err
+	if _, err := r.apply(ctx, &cache, cachepkg.BuildNetworkPolicy(&cache)); err != nil {
+		return ctrl.Result{}, r.failed(ctx, &cache, ReasonApplyFailed, err)
 	}
 	if err := r.applyMeshPolicies(ctx, &cache); err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, r.failed(ctx, &cache, ReasonApplyFailed, err)
 	}
 
 	desired := cachepkg.BuildValkeyCluster(&cache, r.Images)
-	if err := r.apply(ctx, &cache, desired); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	current, err := r.getValkeyCluster(ctx, desired)
+	applied, err := r.apply(ctx, &cache, desired)
 	if err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, r.failed(ctx, &cache, ReasonApplyFailed, err)
 	}
-	specMismatch := current != nil && !usersMatch(desired.Spec.Users, current.Spec.Users)
+	// The apply response is the stored object, with defaults, generation, and
+	// status. The informer cache can still hold the version before the apply.
+	current := &valkeyv1alpha1.ValkeyCluster{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(applied.Object, current); err != nil {
+		return ctrl.Result{}, r.failed(ctx, &cache, ReasonApplyFailed, err)
+	}
+	specMismatch := !usersMatch(desired.Spec.Users, current.Spec.Users)
 
-	if err := r.updateStatus(ctx, &cache, current, specMismatch); err != nil {
+	if err := r.writeStatus(ctx, &cache, readyCondition(cache.Generation, current, specMismatch)); err != nil {
 		return ctrl.Result{}, err
 	}
 	logger.V(1).Info("reconciled", "valkeyCluster", desired.Name, "specMismatch", specMismatch)
@@ -127,17 +130,19 @@ func (r *CacheReconciler) ensureAuthSecret(ctx context.Context, owner *cachev1al
 }
 
 // applyMeshPolicies writes the linkerd objects that let clients reach the
-// Valkey pods under the clusters' default inbound policy (deny).
+// Valkey pods under the clusters' default inbound policy (deny). The
+// authorizations go before the Servers, so a Server never exists without
+// its authorization.
 func (r *CacheReconciler) applyMeshPolicies(ctx context.Context, owner *cachev1alpha1.Cache) error {
 	policies := cachepkg.BuildMeshPolicies(owner)
 	for _, obj := range []client.Object{
 		policies.Authentication,
-		policies.ClientServer,
-		policies.BusServer,
 		policies.ClientPolicy,
 		policies.BusPolicy,
+		policies.ClientServer,
+		policies.BusServer,
 	} {
-		if err := r.apply(ctx, owner, obj); err != nil {
+		if _, err := r.apply(ctx, owner, obj); err != nil {
 			return err
 		}
 	}
@@ -145,55 +150,48 @@ func (r *CacheReconciler) applyMeshPolicies(ctx context.Context, owner *cachev1a
 	return nil
 }
 
-// apply writes obj with server-side apply and the Cache as its controller.
-// The API server and the CRDs default many fields; a read-modify-write would
-// fight those defaults on every reconcile, and a merge patch would not remove
-// fields that another writer added.
-func (r *CacheReconciler) apply(ctx context.Context, owner *cachev1alpha1.Cache, obj client.Object) error {
+// apply writes obj with server-side apply and the Cache as its controller,
+// and returns the stored object from the API server response. The API server
+// and the CRDs default many fields; a read-modify-write would fight those
+// defaults on every reconcile, and a merge patch would not remove fields that
+// another writer added.
+func (r *CacheReconciler) apply(ctx context.Context, owner *cachev1alpha1.Cache, obj client.Object) (*unstructured.Unstructured, error) {
 	gvk, err := apiutil.GVKForObject(obj, r.Scheme)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	obj.GetObjectKind().SetGroupVersionKind(gvk)
 	if err := controllerutil.SetControllerReference(owner, obj, r.Scheme); err != nil {
-		return err
+		return nil, err
 	}
 
 	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	applied := &unstructured.Unstructured{Object: content}
-	// The typed conversion emits an empty status and a null creation
-	// timestamp; neither belongs in an apply configuration.
+	// An apply configuration must not carry a status or a creation timestamp.
+	// The converter omits both today; this keeps it so when a type changes.
 	unstructured.RemoveNestedField(applied.Object, "status")
 	unstructured.RemoveNestedField(applied.Object, "metadata", "creationTimestamp")
 
-	return r.Apply(ctx, client.ApplyConfigurationFromUnstructured(applied), client.FieldOwner(fieldOwner), client.ForceOwnership)
-}
-
-func (r *CacheReconciler) getValkeyCluster(ctx context.Context, desired *valkeyv1alpha1.ValkeyCluster) (*valkeyv1alpha1.ValkeyCluster, error) {
-	current := &valkeyv1alpha1.ValkeyCluster{}
-	err := r.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, current)
-	if apierrors.IsNotFound(err) {
-		return nil, nil
-	}
-	if err != nil {
+	if err := r.Apply(ctx, client.ApplyConfigurationFromUnstructured(applied), client.FieldOwner(fieldOwner), client.ForceOwnership); err != nil {
 		return nil, err
 	}
 
-	return current, nil
+	return applied, nil
 }
 
-// SetupWithManager sets up the controller with the Manager. Updates of the
-// owned objects only matter when their spec generation or their status
-// changes; metadata-only writes (for example managed fields after an apply)
-// must not trigger another reconcile. Secrets are not watched.
+// SetupWithManager sets up the controller with the Manager. A Cache is
+// reconciled again when its spec changes, not when the operator writes its
+// status. Updates of the owned objects only matter when their spec generation
+// or their status changes; metadata-only writes (for example managed fields
+// after an apply) must not trigger another reconcile. Secrets are not watched.
 func (r *CacheReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	generationChanged := builder.WithPredicates(predicate.GenerationChangedPredicate{})
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&cachev1alpha1.Cache{}).
+		For(&cachev1alpha1.Cache{}, generationChanged).
 		Owns(&netv1.NetworkPolicy{}, generationChanged).
 		Owns(&serverv1beta3.Server{}, generationChanged).
 		Owns(&policyv1alpha1.MeshTLSAuthentication{}, generationChanged).
@@ -216,7 +214,7 @@ func valkeyClusterChanged() predicate.Funcs {
 			}
 
 			return oldCluster.Generation != newCluster.Generation ||
-				!reflect.DeepEqual(oldCluster.Status, newCluster.Status)
+				!equality.Semantic.DeepEqual(oldCluster.Status, newCluster.Status)
 		},
 	}
 }

@@ -15,12 +15,8 @@ rules:
   resources:
   - caches
   verbs:
-  - create
-  - delete
   - get
   - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - cache.dis.altinn.cloud
@@ -33,16 +29,13 @@ rules:
   resources:
   - caches/status
   verbs:
-  - get
   - patch
-  - update
 - apiGroups:
   - networking.k8s.io
   resources:
   - networkpolicies
   verbs:
   - create
-  - get
   - list
   - patch
   - watch
@@ -54,7 +47,6 @@ rules:
   - servers
   verbs:
   - create
-  - get
   - list
   - patch
   - watch
@@ -64,13 +56,6 @@ rules:
   - valkeyclusters
   verbs:
   - create
-  - get
   - list
   - patch
   - watch
-- apiGroups:
-  - valkey.io
-  resources:
-  - valkeyclusters/status
-  verbs:
-  - get

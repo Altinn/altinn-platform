@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	cachev1alpha1 "github.com/Altinn/altinn-platform/services/dis-cache-operator/api/v1alpha1"
 	cachepkg "github.com/Altinn/altinn-platform/services/dis-cache-operator/internal/cache"
@@ -21,21 +22,21 @@ const (
 	ReasonValkeyDegraded       = "ValkeyDegraded"
 	ReasonValkeyFailed         = "ValkeyFailed"
 	ReasonUpstreamSpecMismatch = "UpstreamSpecMismatch"
+	ReasonSecretCreateFailed   = "SecretCreateFailed"
+	ReasonApplyFailed          = "ApplyFailed"
 
 	valkeyClientPort = 6379
+	// maxMessageLength keeps an error message far below the CRD limit of the
+	// condition message.
+	maxMessageLength = 1024
 )
 
-func (r *CacheReconciler) updateStatus(
-	ctx context.Context,
-	cache *cachev1alpha1.Cache,
-	cluster *valkeyv1alpha1.ValkeyCluster,
-	specMismatch bool,
-) error {
+// writeStatus sets the Ready condition and derives the connection fields from
+// it: host and port are set only while the cache is Ready.
+func (r *CacheReconciler) writeStatus(ctx context.Context, cache *cachev1alpha1.Cache, condition metav1.Condition) error {
 	orig := cache.DeepCopy()
 
-	condition := readyCondition(cache.Generation, cluster, specMismatch)
 	meta.SetStatusCondition(&cache.Status.Conditions, condition)
-
 	cache.Status.Host, cache.Status.Port = "", 0
 	if condition.Status == metav1.ConditionTrue {
 		cache.Status.Host = cachepkg.ValkeyServiceName(cache) + "." + cache.Namespace + ".svc.cluster.local"
@@ -43,6 +44,34 @@ func (r *CacheReconciler) updateStatus(
 	}
 	cache.Status.ObservedGeneration = cache.Generation
 
+	return r.patchStatus(ctx, cache, orig)
+}
+
+// failed records the error of a reconcile step in the Ready condition and
+// returns the error. Without it a Cache that never reaches the ValkeyCluster
+// step would show no status at all. The connection fields stay as they are:
+// the error is on the operator side, and the Valkey instance is untouched.
+func (r *CacheReconciler) failed(ctx context.Context, cache *cachev1alpha1.Cache, reason string, err error) error {
+	orig := cache.DeepCopy()
+
+	meta.SetStatusCondition(&cache.Status.Conditions, metav1.Condition{
+		Type:               string(cachev1alpha1.ConditionReady),
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: cache.Generation,
+		Reason:             reason,
+		Message:            shortened(err.Error()),
+	})
+	cache.Status.ObservedGeneration = cache.Generation
+
+	if statusErr := r.patchStatus(ctx, cache, orig); statusErr != nil {
+		logf.FromContext(ctx).Error(statusErr, "cannot record the failure in the Cache status")
+	}
+
+	return err
+}
+
+// patchStatus writes the status when it differs from orig.
+func (r *CacheReconciler) patchStatus(ctx context.Context, cache, orig *cachev1alpha1.Cache) error {
 	// The client sends an empty patch too, so skip the round trip ourselves.
 	if equality.Semantic.DeepEqual(orig.Status, cache.Status) {
 		return nil
@@ -51,6 +80,14 @@ func (r *CacheReconciler) updateStatus(
 	// A merge patch carries no resourceVersion, so a concurrent edit of the
 	// Cache does not turn into a conflict and a retry.
 	return r.Status().Patch(ctx, cache, client.MergeFrom(orig))
+}
+
+func shortened(message string) string {
+	if len(message) <= maxMessageLength {
+		return message
+	}
+
+	return message[:maxMessageLength]
 }
 
 // readyCondition maps the upstream ValkeyCluster state to the Cache Ready condition.
@@ -64,10 +101,7 @@ func readyCondition(generation int64, cluster *valkeyv1alpha1.ValkeyCluster, spe
 	switch {
 	case specMismatch:
 		condition.Reason = ReasonUpstreamSpecMismatch
-		condition.Message = "the ValkeyCluster users differ from the desired users; check the valkey-operator CRD version"
-	case cluster == nil:
-		condition.Reason = ReasonProvisioning
-		condition.Message = "waiting for the ValkeyCluster"
+		condition.Message = "the ValkeyCluster users differ from the desired users: an extra or missing user, or a pruned field"
 	case cluster.Status.State == valkeyv1alpha1.ClusterStateReady:
 		condition.Status = metav1.ConditionTrue
 		condition.Reason = ReasonValkeyReady
