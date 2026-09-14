@@ -43,6 +43,11 @@
         {"filename": "dis-vault-release.yml"}
       ]
     },
+    "services/dis-cache-operator": {
+      "dispatch-pipelines": [
+        {"filename": "dis-cache-release.yml"}
+      ]
+    },
     "services/lakmus": {
       "dispatch-pipelines": [
         {"filename": "lakmus-release.yml"}

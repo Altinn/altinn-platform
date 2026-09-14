@@ -16,6 +16,10 @@
       "release-type": "simple",
       "component": "dis-vault"
     },
+    "services/dis-cache-operator": {
+      "release-type": "simple",
+      "component": "dis-cache"
+    },
     "services/lakmus": {
       "release-type": "simple",
       "component": "lakmus"
