@@ -17,11 +17,33 @@ variable "github_org_id" {
 variable "github_environments" {
   type        = set(string)
   description = "Github action environments with matching federation"
+
+  validation {
+    # Keep this expression in sync with the slug maps in azure-identity.tf.
+    # Flattening is not one-to-one - fix/dis and fix_dis both become fix_dis - and two
+    # entries that collide would yield two resources sharing one Azure credential name.
+    # ARM upserts the second over the first, leaving a plan that can never converge.
+    condition = length(distinct([
+      for v in var.github_environments : replace(v, "/[^a-zA-Z0-9_-]/", "_")
+    ])) == length(var.github_environments)
+    error_message = "Values must stay distinct after flattening for the Azure credential name; got ${join(", ", sort(var.github_environments))}."
+  }
 }
 
 variable "github_branches" {
   type        = set(string)
   description = "Github branches with matching federation"
+
+  validation {
+    # Keep this expression in sync with the slug maps in azure-identity.tf.
+    # Flattening is not one-to-one - fix/dis and fix_dis both become fix_dis - and two
+    # entries that collide would yield two resources sharing one Azure credential name.
+    # ARM upserts the second over the first, leaving a plan that can never converge.
+    condition = length(distinct([
+      for v in var.github_branches : replace(v, "/[^a-zA-Z0-9_-]/", "_")
+    ])) == length(var.github_branches)
+    error_message = "Values must stay distinct after flattening for the Azure credential name; got ${join(", ", sort(var.github_branches))}."
+  }
 }
 
 variable "product_name" {
