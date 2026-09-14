@@ -146,10 +146,19 @@ We accept this for v1: every password is per cache, so the damage stays inside t
 ## Pod and data hardening
 
 - The valkey-operator starts `valkey-server` directly and skips the image entrypoint, so the pods would run as root. The operator sets a pod security context (non-root, uid/gid/fsGroup 999, seccomp `RuntimeDefault`) and per-container settings (no privilege escalation, read-only root filesystem, all capabilities dropped) for the `server` and `metrics-exporter` containers.
-- The upstream default images pull from Docker Hub. The operator sets both images to the ACR pull-through path, from its configuration.
+- The upstream default images pull from Docker Hub. The operator sets both images to the ACR pull-through path, from the environment variables `DISCACHE_VALKEY_IMAGE` and `DISCACHE_EXPORTER_IMAGE`. An empty value keeps the upstream image.
 - With `persistence: false`, Valkey would still write snapshots to the node disk, because upstream sets no `save`. The operator sets `save ""` and `appendonly no`.
 - The metrics exporter sidecar cannot be turned off from Go (same `omitempty` problem), so it stays on and gets the same hardening.
 - Persistent volumes use platform-managed keys, like every disk on the clusters.
+
+## Deployment of dis-cache-operator
+
+The operator follows the release path of the other DIS operators. release-please cuts the component `dis-cache`, starting at `0.1.0`. The tag builds the image on GitHub Container Registry and pushes a Kustomize artifact, `dis/kustomize/dis-cache-operator`, to altinncr. A package in gitops-manifests deploys the artifact with a Flux `Kustomization`, promoted ring by ring, and a Terraform flag per cluster creates the Flux configuration.
+
+Two rules for that package:
+
+- It must always set both image variables in `postBuild.substitute`, an empty string is allowed. Flux runs the substitution only when at least one variable is set. Without it, the placeholder text reaches the operator as the image name.
+- It must depend on the valkey-operator package. The operator watches `ValkeyCluster` and the linkerd policy kinds, so their CRDs must exist before the manager starts, or its cache never syncs and the pod exits.
 
 ## One cache per application
 
