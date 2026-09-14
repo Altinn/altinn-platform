@@ -97,6 +97,8 @@ We choose it although it is alpha. The reasons are:
 
 The upstream operator runs in the platform-system layer on each cluster. The platform installs it. Teams never create `ValkeyCluster` resources directly. Only the `Cache` CRD is part of the tenant contract.
 
+**Installation.** The platform installs the upstream operator with its Helm chart (`oci://ghcr.io/valkey-io/valkey-helm`, version 0.5.0) through the `valkey-operator` package in gitops-manifests, promoted ring by ring. A Terraform flag per cluster, `enable_valkey_operator`, creates the Flux configuration. The Helm chart and the Go module bump together. at22 and at23 are the first clusters.
+
 ## Access control
 
 Valkey does not use Entra ID. Workload identity does not help here either: it gives a pod a token for Azure services, and Valkey cannot check such a token. The operator uses the cluster's own tools instead, in three layers:
@@ -112,14 +114,14 @@ Valkey does not use Entra ID. Workload identity does not help here either: it gi
 
 **The built-in `default` user is locked.** Valkey always has a `default` user, and the valkey-operator sets `protected-mode no` and never disables it. Without action, any pod in the namespace can connect with no password and full access, and the `app` user changes nothing. The operator therefore adds `default` to `users[]` with `resetpass` (no password can ever match) and `-@all` (no permissions). It does not use `enabled: false`: that field is an `omitempty` bool with a CRD default of `true`, so a `false` sent from Go is dropped and turned back into `true`.
 
-**Password rotation** has no downtime, because a Valkey user can have several valid passwords. The order matters:
+**Password rotation** has no downtime, because a Valkey user can have several valid passwords. The valkey-operator reads the Secret on every reconcile, every 30 seconds, and reloads the ACL when a password changed. A new value under the same key would lock out every app that still uses the old value, until the app reads the Secret again. The order below keeps both passwords valid during the change:
 
 1. The operator adds a new key to the Secret. The old key stays.
-2. The operator adds the new key to `passwordSecret.keys` on the `ValkeyCluster`. This spec change makes the valkey-operator reload the ACL. Both passwords are now valid. (A changed value under an existing key is not seen until the next reconcile; a `keys` change always is.)
+2. The operator adds the new key to `passwordSecret.keys` on the `ValkeyCluster`. Within 30 seconds both passwords are valid.
 3. The apps pick up the new value. Apps that mount the Secret as a file get it without a restart. Apps that read it as an environment variable need a restart.
 4. After a fixed wait, the operator removes the old key from `keys` first, and from the Secret after. In the other order the valkey-operator fails with "missing password key" and does not update the ACL.
 
-v1 rotates on request. A schedule can come later.
+v1 rotates on request. A schedule can come later. Rotation is the only reason the operator needs `patch` on Secrets. Until rotation lands, the operator has `create` only.
 
 **Why not cert-manager TLS.** The earlier version of this section used a cert-manager server certificate. We dropped it: the DIS clusters have no internal CA issuer (only Let's Encrypt, which cannot sign cluster-internal names and gives no `ca.crt`), a CA key would be one more secret to protect, and the mesh already gives encryption and client identity at once.
 
@@ -135,7 +137,9 @@ We accept this for v1: every password is per cache, so the damage stays inside t
 
 ## Operator permissions and safety
 
-- **Secrets.** dis-cache-operator gets `create` and `patch` on Secrets only — no `get`, `list`, or `watch` — and its informer cache is off for Secrets. It never reads a password back; it tracks which keys exist through `passwordSecret.keys`. A compromised operator can then overwrite Secrets but not read them. dis-pgsql and dis-vault have no Secret permissions at all; this operator is the first.
+- **Secrets.** dis-cache-operator gets `create` on Secrets, and `patch` when rotation lands. It has no `get`, `list`, or `watch`, it does not watch Secrets, and its client cache excludes them. It never reads a password back; it tracks which keys exist through `passwordSecret.keys`. On every reconcile it generates a password and tries to create the Secret. When the Secret exists, the create fails and the stored password stays. A compromised operator can then overwrite Secrets but not read them. dis-pgsql and dis-vault have no Secret permissions at all; this operator is the first.
+- **Deleted Secret.** The operator does not see the deletion. The valkey-operator does: it reads the Secret every 30 seconds and sets its `ValkeyCluster` to state `Failed` when the Secret is gone. That status change triggers a reconcile, which creates the Secret with a new password. Apps then read the Secret again.
+- **Writes.** The NetworkPolicy, the linkerd policies, and the `ValkeyCluster` are written with server-side apply, with the field owner `dis-cache-operator` and force. The API server fills the CRD defaults, and a repeated apply with the same content writes nothing. A field that someone changed by hand goes back to the operator's value on the next reconcile. The operator reconciles an owned object again only when its spec generation or its status changed. The `Cache` status is written with a merge patch, and only when it changed.
 - **Drift guard.** The upstream CRD upgrades with `CreateReplace`. If a chart bump renames `spec.users`, the API server prunes the field and the `default` user is open again. After every apply the operator reads the `ValkeyCluster` back and compares `spec.users`; on a mismatch it sets `Ready=False` with reason `UpstreamSpecMismatch`. The Helm chart and the Go module bump together in one PR.
 - **Linkerd types.** The operator uses the official `github.com/linkerd/linkerd2` API packages, pinned by pseudo-version to the linkerd chart version the clusters run (`edge-26.4.2`). Renovate cannot track edge tags, so this pin moves by hand with the chart. The versions match the served CRDs: `Server` v1beta3, `AuthorizationPolicy` and `MeshTLSAuthentication` v1alpha1.
 
@@ -169,21 +173,26 @@ participant valkeyop as valkey-operator
 
 dev->>kapi: Create or update Cache CR
 kapi->>cacheop: Reconcile Cache
-cacheop->>kapi: Create NetworkPolicy, linkerd policies, password Secret
-cacheop->>kapi: Create or update ValkeyCluster
+cacheop->>kapi: Create the password Secret (kept when it exists)
+cacheop->>kapi: Apply NetworkPolicy and linkerd policies
+cacheop->>kapi: Apply ValkeyCluster
 kapi->>valkeyop: Reconcile ValkeyCluster
 valkeyop->>kapi: Create pods, service, config
 cacheop->>kapi: Read ValkeyCluster status
 cacheop->>kapi: Set Ready, write host and port
 ```
 
+The Secret and the policies come first, so the Valkey pods find the password and the access rules on their first start. The operator writes `host` and `port` only when `Ready` is true.
+
 ## Deletion
 
-The `ValkeyCluster` has an owner reference to the `Cache` resource. When the team deletes the `Cache`, Kubernetes deletes the `ValkeyCluster`. The valkey-operator then removes the pods and the service.
+Every object the operator creates has an owner reference to the `Cache`: the Secret, the NetworkPolicy, the linkerd policies, and the `ValkeyCluster`. When the team deletes the `Cache`, Kubernetes deletes all of them. The valkey-operator then removes the pods and the service. The operator uses no finalizer.
 
 ## Naming
 
 Kubernetes names are unique per namespace. The operator derives the `ValkeyCluster` name from the `Cache` name. We do not need the hash-based global naming that the Azure-backed operators use.
+
+The valkey-operator names the Service `valkey-<name>`. A Service name is one DNS label of at most 63 characters, so the CRD limits a `Cache` name to 56 characters and rejects names with a dot.
 
 # Drawbacks
 
@@ -225,7 +234,6 @@ Teams keep building their own cache setups, and the platform keeps missing the s
 - Kyverno: the linkerd exception keys on a namespace label, injection on an annotation. Team namespaces need both or every injected pod audits against `disallow-capabilities`.
 - The exact CPU, memory, and replica values for each `size`.
 - Backup and restore: out of scope for v1.
-- How the platform installs and pins the upstream operator on the clusters: platform-system artifact, image supply, and a security review.
 
 # Future possibilities
 
