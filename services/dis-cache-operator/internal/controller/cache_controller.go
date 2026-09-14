@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"reflect"
 
+	policyv1alpha1 "github.com/linkerd/linkerd2/controller/gen/apis/policy/v1alpha1"
+	serverv1beta3 "github.com/linkerd/linkerd2/controller/gen/apis/server/v1beta3"
 	valkeyv1alpha1 "github.com/valkey-io/valkey-operator/api/v1alpha1"
 	netv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -37,10 +39,11 @@ type CacheReconciler struct {
 
 // The operator only creates Secrets. It never reads one back, so it has no
 // get, list, or watch on Secrets, and the manager cache excludes them.
-// Owned objects are written with server-side apply, which needs create and
-// patch; owner references delete them.
+// The other owned objects are written with server-side apply, which needs
+// create and patch. Owner references delete all of them.
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=create
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;patch
+// +kubebuilder:rbac:groups=policy.linkerd.io,resources=servers;meshtlsauthentications;authorizationpolicies,verbs=get;list;watch;create;patch
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches/finalizers,verbs=update
@@ -48,9 +51,9 @@ type CacheReconciler struct {
 // +kubebuilder:rbac:groups=valkey.io,resources=valkeyclusters/status,verbs=get
 
 // Reconcile creates the objects for a Cache and mirrors the ValkeyCluster
-// readiness into the Cache status. The Secret and the NetworkPolicy come
+// readiness into the Cache status. The Secret and the access policies come
 // first, so the Valkey pods find the password and the network rules on their
-// first start. The linkerd policies follow in a later change.
+// first start.
 func (r *CacheReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := logf.FromContext(ctx).WithValues("cache", req.NamespacedName)
 
@@ -70,6 +73,9 @@ func (r *CacheReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 	if err := r.apply(ctx, &cache, cachepkg.BuildNetworkPolicy(&cache)); err != nil {
+		return ctrl.Result{}, err
+	}
+	if err := r.applyMeshPolicies(ctx, &cache); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -120,6 +126,25 @@ func (r *CacheReconciler) ensureAuthSecret(ctx context.Context, owner *cachev1al
 	return nil
 }
 
+// applyMeshPolicies writes the linkerd objects that let clients reach the
+// Valkey pods under the clusters' default inbound policy (deny).
+func (r *CacheReconciler) applyMeshPolicies(ctx context.Context, owner *cachev1alpha1.Cache) error {
+	policies := cachepkg.BuildMeshPolicies(owner)
+	for _, obj := range []client.Object{
+		policies.Authentication,
+		policies.ClientServer,
+		policies.BusServer,
+		policies.ClientPolicy,
+		policies.BusPolicy,
+	} {
+		if err := r.apply(ctx, owner, obj); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // apply writes obj with server-side apply and the Cache as its controller.
 // The API server and the CRDs default many fields; a read-modify-write would
 // fight those defaults on every reconcile, and a merge patch would not remove
@@ -165,9 +190,14 @@ func (r *CacheReconciler) getValkeyCluster(ctx context.Context, desired *valkeyv
 // changes; metadata-only writes (for example managed fields after an apply)
 // must not trigger another reconcile. Secrets are not watched.
 func (r *CacheReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	generationChanged := builder.WithPredicates(predicate.GenerationChangedPredicate{})
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&cachev1alpha1.Cache{}).
-		Owns(&netv1.NetworkPolicy{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Owns(&netv1.NetworkPolicy{}, generationChanged).
+		Owns(&serverv1beta3.Server{}, generationChanged).
+		Owns(&policyv1alpha1.MeshTLSAuthentication{}, generationChanged).
+		Owns(&policyv1alpha1.AuthorizationPolicy{}, generationChanged).
 		Owns(&valkeyv1alpha1.ValkeyCluster{}, builder.WithPredicates(valkeyClusterChanged())).
 		Named("cache").
 		Complete(r)

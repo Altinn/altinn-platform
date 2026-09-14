@@ -24,6 +24,8 @@ import (
 	cachev1alpha1 "github.com/Altinn/altinn-platform/services/dis-cache-operator/api/v1alpha1"
 	cachepkg "github.com/Altinn/altinn-platform/services/dis-cache-operator/internal/cache"
 	"github.com/Altinn/altinn-platform/services/dis-cache-operator/internal/controller"
+	policyv1alpha1 "github.com/linkerd/linkerd2/controller/gen/apis/policy/v1alpha1"
+	serverv1beta3 "github.com/linkerd/linkerd2/controller/gen/apis/server/v1beta3"
 	valkeyv1alpha1 "github.com/valkey-io/valkey-operator/api/v1alpha1"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -53,6 +55,8 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(cachev1alpha1.AddToScheme(scheme))
 	utilruntime.Must(valkeyv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(serverv1beta3.AddToScheme(scheme))
+	utilruntime.Must(policyv1alpha1.AddToScheme(scheme))
 
 	// +kubebuilder:scaffold:scheme
 }
