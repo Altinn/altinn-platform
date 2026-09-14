@@ -18,7 +18,8 @@
     },
     "services/dis-cache-operator": {
       "release-type": "simple",
-      "component": "dis-cache"
+      "component": "dis-cache",
+      "initial-version": "0.1.0"
     },
     "services/lakmus": {
       "release-type": "simple",
