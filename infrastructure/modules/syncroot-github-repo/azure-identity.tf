@@ -15,6 +15,14 @@ data "github_repository" "syncroot_source" {
 locals {
   credential_name_prefix = "${var.github_org_name}-${replace(var.github_repo_name, ".", "_")}"
 
+  # Azure credential names must match ^[a-zA-Z0-9][a-zA-Z0-9-_]{2,119}$, but branch and
+  # environment names are not that restricted - a branch like fix/dis is legal on GitHub.
+  # azurerm does not validate the name client side, so an unflattened slash plans fine and
+  # only fails against ARM at apply time. Flatten for the resource name; the subject below
+  # keeps the real ref.
+  branch_slugs = { for b in var.github_branches : b => replace(b, "/[^a-zA-Z0-9_-]/", "_") }
+  env_slugs    = { for e in var.github_environments : e => replace(e, "/[^a-zA-Z0-9_-]/", "_") }
+
   # Repos created, renamed or transferred after 2026-07-15 get OIDC subject claims that
   # embed the immutable org and repo ids instead of the mutable names, and repos can opt
   # in ahead of that. Entra compares subjects verbatim, so federate on both forms and let
@@ -27,7 +35,7 @@ locals {
 
 resource "azurerm_federated_identity_credential" "syncroot_pusher_envs" {
   for_each            = var.github_environments
-  name                = "${local.credential_name_prefix}-env-${each.value}"
+  name                = "${local.credential_name_prefix}-env-${local.env_slugs[each.value]}"
   resource_group_name = var.resource_group_name
   parent_id           = azurerm_user_assigned_identity.syncroot_pusher.id
   issuer              = "https://token.actions.githubusercontent.com"
@@ -37,7 +45,7 @@ resource "azurerm_federated_identity_credential" "syncroot_pusher_envs" {
 
 resource "azurerm_federated_identity_credential" "syncroot_pusher_envs_immutable" {
   for_each            = var.github_environments
-  name                = "${local.credential_name_prefix}-env-${each.value}-immutable"
+  name                = "${local.credential_name_prefix}-env-${local.env_slugs[each.value]}-immutable"
   resource_group_name = var.resource_group_name
   parent_id           = azurerm_user_assigned_identity.syncroot_pusher.id
   issuer              = "https://token.actions.githubusercontent.com"
@@ -47,7 +55,7 @@ resource "azurerm_federated_identity_credential" "syncroot_pusher_envs_immutable
 
 resource "azurerm_federated_identity_credential" "syncroot_pusher_branches" {
   for_each            = var.github_branches
-  name                = "${local.credential_name_prefix}-ref-${each.value}"
+  name                = "${local.credential_name_prefix}-ref-${local.branch_slugs[each.value]}"
   resource_group_name = var.resource_group_name
   parent_id           = azurerm_user_assigned_identity.syncroot_pusher.id
   issuer              = "https://token.actions.githubusercontent.com"
@@ -57,7 +65,7 @@ resource "azurerm_federated_identity_credential" "syncroot_pusher_branches" {
 
 resource "azurerm_federated_identity_credential" "syncroot_pusher_branches_immutable" {
   for_each            = var.github_branches
-  name                = "${local.credential_name_prefix}-ref-${each.value}-immutable"
+  name                = "${local.credential_name_prefix}-ref-${local.branch_slugs[each.value]}-immutable"
   resource_group_name = var.resource_group_name
   parent_id           = azurerm_user_assigned_identity.syncroot_pusher.id
   issuer              = "https://token.actions.githubusercontent.com"
