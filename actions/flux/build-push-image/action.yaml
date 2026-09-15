@@ -36,6 +36,14 @@ inputs:
 runs:
   using: composite
   steps:
+    # DEPRECATED: this action has moved to dis-way/actions.
+    # Remove this step together with the rest of the action once all
+    # consumers have migrated to the new location.
+    - name: Deprecation notice
+      shell: bash
+      run: |
+        echo "::warning title=Deprecated action::Altinn/altinn-platform/actions/flux/build-push-image has moved to dis-way/actions/altinn/flux/build-push-image. Update your workflow to the new location - this copy will be removed."
+
     - name: Prepare Job for Pushing Flux OCI Artifacts to Azure Container Registry
       uses: Altinn/altinn-platform/actions/flux/setup-flux-acr@b0c9762442f2f97346d8b115c30903df903fc010 # main
       id: setup_flux_acr

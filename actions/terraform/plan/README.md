@@ -1,5 +1,12 @@
 # Description
 
+> [!WARNING]
+> **Deprecated — this action has moved to [`dis-way/actions`](https://github.com/dis-way/actions).**
+>
+> It now lives at `dis-way/actions/altinn/terraform/plan`. Update your workflow to the new
+> location; this copy will be removed once all consumers have migrated.
+> See [the migration notes](../../README.md) for status and the full action list.
+
 This GitHub Action executes `terraform plan` against a specified environment and publishes the plan as a GitHub artifact. In addition, this action runs `terraform fmt` and `terraform validate`, and includes the results of all three (`fmt`, `validate`, and `plan`) in the GitHub Action Summary. If this action is triggered by a pull request, it will also post a comment with the summary.
 
 
