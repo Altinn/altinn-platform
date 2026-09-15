@@ -105,6 +105,16 @@ The edge cluster runs nothing but the gateway, its rate limit service, cert-mana
 
 The public IPs are pre-created and static, as they are for the product clusters, so DNS records can be moved between the APIM hostname and the edge cluster without waiting for an IP to be allocated.
 
+## Region and addressing
+
+Everything in this platform is deployed to `norwayeast` — it is the default in the AKS, APIM, DNS child-zone, observability and Grafana modules alike — and the edge clusters follow that default. The proposal is single-region per environment, which matches where APIM sits today.
+
+Two consequences are worth stating rather than leaving implicit, because they cut in opposite directions.
+
+**The public IP stays Norwegian, and that may be a requirement.** Both the IPv4 and the IPv6 addresses are allocated from Azure's Norway East ranges, so a caller resolving a `platform.*.altinn.*` hostname reaches an address that geolocates to Norway and terminates TLS in Norway. That is true of APIM today and stays true under this proposal. It is not true of any anycast edge: Front Door and Cloudflare both terminate TLS at whichever of their points of presence is nearest to the caller, which for a Norwegian client is typically Oslo or Stockholm but is not guaranteed to be either, and the address itself belongs to the provider's global anycast range rather than to Norway. **Whether a Norwegian termination point is an actual obligation — from sovereignty policy, from a sector requirement, or from a commitment already made to consumers — or merely the current state of affairs, should be established before the alternatives below are weighed.** If it is an obligation, it eliminates every managed global edge on its own, independently of the SSE and rebuild arguments, and this RFC is the only option on the table. If it is not, those alternatives stay live. The question is cheap to answer and expensive to get wrong in either direction, so it should be answered from the actual policy rather than from what the current deployment happens to do.
+
+**Single-region means single-region failure.** A regional outage in Norway East takes the edge with it, as it takes APIM with it today, so this is not a regression — but it is also not an improvement, and APIM v1 Premium's multi-region deployment is one of the capabilities the v2 tiers drop. Running a second edge cluster in a paired region is straightforward in this design, since the cluster is small and the configuration is Git-declared: the hard part is not the cluster but the traffic management in front of it, which needs a global load balancer and therefore runs into the Norwegian-IP question above. This is left out of scope and noted as a future possibility rather than designed here.
+
 ## Edge to backend connectivity
 
 The edge VNET is peered to the core cluster VNETs, reusing the bidirectional VNet peering pattern already used for the PostgreSQL subnets. Envoy Gateway routes to an internal Traefik listener on each core cluster over the peering, resolved through a private DNS zone.
@@ -225,9 +235,13 @@ Per [RFC 0012](0012-platform-system-flux-syncroot.md), it should be added to the
 
 ## Prerequisites
 
-**No network policy engine is installed on these clusters.** There is no `network_policy`, `network_data_plane`, Cilium or Calico configuration anywhere in the Terraform, so `NetworkPolicy` objects are not enforced today; isolation is done with Linkerd authorization policy instead. The same latent gap already exists in `dis-cache-operator`, which builds NetworkPolicies that nothing currently enforces. If the edge cluster design depends on `NetworkPolicy`, choosing and installing an engine is a prerequisite decision that this RFC depends on rather than makes.
+Two properties the edge cluster depends on are already in place on the existing clusters, so this section records what to carry over rather than what to decide.
 
-The AKS clusters are also not private clusters — the API server is public, gated by Entra ID and Azure RBAC. That is the existing posture and this RFC does not change it, but for an internet-facing edge cluster it is worth revisiting separately.
+**Cilium is the network policy engine.** `NetworkPolicy` is enforced today, so the edge cluster can treat it as a real control rather than an aspiration: default-deny in the gateway namespace, egress narrowed to the peered backend ranges and to the endpoints cert-manager and the observability agents need. Linkerd authorization policy stays the in-cluster mechanism where a mesh identity exists; network policy is what covers the edge cluster, where much of the traffic is not meshed. This also means the NetworkPolicies `dis-cache-operator` already emits are enforced, which is worth stating because an earlier draft of this RFC claimed otherwise.
+
+**The clusters are private.** The API server is not internet-reachable; access is over the private endpoint, gated by Entra ID and Azure RBAC. The edge cluster gets the same treatment, which matters more here than anywhere else in the platform: it is the one cluster with a deliberately public data plane, and the control plane should not share that exposure. The practical consequence is for tooling — CI, Flux and any break-glass access to the edge cluster must reach the API server over the private path, the same way they do for the existing clusters.
+
+Neither property is visible in `infrastructure/modules/aks`, which is the product-cluster module. The edge cluster's Terraform should set both explicitly rather than inherit them by assumption.
 
 ## Migration
 
@@ -264,6 +278,8 @@ First, **Front Door does not support Server-Sent Events.** WebSockets it handles
 
 Second, it terminates IPv6 at the Microsoft edge and speaks IPv4 to the origin. The requirement we are working to is IPv6 support through the stack, not an IPv6 address on a DNS record, and our clusters already support it natively.
 
+It also moves TLS termination and the public address off Norwegian infrastructure; see Region and addressing for why that may be disqualifying on its own.
+
 Third, and most decisive: **Front Door does not avoid the APIM v1 to v2 rebuild, so it is not actually an alternative to this RFC.** Work through the variants. Front Door in front of APIM still leaves us on v1 and still leaves the migration to be paid for later; doing it properly with a Private Link origin needs a tier that supports inbound private endpoints, which means v2 — the rebuild, now. Front Door straight to the backends removes the API gateway layer entirely along with the authentication, rate limiting and routing it provides, which is not something we are proposing. And Front Door in front of the edge described in this RFC is additive, not alternative: the edge still has to be built first. Whichever variant is chosen, the gateway layer is rebuilt either way, so Front Door is an orthogonal decision about whether we want a managed global edge in front of whatever we land on. It can be added later, on its own merits, in either world.
 
 ### 2. Migrate to APIM Premium v2
@@ -294,6 +310,14 @@ Fully capable and a well-supported Gateway API implementation. Rejected as dispr
 
 All viable. Differentiated against on Gateway API conformance and release maturity, the extent to which the features we need (JWT, global rate limiting, external authorization, WASM) are gated behind a commercial tier, and how much of each project's operational model we would be adopting. Envoy Gateway gives us all the required features in the open-source distribution, which is the same test that eliminated Traefik OSS.
 
+### 7. Cloudflare in front of the edge
+
+Cloudflare is already in use in front of other Altinn endpoints, so the contract, the account structure and the operational familiarity exist. Neither this nor Front Door introduces a new vendor — Front Door is Azure and we are already there — so the differentiator is capability and existing footprint, not procurement. It is dual-stack by default and would satisfy the IPv6 requirement at the DNS record immediately. It brings a managed WAF and DDoS mitigation at a scale we cannot match ourselves, and — unlike Front Door — it proxies Server-Sent Events and WebSockets, so the objection that eliminates alternative 1 does not apply here.
+
+It is nonetheless not an alternative to this RFC, for the same structural reason Front Door is not. Cloudflare is a reverse proxy and security layer, not an API gateway: it does not do Maskinporten JWT validation with per-route scope authorization, it does not replace the self-service onboarding model teams have today, and putting it in front of APIM leaves us on v1 with the rebuild still to pay for. Whatever sits behind it still has to be built. Cloudflare in front of the edge described here is additive and can be adopted later on its own merits — and it is the more natural candidate of the two for that role, on the SSE support alone.
+
+Two things have to be settled before it is adopted in that role, and they are the reason it is not simply folded into the plan. First, the Norwegian termination point discussed under Region and addressing: proxying through Cloudflare moves TLS termination to a Cloudflare PoP and puts a non-Norwegian anycast address on the record. Second, origin protection — a proxied edge is only as good as the guarantee that traffic cannot bypass it, which means Cloudflare Tunnel or authenticated origin pulls plus an IP allowlist on the gateway, and that is a design decision of its own. Both are tractable; neither is free, and neither belongs in the critical path of replacing APIM.
+
 ## Impact of not doing this
 
 We stay non-compliant with the IPv6 obligation. We keep an API edge where network-layer protection cannot be tuned, monitored or improved, because the tier that allows it is not reachable from where APIM sits. We stay locked into a proprietary, single-cloud configuration model at the most exposed layer of the platform. And we pay for the APIM v1 to v2 rebuild anyway — later, under more pressure, for a product that still does not meet the requirements that started this work.
@@ -314,22 +338,23 @@ Externally, Envoy Gateway is the Envoy project's own Gateway API implementation,
 
 - **Support model.** Upstream open-source Envoy Gateway, self-supported, versus a commercial distribution such as Tetrate Enterprise Gateway for Envoy, which offers 24/7 support, CVE-patched and FIPS-verified builds and a bundled Coraza WAF while remaining pure upstream. This needs procurement input and should be answered before the RFC is accepted, because it changes the drawback profile materially.
 - **Traefik Hub pricing**, without which alternative 3 cannot be closed.
+- **Is a Norwegian TLS termination point and a Norwegian public IP an actual requirement, or just the current state?** See Region and addressing. This is the cheapest question on the list to answer and the one that most changes the shape of the decision: if it is a requirement, every managed global edge is eliminated outright and alternatives 1 and 7 close themselves.
 - **Are the Azure Container Apps backends VNet-integrated today?** If not, what does moving them to a VNet-integrated environment with internal ingress cost, and does it block phase 3?
 - **What authenticates the edge-to-backend hop**, given that Linkerd mTLS does not span clusters?
-- **Is a network policy engine a prerequisite, and which one?** This is a platform-wide question that this RFC surfaces but should not decide alone.
 - **Does anything depend on APIM's OpenAPI-based request validation?** If a consumer relies on it, the Envoy extension in Future possibilities has to be assessed for production readiness before that API can move.
 - **Cost.** A concrete comparison of APIM Premium units against six edge clusters plus an Azure DDoS Protection Plan — which is priced per tenant and therefore amortises across all environments and any other VNET we protect — plus the operational load. This should be in the RFC before acceptance.
-- Whether the public AKS API server is acceptable for an internet-facing edge cluster, or whether these six clusters should be private.
 
 # Future possibilities
 
-**WAF in the data plane.** Coraza runs as a WASM filter in Envoy with the OWASP Core Rule Set, configurable through Envoy Gateway policy. This is the natural phase 5 and closes the L7 gap without adding a hop. It brings rule tuning, false positives and CPU cost, so it deserves its own evaluation. Azure Front Door Premium WAF in front of the edge remains the alternative if we would rather buy that capability than run it — but note that it would put the SSE limitation described above back into the path, so it could not front the streaming routes. An in-data-plane WAF has no such constraint, which is a point in its favour beyond the latency argument.
+**WAF in the data plane.** Coraza runs as a WASM filter in Envoy with the OWASP Core Rule Set, configurable through Envoy Gateway policy. This is the natural phase 5 and closes the L7 gap without adding a hop. It brings rule tuning, false positives and CPU cost, so it deserves its own evaluation. A managed WAF in front of the edge remains the alternative if we would rather buy that capability than run it — Cloudflare (alternative 7) more plausibly than Azure Front Door, since Front Door would put the SSE limitation described above back into the path and so could not front the streaming routes. An in-data-plane WAF has no such constraint and no effect on where TLS terminates, which are two points in its favour beyond the latency argument.
 
 **Consolidating on one proxy.** If the edge proves out, Envoy Gateway could replace Traefik on the product clusters and remove the two-data-plane drawback. That is a much larger migration and should be judged on its own evidence, after the edge has run in production for a while.
 
 **`ext_proc` for Altinn-specific token handling**, if internal token validation or claim transformation turns out to need more than `SecurityPolicy` provides.
 
 **HTTP/3 at the edge**, which Envoy Gateway supports and APIM does not.
+
+**A second edge region.** The edge cluster is small enough and declarative enough that standing up a second one in a paired region is a modest piece of work. What is not modest is the traffic management in front of two regions, which needs a global load balancer and therefore reopens the Norwegian-IP question. Worth revisiting once the single-region edge is in production and the regional-failover requirement has been stated properly.
 
 **OpenAPI-driven request validation**, restoring the capability lost with `ApiVersion.spec.content`. This is not native to Envoy, but the same extension mechanism that makes Coraza possible applies here: the [OpenAPI validator](https://builtonenvoy.io/extensions/openapi-validator/) is an Apache-2.0 dynamic module that validates method, path, path and query parameters, headers and request body against an OpenAPI 3.0 or 3.1 document, with a dry-run mode for safe rollout. It targets Envoy 1.38–1.39, which matches the Envoy version shipped with Envoy Gateway v1.9. It is pre-release (0.12.0-dev) and maintained by Tetrate rather than by the Envoy project, so it should be evaluated on maturity before anything depends on it — but it demonstrates that the gap is addressable through extensions rather than permanent.
 
