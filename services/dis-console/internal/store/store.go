@@ -1,9 +1,9 @@
 // Package store persists normalized Flux resource snapshots in PostgreSQL and
-// serves the read queries behind the JSON API. Each sweep upserts the current
-// rows, records a history event whenever a resource's ready/reason/revision
-// changes, prunes rows for objects that have disappeared from the cluster,
-// and — when event retention is enabled — ages out history events past the
-// retention window.
+// serves the read queries behind the JSON API. Each sweep upserts the changed
+// rows and refreshes last_seen for the unchanged ones, records a history event
+// whenever a resource's ready/reason/revision changes, prunes rows for objects
+// that have disappeared from the cluster, and — when event retention is
+// enabled — ages out history events past the retention window.
 package store
 
 import (
@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/Altinn/altinn-platform/services/dis-console/internal/flux"
@@ -379,7 +380,7 @@ func (s *Store) Sync(ctx context.Context, changed, unchanged []flux.Resource) (S
 	}
 	stats.Touched = len(unchanged) - len(missing)
 
-	resources := append(append(make([]flux.Resource, 0, len(changed)+len(missing)), changed...), missing...)
+	resources := slices.Concat(changed, missing)
 	stats.Upserted = len(resources)
 	if stats.Changed, err = upsert(ctx, tx, resources); err != nil {
 		return stats, err
@@ -441,16 +442,11 @@ func touch(ctx context.Context, tx pgx.Tx, resources []flux.Resource) ([]flux.Re
 		return nil, fmt.Errorf("touch: %w", err)
 	}
 	found := make(map[resourceKey]bool, len(resources))
-	for rows.Next() {
-		var k resourceKey
-		if err := rows.Scan(&k.kind, &k.namespace, &k.name); err != nil {
-			rows.Close()
-			return nil, fmt.Errorf("touch scan: %w", err)
-		}
+	var k resourceKey
+	if _, err := pgx.ForEachRow(rows, []any{&k.kind, &k.namespace, &k.name}, func() error {
 		found[k] = true
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
+		return nil
+	}); err != nil {
 		return nil, fmt.Errorf("touch rows: %w", err)
 	}
 	var missing []flux.Resource

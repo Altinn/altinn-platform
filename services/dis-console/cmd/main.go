@@ -86,9 +86,9 @@ func runAgent(args []string) {
 	dbURI := fs.String("db-uri", os.Getenv("DB_URI"),
 		"PostgreSQL connection URI without password (default from DB_URI env)")
 	cacheAddress := fs.String("cache-address", os.Getenv("CACHE_ADDRESS"),
-		"host:port of the Valkey sweep cache (env CACHE_ADDRESS); empty runs without a cache")
+		"host:port of the Valkey sweep cache (default from CACHE_ADDRESS env); empty runs without a cache")
 	cacheUsername := fs.String("cache-username", os.Getenv("CACHE_USERNAME"),
-		"Valkey user of the sweep cache (env CACHE_USERNAME); the password comes from env CACHE_PASSWORD only")
+		"Valkey user of the sweep cache (default from CACHE_USERNAME env); the password comes from CACHE_PASSWORD only")
 	dbDisableEntra := fs.Bool("db-disable-entra", envBool("DB_DISABLE_ENTRA"),
 		"Skip Entra token auth; use PGPASSWORD or trust auth instead. For Kind/CI/local "+
 			"without Azure workload identity (default from DB_DISABLE_ENTRA env)")
@@ -147,18 +147,14 @@ func runAgent(args []string) {
 		log.Fatalf("init meta: %v", err)
 	}
 
-	cache, err := sweepcache.New(ctx, sweepcache.Config{
-		Address: *cacheAddress, Username: *cacheUsername, Password: os.Getenv("CACHE_PASSWORD"),
-	}, "dis-console:"+version)
-	switch {
-	case err != nil:
-		log.Printf("sweep cache: unavailable, running without it: %v", err)
-	case cache == nil:
-		log.Printf("sweep cache: disabled (no address)")
-	default:
-		log.Printf("sweep cache: connected to %s", *cacheAddress)
-		defer cache.Close()
+	cache := &sweepCache{
+		cfg:    sweepcache.Config{Address: *cacheAddress, Username: *cacheUsername, Password: os.Getenv("CACHE_PASSWORD")},
+		prefix: "dis-console:" + version,
 	}
+	if *cacheAddress == "" {
+		log.Printf("sweep cache: disabled (no address)")
+	}
+	defer cache.close()
 
 	h := health.New(st)
 	httpServer := &http.Server{
@@ -270,10 +266,41 @@ func runServer(args []string) {
 	gracefulShutdown(httpServer)
 }
 
+// sweepCache connects on first use and retries on every sweep until it
+// succeeds. The Cache next to the agent may not be ready when the agent
+// starts, and a cache that is down at start must not stay off for the life
+// of the pod.
+type sweepCache struct {
+	cfg    sweepcache.Config
+	prefix string
+	client *sweepcache.Client
+}
+
+// get returns the connected client, or nil while the cache is disabled or
+// unreachable. A connection attempt is bounded by cacheTimeout.
+func (c *sweepCache) get(ctx context.Context) *sweepcache.Client {
+	if c.client != nil || c.cfg.Address == "" {
+		return c.client
+	}
+	connectCtx, cancel := context.WithTimeout(ctx, cacheTimeout)
+	defer cancel()
+	client, err := sweepcache.New(connectCtx, c.cfg, c.prefix)
+	if err != nil {
+		log.Printf("sweep cache: unavailable, running without it until the next sweep: %v", err)
+		return nil
+	}
+	log.Printf("sweep cache: connected to %s", c.cfg.Address)
+	c.client = client
+
+	return client
+}
+
+func (c *sweepCache) close() { c.client.Close() }
+
 // poll sweeps the cluster and writes the result. The sweep cache decides
 // which objects need a full upsert; when it is off or fails, every object is
 // upserted, as without a cache.
-func poll(ctx context.Context, client *flux.Client, st *store.Store, h *health.Server, cache *sweepcache.Client) {
+func poll(ctx context.Context, client *flux.Client, st *store.Store, h *health.Server, cache *sweepCache) {
 	sweepCtx, cancel := context.WithTimeout(ctx, sweepTimeout)
 	defer cancel()
 
@@ -288,14 +315,15 @@ func poll(ctx context.Context, client *flux.Client, st *store.Store, h *health.S
 
 	// The cache gets its own short deadline, so a dead cache costs a few
 	// seconds and never the database sync.
+	sweepCache := cache.get(ctx)
 	readCtx, cancelRead := context.WithTimeout(ctx, cacheTimeout)
-	known, err := cache.Hashes(readCtx, resources)
+	known, err := sweepCache.Hashes(readCtx, resources)
 	cancelRead()
 	if err != nil {
 		log.Printf("sweep cache: read failed, upserting everything: %v", err)
 		known = nil
 	}
-	changed, unchanged := cache.Split(resources, known)
+	changed, unchanged := sweepCache.Split(resources, known)
 
 	storeCtx, cancel2 := context.WithTimeout(ctx, storeTimeout)
 	defer cancel2()
@@ -306,12 +334,12 @@ func poll(ctx context.Context, client *flux.Client, st *store.Store, h *health.S
 	}
 	writeCtx, cancelWrite := context.WithTimeout(ctx, cacheTimeout)
 	defer cancelWrite()
-	if err := cache.Remember(writeCtx, changed); err != nil {
+	if err := sweepCache.Remember(writeCtx, changed); err != nil {
 		log.Printf("sweep cache: write failed: %v", err)
 	}
 
 	h.MarkReady()
-	log.Printf("swept %d resources (%d upserted, %d unchanged via cache, %d changed, %d pruned, %d events expired)",
+	log.Printf("swept %d resources (%d upserted, %d touched, %d changed, %d pruned, %d events expired)",
 		len(resources), stats.Upserted, stats.Touched, stats.Changed, stats.Pruned, stats.EventsExpired)
 }
 

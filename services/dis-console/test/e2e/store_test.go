@@ -824,6 +824,20 @@ func TestSyncTouchesUnchangedObjects(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM flux_resource WHERE name = $1", "app-b").Scan(&count); err != nil || count != 0 {
 		t.Fatalf("app-b must be pruned, count=%d err=%v", count, err)
 	}
+
+	// Sweep 4, the production shape: a changed object and an unchanged one in
+	// the same transaction; c is gone.
+	updatedA, _ = row("app-a")
+	stats, err = s.Sync(ctx, []flux.Resource{res("app-a", flux.ReadyFalse, "Boom", "sha-a2")}, []flux.Resource{})
+	if err != nil {
+		t.Fatalf("sync 4: %v", err)
+	}
+	if stats.Upserted != 1 || stats.Changed != 1 || stats.Touched != 0 || stats.Pruned != 1 {
+		t.Fatalf("sync 4 stats: want upserted=1 changed=1 touched=0 pruned=1, got %+v", stats)
+	}
+	if u, _ := row("app-a"); !u.After(updatedA) {
+		t.Fatalf("a content change must advance updated_at: %v -> %v", updatedA, u)
+	}
 }
 
 // TestSyncAppliedByBackfillAdvancesUpdatedAt reproduces the v1.4.0→v1.5.0
