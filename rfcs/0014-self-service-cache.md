@@ -108,7 +108,7 @@ Valkey does not use Entra ID. Workload identity does not help here either: it gi
    - Linkerd policies. The DIS clusters run linkerd with default inbound policy `deny`. A meshed pod rejects all traffic until a `Server` and an `AuthorizationPolicy` allow it. The operator creates two `Server`s on the Valkey pods (6379 and 16379, both `opaque` so the proxy does not try to detect a protocol), one `MeshTLSAuthentication` (every service account in the namespace, plus the valkey-operator identity `valkey-operator.valkey-operator-system`), and one `AuthorizationPolicy` per `Server`. This layer works on identity, not on IP. The Valkey health probes are `exec` probes, so they never cross the proxy and need no rule. Never add a CIDR-based `NetworkAuthentication` to the cache Servers: it would let plaintext clients back in.
 2. **Encryption and identity: linkerd mTLS.** The Valkey pods and the app pods run in the mesh. Linkerd encrypts the traffic between them and checks both sides' identities. We do not create TLS certificates for Valkey. Two facts drive this:
    - The valkey-operator API has no pod-annotation field, so injection comes from the namespace annotation `linkerd.io/inject: enabled`. The whole team namespace is meshed. Team namespaces get this annotation from their syncroots.
-   - The valkey-operator pod runs in the mesh too. It connects to the Valkey pods to load the ACL. The gitops-manifests package sets its pod annotations: inject the proxy, keep the metrics port 8443 outside the proxy (the Azure Monitor scraper is not meshed and the clusters deny inbound traffic by default; the port checks tokens itself), and keep the API server port 443 outside the proxy.
+   - The valkey-operator pod runs in the mesh too. It connects to the Valkey pods to load the ACL. The gitops-manifests package injects the proxy and adds linkerd policies for the pod, in the platform's shape: a `Server` and an `AuthorizationPolicy` for the metrics port, allowed for the pod network where the Azure Monitor scraper runs, and for the health port and the proxy admin port, allowed for kubelet through the VNET ranges. Only the API server port 443 stays outside the proxy, because the API server is outside the cluster. The platform rule: skip a port only when the other side is outside the cluster; for traffic inside the cluster, write a scoped policy.
    - Linkerd's post-upgrade job restarts every StatefulSet. It must skip the Valkey StatefulSets, or every linkerd upgrade empties every cache without persistence (another gitops-manifests change).
 3. **Password.** The operator generates a random password (`crypto/rand`) and stores it in a Secret in the team namespace, with the keys `username` and `password`. It configures a Valkey ACL user `app` with this password through the upstream `users[].passwordSecret` field. The `app` user gets `+@all -@admin -@dangerous` on all keys and channels: no `FLUSHALL`, `CONFIG`, `SHUTDOWN`, or `ACL` commands. The app reads the Secret.
 
@@ -148,9 +148,9 @@ We accept this for v1: every password is per cache, so the damage stays inside t
 ## Pod and data hardening
 
 - The valkey-operator starts `valkey-server` directly and skips the image entrypoint, so the pods would run as root. The operator sets a pod security context (non-root, uid/gid/fsGroup 999, seccomp `RuntimeDefault`) and per-container settings (no privilege escalation, read-only root filesystem, all capabilities dropped) for the `server` and `metrics-exporter` containers.
-- The upstream default images pull from Docker Hub. The operator sets both images to the ACR pull-through path, from the environment variables `DISCACHE_VALKEY_IMAGE` and `DISCACHE_EXPORTER_IMAGE`. An empty value keeps the upstream image.
+- The upstream default images pull from Docker Hub. The operator sets both images to the ACR pull-through path, from the environment variables `DISCACHE_VALKEY_IMAGE` and `DISCACHE_EXPORTER_IMAGE`. An empty value keeps the upstream image. The values live in the gitops-manifests package with Renovate comments, like every other third-party image on the platform; a new version goes through the ring promotion. Terraform passes no image settings.
 - With `persistence: false`, Valkey would still write snapshots to the node disk, because upstream sets no `save`. The operator sets `save ""` and `appendonly no`.
-- The metrics exporter sidecar cannot be turned off from Go (same `omitempty` problem), so it stays on and gets the same hardening.
+- The metrics exporter sidecar is the upstream default (`oliver006/redis_exporter`). It cannot be turned off from the typed struct (same `omitempty` problem); the unstructured apply could set `enabled: false`, but we keep it on for now, pulled through the ACR, and give it the same hardening.
 - Persistent volumes use platform-managed keys, like every disk on the clusters.
 
 ## Deployment of dis-cache-operator
@@ -159,7 +159,7 @@ The operator follows the release path of the other DIS operators. release-please
 
 Two rules for that package:
 
-- Its `Kustomization` passes both image variables through as required variables, without defaults. The Terraform configuration must set both, an empty string is allowed. Flux runs the substitution only when at least one variable is set, so a forgotten value fails visibly instead of pulling from Docker Hub.
+- Its `Kustomization` sets the two cache images on the operator Deployment with a patch, each with a Renovate comment. Terraform passes no image settings and no variables; it only turns the configuration on.
 - Its `multitenancy` overlay depends on the valkey-operator `Kustomization`. The operator watches `ValkeyCluster` and the linkerd policy kinds, so their CRDs must exist before the manager starts, or its cache never syncs and the pod exits about two minutes after start.
 
 ## One cache per application
@@ -239,6 +239,7 @@ Teams keep building their own cache setups, and the platform keeps missing the s
 
 - Mesh and Valkey: test on at22 that the cluster bus (16379) works through the proxy with `deny`, and that ACL reloads do not drop the `app` user's connections.
 - Metrics: how the exporter sidecar is scraped under NetworkPolicy and `deny`, or whether v1 ships without cache metrics.
+- Kubelet probes under `deny`: the linkerd policy controller authorizes HTTP probes on a port without a `Server`, from the probe networks, which default to all networks. The platform team's experience is that probes fail without a policy. The exporter sidecar has HTTP probes on 9121 and no `Server`. Verify on at22. If the probes fail, the operator must add a `Server` for 9121 with a kubelet `NetworkAuthentication`, and it then needs the cluster address ranges as configuration.
 - Per-team limits: a `ResourceQuota` per namespace and a cap on the number of `Cache` objects, reported as a status condition.
 - Password rotation: the trigger for v1 (an annotation or a spec field), and the wait before the old password is removed.
 - Upstream requests to file: pod annotations on `ValkeyCluster`, a `serviceAccountName` for the Valkey pods (today they use the namespace `default` account, so the mesh identity is shared), `--primaryauth` off the command line, and `*bool` for `enabled`.
