@@ -53,7 +53,7 @@ kubeStateMetrics: # Not really used atm. If re-enabled, we need to drop high car
 
 kubelet:
   serviceMonitor:
-    metricRelabelings:
+    cAdvisorMetricRelabelings:
       - action: drop
         sourceLabels:
           - __name__
