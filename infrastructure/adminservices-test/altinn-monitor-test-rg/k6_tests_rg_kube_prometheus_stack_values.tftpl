@@ -37,6 +37,7 @@ prometheus:
     resources:
       requests:
         memory: 32Gi
+        cpu: 8
     nodeSelector:
       prometheus: "true"
     priorityClassName: "system-cluster-critical"
@@ -49,3 +50,11 @@ prometheus:
               storage: 256Gi
 kubeStateMetrics: # Not really used atm. If re-enabled, we need to drop high cardinality metrics.
   enabled: false
+
+kubelet:
+  serviceMonitor:
+    cAdvisorMetricRelabelings:
+      - action: drop
+        sourceLabels:
+          - __name__
+        regex: 'container_network_.*'
