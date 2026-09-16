@@ -359,7 +359,7 @@ func TestCentralDISFieldsEndToEnd(t *testing.T) {
 			Ready: flux.ReadyFalse, Parent: &flux.ParentRef{Kind: "DatabaseServer", Name: "pg-main"},
 			Raw: json.RawMessage(`{"kind":"Database"}`), ContentHash: "db-1",
 		},
-	}); err != nil {
+	}, nil); err != nil {
 		t.Fatalf("tenant sync: %v", err)
 	}
 
@@ -557,7 +557,7 @@ func TestCentralImagesEndToEnd(t *testing.T) {
 			{Container: "app", Image: "registry.example.com/team-a/app:v42"},
 		},
 		Raw: json.RawMessage(`{"kind":"Deployment"}`), ContentHash: "deploy-1",
-	}}); err != nil {
+	}}, nil); err != nil {
 		t.Fatalf("tenant sync: %v", err)
 	}
 
@@ -612,7 +612,7 @@ func TestCentralEventCopyAndHistory(t *testing.T) {
 	if _, err := ts.Sync(ctx, []flux.Resource{
 		res("apps", flux.ReadyTrue, "ReconciliationSucceeded", "sha-1"),
 		res("infra", flux.ReadyFalse, "BuildFailed", "sha-1"),
-	}); err != nil {
+	}, nil); err != nil {
 		t.Fatalf("tenant sync 1: %v", err)
 	}
 
@@ -630,7 +630,7 @@ func TestCentralEventCopyAndHistory(t *testing.T) {
 	// Sweep 2: infra recovers (new event); apps disappears (pruned in the tenant).
 	if _, err := ts.Sync(ctx, []flux.Resource{
 		res("infra", flux.ReadyTrue, "ReconciliationSucceeded", "sha-2"),
-	}); err != nil {
+	}, nil); err != nil {
 		t.Fatalf("tenant sync 2: %v", err)
 	}
 	pullAndApply(t, cs, ts, "ttd_at23")
@@ -683,7 +683,7 @@ func TestCentralEventRetention(t *testing.T) {
 	}
 
 	// One tenant event, copied into the central log.
-	if _, err := ts.Sync(ctx, []flux.Resource{res("infra", flux.ReadyFalse, "BuildFailed", "sha-1")}); err != nil {
+	if _, err := ts.Sync(ctx, []flux.Resource{res("infra", flux.ReadyFalse, "BuildFailed", "sha-1")}, nil); err != nil {
 		t.Fatalf("tenant sync 1: %v", err)
 	}
 	pullAndApply(t, cs, ts, "ttd_at23")
@@ -720,7 +720,7 @@ func TestCentralEventRetention(t *testing.T) {
 	}
 
 	// Newer tenant events still flow after a purge.
-	if _, err := ts.Sync(ctx, []flux.Resource{res("infra", flux.ReadyTrue, "ReconciliationSucceeded", "sha-2")}); err != nil {
+	if _, err := ts.Sync(ctx, []flux.Resource{res("infra", flux.ReadyTrue, "ReconciliationSucceeded", "sha-2")}, nil); err != nil {
 		t.Fatalf("tenant sync 2: %v", err)
 	}
 	pullAndApply(t, cs, ts, "ttd_at23")

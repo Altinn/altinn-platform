@@ -92,7 +92,7 @@ func TestSyncUpsertHistoryAndPrune(t *testing.T) {
 	stats, err := s.Sync(ctx, []flux.Resource{
 		res("apps", flux.ReadyTrue, "ReconciliationSucceeded", "sha-1"),
 		res("infra", flux.ReadyFalse, "BuildFailed", "sha-1"),
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("sync 1: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestSyncUpsertHistoryAndPrune(t *testing.T) {
 	stats, err = s.Sync(ctx, []flux.Resource{
 		res("apps", flux.ReadyTrue, "ReconciliationSucceeded", "sha-1"),
 		res("infra", flux.ReadyFalse, "BuildFailed", "sha-1"),
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("sync 2: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestSyncUpsertHistoryAndPrune(t *testing.T) {
 	// Third sweep: "infra" recovers (status change) and "apps" disappears.
 	stats, err = s.Sync(ctx, []flux.Resource{
 		res("infra", flux.ReadyTrue, "ReconciliationSucceeded", "sha-2"),
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("sync 3: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestSyncRoundTripsDISColumns(t *testing.T) {
 		Raw:         json.RawMessage(`{"kind":"Database"}`),
 		ContentHash: "db-1",
 	}
-	if _, err := s.Sync(ctx, []flux.Resource{vault, database}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{vault, database}, nil); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 
@@ -272,7 +272,7 @@ func TestSyncAppliedByRoundTrip(t *testing.T) {
 		Raw:         json.RawMessage(`{"kind":"Kustomization"}`),
 		ContentHash: "root-1",
 	}
-	if _, err := s.Sync(ctx, []flux.Resource{child, root}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{child, root}, nil); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 
@@ -338,7 +338,7 @@ func TestSyncBaseLayerRoundTrip(t *testing.T) {
 		},
 		Raw: json.RawMessage(`{"kind":"Kustomization"}`), ContentHash: "kust-1",
 	}
-	if _, err := s.Sync(ctx, []flux.Resource{repo, kust}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{repo, kust}, nil); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 
@@ -441,7 +441,7 @@ func TestSyncBaseLayerBackfillAdvancesUpdatedAt(t *testing.T) {
 		Ready: flux.ReadyTrue,
 		Raw:   json.RawMessage(`{"kind":"Kustomization"}`), ContentHash: "same-object",
 	}
-	if _, err := s.Sync(ctx, []flux.Resource{pre}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{pre}, nil); err != nil {
 		t.Fatalf("sync 1: %v", err)
 	}
 	first := updatedAt()
@@ -450,7 +450,7 @@ func TestSyncBaseLayerBackfillAdvancesUpdatedAt(t *testing.T) {
 	post := pre
 	post.SourceRef = &flux.SourceRef{Kind: "OCIRepository", Name: "team-a-ab12", Namespace: "product-team-a"}
 	post.Inventory = []flux.InventoryEntry{{ID: "product-team-a_app_apps_Deployment", Version: "v1"}}
-	if _, err := s.Sync(ctx, []flux.Resource{post}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{post}, nil); err != nil {
 		t.Fatalf("sync 2: %v", err)
 	}
 	second := updatedAt()
@@ -467,7 +467,7 @@ func TestSyncBaseLayerBackfillAdvancesUpdatedAt(t *testing.T) {
 	}
 
 	// Sweep 3: identical again (projections unchanged) => no churn.
-	if _, err := s.Sync(ctx, []flux.Resource{post}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{post}, nil); err != nil {
 		t.Fatalf("sync 3: %v", err)
 	}
 	if got := updatedAt(); !got.Equal(second) {
@@ -500,7 +500,7 @@ func TestSyncImagesRoundTrip(t *testing.T) {
 		Ready: flux.ReadyTrue,
 		Raw:   json.RawMessage(`{"kind":"Kustomization"}`), ContentHash: "kust-1",
 	}
-	if _, err := s.Sync(ctx, []flux.Resource{deploy, kust}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{deploy, kust}, nil); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 
@@ -579,7 +579,7 @@ func TestSyncImagesBackfillAdvancesUpdatedAt(t *testing.T) {
 		Ready: flux.ReadyTrue,
 		Raw:   json.RawMessage(`{"kind":"Deployment"}`), ContentHash: "same-object",
 	}
-	if _, err := s.Sync(ctx, []flux.Resource{pre}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{pre}, nil); err != nil {
 		t.Fatalf("sync 1: %v", err)
 	}
 	first := updatedAt()
@@ -587,7 +587,7 @@ func TestSyncImagesBackfillAdvancesUpdatedAt(t *testing.T) {
 	// Sweep 2: identical object + hash, but the agent now projects images.
 	post := pre
 	post.Images = []flux.ContainerImage{{Container: "app", Image: "registry.example.com/team-a/app:v42"}}
-	if _, err := s.Sync(ctx, []flux.Resource{post}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{post}, nil); err != nil {
 		t.Fatalf("sync 2: %v", err)
 	}
 	second := updatedAt()
@@ -604,7 +604,7 @@ func TestSyncImagesBackfillAdvancesUpdatedAt(t *testing.T) {
 	}
 
 	// Sweep 3: identical again (images unchanged) => no churn.
-	if _, err := s.Sync(ctx, []flux.Resource{post}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{post}, nil); err != nil {
 		t.Fatalf("sync 3: %v", err)
 	}
 	if got := updatedAt(); !got.Equal(second) {
@@ -640,7 +640,7 @@ func TestSyncWorkloadRevisionBackfillAdvancesUpdatedAt(t *testing.T) {
 		Images: []flux.ContainerImage{{Container: "app", Image: "registry.example.com/team-a/app:v42"}},
 		Raw:    json.RawMessage(`{"kind":"Deployment"}`), ContentHash: "same-object",
 	}
-	if _, err := s.Sync(ctx, []flux.Resource{pre}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{pre}, nil); err != nil {
 		t.Fatalf("sync 1: %v", err)
 	}
 	first := updatedAt()
@@ -648,7 +648,7 @@ func TestSyncWorkloadRevisionBackfillAdvancesUpdatedAt(t *testing.T) {
 	// Sweep 2: identical object + hash, but the agent now projects the tag.
 	post := pre
 	post.Revision = "v42"
-	stats, err := s.Sync(ctx, []flux.Resource{post})
+	stats, err := s.Sync(ctx, []flux.Resource{post}, nil)
 	if err != nil {
 		t.Fatalf("sync 2: %v", err)
 	}
@@ -669,7 +669,7 @@ func TestSyncWorkloadRevisionBackfillAdvancesUpdatedAt(t *testing.T) {
 	}
 
 	// Sweep 3: identical again (revision unchanged) => no churn, no event.
-	stats, err = s.Sync(ctx, []flux.Resource{post})
+	stats, err = s.Sync(ctx, []flux.Resource{post}, nil)
 	if err != nil {
 		t.Fatalf("sync 3: %v", err)
 	}
@@ -702,10 +702,10 @@ func TestSyncWorkloadImageBumpRecordsEvent(t *testing.T) {
 		}
 	}
 
-	if _, err := s.Sync(ctx, []flux.Resource{deploy("v41", "deploy-1")}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{deploy("v41", "deploy-1")}, nil); err != nil {
 		t.Fatalf("sync 1: %v", err)
 	}
-	stats, err := s.Sync(ctx, []flux.Resource{deploy("v42", "deploy-2")})
+	stats, err := s.Sync(ctx, []flux.Resource{deploy("v42", "deploy-2")}, nil)
 	if err != nil {
 		t.Fatalf("sync 2: %v", err)
 	}
@@ -752,13 +752,13 @@ func TestSyncContentHashSkipsUnchangedRewrite(t *testing.T) {
 		return ts
 	}
 
-	if _, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyTrue, "OK", "sha-1")}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyTrue, "OK", "sha-1")}, nil); err != nil {
 		t.Fatalf("sync 1: %v", err)
 	}
 	first := updatedAt()
 
 	// Identical content => same content_hash => updated_at must not move.
-	if _, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyTrue, "OK", "sha-1")}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyTrue, "OK", "sha-1")}, nil); err != nil {
 		t.Fatalf("sync 2: %v", err)
 	}
 	if got := updatedAt(); !got.Equal(first) {
@@ -766,11 +766,63 @@ func TestSyncContentHashSkipsUnchangedRewrite(t *testing.T) {
 	}
 
 	// A content change must advance updated_at.
-	if _, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyFalse, "Boom", "sha-2")}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyFalse, "Boom", "sha-2")}, nil); err != nil {
 		t.Fatalf("sync 3: %v", err)
 	}
 	if got := updatedAt(); !got.After(first) {
 		t.Fatalf("updated_at did not advance on a content change: %v -> %v", first, got)
+	}
+}
+
+// TestSyncTouchesUnchangedObjects covers the sweep cache path: objects the
+// cache reports unchanged only get last_seen refreshed, so they survive the
+// prune without a rewrite; an unchanged object the database does not know is
+// upserted anyway; and objects missing from both lists are pruned.
+func TestSyncTouchesUnchangedObjects(t *testing.T) {
+	s, pool := newStore(t)
+	ctx := context.Background()
+
+	row := func(name string) (updatedAt, lastSeen time.Time) {
+		if err := pool.QueryRow(ctx,
+			"SELECT updated_at, last_seen FROM flux_resource WHERE name = $1", name).Scan(&updatedAt, &lastSeen); err != nil {
+			t.Fatalf("query %s: %v", name, err)
+		}
+		return updatedAt, lastSeen
+	}
+	a := res("app-a", flux.ReadyTrue, "OK", "sha-a")
+	b := res("app-b", flux.ReadyTrue, "OK", "sha-b")
+	c := res("app-c", flux.ReadyTrue, "OK", "sha-c")
+
+	if _, err := s.Sync(ctx, []flux.Resource{a, b}, nil); err != nil {
+		t.Fatalf("sync 1: %v", err)
+	}
+	updatedA, seenA := row("app-a")
+
+	// Sweep 2: the cache says both are unchanged.
+	stats, err := s.Sync(ctx, nil, []flux.Resource{a, b})
+	if err != nil {
+		t.Fatalf("sync 2: %v", err)
+	}
+	if stats.Touched != 2 || stats.Upserted != 0 || stats.Pruned != 0 {
+		t.Fatalf("sync 2 stats: want touched=2 upserted=0 pruned=0, got %+v", stats)
+	}
+	if u, seen := row("app-a"); !u.Equal(updatedA) || !seen.After(seenA) {
+		t.Fatalf("touch must keep updated_at (%v -> %v) and advance last_seen (%v -> %v)", updatedA, u, seenA, seen)
+	}
+
+	// Sweep 3: a is unchanged, c is "unchanged" for the cache but unknown to
+	// the database, b is gone.
+	stats, err = s.Sync(ctx, nil, []flux.Resource{a, c})
+	if err != nil {
+		t.Fatalf("sync 3: %v", err)
+	}
+	if stats.Touched != 1 || stats.Upserted != 1 || stats.Pruned != 1 {
+		t.Fatalf("sync 3 stats: want touched=1 upserted=1 pruned=1, got %+v", stats)
+	}
+	row("app-c")
+	var count int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM flux_resource WHERE name = $1", "app-b").Scan(&count); err != nil || count != 0 {
+		t.Fatalf("app-b must be pruned, count=%d err=%v", count, err)
 	}
 }
 
@@ -803,7 +855,7 @@ func TestSyncAppliedByBackfillAdvancesUpdatedAt(t *testing.T) {
 		Raw:         json.RawMessage(`{"kind":"HelmRelease"}`),
 		ContentHash: "same-object",
 	}
-	if _, err := s.Sync(ctx, []flux.Resource{pre}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{pre}, nil); err != nil {
 		t.Fatalf("sync 1: %v", err)
 	}
 	first := updatedAt()
@@ -811,7 +863,7 @@ func TestSyncAppliedByBackfillAdvancesUpdatedAt(t *testing.T) {
 	// Sweep 2: identical object + hash, but the agent now projects appliedBy.
 	post := pre
 	post.AppliedBy = &flux.AppliedBy{Name: "grafana-operator-grafana-operator", Namespace: "flux-system"}
-	if _, err := s.Sync(ctx, []flux.Resource{post}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{post}, nil); err != nil {
 		t.Fatalf("sync 2: %v", err)
 	}
 	second := updatedAt()
@@ -829,7 +881,7 @@ func TestSyncAppliedByBackfillAdvancesUpdatedAt(t *testing.T) {
 	}
 
 	// Sweep 3: identical again (appliedBy unchanged) => no churn.
-	if _, err := s.Sync(ctx, []flux.Resource{post}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{post}, nil); err != nil {
 		t.Fatalf("sync 3: %v", err)
 	}
 	if got := updatedAt(); !got.Equal(second) {
@@ -856,10 +908,10 @@ func TestSyncEventRetention(t *testing.T) {
 	}
 
 	// Two sweeps: initial upsert, then a status change => two history events.
-	if _, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyTrue, "OK", "sha-1")}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyTrue, "OK", "sha-1")}, nil); err != nil {
 		t.Fatalf("sync 1: %v", err)
 	}
-	if _, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyFalse, "Boom", "sha-2")}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyFalse, "Boom", "sha-2")}, nil); err != nil {
 		t.Fatalf("sync 2: %v", err)
 	}
 	if n := countEvents(); n != 2 {
@@ -874,7 +926,7 @@ func TestSyncEventRetention(t *testing.T) {
 	}
 
 	// Retention disabled (the default): a sweep must not purge anything.
-	stats, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyFalse, "Boom", "sha-2")})
+	stats, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyFalse, "Boom", "sha-2")}, nil)
 	if err != nil {
 		t.Fatalf("sync 3: %v", err)
 	}
@@ -884,7 +936,7 @@ func TestSyncEventRetention(t *testing.T) {
 
 	// 24h retention: the next sweep drops the aged event and keeps the fresh one.
 	s.SetEventRetention(24 * time.Hour)
-	stats, err = s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyFalse, "Boom", "sha-2")})
+	stats, err = s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyFalse, "Boom", "sha-2")}, nil)
 	if err != nil {
 		t.Fatalf("sync 4: %v", err)
 	}
@@ -905,7 +957,7 @@ func TestSyncEventRetention(t *testing.T) {
 	}
 
 	// Steady state: nothing is old enough anymore, so the next sweep purges nothing.
-	stats, err = s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyFalse, "Boom", "sha-2")})
+	stats, err = s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyFalse, "Boom", "sha-2")}, nil)
 	if err != nil {
 		t.Fatalf("sync 5: %v", err)
 	}
@@ -931,7 +983,7 @@ func TestMetaRecordedOnSync(t *testing.T) {
 		t.Fatalf("expected zero last_sweep_at before any sweep, got %v", m.LastSweepAt)
 	}
 
-	if _, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyTrue, "OK", "sha-1")}); err != nil {
+	if _, err := s.Sync(ctx, []flux.Resource{res("apps", flux.ReadyTrue, "OK", "sha-1")}, nil); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 	m, err = s.GetMeta(ctx)
