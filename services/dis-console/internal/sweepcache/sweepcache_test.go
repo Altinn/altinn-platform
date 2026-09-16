@@ -7,6 +7,8 @@ import (
 	"github.com/Altinn/altinn-platform/services/dis-console/internal/flux"
 )
 
+func testClient(prefix string) *Client { return &Client{prefix: prefix} }
+
 func TestSplitSeparatesUnchangedObjects(t *testing.T) {
 	t.Parallel()
 
@@ -15,13 +17,14 @@ func TestSplitSeparatesUnchangedObjects(t *testing.T) {
 		{Kind: "Kustomization", Namespace: "team-a", Name: "app-two", ContentHash: "bbb"},
 		{Kind: "HelmRelease", Namespace: "team-b", Name: "app-three", ContentHash: "ccc"},
 	}
+	c := testClient("v1")
 	known := map[string]string{
-		Key("v1", &resources[0]): "aaa", // same hash: unchanged
-		Key("v1", &resources[1]): "old", // different hash: changed
+		key("v1", &resources[0]): fingerprint(&resources[0]), // same: unchanged
+		key("v1", &resources[1]): "old|",                     // different hash: changed
 		// app-three has no entry: changed
 	}
 
-	changed, unchanged := Split("v1", resources, known)
+	changed, unchanged := c.Split(resources, known)
 
 	if len(unchanged) != 1 || unchanged[0].Name != "app-one" {
 		t.Errorf("unchanged: want [app-one], got %v", names(unchanged))
@@ -31,13 +34,29 @@ func TestSplitSeparatesUnchangedObjects(t *testing.T) {
 	}
 }
 
+func TestSplitSeesAChangedApplier(t *testing.T) {
+	t.Parallel()
+
+	before := flux.Resource{Kind: "HelmRelease", Namespace: "team-a", Name: "app-one", ContentHash: "aaa",
+		AppliedBy: &flux.AppliedBy{Name: "release-one", Namespace: "team-a"}}
+	after := before
+	after.AppliedBy = &flux.AppliedBy{Name: "release-two", Namespace: "team-a"}
+	c := testClient("v1")
+	known := map[string]string{key("v1", &before): fingerprint(&before)}
+
+	changed, unchanged := c.Split([]flux.Resource{after}, known)
+	if len(changed) != 1 || len(unchanged) != 0 {
+		t.Errorf("a new applier with the same hash must count as changed, got changed=%d unchanged=%d", len(changed), len(unchanged))
+	}
+}
+
 func TestSplitTreatsAnotherBuildAsChanged(t *testing.T) {
 	t.Parallel()
 
 	resources := []flux.Resource{{Kind: "Kustomization", Namespace: "team-a", Name: "app-one", ContentHash: "aaa"}}
-	known := map[string]string{Key("v1", &resources[0]): "aaa"}
+	known := map[string]string{key("v1", &resources[0]): fingerprint(&resources[0])}
 
-	changed, unchanged := Split("v2", resources, known)
+	changed, unchanged := testClient("v2").Split(resources, known)
 	if len(changed) != 1 || len(unchanged) != 0 {
 		t.Errorf("a new prefix must miss every entry, got changed=%d unchanged=%d", len(changed), len(unchanged))
 	}
@@ -55,6 +74,10 @@ func TestNilClientIsANoop(t *testing.T) {
 	}
 	if err := c.Remember(context.Background(), resources); err != nil {
 		t.Errorf("nil client Remember: %v", err)
+	}
+	changed, unchanged := c.Split(resources, map[string]string{key("v1", &resources[0]): fingerprint(&resources[0])})
+	if len(changed) != 1 || len(unchanged) != 0 {
+		t.Errorf("nil client Split: want everything changed, got changed=%d unchanged=%d", len(changed), len(unchanged))
 	}
 	c.Close()
 }
