@@ -18,6 +18,7 @@ import (
 	"github.com/Altinn/altinn-platform/services/dis-console/internal/flux"
 	"github.com/Altinn/altinn-platform/services/dis-console/internal/health"
 	"github.com/Altinn/altinn-platform/services/dis-console/internal/store"
+	"github.com/Altinn/altinn-platform/services/dis-console/internal/sweepcache"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 )
@@ -82,6 +83,12 @@ func runAgent(args []string) {
 	local := fs.Bool("local", false, "Use the local kubeconfig instead of in-cluster config (laptop dev)")
 	dbURI := fs.String("db-uri", os.Getenv("DB_URI"),
 		"PostgreSQL connection URI without password (default from DB_URI env)")
+	cacheAddress := fs.String("cache-address", os.Getenv("CACHE_ADDRESS"),
+		"host:port of the Valkey sweep cache (env CACHE_ADDRESS); empty runs without a cache")
+	cacheUsername := fs.String("cache-username", os.Getenv("CACHE_USERNAME"),
+		"Valkey user of the sweep cache (env CACHE_USERNAME)")
+	cachePassword := fs.String("cache-password", os.Getenv("CACHE_PASSWORD"),
+		"Valkey password of the sweep cache (env CACHE_PASSWORD)")
 	dbDisableEntra := fs.Bool("db-disable-entra", envBool("DB_DISABLE_ENTRA"),
 		"Skip Entra token auth; use PGPASSWORD or trust auth instead. For Kind/CI/local "+
 			"without Azure workload identity (default from DB_DISABLE_ENTRA env)")
@@ -140,6 +147,19 @@ func runAgent(args []string) {
 		log.Fatalf("init meta: %v", err)
 	}
 
+	cache, err := sweepcache.New(ctx, sweepcache.Config{
+		Address: *cacheAddress, Username: *cacheUsername, Password: *cachePassword,
+	}, "dis-console:"+version)
+	switch {
+	case err != nil:
+		log.Printf("sweep cache: unavailable, running without it: %v", err)
+	case cache == nil:
+		log.Printf("sweep cache: disabled (no address)")
+	default:
+		log.Printf("sweep cache: connected to %s", *cacheAddress)
+		defer cache.Close()
+	}
+
 	h := health.New(st)
 	httpServer := &http.Server{
 		Addr:              *httpAddr,
@@ -154,7 +174,7 @@ func runAgent(args []string) {
 	}()
 
 	// Initial sweep before starting the ticker so readiness flips quickly.
-	poll(ctx, client, st, h)
+	poll(ctx, client, st, h, cache)
 
 	ticker := time.NewTicker(*pollInterval)
 	defer ticker.Stop()
@@ -165,7 +185,7 @@ func runAgent(args []string) {
 			gracefulShutdown(httpServer)
 			return
 		case <-ticker.C:
-			poll(ctx, client, st, h)
+			poll(ctx, client, st, h, cache)
 		}
 	}
 }
@@ -250,7 +270,10 @@ func runServer(args []string) {
 	gracefulShutdown(httpServer)
 }
 
-func poll(ctx context.Context, client *flux.Client, st *store.Store, h *health.Server) {
+// poll sweeps the cluster and writes the result. The sweep cache decides
+// which objects need a full upsert; when it is off or fails, every object is
+// upserted, as without a cache.
+func poll(ctx context.Context, client *flux.Client, st *store.Store, h *health.Server, cache *sweepcache.Client) {
 	sweepCtx, cancel := context.WithTimeout(ctx, sweepTimeout)
 	defer cancel()
 
@@ -265,15 +288,24 @@ func poll(ctx context.Context, client *flux.Client, st *store.Store, h *health.S
 
 	storeCtx, cancel2 := context.WithTimeout(ctx, storeTimeout)
 	defer cancel2()
-	stats, err := st.Sync(storeCtx, resources)
+	known, err := cache.Hashes(storeCtx, resources)
+	if err != nil {
+		log.Printf("sweep cache: read failed, upserting everything: %v", err)
+		known = nil
+	}
+	changed, unchanged := sweepcache.Split("dis-console:"+version, resources, known)
+	stats, err := st.Sync(storeCtx, changed, unchanged)
 	if err != nil {
 		log.Printf("store sync failed, keeping previous data: %v", err)
 		return
 	}
+	if err := cache.Remember(storeCtx, changed); err != nil {
+		log.Printf("sweep cache: write failed: %v", err)
+	}
 
 	h.MarkReady()
-	log.Printf("swept %d resources (%d changed, %d pruned, %d events expired)",
-		stats.Upserted, stats.Changed, stats.Pruned, stats.EventsExpired)
+	log.Printf("swept %d resources (%d upserted, %d unchanged via cache, %d changed, %d pruned, %d events expired)",
+		len(resources), stats.Upserted, stats.Touched, stats.Changed, stats.Pruned, stats.EventsExpired)
 }
 
 func gracefulShutdown(srv *http.Server) {
