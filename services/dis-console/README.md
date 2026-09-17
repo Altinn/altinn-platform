@@ -188,6 +188,13 @@ Agent flags: `--http-address` (default `:8080`), `--poll-interval` (default
 this; `0` keeps them forever). The server takes the same `--event-retention`
 for the central database.
 
+Sweep cache (optional): `--cache-address` (default `CACHE_ADDRESS`, `host:port`
+of a Valkey; empty runs without a cache), `--cache-username` (default
+`CACHE_USERNAME`), and the password from `CACHE_PASSWORD` only. The agent
+remembers a fingerprint per object in the cache and skips the full database
+upsert for objects that did not change. When the cache is unreachable or a
+call fails, the agent logs it and upserts everything, as without a cache.
+
 ## Develop
 
 ```bash

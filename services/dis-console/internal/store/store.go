@@ -1,9 +1,9 @@
 // Package store persists normalized Flux resource snapshots in PostgreSQL and
-// serves the read queries behind the JSON API. Each sweep upserts the current
-// rows, records a history event whenever a resource's ready/reason/revision
-// changes, prunes rows for objects that have disappeared from the cluster,
-// and — when event retention is enabled — ages out history events past the
-// retention window.
+// serves the read queries behind the JSON API. Each sweep upserts the changed
+// rows and refreshes last_seen for the unchanged ones, records a history event
+// whenever a resource's ready/reason/revision changes, prunes rows for objects
+// that have disappeared from the cluster, and — when event retention is
+// enabled — ages out history events past the retention window.
 package store
 
 import (
@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/Altinn/altinn-platform/services/dis-console/internal/flux"
@@ -124,7 +125,8 @@ func (s *Store) GetMeta(ctx context.Context) (Meta, error) {
 
 // SyncStats reports what a Sync did.
 type SyncStats struct {
-	Upserted      int   // rows seen this sweep
+	Upserted      int   // rows written in full this sweep
+	Touched       int   // rows the cache reported unchanged; only last_seen was refreshed
 	Changed       int   // rows whose ready/reason/revision changed (history events written)
 	Pruned        int64 // rows deleted because their object disappeared from the cluster
 	EventsExpired int64 // history rows deleted for aging past the event retention window
@@ -350,10 +352,21 @@ WHERE NOT EXISTS (SELECT 1 FROM prev)
 // avoids any app/DB clock-skew that a wall-clock cutoff would introduce.
 const pruneStmt = `DELETE FROM flux_resource WHERE last_seen < now()`
 
-// Sync upserts every resource and prunes objects that disappeared, all in one
-// transaction so the API never observes a partial sweep.
-func (s *Store) Sync(ctx context.Context, resources []flux.Resource) (SyncStats, error) {
-	stats := SyncStats{Upserted: len(resources)}
+// touchStmt refreshes last_seen for objects the cache reported unchanged and
+// returns the rows it found, so the caller can upsert the ones it did not.
+const touchStmt = `
+UPDATE flux_resource AS r SET last_seen = now()
+FROM unnest($1::text[], $2::text[], $3::text[]) AS u(kind, namespace, name)
+WHERE r.kind = u.kind AND r.namespace = u.namespace AND r.name = u.name
+RETURNING r.kind, r.namespace, r.name`
+
+// Sync writes one sweep in one transaction, so the API never observes a
+// partial sweep. Changed objects are upserted in full. Unchanged objects,
+// as reported by the sweep cache, only get their last_seen refreshed; the
+// ones the database does not know after all are upserted too, so the cache
+// can never hide an object. Then objects that disappeared are pruned.
+func (s *Store) Sync(ctx context.Context, changed, unchanged []flux.Resource) (SyncStats, error) {
+	var stats SyncStats
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -361,49 +374,16 @@ func (s *Store) Sync(ctx context.Context, resources []flux.Resource) (SyncStats,
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if len(resources) > 0 {
-		batch := &pgx.Batch{}
-		for i := range resources {
-			r := &resources[i]
-			raw := r.Raw
-			if len(raw) == 0 {
-				raw = json.RawMessage("{}")
-			}
-			parentKind, parentName := parentCols(r.Parent)
-			appliedByName, appliedByNamespace := appliedByCols(r.AppliedBy)
-			sourceRefKind, sourceRefName, sourceRefNamespace := sourceRefCols(r.SourceRef)
-			inventory, err := inventoryParam(r.Inventory)
-			if err != nil {
-				return stats, fmt.Errorf("%s %s/%s: %w", r.Kind, r.Namespace, r.Name, err)
-			}
-			images, err := imagesParam(r.Images)
-			if err != nil {
-				return stats, fmt.Errorf("%s %s/%s: %w", r.Kind, r.Namespace, r.Name, err)
-			}
-			batch.Queue(upsertStmt,
-				r.Kind, r.APIVersion, r.Namespace, r.Name,
-				r.Ready, r.Reason, r.Message, r.Revision, r.Suspended,
-				r.Generation, r.ObservedGeneration, r.LastTransition, []byte(raw), r.ContentHash,
-				r.AzureResourceID, parentKind, parentName,
-				appliedByName, appliedByNamespace,
-				sourceRefKind, sourceRefName, sourceRefNamespace,
-				nullable(r.SourceURL), nullable(r.OriginRevision), nullable(r.OriginSource), inventory, images,
-			)
-		}
-		br := tx.SendBatch(ctx, batch)
-		for range resources {
-			tag, err := br.Exec()
-			if err != nil {
-				_ = br.Close()
-				return stats, fmt.Errorf("upsert: %w", err)
-			}
-			if tag.RowsAffected() > 0 {
-				stats.Changed++
-			}
-		}
-		if err := br.Close(); err != nil {
-			return stats, fmt.Errorf("close batch: %w", err)
-		}
+	missing, err := touch(ctx, tx, unchanged)
+	if err != nil {
+		return stats, err
+	}
+	stats.Touched = len(unchanged) - len(missing)
+
+	resources := slices.Concat(changed, missing)
+	stats.Upserted = len(resources)
+	if stats.Changed, err = upsert(ctx, tx, resources); err != nil {
+		return stats, err
 	}
 
 	tag, err := tx.Exec(ctx, pruneStmt)
@@ -441,6 +421,96 @@ func (s *Store) Sync(ctx context.Context, resources []flux.Resource) (SyncStats,
 		return stats, fmt.Errorf("commit: %w", err)
 	}
 	return stats, nil
+}
+
+type resourceKey struct{ kind, namespace, name string }
+
+// touch refreshes last_seen for the given objects and returns those the
+// database does not have a row for.
+func touch(ctx context.Context, tx pgx.Tx, resources []flux.Resource) ([]flux.Resource, error) {
+	if len(resources) == 0 {
+		return nil, nil
+	}
+	kinds := make([]string, len(resources))
+	namespaces := make([]string, len(resources))
+	names := make([]string, len(resources))
+	for i := range resources {
+		kinds[i], namespaces[i], names[i] = resources[i].Kind, resources[i].Namespace, resources[i].Name
+	}
+	rows, err := tx.Query(ctx, touchStmt, kinds, namespaces, names)
+	if err != nil {
+		return nil, fmt.Errorf("touch: %w", err)
+	}
+	found := make(map[resourceKey]bool, len(resources))
+	var k resourceKey
+	if _, err := pgx.ForEachRow(rows, []any{&k.kind, &k.namespace, &k.name}, func() error {
+		found[k] = true
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("touch rows: %w", err)
+	}
+	var missing []flux.Resource
+	for i := range resources {
+		r := &resources[i]
+		if !found[resourceKey{r.Kind, r.Namespace, r.Name}] {
+			missing = append(missing, *r)
+		}
+	}
+
+	return missing, nil
+}
+
+// upsert writes the given objects in one batch and returns how many rows
+// changed their ready, reason, or revision.
+func upsert(ctx context.Context, tx pgx.Tx, resources []flux.Resource) (int, error) {
+	if len(resources) == 0 {
+		return 0, nil
+	}
+	batch := &pgx.Batch{}
+	for i := range resources {
+		r := &resources[i]
+		raw := r.Raw
+		if len(raw) == 0 {
+			raw = json.RawMessage("{}")
+		}
+		parentKind, parentName := parentCols(r.Parent)
+		appliedByName, appliedByNamespace := appliedByCols(r.AppliedBy)
+		sourceRefKind, sourceRefName, sourceRefNamespace := sourceRefCols(r.SourceRef)
+		inventory, err := inventoryParam(r.Inventory)
+		if err != nil {
+			return 0, fmt.Errorf("%s %s/%s: %w", r.Kind, r.Namespace, r.Name, err)
+		}
+		images, err := imagesParam(r.Images)
+		if err != nil {
+			return 0, fmt.Errorf("%s %s/%s: %w", r.Kind, r.Namespace, r.Name, err)
+		}
+		batch.Queue(upsertStmt,
+			r.Kind, r.APIVersion, r.Namespace, r.Name,
+			r.Ready, r.Reason, r.Message, r.Revision, r.Suspended,
+			r.Generation, r.ObservedGeneration, r.LastTransition, []byte(raw), r.ContentHash,
+			r.AzureResourceID, parentKind, parentName,
+			appliedByName, appliedByNamespace,
+			sourceRefKind, sourceRefName, sourceRefNamespace,
+			nullable(r.SourceURL), nullable(r.OriginRevision), nullable(r.OriginSource), inventory, images,
+		)
+	}
+	changed := 0
+	br := tx.SendBatch(ctx, batch)
+	for range resources {
+		tag, err := br.Exec()
+		if err != nil {
+			_ = br.Close()
+			return 0, fmt.Errorf("upsert: %w", err)
+		}
+		if tag.RowsAffected() > 0 {
+			changed++
+		}
+	}
+	if err := br.Close(); err != nil {
+		return 0, fmt.Errorf("close batch: %w", err)
+	}
+
+	return changed, nil
 }
 
 // pruneEventsStmt removes history rows whose resource no longer exists. Run only
