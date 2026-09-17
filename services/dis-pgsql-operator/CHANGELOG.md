@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.13.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.12.2...dis-pgsql-v0.13.0) (2026-09-17)
+
+
+### Features
+
+* **dis-operators:** apply RFC 0007 finops base tags to operator-created Azure resources ([#3856](https://github.com/Altinn/altinn-platform/issues/3856)) ([e4e3591](https://github.com/Altinn/altinn-platform/commit/e4e359128a002a3dbdc71dbd70c46146d4fdd04c))
+
+
+### Bug Fixes
+
+* **deps:** bump golang builder images to 1.26.6 to clear Trivy stdlib HIGH CVEs ([#3946](https://github.com/Altinn/altinn-platform/issues/3946)) ([579cc6d](https://github.com/Altinn/altinn-platform/commit/579cc6d05c1abe07709ed9742124d0585c23adb8))
+* **deps:** bump x/crypto and grpc to clear Trivy HIGH CVEs ([#4069](https://github.com/Altinn/altinn-platform/issues/4069)) ([8856a27](https://github.com/Altinn/altinn-platform/commit/8856a27ea9bafd12edc2d90dc89cabf6b34e03ed))
+* **deps:** remediate govulncheck + Trivy CVEs (grpc, x/text, Go 1.26.5) ([#3854](https://github.com/Altinn/altinn-platform/issues/3854)) ([2fb8b07](https://github.com/Altinn/altinn-platform/commit/2fb8b07d47d63b6ff8cc87cb415daf4e32d85dd9))
+* **dis-pgsql-operator:** read subnets that carry addressPrefixes ([#4068](https://github.com/Altinn/altinn-platform/issues/4068)) ([1011514](https://github.com/Altinn/altinn-platform/commit/1011514e3fbc0b4a198b3b7bc98cd0437cba5417))
+
 ## [0.12.2](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.12.1...dis-pgsql-v0.12.2) (2026-07-07)
 
 
