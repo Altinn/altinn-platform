@@ -28,7 +28,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: dis-console
-          image: ghcr.io/altinn/altinn-platform/dis-console:v1.7.3
+          image: ghcr.io/altinn/altinn-platform/dis-console:v1.8.0
           args:
             - agent
           ports:
@@ -40,6 +40,20 @@ spec:
                 configMapKeyRef:
                   name: dis-console-db-dis-console-dis-pgsql
                   key: uri
+            - name: CACHE_ADDRESS
+              value: valkey-dis-console-cache.product-dis.svc.cluster.local:6379
+            - name: CACHE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: dis-console-cache-cache-auth
+                  key: username
+                  optional: true
+            - name: CACHE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dis-console-cache-cache-auth
+                  key: password
+                  optional: true
           livenessProbe:
             httpGet:
               path: /healthz

@@ -1,0 +1,7 @@
+apiVersion: cache.dis.altinn.cloud/v1alpha1
+kind: Cache
+metadata:
+  name: dis-console-cache
+  namespace: product-dis
+spec:
+  size: small

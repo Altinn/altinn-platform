@@ -7,3 +7,17 @@ resources:
   - dis-console-databaseserver.yaml
   - dis-console-database.yaml
   - dis-console.yaml
+  - dis-console-cache.yaml
+patches:
+  - target:
+      kind: Namespace
+      name: product-dis
+    patch: |
+      - op: add
+        path: /metadata/annotations
+        value:
+          linkerd.io/inject: enabled
+      - op: add
+        path: /metadata/labels
+        value:
+          linkerd.io/inject: enabled
