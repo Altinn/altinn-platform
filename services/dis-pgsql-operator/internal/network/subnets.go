@@ -160,7 +160,7 @@ func FetchSubnetCatalog(
 // reading only addressPrefix silently drops every subnet created by a recent
 // provider — which surfaces as ErrEmptyCatalog at startup.
 //
-// The dis-pgsql Data VNet is IPv4-only by design (see DIS-CORE-NET-PREFIXES.md),
+// The dis-pgsql Data VNet is IPv4-only by design (see DIS-CORE-NET-PREFIXES.md in dis-way/core),
 // so these subnets carry a single prefix and the first non-empty one is it.
 func subnetPrefix(p *armnetwork.SubnetPropertiesFormat) string {
 	if p.AddressPrefix != nil && *p.AddressPrefix != "" {
