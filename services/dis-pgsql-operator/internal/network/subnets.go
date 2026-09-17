@@ -125,7 +125,12 @@ func FetchSubnetCatalog(
 		}
 
 		for _, s := range page.Value {
-			if s == nil || s.Properties == nil || s.Properties.AddressPrefix == nil {
+			if s == nil || s.Properties == nil {
+				continue
+			}
+
+			cidr := subnetPrefix(s.Properties)
+			if cidr == "" {
 				continue
 			}
 
@@ -136,12 +141,39 @@ func FetchSubnetCatalog(
 
 			infos = append(infos, SubnetInfo{
 				Name: name,
-				CIDR: *s.Properties.AddressPrefix,
+				CIDR: cidr,
 			})
 		}
 	}
 
 	return NewSubnetCatalog(infos)
+}
+
+// subnetPrefix returns the subnet's address prefix, reading both of the forms
+// Azure uses to represent one.
+//
+// ARM stores whichever form the subnet was created with and returns exactly
+// that, so the other field comes back nil. Older terraform-azurerm versions
+// wrote the singular addressPrefix; from v5 they write a one-element
+// addressPrefixes array, and existing subnets are never rewritten. A VNet can
+// therefore hold subnets in either form depending on when it was applied, and
+// reading only addressPrefix silently drops every subnet created by a recent
+// provider — which surfaces as ErrEmptyCatalog at startup.
+//
+// The dis-pgsql Data VNet is IPv4-only by design (see DIS-CORE-NET-PREFIXES.md in dis-way/core),
+// so these subnets carry a single prefix and the first non-empty one is it.
+func subnetPrefix(p *armnetwork.SubnetPropertiesFormat) string {
+	if p.AddressPrefix != nil && *p.AddressPrefix != "" {
+		return *p.AddressPrefix
+	}
+
+	for _, prefix := range p.AddressPrefixes {
+		if prefix != nil && *prefix != "" {
+			return *prefix
+		}
+	}
+
+	return ""
 }
 
 // FindByCIDR returns the SubnetInfo with the given CIDR, if any.

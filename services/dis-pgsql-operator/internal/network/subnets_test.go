@@ -1,6 +1,16 @@
 package network
 
-import "testing"
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7"
+
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/config"
+	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/test/azfakes"
+)
 
 const (
 	cidr0  = "10.100.0.0/28"
@@ -119,5 +129,118 @@ func TestFirstFreeSubnet_AllUsed(t *testing.T) {
 
 	if _, err := catalog.FirstFreeSubnet(used); err == nil {
 		t.Fatalf("expected error when all subnets are used, got nil")
+	}
+}
+
+// fakeSubnet builds an armnetwork.Subnet carrying its prefix in the singular
+// addressPrefix field (when singular is non-empty), the plural addressPrefixes
+// array (for every entry in plural), or neither.
+func fakeSubnet(name, singular string, plural ...string) *armnetwork.Subnet {
+	props := &armnetwork.SubnetPropertiesFormat{}
+
+	if singular != "" {
+		props.AddressPrefix = to.Ptr(singular)
+	}
+	for _, prefix := range plural {
+		props.AddressPrefixes = append(props.AddressPrefixes, to.Ptr(prefix))
+	}
+
+	return &armnetwork.Subnet{
+		Name:       to.Ptr(name),
+		Properties: props,
+	}
+}
+
+func fetchFakeCatalog(t *testing.T, subnets []*armnetwork.Subnet) (*SubnetCatalog, error) {
+	t.Helper()
+
+	env := azfakes.NewNetworkEnv(azfakes.SubnetsServerWithSubnets(subnets))
+	cfg := &config.OperatorConfig{
+		SubscriptionId: "00000000-0000-0000-0000-000000000000",
+		ResourceGroup:  "rg-fake",
+		DBVNetName:     "vnet-fake",
+	}
+
+	return FetchSubnetCatalog(context.Background(), cfg, env.Cred, env.ARM)
+}
+
+// Azure returns a subnet's prefix in whichever form created it and leaves the
+// other field nil: terraform-azurerm wrote the singular addressPrefix before
+// v5 and a one-element addressPrefixes array from v5 on, and it never rewrites
+// existing subnets. One VNet can therefore hold both forms, and reading only
+// addressPrefix drops every subnet a recent provider created.
+func TestFetchSubnetCatalog_ReadsBothAddressPrefixForms(t *testing.T) {
+	tests := []struct {
+		name    string
+		subnets []*armnetwork.Subnet
+		want    []string
+	}{
+		{
+			name:    "singular addressPrefix",
+			subnets: []*armnetwork.Subnet{fakeSubnet("s0", cidr0), fakeSubnet("s1", cidr16)},
+			want:    []string{cidr0, cidr16},
+		},
+		{
+			name:    "plural addressPrefixes",
+			subnets: []*armnetwork.Subnet{fakeSubnet("s0", "", cidr0), fakeSubnet("s1", "", cidr16)},
+			want:    []string{cidr0, cidr16},
+		},
+		{
+			name: "both forms in one VNet",
+			subnets: []*armnetwork.Subnet{
+				fakeSubnet("s0", cidr0),
+				fakeSubnet("s1", "", cidr16),
+				fakeSubnet("s2", cidr32),
+			},
+			want: []string{cidr0, cidr16, cidr32},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			catalog, err := fetchFakeCatalog(t, tt.subnets)
+			if err != nil {
+				t.Fatalf("FetchSubnetCatalog returned error: %v", err)
+			}
+
+			all := catalog.All()
+			if got, want := len(all), len(tt.want); got != want {
+				t.Fatalf("expected %d subnets, got %d (%+v)", want, got, all)
+			}
+
+			for i, want := range tt.want {
+				if all[i].CIDR != want {
+					t.Errorf("all[%d].CIDR = %q, want %q", i, all[i].CIDR, want)
+				}
+			}
+		})
+	}
+}
+
+func TestFetchSubnetCatalog_SkipsSubnetsWithoutAnyPrefix(t *testing.T) {
+	subnets := []*armnetwork.Subnet{
+		fakeSubnet("no-prefix", ""),
+		fakeSubnet("empty-plural", "", ""),
+		fakeSubnet("usable", "", cidr0),
+	}
+
+	catalog, err := fetchFakeCatalog(t, subnets)
+	if err != nil {
+		t.Fatalf("FetchSubnetCatalog returned error: %v", err)
+	}
+
+	all := catalog.All()
+	if got, want := len(all), 1; got != want {
+		t.Fatalf("expected %d subnets, got %d (%+v)", want, got, all)
+	}
+	if all[0].CIDR != cidr0 {
+		t.Errorf("all[0].CIDR = %q, want %q", all[0].CIDR, cidr0)
+	}
+}
+
+func TestFetchSubnetCatalog_EmptyWhenNoSubnetHasAPrefix(t *testing.T) {
+	_, err := fetchFakeCatalog(t, []*armnetwork.Subnet{fakeSubnet("no-prefix", "")})
+	if !errors.Is(err, ErrEmptyCatalog) {
+		t.Fatalf("expected ErrEmptyCatalog, got %v", err)
 	}
 }
