@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.8.0](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.7.3...dis-console-v1.8.0) (2026-09-17)
+
+
+### Features
+
+* **dis-console:** add a sweep cache package that remembers object hashes in Valkey ([#4065](https://github.com/Altinn/altinn-platform/issues/4065)) ([ee5545f](https://github.com/Altinn/altinn-platform/commit/ee5545f0d5fad68316261d0855b47378598a9b94))
+* **dis-console:** let the agent skip unchanged objects with the sweep cache ([#4067](https://github.com/Altinn/altinn-platform/issues/4067)) ([b8be978](https://github.com/Altinn/altinn-platform/commit/b8be97897c5f9d16f267505f6cc516ca703cb73d))
+
+
+### Bug Fixes
+
+* **deps:** bump golang builder images to 1.26.6 to clear Trivy stdlib HIGH CVEs ([#3946](https://github.com/Altinn/altinn-platform/issues/3946)) ([579cc6d](https://github.com/Altinn/altinn-platform/commit/579cc6d05c1abe07709ed9742124d0585c23adb8))
+
 ## [1.7.3](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.7.2...dis-console-v1.7.3) (2026-07-31)
 
 
