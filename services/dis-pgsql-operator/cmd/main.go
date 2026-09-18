@@ -342,6 +342,7 @@ func main() {
 	if err := (&controller.DatabaseServerReconciler{
 		Client:        mgr.GetClient(),
 		Scheme:        mgr.GetScheme(),
+		APIReader:     mgr.GetAPIReader(),
 		SubnetCatalog: subnetCatalog,
 		Config:        *opCfg,
 	}).SetupWithManager(mgr); err != nil {
