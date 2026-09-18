@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0](https://github.com/Altinn/altinn-platform/compare/dis-cache-v0.1.1...dis-cache-v0.2.0) (2026-09-18)
+
+
+### Features
+
+* **dis-cache-operator:** add the password rotation patches and the two-key user ([#4103](https://github.com/Altinn/altinn-platform/issues/4103)) ([b6989aa](https://github.com/Altinn/altinn-platform/commit/b6989aa1bf3df672b0b376bcb7fcc92f3879abd2))
+* **dis-cache-operator:** add the password rotation request and status to the Cache API ([#4100](https://github.com/Altinn/altinn-platform/issues/4100)) ([2f28247](https://github.com/Altinn/altinn-platform/commit/2f28247ca58a516a2e545d52a5ea008002b97daf))
+
 ## [0.1.1](https://github.com/Altinn/altinn-platform/compare/dis-cache-v0.1.0...dis-cache-v0.1.1) (2026-09-18)
 
 
