@@ -21,7 +21,13 @@ import (
 )
 
 const (
-	containerImage = "flux-dispatch:latest"
+	// containerImage is a placeholder that is never pulled: the Flux
+	// Kustomization in gitops-manifests (oci/flux-dispatch/flux-kustomize.yaml)
+	// rewrites it through spec.images, which matches on the image NAME. Its
+	// entry is `name: controller`, the convention lakmus uses too, so this must
+	// stay "controller". Any other name leaves the placeholder in the
+	// Deployment and the pod fails to pull it.
+	containerImage = "controller:latest"
 	appName        = "flux-dispatch"
 	namespace      = "dis-platform"
 

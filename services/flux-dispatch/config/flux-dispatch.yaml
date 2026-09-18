@@ -54,7 +54,7 @@ spec:
           value: ${GITHUB_INSTALLATION_ID}
         - name: GITHUB_PRIVATE_KEY_PATH
           value: /etc/flux-dispatch/secrets/github-app/private-key.pem
-        image: flux-dispatch:latest
+        image: controller:latest
         livenessProbe:
           httpGet:
             path: /healthz
