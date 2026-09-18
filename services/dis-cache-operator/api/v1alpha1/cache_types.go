@@ -62,6 +62,24 @@ type CacheSpec struct {
 	// +optional
 	// +kubebuilder:default=noeviction
 	EvictionPolicy CacheEvictionPolicy `json:"evictionPolicy,omitempty"`
+
+	// PasswordRotation asks the operator for a new password.
+	// +optional
+	PasswordRotation *PasswordRotationSpec `json:"passwordRotation,omitempty"`
+}
+
+// PasswordRotationSpec asks for a new password. The operator rotates when
+// requestedAt is later than status.passwordRotation.rotatedAt. The new
+// password lands under the Secret key "password". The old one stays valid
+// under "password-previous" for a wait the platform sets, so applications
+// can move over without downtime. A request that arrives during that wait
+// is refused until the wait is over.
+type PasswordRotationSpec struct {
+	// RequestedAt is the time of the request. A later value than the last
+	// rotation starts a new one. The value itself is only a marker: the
+	// operator does not wait for it.
+	// +required
+	RequestedAt metav1.Time `json:"requestedAt"`
 }
 
 // CacheStatus defines the observed state of Cache.
@@ -83,6 +101,23 @@ type CacheStatus struct {
 	// ObservedGeneration is the latest generation reconciled by the controller.
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// PasswordRotation records the last password rotation.
+	// +optional
+	PasswordRotation *PasswordRotationStatus `json:"passwordRotation,omitempty"`
+}
+
+// PasswordRotationStatus records the last password rotation.
+type PasswordRotationStatus struct {
+	// RotatedAt is the requestedAt value of the last rotation the operator
+	// carried out. A request with a later value starts the next one.
+	// +optional
+	RotatedAt *metav1.Time `json:"rotatedAt,omitempty"`
+
+	// PreviousValidUntil is the time until the previous password stays valid.
+	// It is unset when no previous password exists.
+	// +optional
+	PreviousValidUntil *metav1.Time `json:"previousValidUntil,omitempty"`
 }
 
 // MaxCacheNameLength is the longest Cache name the CRD admits. The
@@ -97,6 +132,10 @@ const (
 	// ConditionReady aggregates the readiness of everything the operator manages for this Cache.
 	// Follow-up changes add the per-dependency condition types as they implement them.
 	ConditionReady ConditionType = "Ready"
+
+	// ConditionPasswordRotation reports the state of the last password
+	// rotation request: in progress, done, or refused.
+	ConditionPasswordRotation ConditionType = "PasswordRotation"
 )
 
 // +kubebuilder:object:root=true

@@ -63,6 +63,19 @@ spec:
                 - volatile-random
                 - volatile-ttl
                 type: string
+              passwordRotation:
+                description: PasswordRotation asks the operator for a new password.
+                properties:
+                  requestedAt:
+                    description: |-
+                      RequestedAt is the time of the request. A later value than the last
+                      rotation starts a new one. The value itself is only a marker: the
+                      operator does not wait for it.
+                    format: date-time
+                    type: string
+                required:
+                - requestedAt
+                type: object
               persistence:
                 description: |-
                   Persistence keeps cache data on disk. Off by default: a cache does not
@@ -150,6 +163,22 @@ spec:
                   by the controller.
                 format: int64
                 type: integer
+              passwordRotation:
+                description: PasswordRotation records the last password rotation.
+                properties:
+                  previousValidUntil:
+                    description: |-
+                      PreviousValidUntil is the time until the previous password stays valid.
+                      It is unset when no previous password exists.
+                    format: date-time
+                    type: string
+                  rotatedAt:
+                    description: |-
+                      RotatedAt is the requestedAt value of the last rotation the operator
+                      carried out. A request with a later value starts the next one.
+                    format: date-time
+                    type: string
+                type: object
               port:
                 description: Port is the Valkey port.
                 format: int32
