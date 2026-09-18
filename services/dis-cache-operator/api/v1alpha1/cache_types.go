@@ -62,6 +62,47 @@ type CacheSpec struct {
 	// +optional
 	// +kubebuilder:default=noeviction
 	EvictionPolicy CacheEvictionPolicy `json:"evictionPolicy,omitempty"`
+
+	// PasswordRotation controls the password rotation of this Cache. The
+	// defaults apply when the field is not set.
+	// +optional
+	// +kubebuilder:default={}
+	PasswordRotation *PasswordRotationSpec `json:"passwordRotation,omitempty"`
+}
+
+// PasswordRotationSpec controls the password rotation. A rotation stores a
+// new password under the Secret key "password" and keeps the old value valid
+// under "password-previous" for a period, so applications can change to the
+// new password without downtime. The key names do not change, so
+// applications keep their manifests.
+// +kubebuilder:validation:XValidation:rule="!has(self.intervalDays) || self.intervalDays == 0 || self.intervalDays >= 7",message="intervalDays is 0 (off) or at least 7"
+// +kubebuilder:validation:XValidation:rule="!has(self.previousValidFor) || duration(self.previousValidFor) <= duration('168h')",message="previousValidFor is at most 168h (7 days)"
+// +kubebuilder:validation:XValidation:rule="!has(self.previousValidFor) || !has(self.intervalDays) || self.intervalDays == 0 || duration(self.previousValidFor).getSeconds() <= self.intervalDays * 43200",message="previousValidFor is at most half of the interval"
+type PasswordRotationSpec struct {
+	// IntervalDays rotates the password on a schedule, every IntervalDays
+	// days after the last rotation. 0 turns the schedule off. The platform
+	// default is 0 until applications on the platform reload the password
+	// without a restart. The target default is 90.
+	// +optional
+	// +kubebuilder:default=0
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=365
+	IntervalDays int32 `json:"intervalDays,omitempty"`
+
+	// RequestedAt asks for one rotation. A value later than
+	// status.passwordRotation.requestedAt starts it. The operator does not
+	// wait for this time. A value in the future starts the rotation now. The
+	// operator carries out a request made while a previous password is still
+	// valid when that period ends.
+	// +optional
+	RequestedAt *metav1.Time `json:"requestedAt,omitempty"`
+
+	// PreviousValidFor is how long the previous password stays valid after a
+	// rotation. Zero removes it at once, for a password that may have leaked.
+	// A removed password does not end open connections. An operator flag sets
+	// the default, 7 days on the platform. The maximum is 168h.
+	// +optional
+	PreviousValidFor *metav1.Duration `json:"previousValidFor,omitempty"`
 }
 
 // CacheStatus defines the observed state of Cache.
@@ -83,6 +124,29 @@ type CacheStatus struct {
 	// ObservedGeneration is the latest generation reconciled by the controller.
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// PasswordRotation records the last password rotation.
+	// +optional
+	PasswordRotation *PasswordRotationStatus `json:"passwordRotation,omitempty"`
+}
+
+// PasswordRotationStatus records the last password rotation.
+type PasswordRotationStatus struct {
+	// RequestedAt is the spec.passwordRotation.requestedAt value of the last
+	// request the operator carried out. A request with a later value starts
+	// the next rotation.
+	// +optional
+	RequestedAt *metav1.Time `json:"requestedAt,omitempty"`
+
+	// LastRotatedAt is the time of the last rotation. The schedule counts
+	// from this time.
+	// +optional
+	LastRotatedAt *metav1.Time `json:"lastRotatedAt,omitempty"`
+
+	// PreviousValidUntil is the time when the previous password stops being
+	// valid. It is unset when no previous password exists.
+	// +optional
+	PreviousValidUntil *metav1.Time `json:"previousValidUntil,omitempty"`
 }
 
 // MaxCacheNameLength is the longest Cache name the CRD admits. The
@@ -97,6 +161,13 @@ const (
 	// ConditionReady aggregates the readiness of everything the operator manages for this Cache.
 	// Follow-up changes add the per-dependency condition types as they implement them.
 	ConditionReady ConditionType = "Ready"
+
+	// ConditionPasswordRotated reports the password rotation state. True with
+	// reason Rotated when no rotation is in progress. False with reason
+	// Rotating while the operator changes the Secret and the ValkeyCluster,
+	// and with reason PreviousPasswordValid while the previous password is
+	// still valid.
+	ConditionPasswordRotated ConditionType = "PasswordRotated"
 )
 
 // +kubebuilder:object:root=true
