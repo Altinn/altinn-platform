@@ -2903,6 +2903,55 @@ var _ = Describe("DatabaseServer controller", func() {
 			Should(Equal(expectedFlexibleServerResourceID(db.Name)))
 	})
 
+	It("finishes the teardown of a pre-rename server without waiting for a requeue", func() {
+		const serverName = "my-app-db-legacy-teardown"
+		legacyZoneName := serverName + ".private.postgres.database.azure.com"
+		loc := privateDNSZoneLocation
+
+		// A zone as the pre-rename operator laid it out: named after the FQDN
+		// and without an owner reference, so its deletion sends no event back
+		// to the DatabaseServer.
+		zone := &networkv1.PrivateDnsZone{
+			ObjectMeta: metav1.ObjectMeta{Name: legacyZoneName, Namespace: ns},
+			Spec: networkv1.PrivateDnsZone_Spec{
+				AzureName: legacyZoneName,
+				Location:  &loc,
+				Owner: &genruntime.KnownResourceReference{
+					ARMID: "/subscriptions/my-subscription-id/resourceGroups/rg-dis-dev-network",
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, zone)).To(Succeed())
+
+		db := newDedicatedDatabaseServer(serverName, adminAuth(
+			adminManagedIdentity,
+			adminManagedIdentityID,
+			adminManagedIdentity,
+		))
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+
+		Eventually(func(g Gomega) {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated)).To(Succeed())
+			g.Expect(controllerutil.ContainsFinalizer(&updated, databaseServerFinalizer)).To(BeTrue())
+		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+
+		Expect(k8sClient.Delete(ctx, db)).To(Succeed())
+
+		// Both are gone well inside the 15 second delete requeue interval: the
+		// teardown confirms each deletion with the API server instead of
+		// waiting for an event that never comes.
+		Eventually(func(g Gomega) {
+			var updated storagev1alpha1.DatabaseServer
+			g.Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &updated))).To(BeTrue())
+
+			var gone networkv1.PrivateDnsZone
+			g.Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: legacyZoneName, Namespace: ns}, &gone))).To(BeTrue())
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+	})
+
 	It("preserves the legacy FQDN-named DNS zone and links on pre-rename servers", func() {
 		const serverName = "my-app-db-legacy-zone"
 		legacyZoneName := serverName + ".private.postgres.database.azure.com"
