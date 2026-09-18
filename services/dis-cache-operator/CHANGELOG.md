@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/Altinn/altinn-platform/compare/dis-cache-v0.1.0...dis-cache-v0.1.1) (2026-09-18)
+
+
+### Bug Fixes
+
+* **dis-cache-operator:** allow the linkerd inbound port in the Cache NetworkPolicy ([#4097](https://github.com/Altinn/altinn-platform/issues/4097)) ([e6cc16b](https://github.com/Altinn/altinn-platform/commit/e6cc16bae2d4095c45e9534b9d54ec243a42fdf1))
+
 ## 0.1.0 (2026-09-14)
 
 
