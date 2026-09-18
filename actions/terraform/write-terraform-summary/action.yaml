@@ -20,6 +20,14 @@ inputs:
 runs:
   using: composite
   steps:
+    # DEPRECATED: this action has moved to dis-way/actions.
+    # Remove this step together with the rest of the action once all
+    # consumers have migrated to the new location.
+    - name: Deprecation notice
+      shell: bash
+      run: |
+        echo "::warning title=Deprecated action::Altinn/altinn-platform/actions/terraform/write-terraform-summary has moved to dis-way/actions/altinn/terraform/write-terraform-summary. Update your workflow to the new location - this copy will be removed."
+
     - name: generate random delimiter
       shell: bash
       run: echo "DELIMITER=$(uuidgen)" >> $GITHUB_ENV

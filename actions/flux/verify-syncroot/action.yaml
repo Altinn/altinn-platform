@@ -13,6 +13,14 @@ inputs:
 runs:
   using: composite
   steps:
+    # DEPRECATED: this action has moved to dis-way/actions.
+    # Remove this step together with the rest of the action once all
+    # consumers have migrated to the new location.
+    - name: Deprecation notice
+      shell: bash
+      run: |
+        echo "::warning title=Deprecated action::Altinn/altinn-platform/actions/flux/verify-syncroot has moved to dis-way/actions/altinn/flux/verify-syncroot. Update your workflow to the new location - this copy will be removed."
+
     - name: Validate folder structure
       shell: bash
       env:
