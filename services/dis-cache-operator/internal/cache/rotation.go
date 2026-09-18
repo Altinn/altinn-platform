@@ -16,10 +16,12 @@ const (
 	// rotation period. Both passwords are valid until the period ends.
 	AuthSecretPreviousPasswordKey = "password-previous"
 
-	// RotationStepAnnotation records on the Secret how far a rotation got.
-	// Every rotation patch tests it first. A failed test tells the operator
-	// the state of the Secret without a read, and a Secret that someone else
-	// made never gets rotated.
+	// RotationStepAnnotation records on the Secret which rotation step is
+	// done. Every rotation patch tests it first, so a step out of order or a
+	// Secret that someone else made stops the patch. A failed test is one
+	// error without a reason, so the controller reads the annotation with a
+	// metadata-only get before it resumes a rotation. That read carries no
+	// Secret data.
 	RotationStepAnnotation = "cache.dis.altinn.cloud/rotation-step"
 
 	// RotationStepIdle means no rotation is in progress.
@@ -68,6 +70,7 @@ func dataPath(key string) string {
 
 // rotationGuard returns the test operations every rotation patch starts with:
 // the Secret belongs to this Cache, and the rotation is at the expected step.
+// The API server rejects the whole patch when a test fails.
 func rotationGuard(cache *cachev1alpha1.Cache, step string) []jsonPatchOp {
 	return []jsonPatchOp{
 		{Op: opTest, Path: labelPath(CacheNameLabel), Value: cache.Name},
@@ -102,8 +105,8 @@ func RotationReplacePatch(cache *cachev1alpha1.Cache, password string) ([]byte, 
 }
 
 // RotationRemovePatch returns the JSON patch for the last rotation step: the
-// previous password goes away and the Secret is idle again. It runs after the
-// ValkeyCluster no longer lists the previous key.
+// previous password is removed and the Secret is idle again. The controller
+// applies it after the ValkeyCluster no longer lists the previous key.
 func RotationRemovePatch(cache *cachev1alpha1.Cache) ([]byte, error) {
 	ops := append(rotationGuard(cache, RotationStepReplaced),
 		jsonPatchOp{Op: opRemove, Path: dataPath(AuthSecretPreviousPasswordKey)},
@@ -115,8 +118,11 @@ func RotationRemovePatch(cache *cachev1alpha1.Cache) ([]byte, error) {
 
 // RotationMarkIdlePatch returns the merge patch that sets the rotation step
 // annotation to idle. It is for Secrets the operator created before the
-// annotation existed. The controller uses it only when no rotation is in
-// progress, so the annotation is idle in both cases.
+// annotation existed. It has no guard and overwrites any step, so the
+// controller applies it only when the Cache status shows no rotation. For
+// that to be safe, the controller writes the status before the first
+// rotation patch, never after. Both a new Secret and an old Secret then
+// carry idle.
 func RotationMarkIdlePatch() ([]byte, error) {
 	return json.Marshal(map[string]any{
 		"metadata": map[string]any{

@@ -78,7 +78,7 @@ func TestRotationReplacePatch(t *testing.T) {
 	if ops[2]["op"] != "replace" || ops[2]["path"] != "/data/password" || ops[2]["value"] != want {
 		t.Errorf("want the password replaced with the base64 value, got %v", ops[2])
 	}
-	if ops[3]["value"] != RotationStepReplaced {
+	if ops[3]["op"] != "replace" || ops[3]["path"] != annotationPathWant || ops[3]["value"] != RotationStepReplaced {
 		t.Errorf("want the step set to replaced, got %v", ops[3])
 	}
 }
@@ -95,7 +95,7 @@ func TestRotationRemovePatch(t *testing.T) {
 	if ops[2]["op"] != "remove" || ops[2]["path"] != "/data/password-previous" {
 		t.Errorf("want the previous key removed, got %v", ops[2])
 	}
-	if ops[3]["value"] != RotationStepIdle {
+	if ops[3]["op"] != "replace" || ops[3]["path"] != annotationPathWant || ops[3]["value"] != RotationStepIdle {
 		t.Errorf("want the step set back to idle, got %v", ops[3])
 	}
 }
