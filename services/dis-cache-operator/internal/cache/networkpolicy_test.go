@@ -3,6 +3,7 @@ package cache
 import (
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 )
 
@@ -72,6 +73,9 @@ func portsEqual(ports []netv1.NetworkPolicyPort, want ...int) bool {
 		return false
 	}
 	for i, p := range ports {
+		if p.Protocol == nil || *p.Protocol != corev1.ProtocolTCP {
+			return false
+		}
 		if p.Port == nil || p.Port.IntValue() != want[i] {
 			return false
 		}

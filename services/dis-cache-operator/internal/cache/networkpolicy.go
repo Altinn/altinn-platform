@@ -37,10 +37,10 @@ const (
 	valkeyClientPort     = 6379
 	valkeyClusterBusPort = 16379
 	// linkerdInboundPort is where the linkerd proxy of a meshed pod accepts
-	// connections from other meshed pods. Traffic between two meshed pods
-	// never arrives on the application port, so every rule has to allow the
-	// proxy port too, or the CNI drops the mesh connection before linkerd can
-	// authorize it.
+	// connections from other meshed pods. The proxy of a meshed client dials
+	// this port, not the application port. Each rule must allow it. If not,
+	// the CNI drops the connection before linkerd can authorize it. This is
+	// the chart default proxy.ports.inbound; the clusters do not change it.
 	linkerdInboundPort = 4143
 )
 
@@ -53,7 +53,11 @@ func NetworkPolicyName(cache *cachev1alpha1.Cache) string {
 // pods in the same namespace and the valkey-operator on the client port,
 // and the Valkey pods themselves on the client and cluster bus ports. Each
 // rule also allows the linkerd inbound port, because meshed traffic arrives
-// there; the linkerd Server and AuthorizationPolicy then decide per identity.
+// there. For meshed peers the port split is then enforced by the linkerd
+// Server and AuthorizationPolicy, which authorize the client by its identity.
+// The application ports stay in the rules for clients without a proxy.
+// Kubelet probes and the proxy admin port 4191 are not listed: the probes
+// are exec probes, and the CNI on the clusters lets host traffic through.
 func BuildNetworkPolicy(cache *cachev1alpha1.Cache) *netv1.NetworkPolicy {
 	tcp := corev1.ProtocolTCP
 	clientPort := intstr.FromInt32(valkeyClientPort)

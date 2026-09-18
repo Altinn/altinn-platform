@@ -209,15 +209,15 @@ var _ = Describe("Cache reconciler", func() {
 
 		policy := getNetworkPolicy(cachepkg.NetworkPolicyName(cache))
 		Expect(metav1.IsControlledBy(policy, getCache("cache-netpol"))).To(BeTrue())
-		want := len(cachepkg.BuildNetworkPolicy(cache).Spec.Ingress)
-		Expect(policy.Spec.Ingress).To(HaveLen(want))
+		want := cachepkg.BuildNetworkPolicy(cache).Spec.Ingress
+		Expect(policy.Spec.Ingress).To(Equal(want))
 
 		policy.Spec.Ingress = nil
 		Expect(k8sClient.Update(ctx, policy)).To(Succeed())
 		Expect(getNetworkPolicy(policy.Name).Spec.Ingress).To(BeEmpty())
 		reconcile("cache-netpol")
 
-		Expect(getNetworkPolicy(policy.Name).Spec.Ingress).To(HaveLen(want))
+		Expect(getNetworkPolicy(policy.Name).Spec.Ingress).To(Equal(want))
 	})
 
 	It("keeps a Secret that someone else created with the same name", func() {
