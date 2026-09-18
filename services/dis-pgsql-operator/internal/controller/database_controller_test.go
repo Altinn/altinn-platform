@@ -2939,7 +2939,7 @@ var _ = Describe("DatabaseServer controller", func() {
 
 		Expect(k8sClient.Delete(ctx, db)).To(Succeed())
 
-		// Both are gone well inside the 15 second delete requeue interval: the
+		// Both are gone inside the 15 second delete requeue interval: the
 		// teardown confirms each deletion with the API server instead of
 		// waiting for an event that never comes.
 		Eventually(func(g Gomega) {

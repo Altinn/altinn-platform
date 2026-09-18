@@ -78,8 +78,10 @@ type DatabaseServerReconciler struct {
 	Scheme *runtime.Scheme
 
 	// APIReader reads from the API server and not from the cache. The delete
-	// path uses it to confirm that a child is gone, because the cache can still
-	// hold an object the API server has already removed.
+	// path uses it to confirm that a child is gone. The cache can still hold
+	// an object the API server has removed, or miss one it has just created.
+	// main.go and the test suite must set it; without it the delete path
+	// falls back to the cache.
 	APIReader client.Reader
 
 	// SubnetCatalog is the static list of available subnets for this environment.
@@ -248,14 +250,17 @@ func (r *DatabaseServerReconciler) ensureChildDeleted(
 	obj client.Object,
 ) (gone bool, err error) {
 	key := types.NamespacedName{Name: name, Namespace: namespace}
+	cached := true
 	if err := r.Get(ctx, key, obj); err != nil {
-		if apierrors.IsNotFound(err) {
-			return true, nil
+		if !apierrors.IsNotFound(err) {
+			return false, fmt.Errorf("get %T %s/%s for deletion: %w", obj, namespace, name, err)
 		}
-		return false, fmt.Errorf("get %T %s/%s for deletion: %w", obj, namespace, name, err)
+		// The cache can miss a child the previous reconcile created. The live
+		// read below decides.
+		cached = false
 	}
 
-	if obj.GetDeletionTimestamp().IsZero() {
+	if cached && obj.GetDeletionTimestamp().IsZero() {
 		logger.Info("deleting owned resource during DatabaseServer teardown",
 			"kind", fmt.Sprintf("%T", obj),
 			"name", name,
@@ -269,9 +274,9 @@ func (r *DatabaseServerReconciler) ensureChildDeleted(
 		}
 	}
 
-	// The cache can lag behind the API server, and a child without a finalizer
-	// is gone the moment its delete is accepted. A child without an owner
-	// reference sends no event back either, so a cached read would leave the
+	// The cache can lag behind the API server. A child without a finalizer is
+	// gone the moment its delete is accepted. A child without an owner
+	// reference sends no event back. A cached read would then leave the
 	// teardown waiting for the next requeue. Ask the API server directly.
 	if err := r.liveReader().Get(ctx, key, obj); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -284,8 +289,8 @@ func (r *DatabaseServerReconciler) ensureChildDeleted(
 	return false, nil
 }
 
-// liveReader returns the reader that talks to the API server directly, or the
-// cached client when none is configured.
+// liveReader returns the reader that reads from the API server directly, or
+// the cached client when none is configured.
 func (r *DatabaseServerReconciler) liveReader() client.Reader {
 	if r.APIReader != nil {
 		return r.APIReader
