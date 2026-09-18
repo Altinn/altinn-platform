@@ -153,7 +153,7 @@ func valkeyUsers(cache *cachev1alpha1.Cache) []valkeyv1alpha1.UserAclSpec {
 			Enabled: true,
 			PasswordSecret: valkeyv1alpha1.PasswordSecretSpec{
 				Name: AuthSecretName(cache),
-				Keys: []string{AuthSecretPasswordKey},
+				Keys: PasswordKeys(cache),
 			},
 			Commands: valkeyv1alpha1.CommandsAclSpec{
 				Allow: []string{aclAllCommands},

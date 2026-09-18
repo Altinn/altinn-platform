@@ -29,7 +29,8 @@ const (
 
 	// AuthSecretUsernameKey and AuthSecretPasswordKey are the data keys in the
 	// auth Secret. The application reads both. The controller points the
-	// upstream users[].passwordSecret at the password key.
+	// upstream users[].passwordSecret at the password key, and during a
+	// rotation also at the previous password key.
 	AuthSecretUsernameKey = "username"
 	AuthSecretPasswordKey = "password"
 )
@@ -43,9 +44,10 @@ func AuthSecretName(cache *cachev1alpha1.Cache) string {
 func BuildAuthSecret(cache *cachev1alpha1.Cache, password string) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      AuthSecretName(cache),
-			Namespace: cache.Namespace,
-			Labels:    Labels(cache),
+			Name:        AuthSecretName(cache),
+			Namespace:   cache.Namespace,
+			Labels:      Labels(cache),
+			Annotations: map[string]string{RotationStepAnnotation: RotationStepIdle},
 		},
 		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{

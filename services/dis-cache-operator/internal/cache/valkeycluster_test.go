@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	valkeyv1alpha1 "github.com/valkey-io/valkey-operator/api/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 
@@ -172,6 +173,16 @@ func TestBuildValkeyClusterAppUser(t *testing.T) {
 	}
 	if !slices.Equal(appUser.PasswordSecret.Keys, []string{AuthSecretPasswordKey}) {
 		t.Errorf("app user: want password key %q, got %v", AuthSecretPasswordKey, appUser.PasswordSecret.Keys)
+	}
+
+	rotating := newTestCache(func(c *cachev1alpha1.Cache) {
+		meta.SetStatusCondition(&c.Status.Conditions, metav1.Condition{
+			Type: string(cachev1alpha1.ConditionPasswordRotated), Status: metav1.ConditionFalse, Reason: "Rotating",
+		})
+	})
+	rotatingUser := userByName(t, BuildValkeyCluster(rotating, Images{}).Spec.Users, AuthUsername)
+	if !slices.Equal(rotatingUser.PasswordSecret.Keys, []string{AuthSecretPasswordKey, AuthSecretPreviousPasswordKey}) {
+		t.Errorf("app user during a rotation: want both password keys, got %v", rotatingUser.PasswordSecret.Keys)
 	}
 	if !slices.Equal(appUser.Commands.Allow, []string{aclAllCommands}) {
 		t.Errorf("app user: want +@all, got allow %v", appUser.Commands.Allow)

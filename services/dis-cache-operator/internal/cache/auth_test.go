@@ -26,4 +26,10 @@ func TestBuildAuthSecret(t *testing.T) {
 	if got := string(secret.Data[AuthSecretPasswordKey]); got != "secret-password-123" {
 		t.Errorf("password: want secret-password-123, got %q", got)
 	}
+	if got := secret.Annotations[RotationStepAnnotation]; got != RotationStepIdle {
+		t.Errorf("rotation step: want idle, got %q", got)
+	}
+	if _, has := secret.Data[AuthSecretPreviousPasswordKey]; has {
+		t.Errorf("a new Secret must not carry a previous password")
+	}
 }
