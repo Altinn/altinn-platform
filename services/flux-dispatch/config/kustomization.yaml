@@ -3,4 +3,4 @@ kind: Kustomization
 metadata:
   name: flux-dispatch
 resources:
-  - flux-dispatch.yaml
+- flux-dispatch.yaml

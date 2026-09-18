@@ -2,7 +2,7 @@
 
 ## Project goals
 - Receive Flux `notification-controller` webhooks and turn them into GitHub `repository_dispatch` events, so product teams get a deploy-finished (or deploy-failed) signal without running a receiver themselves.
-- Stdlib-first: the only direct dependencies are `golang-jwt/jwt/v5` and `prometheus/client_golang`. Do not add a GitHub SDK or an HTTP framework.
+- Stdlib-first: the service's only direct dependencies are `golang-jwt/jwt/v5` and `prometheus/client_golang`; the `k8s.io/*` and `sigs.k8s.io/yaml` modules in `go.mod` are used only by the `manifests/` generator. They still share the service's module graph, so minimal version selection can move modules the service binary does link (adding them moved `google.golang.org/protobuf`, `golang.org/x/sys` and `go.yaml.in/yaml/v2`). Expect `go.sum` churn on k8s bumps, and check what the binary actually links with `go version -m` on the built binary. Do not add a GitHub SDK or an HTTP framework.
 - See `README.md` for the request flow, the configuration table, and the return-code contract. See RFC 0010 for the design.
 
 ## Invariants that are easy to break
@@ -14,6 +14,7 @@ Changes in these areas need more care than the compiler or the linter can give:
 - **Metric labels come from the request body.** A `CounterVec` never evicts a child, so any label taken from an Alert must be validated or bucketed first (`validate.ReasonLabel`, `validate.DispatchEvent`, `validate.RepoAllowed`). An unbounded label is a memory leak that only shows up in production.
 - **`replicas: 1` is load-bearing.** Dedup state is in-memory and per-pod, so a second replica dispatches duplicates.
 - **The service is unauthenticated by design.** Access control is the NetworkPolicy restricting ingress on 8080 to `flux-system`. Do not add an HTTP auth layer without changing the RFC first.
+- **`k8s.io/api` and `k8s.io/apimachinery` are pinned below v0.36.** v0.36 and later require go 1.26, and raising the `go` line in `go.mod` changes the service binary's GODEBUG defaults. A `renovate.json` packageRule caps both at `<0.36.0` for this module; lift it (delete the rule) only as part of a deliberate move to go 1.26.
 
 ## Required verification for code changes
 If you modify any Go file, you MUST run before producing a final answer/patch:
@@ -21,7 +22,7 @@ If you modify any Go file, you MUST run before producing a final answer/patch:
 1. `make verify` — the gate the PR must pass: `gofmt`, `go vet`, and `go test -race ./...`
 2. `make lint` — golangci-lint, which `make verify` does not cover
 
-If you change `manifests/`, also run `make cdk8s-manifests-verify` — the rendered YAML in `config/` is generated and CI fails on drift.
+If you change `manifests/`, also run `make k8s-manifests-verify` — the rendered YAML in `config/` is generated and CI fails on drift.
 
 In the final response, include the command(s) you ran and whether they passed.
 If you cannot run them, you MUST say so explicitly and explain why.

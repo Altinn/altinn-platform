@@ -1,4 +1,5 @@
 apiVersion: v1
+automountServiceAccountToken: false
 kind: ServiceAccount
 metadata:
   annotations:
@@ -8,13 +9,17 @@ metadata:
     owner: platform
   name: flux-dispatch
   namespace: dis-platform
-automountServiceAccountToken: false
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   annotations:
-    dis.altinn.cloud/scaling-note: "replicas is pinned to 1: the dedup tracker (RFC 0010 Deduplication) lives in this pod's own memory. A second replica has a disjoint dedup map, so the same Flux reconcile event (or a notification-controller retry) delivered to both pods dispatches twice — duplicate GitHub Actions runs for one deploy, the exact failure mode this service exists to prevent. Do not scale horizontally without first moving dedup to shared storage."
+    dis.altinn.cloud/scaling-note: 'replicas is pinned to 1: the dedup tracker (RFC
+      0010 Deduplication) lives in this pod''s own memory. A second replica has a
+      disjoint dedup map, so the same Flux reconcile event (or a notification-controller
+      retry) delivered to both pods dispatches twice — duplicate GitHub Actions runs
+      for one deploy, the exact failure mode this service exists to prevent. Do not
+      scale horizontally without first moving dedup to shared storage.'
   labels:
     app: flux-dispatch
     owner: platform
@@ -36,48 +41,48 @@ spec:
     spec:
       automountServiceAccountToken: false
       containers:
-        - env:
-            - name: LISTEN_ADDR
-              value: :8080
-            - name: METRICS_ADDR
-              value: :9090
-            - name: DRY_RUN
-              value: ${DRY_RUN}
-            - name: GITHUB_APP_ID
-              value: ${GITHUB_APP_ID}
-            - name: GITHUB_INSTALLATION_ID
-              value: ${GITHUB_INSTALLATION_ID}
-            - name: GITHUB_PRIVATE_KEY_PATH
-              value: /etc/flux-dispatch/secrets/github-app/private-key.pem
-          image: flux-dispatch:latest
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: webhook
-          name: flux-dispatch
-          ports:
-            - containerPort: 8080
-              name: webhook
-            - containerPort: 9090
-              name: metrics
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: webhook
-          resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-            readOnlyRootFilesystem: true
-          volumeMounts:
-            - mountPath: /etc/flux-dispatch/secrets/github-app
-              name: github-app-key
-              readOnly: true
+      - env:
+        - name: LISTEN_ADDR
+          value: :8080
+        - name: METRICS_ADDR
+          value: :9090
+        - name: DRY_RUN
+          value: ${DRY_RUN}
+        - name: GITHUB_APP_ID
+          value: ${GITHUB_APP_ID}
+        - name: GITHUB_INSTALLATION_ID
+          value: ${GITHUB_INSTALLATION_ID}
+        - name: GITHUB_PRIVATE_KEY_PATH
+          value: /etc/flux-dispatch/secrets/github-app/private-key.pem
+        image: flux-dispatch:latest
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: webhook
+        name: flux-dispatch
+        ports:
+        - containerPort: 8080
+          name: webhook
+        - containerPort: 9090
+          name: metrics
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: webhook
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /etc/flux-dispatch/secrets/github-app
+          name: github-app-key
+          readOnly: true
       enableServiceLinks: false
       securityContext:
         runAsNonRoot: true
@@ -85,10 +90,10 @@ spec:
           type: RuntimeDefault
       serviceAccountName: flux-dispatch
       volumes:
-        - name: github-app-key
-          secret:
-            optional: true
-            secretName: flux-dispatch-github-app-key
+      - name: github-app-key
+        secret:
+          optional: true
+          secretName: flux-dispatch-github-app-key
 ---
 apiVersion: v1
 kind: Service
@@ -100,10 +105,10 @@ metadata:
   namespace: dis-platform
 spec:
   ports:
-    - name: webhook
-      port: 8080
-      protocol: TCP
-      targetPort: webhook
+  - name: webhook
+    port: 8080
+    protocol: TCP
+    targetPort: webhook
   selector:
     app: flux-dispatch
     owner: platform
@@ -116,18 +121,18 @@ metadata:
   namespace: dis-platform
 spec:
   ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: flux-system
-      ports:
-        - port: 8080
-          protocol: TCP
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: flux-system
+    ports:
+    - port: 8080
+      protocol: TCP
   podSelector:
     matchLabels:
       app: flux-dispatch
   policyTypes:
-    - Ingress
+  - Ingress
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -136,18 +141,18 @@ metadata:
   namespace: dis-platform
 spec:
   ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: monitoring
-      ports:
-        - port: 9090
-          protocol: TCP
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+    ports:
+    - port: 9090
+      protocol: TCP
   podSelector:
     matchLabels:
       app: flux-dispatch
   policyTypes:
-    - Ingress
+  - Ingress
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -156,23 +161,23 @@ metadata:
   namespace: dis-platform
 spec:
   egress:
-    - ports:
-        - port: 53
-          protocol: UDP
-        - port: 53
-          protocol: TCP
-      to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kube-system
-    - ports:
-        - port: 443
-          protocol: TCP
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+    to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+  - ports:
+    - port: 443
+      protocol: TCP
   podSelector:
     matchLabels:
       app: flux-dispatch
   policyTypes:
-    - Egress
+  - Egress
 ---
 apiVersion: azmonitoring.coreos.com/v1
 kind: PodMonitor
@@ -186,9 +191,9 @@ spec:
   namespaceSelector:
     any: true
   podMetricsEndpoints:
-    - interval: 30s
-      path: /metrics
-      port: metrics
+  - interval: 30s
+    path: /metrics
+    port: metrics
   selector:
     matchLabels:
       app: flux-dispatch
@@ -221,9 +226,9 @@ metadata:
   namespace: dis-platform
 spec:
   data:
-    - remoteRef:
-        key: ${KV_SECRET_NAME_GITHUB_APP_KEY}
-      secretKey: private-key.pem
+  - remoteRef:
+      key: ${KV_SECRET_NAME_GITHUB_APP_KEY}
+    secretKey: private-key.pem
   refreshInterval: 1h
   secretStoreRef:
     kind: SecretStore

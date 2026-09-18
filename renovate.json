@@ -106,6 +106,20 @@
       "enabled": false
     },
     {
+      "description": "flux-dispatch stays on go 1.25.3, but k8s.io/api and k8s.io/apimachinery v0.36+ require go 1.26: the grouped gomod PR would fail its artifact update or silently raise flux-dispatch's go line, which changes its binary's GODEBUG defaults. Remove this rule when flux-dispatch deliberately moves to go 1.26.",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchFileNames": [
+        "services/flux-dispatch/go.mod"
+      ],
+      "matchPackageNames": [
+        "k8s.io/api",
+        "k8s.io/apimachinery"
+      ],
+      "allowedVersions": "<0.36.0"
+    },
+    {
       "matchManagers": [
         "custom.regex"
       ],

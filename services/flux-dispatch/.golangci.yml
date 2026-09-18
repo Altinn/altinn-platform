@@ -44,17 +44,14 @@ linters:
           - dupl
           - lll
         path: internal/.*
-      # manifests/ builds Kubernetes objects as map literals, so the repeated
-      # strings goconst flags are API field names ("name", "port", "TCP") and
-      # the long lines are single YAML values. Hoisting either out would hide
-      # the shape of the manifest being generated.
+      # manifests/ spells out each Kubernetes object as a literal, so label
+      # keys such as "app" repeat across the labels and the selectors that
+      # match them. Hoisting them into constants would hide the shape of the
+      # manifest being generated.
       - linters:
           - goconst
-          - lll
         path: manifests/.*
     paths:
-      # cdk8s emits these Kubernetes bindings; they are not ours to lint.
-      - imports/k8s
       - third_party$
       - builtin$
       - examples$
@@ -65,7 +62,6 @@ formatters:
   exclusions:
     generated: lax
     paths:
-      - imports/k8s
       - third_party$
       - builtin$
       - examples$
