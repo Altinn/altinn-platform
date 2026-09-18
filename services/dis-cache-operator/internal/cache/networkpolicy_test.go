@@ -32,16 +32,16 @@ func TestBuildNetworkPolicy(t *testing.T) {
 	if sameNamespace.From[0].PodSelector == nil || len(sameNamespace.From[0].PodSelector.MatchLabels) != 0 {
 		t.Errorf("rule 0: want an empty pod selector (all pods in the namespace), got %+v", sameNamespace.From[0])
 	}
-	if len(sameNamespace.Ports) != 1 || sameNamespace.Ports[0].Port.IntValue() != 6379 {
-		t.Errorf("rule 0 ports: want [6379], got %+v", sameNamespace.Ports)
+	if !portsEqual(sameNamespace.Ports, 6379, 4143) {
+		t.Errorf("rule 0 ports: want [6379 4143], got %+v", sameNamespace.Ports)
 	}
 
 	valkeyToValkey := policy.Spec.Ingress[1]
 	if got := valkeyToValkey.From[0].PodSelector.MatchLabels[valkeyClusterLabel]; got != "app-one-cache" {
 		t.Errorf("rule 1: want the valkey pods themselves, got %q", got)
 	}
-	if len(valkeyToValkey.Ports) != 2 || valkeyToValkey.Ports[1].Port.IntValue() != 16379 {
-		t.Errorf("rule 1 ports: want [6379 16379], got %+v", valkeyToValkey.Ports)
+	if !portsEqual(valkeyToValkey.Ports, 6379, 16379, 4143) {
+		t.Errorf("rule 1 ports: want [6379 16379 4143], got %+v", valkeyToValkey.Ports)
 	}
 
 	operator := policy.Spec.Ingress[2]
@@ -60,7 +60,21 @@ func TestBuildNetworkPolicy(t *testing.T) {
 	if got := operator.From[0].PodSelector.MatchLabels["control-plane"]; got != "controller-manager" {
 		t.Errorf("rule 2: want control-plane controller-manager, got %q", got)
 	}
-	if len(operator.Ports) != 1 || operator.Ports[0].Port.IntValue() != 6379 {
-		t.Errorf("rule 2 ports: want [6379], got %+v", operator.Ports)
+	if !portsEqual(operator.Ports, 6379, 4143) {
+		t.Errorf("rule 2 ports: want [6379 4143], got %+v", operator.Ports)
 	}
+}
+
+// portsEqual reports whether the TCP ports of a rule are exactly the given
+// numbers, in order.
+func portsEqual(ports []netv1.NetworkPolicyPort, want ...int) bool {
+	if len(ports) != len(want) {
+		return false
+	}
+	for i, p := range ports {
+		if p.Port == nil || p.Port.IntValue() != want[i] {
+			return false
+		}
+	}
+	return true
 }

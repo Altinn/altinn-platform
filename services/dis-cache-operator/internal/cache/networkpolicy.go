@@ -36,6 +36,12 @@ const (
 
 	valkeyClientPort     = 6379
 	valkeyClusterBusPort = 16379
+	// linkerdInboundPort is where the linkerd proxy of a meshed pod accepts
+	// connections from other meshed pods. Traffic between two meshed pods
+	// never arrives on the application port, so every rule has to allow the
+	// proxy port too, or the CNI drops the mesh connection before linkerd can
+	// authorize it.
+	linkerdInboundPort = 4143
 )
 
 // NetworkPolicyName returns the name of the NetworkPolicy for a Cache.
@@ -45,11 +51,14 @@ func NetworkPolicyName(cache *cachev1alpha1.Cache) string {
 
 // BuildNetworkPolicy limits who can reach the Valkey pods of a Cache:
 // pods in the same namespace and the valkey-operator on the client port,
-// and the Valkey pods themselves on the client and cluster bus ports.
+// and the Valkey pods themselves on the client and cluster bus ports. Each
+// rule also allows the linkerd inbound port, because meshed traffic arrives
+// there; the linkerd Server and AuthorizationPolicy then decide per identity.
 func BuildNetworkPolicy(cache *cachev1alpha1.Cache) *netv1.NetworkPolicy {
 	tcp := corev1.ProtocolTCP
 	clientPort := intstr.FromInt32(valkeyClientPort)
 	busPort := intstr.FromInt32(valkeyClusterBusPort)
+	meshPort := intstr.FromInt32(linkerdInboundPort)
 
 	valkeyPods := metav1.LabelSelector{
 		MatchLabels: map[string]string{valkeyClusterLabel: ValkeyClusterName(cache)},
@@ -71,6 +80,7 @@ func BuildNetworkPolicy(cache *cachev1alpha1.Cache) *netv1.NetworkPolicy {
 					},
 					Ports: []netv1.NetworkPolicyPort{
 						{Protocol: &tcp, Port: &clientPort},
+						{Protocol: &tcp, Port: &meshPort},
 					},
 				},
 				{
@@ -80,6 +90,7 @@ func BuildNetworkPolicy(cache *cachev1alpha1.Cache) *netv1.NetworkPolicy {
 					Ports: []netv1.NetworkPolicyPort{
 						{Protocol: &tcp, Port: &clientPort},
 						{Protocol: &tcp, Port: &busPort},
+						{Protocol: &tcp, Port: &meshPort},
 					},
 				},
 				{
@@ -100,6 +111,7 @@ func BuildNetworkPolicy(cache *cachev1alpha1.Cache) *netv1.NetworkPolicy {
 					},
 					Ports: []netv1.NetworkPolicyPort{
 						{Protocol: &tcp, Port: &clientPort},
+						{Protocol: &tcp, Port: &meshPort},
 					},
 				},
 			},
