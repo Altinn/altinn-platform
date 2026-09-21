@@ -16,7 +16,7 @@ variable "product_syncroot_source_repos" {
   }))
 
   validation {
-    condition     = alltrue([for k, v in var.product_syncroot_source_repos : can(regex("^[a-zA-Z0-9]+$", k))])
-    error_message = "Product names (map keys) must be alphanumeric characters only."
+    condition     = alltrue([for k, v in var.product_syncroot_source_repos : can(regex("^[a-zA-Z0-9]+(-[a-zA-Z0-9]+)*$", k))])
+    error_message = "Product names (map keys) must contain only alphanumeric characters separated by single hyphens."
   }
 }
