@@ -8,7 +8,7 @@
 
 # Summary
 
-Extend `dis-console` with an authenticated API that lets product workflows register a deployment attempt and poll its outcome. A successful attempt means the requested application artifact reconciled in the intended environment and its required workloads completed their rollout. Reuse the existing cluster agents and central database, add durable attempt records, and provide a shared GitHub Action. Start with Dialogporten in `at23`. The [implementation plan](0016-dis-deployment-status-implementation-plan.md) describes the coordinated changes and validation.
+Extend `dis-console` with an authenticated API that lets product workflows register a deployment attempt and poll its outcome. A successful attempt means the requested application artifact reconciled in the intended environment and its required workloads completed their rollout. Reuse the existing cluster agents and central database, add durable attempt records, and provide a shared GitHub Action. The [implementation plan](0016-dis-deployment-status-implementation-plan.md) describes the coordinated changes and validation.
 
 # Motivation
 
@@ -19,7 +19,7 @@ There are two common false positives:
 - The previous release is healthy while the requested release has not reached the cluster.
 - Kubernetes still serves traffic through old replicas while replacement replicas fail to become ready.
 
-Dialogporten also has two repository identities: the application commit that initiated deployment and the manifest commit used to publish the Flux artifact. A result must be correlated through both repositories to the exact artifact and environment.
+Products with separate application and manifest repositories have two commit identities: the application commit that initiated deployment and the manifest commit used to publish the Flux artifact. A result must correlate both commits with the exact artifact and environment.
 
 The console already collects Flux and workload state across clusters. Extending it gives product teams one contract for deployment results and failure detail, without requiring each workflow to implement cluster access and Flux-specific polling.
 
@@ -31,20 +31,20 @@ A product registers a **deployment attempt** before asking its manifest publishe
 
 The publisher creates an **artifact receipt**: the manifest commit, OCI repository, immutable artifact digest, and expected application images. It attaches this receipt before promoting the environment's artifact tag. The workflow then polls the attempt using a shared action.
 
-For Dialogporten `at23`, the sequence is:
+The deployment sequence is:
 
-1. Register an attempt for the application commit and `at23`.
-2. Dispatch the attempt ID and requested images to `dialogporten-manifests`.
-3. Publish the manifest artifact, attach its receipt, and promote the `at23` application artifact tag.
-4. Flux observes the artifact and reconciles `product-dialogporten/dialogporten-apps`.
+1. Register an attempt for the application commit and target environment.
+2. Pass the attempt ID and requested images to the manifest publisher.
+3. Publish the manifest artifact, attach its receipt, and promote the target environment's application artifact tag.
+4. Flux observes the artifact and reconciles the configured application Kustomization.
 5. The console evaluates the application revision and required workload rollouts.
 6. The shared action exits successfully when the attempt succeeds, or reports the terminal outcome and diagnostic details.
 
-For example, if the old release remains available while the new Web API pods fail to start, the attempt stays in progress with rollout diagnostics. It eventually fails on an attributable terminal error or reaches its deadline. It cannot succeed using the old release's readiness.
+For example, if the old release remains available while the new application pods fail to start, the attempt stays in progress with rollout diagnostics. It eventually fails on an attributable terminal error or reaches its deadline. It cannot succeed using the old release's readiness.
 
 ## Scope of success
 
-V1 covers manifest reconciliation and application rollout in one target cluster per attempt. The pilot supports explicitly configured Kubernetes Deployments. Other workload kinds and rollout strategies require defined evaluators before onboarding.
+V1 covers manifest reconciliation and rollout of explicitly configured Kubernetes Deployments in one target cluster per attempt. Other workload kinds and rollout strategies require defined evaluators before onboarding.
 
 Migration execution, smoke tests, automatic rollback, and a new console UI are outside this RFC's initial implementation. A product can run its existing checks after the wait action. If multiple systems deploy an application during migration to DIS, their outcomes must be reported separately.
 
@@ -52,12 +52,11 @@ Migration execution, smoke tests, automatic rollback, and a new console UI are o
 
 ## Existing implementation
 
-The source baseline for this proposal is `altinn-platform` commit `b5e1ed6d` and `dialogporten-manifests` commit `813149a5`. Source inspection does not verify deployed versions or connectivity.
+The source baseline for the console and shared publishing action is `altinn-platform` commit `b5e1ed6d`. Source inspection does not verify deployed versions or connectivity.
 
 - The [console agent](../services/dis-console/internal/flux/client.go) collects Flux resources and selected Deployments, StatefulSets, and DaemonSets. The central [API](../services/dis-console/internal/api/server.go) serves resource details, inventory, history, and cluster freshness.
 - Current [normalization](../services/dis-console/internal/flux/normalize.go) projects one display revision and uses a Deployment's `Available` condition. Deployment evaluation needs separate applied/attempted revisions and complete rollout evidence.
 - The [publishing action](../actions/flux/build-push-image/action.yaml) records the publishing repository's Git revision. It does not return a deployment receipt to the originating application workflow.
-- Dialogporten's [application Kustomization](https://github.com/Altinn/dialogporten-manifests/blob/813149a5f4c9952032b7ddae2adc78e999af0492/flux/syncroot/base/dialogporten-flux-kustomization.yaml) has no explicit rollout health checks. At that baseline, its [source](https://github.com/Altinn/dialogporten-manifests/blob/813149a5f4c9952032b7ddae2adc78e999af0492/flux/syncroot/base/dialogporten-oci-repository.yaml) polls a shared `:main` application artifact every ten minutes. Dialogporten plans to replace this publishing contract with environment tags; this RFC targets that planned contract, not continued use of `:main`.
 
 ## Architecture
 
@@ -88,7 +87,7 @@ Store these identities independently:
 - Expected application image references, preferably pinned by digest.
 - Deployment ID, idempotency key, registration time, and deadline.
 
-Compare the upstream OCI digest represented in the source's `status.artifact.revision`. Flux's stored-artifact checksum is a different identity. An image tag alone is insufficient for strict version verification; the pilot must pin images by digest or establish an enforceable immutable image-tag policy. See [OCIRepository artifact status](https://fluxcd.io/flux/components/source/ocirepositories/#artifact).
+Compare the upstream OCI digest represented in the source's `status.artifact.revision`. Flux's stored-artifact checksum is a different identity. An image tag alone is insufficient for strict version verification; products must pin images by digest or establish an enforceable immutable image-tag policy. See [OCIRepository artifact status](https://fluxcd.io/flux/components/source/ocirepositories/#artifact).
 
 Proposed routes:
 
@@ -105,15 +104,15 @@ Example status response; identifiers and digest are illustrative:
 
 ```json
 {
-  "deploymentId": "dp-at23-123456-1",
-  "product": "dialogporten",
-  "environment": "at23",
+  "deploymentId": "example-staging-123456-1",
+  "product": "example",
+  "environment": "staging",
   "state": "progressing",
   "terminal": false,
   "target": {
-    "cluster": "dis-core-at23-aks",
-    "namespace": "product-dialogporten",
-    "kustomization": "dialogporten-apps",
+    "cluster": "example-staging-cluster",
+    "namespace": "product-example",
+    "kustomization": "example-apps",
     "artifactDigest": "sha256:..."
   },
   "checks": {
@@ -152,9 +151,9 @@ Finalize outcomes transactionally and retain them independently of resource hist
 
 ## Publication, concurrency, and recovery
 
-[Dialogporten manifest PR #86](https://github.com/Altinn/dialogporten-manifests/pull/86) introduces environment tags (`at23`, `tt02`, `yt01`, and `prod`) for application and syncroot artifacts. Initially, every commit to `main` builds each complete bundle once and refreshes all four tags. Application tags are published before syncroot tags; each environment retains the runtime image versions in its own overlay. Treat this publishing rewrite as a prerequisite, coordinated separately from this RFC. Integrate receipts into that publisher and verify that each Flux source selects its environment tag and the correct artifact path.
+Products publish application OCI artifacts under environment tags and configure Flux to consume the corresponding tag and artifact path. The tag selects the environment; the immutable digest identifies the release. For example, `example/manifests:staging` may point to digest A for one attempt and digest B for the next. Record the exact digest produced by each publishing operation and compare it with the observed Flux revision. Never resolve the mutable tag later to reconstruct an earlier attempt's identity.
 
-The tag selects the environment; the digest identifies the release. For example, `dialogporten/dialogporten-sync:at23` may point to digest A for one attempt and digest B for the next. Record the exact digest produced by each publishing operation and compare it with the observed Flux revision. Never resolve the mutable tag later to reconstruct an earlier attempt's identity. During the initial all-tag publication phase, even a change for `tt02` advances the artifact digest behind `:at23`. Environment tag names alone therefore do not provide independent promotion. Before enforcing this RFC's per-environment attempt ownership, add publication scoped to the requested environment in a separate follow-up. Two successive `:at23` promotions will still require ownership and supersession handling.
+Environment tags alone do not provide independent promotion. If a publisher refreshes every environment tag together, an unrelated environment change can replace the digest an active attempt expects. Before enforcing per-environment attempt ownership, scope promotion to the requested environment. Product-specific migration steps belong in the implementation plan. Successive promotions within one environment still require ownership and supersession handling.
 
 Bootstrap syncroot and application artifacts remain distinct OCI repositories even when both use the same environment tag. Track the application artifact receipt for application rollout success.
 
@@ -174,14 +173,14 @@ Expose only the intended API routes and selected status fields. Protect diagnost
 
 ## Delivery and validation
 
-Implement additive schema and agent changes, then the evaluator/API/authentication, then publisher and wait actions, followed by the Dialogporten pilot after its environment-tag publishing rewrite and the follow-up for independent promotion are available. Preserve compatibility with existing console/UI consumers. The [implementation plan](0016-dis-deployment-status-implementation-plan.md) defines repository owners, dependency order, and checks.
+Implement additive schema and agent changes, then the evaluator/API/authentication, then publisher and wait actions. Onboard products once their publishing workflows meet the artifact identity and promotion ownership contract. Preserve compatibility with existing console/UI consumers. The [implementation plan](0016-dis-deployment-status-implementation-plan.md) defines repository owners, dependency order, and checks.
 
 Run the gate in observation mode before making it required. Acceptance scenarios include a successful rollout, a broken image while old replicas serve traffic, invalid manifests, source failure, stale collection, duplicate requests, cross-product access denial, interrupted publication, successive releases under the same environment tag, independent promotions in different environments, and competing attempts. Roll back enforcement independently of application delivery and retain attempt history.
 
 # Drawbacks
 
 - The console gains durable workflow state and becomes a dependency for deployment reporting and, once enforced, promotion registration.
-- Polling and central synchronization add latency. The existing ten-minute source interval can dominate the feedback time.
+- Polling and central synchronization add latency. Each product's configured source interval can dominate the feedback time.
 - Correct revision correlation and publication ownership require coordinated changes across application, manifest, and platform repositories.
 - The API cannot prove that a short-lived release succeeded if collection missed the evidence. It must report uncertainty conservatively.
 - Registration, receipt handling, and authorization create more operational responsibility than a simple notification integration.
@@ -202,7 +201,7 @@ A reusable action could read Flux resources through the Kubernetes API. This is 
 
 That proposal addresses event-triggered workflows. This RFC addresses a caller waiting for a durable outcome of a specific attempt. It has no dependency on merging or deploying flux-dispatch and does not decide that proposal's fate. If both proceed, agree on shared release identity and outcome vocabulary. Notifications could accelerate observation or publish finalized outcomes without becoming the sole source of truth.
 
-Native [GitHub notification providers](https://fluxcd.io/flux/components/notification/providers/) are another option. They can publish commit statuses, but Dialogporten still needs correlation between its application commit and the manifest artifact's origin commit, plus rollout checks and missing-event/deadline handling.
+Native [GitHub notification providers](https://fluxcd.io/flux/components/notification/providers/) are another option. They can publish commit statuses, but products with separate application and manifest repositories still need commit correlation, rollout checks, and missing-event/deadline handling.
 
 ## Prometheus or Azure Flux status
 
@@ -222,12 +221,12 @@ Product pipelines would continue reporting publication/dispatch success without 
 
 # Unresolved questions
 
-Before implementation and pilot enforcement:
+Before implementation and enforcement:
 
 - Which gateway, hostname, and infrastructure checkout own API exposure, and should OIDC validation happen at the gateway or service?
-- Which Dialogporten Deployments are required, what is the policy for zero replicas, and will the pilot pin runtime images by digest?
+- How should reviewed product configuration declare required workloads, zero-replica policies, and image immutability requirements?
 - What serialized publisher/fencing mechanism prevents late writes after cancellation, timeout, or supersession? Confirm this before allowing a replacement publisher to proceed.
-- Which console/Flux versions and agent coverage are actually deployed in the pilot, and what retention period should finalized attempts have?
+- Which console/Flux versions must be supported, how should agent capability requirements be checked during onboarding, and what retention period should finalized attempts have?
 - Does the shared action belong here or in `dis-way/actions`? Coordinate with the [pending action migration](https://github.com/Altinn/altinn-platform/pull/3926) before publishing a new supported action path.
 
 # Future possibilities
