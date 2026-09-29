@@ -57,7 +57,7 @@ The source baseline for this proposal is `altinn-platform` commit `b5e1ed6d` and
 - The [console agent](../services/dis-console/internal/flux/client.go) collects Flux resources and selected Deployments, StatefulSets, and DaemonSets. The central [API](../services/dis-console/internal/api/server.go) serves resource details, inventory, history, and cluster freshness.
 - Current [normalization](../services/dis-console/internal/flux/normalize.go) projects one display revision and uses a Deployment's `Available` condition. Deployment evaluation needs separate applied/attempted revisions and complete rollout evidence.
 - The [publishing action](../actions/flux/build-push-image/action.yaml) records the publishing repository's Git revision. It does not return a deployment receipt to the originating application workflow.
-- Dialogporten's [application Kustomization](https://github.com/Altinn/dialogporten-manifests/blob/813149a5f4c9952032b7ddae2adc78e999af0492/flux/syncroot/base/dialogporten-flux-kustomization.yaml) has no explicit rollout health checks. Its [source](https://github.com/Altinn/dialogporten-manifests/blob/813149a5f4c9952032b7ddae2adc78e999af0492/flux/syncroot/base/dialogporten-oci-repository.yaml) polls a shared `:main` application artifact every ten minutes.
+- Dialogporten's [application Kustomization](https://github.com/Altinn/dialogporten-manifests/blob/813149a5f4c9952032b7ddae2adc78e999af0492/flux/syncroot/base/dialogporten-flux-kustomization.yaml) has no explicit rollout health checks. At that baseline, its [source](https://github.com/Altinn/dialogporten-manifests/blob/813149a5f4c9952032b7ddae2adc78e999af0492/flux/syncroot/base/dialogporten-oci-repository.yaml) polls a shared `:main` application artifact every ten minutes. Dialogporten plans to replace this publishing contract with environment tags; this RFC targets that planned contract, not continued use of `:main`.
 
 ## Architecture
 
@@ -84,7 +84,7 @@ Store these identities independently:
 
 - Product, environment, cluster, namespace, source, Kustomization, and required workloads.
 - Application repository/full commit SHA and GitHub workflow run ID/attempt.
-- Manifest repository/full commit SHA and immutable OCI manifest digest.
+- Manifest repository/full commit SHA, OCI repository/environment tag, and immutable OCI manifest digest.
 - Expected application image references, preferably pinned by digest.
 - Deployment ID, idempotency key, registration time, and deadline.
 
@@ -152,7 +152,11 @@ Finalize outcomes transactionally and retain them independently of resource hist
 
 ## Publication, concurrency, and recovery
 
-Use environment-specific application artifact tags for the pilot. The existing shared `:main` bundle allows an unrelated environment update to replace the digest a caller is waiting for. Keep application artifact tags separate from bootstrap syncroot tags.
+Dialogporten will publish application OCI artifacts using environment tags such as `at23`, `tt02`, and `prod`. Treat that publishing rewrite as a prerequisite for the pilot, coordinated separately from this RFC. Integrate receipts and attempt ownership into the rewritten publisher, and verify that each Flux source selects its environment tag and the correct path inside the artifact. Do not duplicate the tag migration in the deployment-status implementation.
+
+The tag selects the environment; the digest identifies the release. For example, `dialogporten/dialogporten-sync:at23` may point to digest A for one attempt and digest B for the next. Record the exact digest produced by each publishing operation and compare it with the observed Flux revision. Never resolve the mutable tag later to reconstruct an earlier attempt's identity. Publishing `:tt02` must not move `:at23`; two successive `:at23` promotions still require ownership and supersession handling.
+
+Bootstrap syncroot and application artifacts remain distinct OCI repositories even when both use the same environment tag. Track the application artifact receipt for application rollout success.
 
 Registration permits one active attempt per product/environment. A competing attempt receives a retryable conflict. This avoids treating GitHub's workflow concurrency mechanism as a durable queue. An authorized explicit operation may supersede an attempt, but must first stop or fence the old publisher.
 
@@ -170,9 +174,9 @@ Expose only the intended API routes and selected status fields. Protect diagnost
 
 ## Delivery and validation
 
-Implement additive schema and agent changes, then the evaluator/API/authentication, then publisher and wait actions, followed by the Dialogporten pilot. Preserve compatibility with existing console/UI consumers. The [implementation plan](0016-dis-deployment-status-implementation-plan.md) defines repository owners, dependency order, and checks.
+Implement additive schema and agent changes, then the evaluator/API/authentication, then publisher and wait actions, followed by the Dialogporten pilot once its environment-tag publishing rewrite is available. Preserve compatibility with existing console/UI consumers. The [implementation plan](0016-dis-deployment-status-implementation-plan.md) defines repository owners, dependency order, and checks.
 
-Run the gate in observation mode before making it required. Acceptance scenarios include a successful rollout, a broken image while old replicas serve traffic, invalid manifests, source failure, stale collection, duplicate requests, cross-product access denial, interrupted publication, and competing attempts. Roll back enforcement independently of application delivery and retain attempt history.
+Run the gate in observation mode before making it required. Acceptance scenarios include a successful rollout, a broken image while old replicas serve traffic, invalid manifests, source failure, stale collection, duplicate requests, cross-product access denial, interrupted publication, successive releases under the same environment tag, independent promotions in different environments, and competing attempts. Roll back enforcement independently of application delivery and retain attempt history.
 
 # Drawbacks
 
