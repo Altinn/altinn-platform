@@ -1,7 +1,7 @@
 - Feature Name: dis_deployment_status
 - Title: Deployment status through DIS Console
 - Start Date: 2026-09-29
-- RFC PR: Pending creation
+- RFC PR: [altinn/altinn-platform#4144](https://github.com/Altinn/altinn-platform/pull/4144)
 - Github Issue: N/A; implementation issues follow RFC acceptance
 - Product/Category: CI/CD / DIS Console
 - State: **REVIEW**
