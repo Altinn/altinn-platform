@@ -89,6 +89,20 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
     msi_auth_for_monitoring_enabled = true
   }
 
+  network_profile {
+    network_plugin      = "azure"
+    network_plugin_mode = "overlay"
+    load_balancer_sku   = "standard"
+
+    load_balancer_profile {
+      # https://learn.microsoft.com/en-us/azure/load-balancer/load-balancer-outbound-connections#preallocatedports
+      # TODO: Just a quick test, but I should optimize this.
+      outbound_ports_allocated  = 4096
+      idle_timeout_in_minutes   = 10 # We could probably decrease it even further. 4 mins is the min.
+      managed_outbound_ip_count = 1
+    }
+  }
+
   automatic_upgrade_channel = "stable"
 
 }
