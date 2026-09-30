@@ -59,7 +59,7 @@ resource "azurerm_kubernetes_cluster" "k6tests" {
     name                 = "default"
     auto_scaling_enabled = true
     min_count            = 1
-    max_count            = 5
+    max_count            = 3
     vm_size              = "Standard_D4s_v6"
     upgrade_settings { # Adding these to keep plans clean
       drain_timeout_in_minutes      = 0
@@ -170,7 +170,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot2c7g" {
   auto_scaling_enabled  = true
   node_count            = 0
   min_count             = 0
-  max_count             = 20
+  max_count             = 1 # TODO: remove this one? Probably too underpowered.
   priority              = "Spot"
   eviction_policy       = "Delete"
   spot_max_price        = -1 # (the current on-demand price for a Virtual Machine)
