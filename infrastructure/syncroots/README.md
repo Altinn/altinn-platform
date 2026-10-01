@@ -12,11 +12,12 @@ write condition includes all products sharing the repository. All shared entries
 must specify identical branches and environments. Changing the selected identity
 product can replace the publishing identity and its credentials.
 
-`altinn-auth` retains `accessmanagement` as its identity product and a legacy
-artifact prefix because its publisher and the at22 bootstrap still use that name.
-The new `access-management` prefix is available alongside it. Migrating the
-existing namespace, Flux resources, RBAC and workload identities requires
-coordinated changes in `altinn-auth` and `dis-way/core`.
+`altinn-auth` uses `access-management` as its identity product. `moved.tf` migrates
+the former `accessmanagement` module address so existing GitHub secrets retain
+their Terraform ownership. Renaming the Azure identity creates a new client ID;
+Terraform updates the repository secret to match. The old artifact prefix loses
+write access. Coordinate the publisher and namespace migration with `altinn-auth`
+and `dis-way/core` before publishing or switching the at22 bootstrap.
 
 After deployment, the workflow seeds missing environment tags with the default
 syncroot. Adding an entry does not configure a product's publisher or bootstrap

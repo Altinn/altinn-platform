@@ -10,17 +10,17 @@ run "configured_repositories_have_one_identity_each" {
 
   assert {
     condition = toset(keys(module.syncroot_github_repo)) == toset([
-      "accessmanagement", "arbeidsflate", "core", "dialogporten", "dis",
+      "access-management", "arbeidsflate", "core", "dialogporten", "dis",
       "disproxies", "infoportal", "monitoring", "preinvoicingsystem", "studio"
     ])
-    error_message = "Adding products must retain the existing module addresses and create only one publishing identity per repository."
+    error_message = "Each repository must have one publishing identity, with the Auth module renamed to access-management."
   }
 
   assert {
     condition = toset([
       for product, repo in var.product_syncroot_source_repos : product if repo.repo_name == "altinn-auth"
-    ]) == toset(["accessmanagement", "access-management", "authorization", "authentication", "register", "resource-registry"])
-    error_message = "The five new syncroots must coexist with the legacy accessmanagement syncroot."
+    ]) == toset(["access-management", "authorization", "authentication", "register", "resource-registry"])
+    error_message = "Auth must have exactly the five requested syncroots, with no legacy accessmanagement entry."
   }
 }
 
@@ -52,8 +52,8 @@ run "shared_repository_rejects_different_branches" {
   command = plan
   variables {
     product_syncroot_source_repos = {
-      accessmanagement = { repo_name = "altinn-auth", environments = [], branches = ["main"] }
-      authorization    = { repo_name = "altinn-auth", environments = [], branches = ["main", "fix/dis"] }
+      access-management = { repo_name = "altinn-auth", environments = [], branches = ["main"] }
+      authorization     = { repo_name = "altinn-auth", environments = [], branches = ["main", "fix/dis"] }
     }
   }
   expect_failures = [var.product_syncroot_source_repos]
@@ -63,8 +63,8 @@ run "shared_repository_rejects_different_environments" {
   command = plan
   variables {
     product_syncroot_source_repos = {
-      accessmanagement = { repo_name = "altinn-auth", environments = [], branches = ["main"] }
-      authorization    = { repo_name = "altinn-auth", environments = ["prod"], branches = ["main"] }
+      access-management = { repo_name = "altinn-auth", environments = [], branches = ["main"] }
+      authorization     = { repo_name = "altinn-auth", environments = ["prod"], branches = ["main"] }
     }
   }
   expect_failures = [var.product_syncroot_source_repos]
