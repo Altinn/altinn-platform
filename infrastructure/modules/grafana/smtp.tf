@@ -6,6 +6,7 @@ resource "azuread_application" "smtp" {
   count            = var.smtp == null ? 0 : 1
   display_name     = "${local.grafana_name}-smtp"
   sign_in_audience = "AzureADMyOrg"
+  owners           = [data.azuread_client_config.current[0].object_id]
 }
 
 resource "azuread_service_principal" "smtp" {
@@ -25,6 +26,10 @@ resource "azuread_application_password" "smtp" {
 
   rotate_when_changed = {
     rotation = time_rotating.smtp_secret[0].id
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
