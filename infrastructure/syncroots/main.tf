@@ -10,8 +10,11 @@ resource "azurerm_resource_group" "syncroot_pushers" {
 }
 
 module "syncroot_github_repo" {
-  source   = "../modules/syncroot-github-repo"
-  for_each = var.product_syncroot_source_repos
+  source = "../modules/syncroot-github-repo"
+  for_each = {
+    for product, repo in var.product_syncroot_source_repos : product => repo
+    if product == lookup(var.repo_identity_products, repo.repo_name, product)
+  }
 
   github_repo_name    = each.value.repo_name
   github_org_name     = var.github_org_name
@@ -22,4 +25,8 @@ module "syncroot_github_repo" {
   resource_group_name = azurerm_resource_group.syncroot_pushers.name
   tags                = local.common-tags
   product_name        = each.key
+  additional_product_names = toset([
+    for product, repo in var.product_syncroot_source_repos : product
+    if repo.repo_name == each.value.repo_name && product != each.key
+  ])
 }

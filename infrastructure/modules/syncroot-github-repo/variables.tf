@@ -51,6 +51,17 @@ variable "product_name" {
   description = "Name of the team that owns this syncroot user managed identity"
 }
 
+variable "additional_product_names" {
+  type        = set(string)
+  description = "Additional product prefixes this repository's publishing identity may write to in ACR."
+  default     = []
+
+  validation {
+    condition     = alltrue([for product in var.additional_product_names : can(regex("^[a-zA-Z0-9]+(-[a-zA-Z0-9]+)*$", product))])
+    error_message = "Additional product names must contain alphanumeric segments separated by single hyphens."
+  }
+}
+
 variable "subscription_id" {
   type        = string
   description = "subscription where the user manage identity are going to be deployed"
