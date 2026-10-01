@@ -19,6 +19,14 @@ resource "azurerm_dashboard_grafana" "grafana" {
     resource_id = azurerm_monitor_workspace.k6tests_amw.id
   }
 
+  azure_monitor_workspace_integrations {
+    resource_id = "/subscriptions/b946eabe-2509-4652-abfc-6aa3b991fe25/resourceGroups/dis-edge-tt02-monitor-rg/providers/Microsoft.Monitor/accounts/dis-edge-tt02-products-amw"
+  }
+
+  azure_monitor_workspace_integrations {
+    resource_id = "/subscriptions/3be00243-992b-41a2-8bb5-34ed04f7d653/resourceGroups/dis-edge-at24-monitor-rg/providers/Microsoft.Monitor/accounts/dis-edge-at24-products-amw"
+  }
+
   smtp {
     enabled          = true
     host             = "smtp.azurecomm.net:587"
