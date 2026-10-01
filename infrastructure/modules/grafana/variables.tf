@@ -122,7 +122,7 @@ variable "smtp" {
     communication_service_id  = string
     sender_role_definition_id = string
     from_address              = optional(string, "grafana@altinn.cloud")
-    from_name                 = optional(string, "Grafana")
+    from_name                 = optional(string, "Altinn Grafana")
     secret_rotation_days      = optional(number, 180)
   })
   default     = null
