@@ -1,12 +1,8 @@
-data "azuread_client_config" "current" {
-  count = var.smtp == null ? 0 : 1
-}
-
 resource "azuread_application" "smtp" {
   count            = var.smtp == null ? 0 : 1
   display_name     = "${local.grafana_name}-smtp"
   sign_in_audience = "AzureADMyOrg"
-  owners           = [data.azuread_client_config.current[0].object_id]
+  owners           = [var.client_config_current_object_id]
 }
 
 resource "azuread_service_principal" "smtp" {
@@ -43,7 +39,7 @@ resource "azapi_resource" "smtp_username" {
     properties = {
       username           = local.grafana_name
       entraApplicationId = azuread_application.smtp[0].client_id
-      tenantId           = data.azuread_client_config.current[0].tenant_id
+      tenantId           = var.smtp.tenant_id
     }
   }
 }

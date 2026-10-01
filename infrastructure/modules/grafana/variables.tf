@@ -121,6 +121,7 @@ variable "smtp" {
   type = object({
     communication_service_id  = string
     sender_role_definition_id = string
+    tenant_id                 = string
     from_address              = optional(string, "grafana@altinn.cloud")
     from_name                 = optional(string, "Altinn Grafana")
     secret_rotation_days      = optional(number, 180)
@@ -132,6 +133,7 @@ variable "smtp" {
     The deploying identity needs the ACS Terraform Operations (dis-acs-relay) role on the relay.
       communication_service_id  - communication_service_id output of dis-email-relay-acs-rg
       sender_role_definition_id - smtp_sender_role_definition_id output of dis-email-relay-acs-rg
+      tenant_id                 - Entra tenant of the SMTP app, same as the relay
       from_address              - must be a sender registered on the relay
   EOT
 }
