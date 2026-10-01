@@ -79,7 +79,7 @@ run "single_product_does_not_need_identity_selection" {
     }
   }
   assert {
-    condition     = keys(module.syncroot_github_repo) == ["resource-registry"]
+    condition     = toset(keys(module.syncroot_github_repo)) == toset(["resource-registry"])
     error_message = "A single product with a hyphenated name must work without an explicit identity selection."
   }
 }

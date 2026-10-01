@@ -58,7 +58,7 @@ run "shared_identity_can_publish_all_product_prefixes" {
     error_message = "The product prefixes must be alternatives in the write condition."
   }
   assert {
-    condition     = keys(azurerm_federated_identity_credential.syncroot_pusher_branches) == ["main"] && keys(azurerm_federated_identity_credential.syncroot_pusher_branches_immutable) == ["main"] && length(azurerm_federated_identity_credential.syncroot_pusher_envs) == 0 && length(azurerm_federated_identity_credential.syncroot_pusher_envs_immutable) == 0
+    condition     = toset(keys(azurerm_federated_identity_credential.syncroot_pusher_branches)) == toset(["main"]) && toset(keys(azurerm_federated_identity_credential.syncroot_pusher_branches_immutable)) == toset(["main"]) && length(azurerm_federated_identity_credential.syncroot_pusher_envs) == 0 && length(azurerm_federated_identity_credential.syncroot_pusher_envs_immutable) == 0
     error_message = "Shared publishing must remain restricted to main, with no environment federation."
   }
 }
