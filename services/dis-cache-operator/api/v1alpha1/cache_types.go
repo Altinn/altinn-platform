@@ -144,7 +144,9 @@ type PasswordRotationStatus struct {
 	LastRotatedAt *metav1.Time `json:"lastRotatedAt,omitempty"`
 
 	// PreviousValidUntil is the time when the previous password stops being
-	// valid. It is unset when no previous password exists.
+	// valid. It stays set until the operator has removed the previous
+	// password from the Secret, and it is unset when no previous password
+	// exists.
 	// +optional
 	PreviousValidUntil *metav1.Time `json:"previousValidUntil,omitempty"`
 }
@@ -164,9 +166,11 @@ const (
 
 	// ConditionPasswordRotated reports the password rotation state. True with
 	// reason Rotated when no rotation is in progress. False with reason
-	// Rotating while the operator changes the Secret and the ValkeyCluster,
-	// and with reason PreviousPasswordValid while the previous password is
-	// still valid.
+	// Rotating until the operator has copied the previous password, with
+	// reason PasswordCopied until the new password is in place, and with
+	// reason PreviousPasswordValid while the previous password is still
+	// valid. False with reason RotationFailed when the Secret with the auth
+	// Secret name is not the operator's; a later request starts over.
 	ConditionPasswordRotated ConditionType = "PasswordRotated"
 )
 

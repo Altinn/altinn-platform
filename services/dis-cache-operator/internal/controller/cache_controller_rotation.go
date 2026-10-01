@@ -26,8 +26,8 @@ import (
 const (
 	ReasonRotated               = "Rotated"
 	ReasonRotating              = "Rotating"
-	ReasonPasswordCopied        = "PasswordCopied"
-	ReasonPreviousPasswordValid = "PreviousPasswordValid"
+	ReasonPasswordCopied        = cachepkg.ReasonPasswordCopied
+	ReasonPreviousPasswordValid = cachepkg.ReasonPreviousPasswordValid
 	ReasonRotationFailed        = "RotationFailed"
 
 	// DefaultPreviousValidFor is the period the previous password stays valid
@@ -39,6 +39,15 @@ const (
 // of its test operations failed: the step is not the expected one, or the
 // Secret does not carry the Cache label.
 var errPatchRejected = errors.New("the rotation patch was rejected")
+
+// errForeignSecret means every guarded patch was rejected: the Secret with
+// the auth Secret name is not the operator's. This is the one terminal error
+// of a rotation.
+var errForeignSecret = errors.New("the Secret does not carry the Cache label and the rotation step")
+
+// errAdopted means a Secret from before the step annotation existed got its
+// first annotation, idle. The rotation goes on in the next reconcile.
+var errAdopted = errors.New("the Secret got its first rotation step annotation")
 
 // rotationDue reports whether the team asked for a rotation that the operator
 // has not carried out yet. The schedule comes in a later change.
@@ -115,21 +124,6 @@ func (r *CacheReconciler) patchAuthSecret(ctx context.Context, cache *cachev1alp
 	return fmt.Errorf("patch Secret %s: %w", cachepkg.AuthSecretName(cache), err)
 }
 
-// markIdle sets the rotation step annotation to idle. It is for Secrets from
-// before the annotation existed, and it runs only while no rotation is in
-// progress, so idle is the right value in every case.
-func (r *CacheReconciler) markIdle(ctx context.Context, cache *cachev1alpha1.Cache) error {
-	body, err := cachepkg.RotationMarkIdlePatch()
-	if err != nil {
-		return err
-	}
-	if err := r.Patch(ctx, authSecretMetadata(cache), client.RawPatch(types.MergePatchType, body)); err != nil {
-		return fmt.Errorf("mark Secret %s idle: %w", cachepkg.AuthSecretName(cache), err)
-	}
-
-	return nil
-}
-
 // beginRotation runs before the ValkeyCluster apply. It resets the rotation
 // state when the Secret was created again, ends the period when it is over,
 // and starts a rotation the team asked for. It writes the status before the
@@ -143,13 +137,25 @@ func (r *CacheReconciler) beginRotation(ctx context.Context, cache *cachev1alpha
 	if secretCreated && inProgress {
 		// The Secret came back with one password. The previous key is gone,
 		// so the ValkeyCluster must list one key again.
+		// The new Secret holds a new password, so the request is done too.
 		logger.Info("the auth Secret was created again during a rotation; the rotation state is reset")
 		setRotationCondition(cache, metav1.ConditionTrue, ReasonRotated, "the Secret was created again; the rotation was reset")
-		if cache.Status.PasswordRotation != nil {
-			cache.Status.PasswordRotation.PreviousValidUntil = nil
+		if cache.Status.PasswordRotation == nil {
+			cache.Status.PasswordRotation = &cachev1alpha1.PasswordRotationStatus{}
+		}
+		cache.Status.PasswordRotation.PreviousValidUntil = nil
+		cache.Status.PasswordRotation.LastRotatedAt = &metav1.Time{Time: r.now()}
+		if spec := cache.Spec.PasswordRotation; spec != nil && spec.RequestedAt != nil {
+			cache.Status.PasswordRotation.RequestedAt = spec.RequestedAt.DeepCopy()
 		}
 
 		return r.patchStatus(ctx, cache, orig)
+	}
+
+	if inProgress && cond.Reason == ReasonRotationFailed && rotationDue(cache) {
+		// A newer request after the terminal failure starts over, for example
+		// after someone removed the foreign Secret.
+		inProgress = false
 	}
 
 	if inProgress {
@@ -158,7 +164,7 @@ func (r *CacheReconciler) beginRotation(ctx context.Context, cache *cachev1alpha
 			!r.now().Before(status.PreviousValidUntil.Time) {
 			// The period is over. The condition goes True first, so the apply
 			// lists one key before the previous password is removed.
-			setRotationCondition(cache, metav1.ConditionTrue, ReasonRotated, "the previous password is being removed")
+			setRotationCondition(cache, metav1.ConditionTrue, ReasonRotated, "the operator removes the previous password")
 
 			return r.patchStatus(ctx, cache, orig)
 		}
@@ -170,10 +176,7 @@ func (r *CacheReconciler) beginRotation(ctx context.Context, cache *cachev1alpha
 		return nil
 	}
 
-	if err := r.markIdle(ctx, cache); err != nil {
-		return err
-	}
-	setRotationCondition(cache, metav1.ConditionFalse, ReasonRotating, "the password is being rotated")
+	setRotationCondition(cache, metav1.ConditionFalse, ReasonRotating, "the operator rotates the password")
 	if err := r.patchStatus(ctx, cache, orig); err != nil {
 		return err
 	}
@@ -203,8 +206,11 @@ func (r *CacheReconciler) copyPassword(ctx context.Context, cache *cachev1alpha1
 
 // replacePassword writes the new password. A rejected replace after a
 // confirmed copy means the replace already happened before a restart. A
-// rejected replace without a confirmed copy means the Secret is not the
-// operator's: both guarded patches failed on it.
+// rejected replace without a confirmed copy has three causes, and two more
+// patches tell them apart: a probe with tests only says whether the Secret is
+// ours and already replaced; then the adopt patch says whether it is ours and
+// from before the annotation existed. When both are rejected too, the Secret
+// is not the operator's.
 func (r *CacheReconciler) replacePassword(ctx context.Context, cache *cachev1alpha1.Cache, copyConfirmed bool) error {
 	body, err := cachepkg.RotationReplacePatch(cache, rand.Text())
 	if err != nil {
@@ -214,9 +220,30 @@ func (r *CacheReconciler) replacePassword(ctx context.Context, cache *cachev1alp
 	switch {
 	case err == nil, errors.Is(err, errPatchRejected) && copyConfirmed:
 		return nil
+	case !errors.Is(err, errPatchRejected):
+		return err
+	}
+
+	probe, err := cachepkg.RotationReplacedProbe(cache)
+	if err != nil {
+		return err
+	}
+	switch err := r.patchAuthSecret(ctx, cache, probe); {
+	case err == nil:
+		return nil
+	case !errors.Is(err, errPatchRejected):
+		return err
+	}
+
+	adopt, err := cachepkg.RotationAdoptPatch(cache)
+	if err != nil {
+		return err
+	}
+	switch err := r.patchAuthSecret(ctx, cache, adopt); {
+	case err == nil:
+		return errAdopted
 	case errors.Is(err, errPatchRejected):
-		return fmt.Errorf("the Secret %s does not carry the Cache label and the rotation step: %w",
-			cachepkg.AuthSecretName(cache), err)
+		return fmt.Errorf("%w: %s: %w", errForeignSecret, cachepkg.AuthSecretName(cache), err)
 	default:
 		return err
 	}
@@ -245,9 +272,19 @@ func (r *CacheReconciler) completeRotation(ctx context.Context, cache *cachev1al
 			if err := r.copyPassword(ctx, cache); err != nil {
 				return 0, err
 			}
+			if rotationCondition(cache).Reason == ReasonPasswordCopied {
+				// The copy is confirmed now, but this apply listed one key.
+				// The next reconcile lists both keys before the replace.
+				return time.Second, nil
+			}
 		}
-		copyConfirmed := rotationCondition(cache).Reason == ReasonPasswordCopied
+		copyConfirmed := cond.Reason == ReasonPasswordCopied
 		if err := r.replacePassword(ctx, cache, copyConfirmed); err != nil {
+			if errors.Is(err, errAdopted) {
+				logger.Info("the auth Secret got its rotation step annotation", "secret", cachepkg.AuthSecretName(cache))
+
+				return time.Second, nil
+			}
 			return 0, err
 		}
 		orig := cache.DeepCopy()
@@ -262,7 +299,9 @@ func (r *CacheReconciler) completeRotation(ctx context.Context, cache *cachev1al
 			"the new password is in place; the previous one stays valid until "+status.PreviousValidUntil.UTC().Format(time.RFC3339))
 		logger.Info("password rotated", "secret", cachepkg.AuthSecretName(cache), "previousValidUntil", status.PreviousValidUntil.UTC())
 
-		return max(period, time.Second), r.patchStatus(ctx, cache, orig)
+		// The next reconcile writes the rotation time on the ValkeyCluster,
+		// which makes the valkey-operator load both passwords at once.
+		return time.Second, r.patchStatus(ctx, cache, orig)
 
 	case cond.Status == metav1.ConditionTrue && status.PreviousValidUntil != nil:
 		// A rejected remove means the key is already gone: only the
@@ -289,11 +328,28 @@ func (r *CacheReconciler) completeRotation(ctx context.Context, cache *cachev1al
 }
 
 // rotationFailed records a rotation error in the PasswordRotated condition
-// and returns the error. The condition stays False, so the ValkeyCluster
-// keeps both keys until someone looks.
+// and returns the error. The reason records the confirmed step, so a passing
+// error keeps the reason and only sets the message: the next reconcile
+// resumes at the same step. A foreign Secret is terminal: the condition gets
+// the reason RotationFailed, the request counts as handled, and the
+// ValkeyCluster lists one key. A later request starts over.
 func (r *CacheReconciler) rotationFailed(ctx context.Context, cache *cachev1alpha1.Cache, err error) error {
 	orig := cache.DeepCopy()
-	setRotationCondition(cache, metav1.ConditionFalse, ReasonRotationFailed, shortened(err.Error()))
+	cond := rotationCondition(cache)
+	switch {
+	case errors.Is(err, errForeignSecret):
+		setRotationCondition(cache, metav1.ConditionFalse, ReasonRotationFailed, shortened(err.Error()))
+		if spec := cache.Spec.PasswordRotation; spec != nil && spec.RequestedAt != nil {
+			if cache.Status.PasswordRotation == nil {
+				cache.Status.PasswordRotation = &cachev1alpha1.PasswordRotationStatus{}
+			}
+			cache.Status.PasswordRotation.RequestedAt = spec.RequestedAt.DeepCopy()
+		}
+	case cond != nil:
+		setRotationCondition(cache, cond.Status, cond.Reason, shortened(err.Error()))
+	default:
+		return err
+	}
 	if statusErr := r.patchStatus(ctx, cache, orig); statusErr != nil {
 		logf.FromContext(ctx).Error(statusErr, "cannot record the rotation failure in the Cache status")
 	}

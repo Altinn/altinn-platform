@@ -121,15 +121,6 @@ func (r *CacheReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	return ctrl.Result{RequeueAfter: requeueAfter}, nil
 }
 
-// ensureAuthSecret creates the credentials Secret with a new random password.
-// When the Secret exists, the create fails with AlreadyExists and the stored
-// password stays. The operator does not read the Secret back, so a new
-// password is generated on every reconcile and dropped when it is not needed.
-//
-// A Secret with the same name that someone else created is kept as it is: it
-// becomes the password source, it gets no owner reference, and the operator
-// cannot check its content. A missing password key shows up as a failed
-// ValkeyCluster.
 // ensureAuthSecret creates the auth Secret when it does not exist. It reports
 // whether it created one: that is the only signal that a new password exists.
 func (r *CacheReconciler) ensureAuthSecret(ctx context.Context, owner *cachev1alpha1.Cache) (bool, error) {

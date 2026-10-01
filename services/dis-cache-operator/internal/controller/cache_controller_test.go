@@ -594,9 +594,14 @@ var _ = Describe("Cache password rotation", func() {
 		Expect(updated.Status.PasswordRotation.RequestedAt.Time).To(BeTemporally("==", now))
 		Expect(updated.Status.PasswordRotation.LastRotatedAt.Time).To(BeTemporally("==", now))
 		Expect(updated.Status.PasswordRotation.PreviousValidUntil.Time).To(BeTemporally("==", now.Add(time.Hour)))
+		// The first requeue is short: the next reconcile writes the rotation
+		// time on the ValkeyCluster, and from then on the requeue is the period.
+		Expect(result.RequeueAfter).To(Equal(time.Second))
+		result = reconcileWith(r, "cache-rotate")
 		Expect(result.RequeueAfter).To(Equal(time.Hour))
+		Expect(getValkeyCluster("cache-rotate").Annotations[cachepkg.PasswordRotatedAtAnnotation]).To(Equal("2026-09-19T08:00:00Z"))
 
-		// A second reconcile inside the period changes nothing.
+		// A further reconcile inside the period changes nothing.
 		reconcileWith(r, "cache-rotate")
 		Expect(getSecret(secret.Name).Data).To(Equal(rotated.Data))
 
@@ -677,6 +682,11 @@ var _ = Describe("Cache password rotation", func() {
 		Expect(k8sClient.Update(ctx, old)).To(Succeed())
 
 		requestRotation("cache-rotate-old", now)
+		// One reconcile adopts the Secret, the next copies, the third replaces.
+		reconcileWith(r, "cache-rotate-old")
+		Expect(getSecret(old.Name).Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepIdle))
+		reconcileWith(r, "cache-rotate-old")
+		Expect(getSecret(old.Name).Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepCopied))
 		reconcileWith(r, "cache-rotate-old")
 
 		rotated := getSecret(old.Name)
@@ -732,5 +742,95 @@ var _ = Describe("Cache password rotation of a foreign Secret", func() {
 		cond := rotatedOf(getCache("cache-rotate-foreign"))
 		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
 		Expect(cond.Reason).To(Equal(ReasonRotationFailed))
+		Expect(cond.Message).NotTo(ContainSubstring("theirs"))
+		Expect(cond.Message).NotTo(ContainSubstring("dGhlaXJz"))
+		Expect(getValkeyCluster("cache-rotate-foreign").Spec.Users[1].PasswordSecret.Keys).To(Equal([]string{cachepkg.AuthSecretPasswordKey}))
+
+		// The request counts as handled: the next reconcile does not retry.
+		reconcileWith(r, "cache-rotate-foreign")
+		Expect(getSecret(foreign.Name).Annotations).NotTo(HaveKey(cachepkg.RotationStepAnnotation))
+		Expect(rotatedOf(getCache("cache-rotate-foreign")).Reason).To(Equal(ReasonRotationFailed))
+	})
+})
+
+var _ = Describe("Cache password rotation after a passing error", func() {
+	It("keeps the step and completes the removal on the next reconcile", func() {
+		now := time.Date(2026, 9, 19, 14, 0, 0, 0, time.UTC)
+		cache := newCache("cache-rotate-retry", func(c *cachev1alpha1.Cache) {
+			c.Spec.PasswordRotation = &cachev1alpha1.PasswordRotationSpec{PreviousValidFor: &metav1.Duration{}}
+		})
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+		good := rotationReconciler(&now)
+		reconcileWith(good, "cache-rotate-retry")
+		requestRotation("cache-rotate-retry", now)
+		reconcileWith(good, "cache-rotate-retry")
+
+		// The remove patch fails once, as an API server error would.
+		watchClient, err := client.NewWithWatch(cfg, client.Options{Scheme: k8sClient.Scheme()})
+		Expect(err).NotTo(HaveOccurred())
+		failing := interceptor.NewClient(watchClient, interceptor.Funcs{
+			Patch: func(callCtx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+				if _, isMeta := obj.(*metav1.PartialObjectMetadata); isMeta && patch.Type() == types.JSONPatchType {
+					return errors.New("the API server is not available")
+				}
+				return c.Patch(callCtx, obj, patch, opts...)
+			},
+		})
+		bad := rotationReconciler(&now)
+		bad.Client = failing
+		_, err = bad.Reconcile(ctx, ctrl.Request{
+			NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: "cache-rotate-retry"},
+		})
+		Expect(err).To(HaveOccurred())
+		cond := rotatedOf(getCache("cache-rotate-retry"))
+		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+		Expect(cond.Reason).To(Equal(ReasonRotated))
+		Expect(cond.Message).To(ContainSubstring("not available"))
+		Expect(getSecret(cachepkg.AuthSecretName(cache)).Data).To(HaveKey(cachepkg.AuthSecretPreviousPasswordKey))
+
+		// The next reconcile resumes at the same step and removes the key.
+		reconcileWith(good, "cache-rotate-retry")
+		Expect(getSecret(cachepkg.AuthSecretName(cache)).Data).NotTo(HaveKey(cachepkg.AuthSecretPreviousPasswordKey))
+		Expect(getCache("cache-rotate-retry").Status.PasswordRotation.PreviousValidUntil).To(BeNil())
+	})
+})
+
+var _ = Describe("Cache password rotation after lost status writes", func() {
+	It("finds the step on the Secret and completes the rotation", func() {
+		now := time.Date(2026, 9, 19, 15, 0, 0, 0, time.UTC)
+		cache := newCache("cache-rotate-lost", nil)
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+		good := rotationReconciler(&now)
+		reconcileWith(good, "cache-rotate-lost")
+		first := getSecret(cachepkg.AuthSecretName(cache)).Data[cachepkg.AuthSecretPasswordKey]
+
+		// Every status write of the first rotation reconcile is lost, as a
+		// crash right after the Secret patches would lose them.
+		watchClient, err := client.NewWithWatch(cfg, client.Options{Scheme: k8sClient.Scheme()})
+		Expect(err).NotTo(HaveOccurred())
+		silent := interceptor.NewClient(watchClient, interceptor.Funcs{
+			SubResourcePatch: func(context.Context, client.Client, string, client.Object, client.Patch, ...client.SubResourcePatchOption) error {
+				return nil
+			},
+		})
+		requestRotation("cache-rotate-lost", now)
+		amnesic := rotationReconciler(&now)
+		amnesic.Client = silent
+		reconcileWith(amnesic, "cache-rotate-lost")
+		Expect(getSecret(cachepkg.AuthSecretName(cache)).Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepReplaced))
+		Expect(rotatedOf(getCache("cache-rotate-lost"))).To(BeNil())
+
+		// The next reconciles see no rotation state, probe the Secret, and
+		// record the rotation that already happened.
+		reconcileWith(good, "cache-rotate-lost")
+		reconcileWith(good, "cache-rotate-lost")
+		rotated := getSecret(cachepkg.AuthSecretName(cache))
+		Expect(rotated.Data[cachepkg.AuthSecretPreviousPasswordKey]).To(Equal(first))
+		Expect(rotated.Data[cachepkg.AuthSecretPasswordKey]).NotTo(Equal(first))
+		Expect(rotatedOf(getCache("cache-rotate-lost")).Reason).To(Equal(ReasonPreviousPasswordValid))
+		Expect(getValkeyCluster("cache-rotate-lost").Spec.Users[1].PasswordSecret.Keys).To(Equal(
+			[]string{cachepkg.AuthSecretPasswordKey, cachepkg.AuthSecretPreviousPasswordKey}))
 	})
 })
