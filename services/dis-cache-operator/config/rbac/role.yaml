@@ -10,6 +10,7 @@ rules:
   - secrets
   verbs:
   - create
+  - patch
 - apiGroups:
   - cache.dis.altinn.cloud
   resources:

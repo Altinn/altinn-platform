@@ -207,7 +207,9 @@ spec:
                   previousValidUntil:
                     description: |-
                       PreviousValidUntil is the time when the previous password stops being
-                      valid. It is unset when no previous password exists.
+                      valid. It stays set until the operator has removed the previous
+                      password from the Secret, and it is unset when no previous password
+                      exists.
                     format: date-time
                     type: string
                   requestedAt:

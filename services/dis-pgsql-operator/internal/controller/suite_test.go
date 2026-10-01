@@ -127,6 +127,7 @@ var _ = BeforeSuite(func() {
 	err = (&DatabaseServerReconciler{
 		Client:        k8sManager.GetClient(),
 		Scheme:        k8sManager.GetScheme(),
+		APIReader:     k8sManager.GetAPIReader(),
 		SubnetCatalog: testCatalog,
 		Config:        config,
 	}).SetupWithManager(k8sManager)

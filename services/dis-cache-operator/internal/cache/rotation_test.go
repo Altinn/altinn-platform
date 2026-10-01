@@ -100,23 +100,34 @@ func TestRotationRemovePatch(t *testing.T) {
 	}
 }
 
-func TestRotationMarkIdlePatch(t *testing.T) {
+func TestRotationReplacedProbe(t *testing.T) {
 	t.Parallel()
 
-	body, err := RotationMarkIdlePatch()
-	if err != nil {
-		t.Fatalf("build patch: %v", err)
+	body, err := RotationReplacedProbe(newTestCache(nil))
+	ops := decodePatch(t, body, err)
+	expectGuard(t, ops, RotationStepReplaced)
+	if len(ops) != 2 {
+		t.Fatalf("the probe must change nothing: want 2 test operations, got %d: %v", len(ops), ops)
 	}
-	var patch struct {
-		Metadata struct {
-			Annotations map[string]string `json:"annotations"`
-		} `json:"metadata"`
+}
+
+func TestRotationAdoptPatch(t *testing.T) {
+	t.Parallel()
+
+	body, err := RotationAdoptPatch(newTestCache(nil))
+	ops := decodePatch(t, body, err)
+	if len(ops) != 2 {
+		t.Fatalf("want 2 operations, got %d: %v", len(ops), ops)
 	}
-	if err := json.Unmarshal(body, &patch); err != nil {
-		t.Fatalf("decode patch %s: %v", body, err)
+	if ops[0]["op"] != "test" || ops[0]["path"] != labelPathWant || ops[0]["value"] != "app-one-cache" {
+		t.Errorf("want a test on the cache label first, got %v", ops[0])
 	}
-	if patch.Metadata.Annotations[RotationStepAnnotation] != RotationStepIdle {
-		t.Errorf("want the idle annotation only, got %s", body)
+	want := map[string]any{RotationStepAnnotation: RotationStepIdle}
+	if ops[1]["op"] != "add" || ops[1]["path"] != "/metadata/annotations" {
+		t.Errorf("want the whole annotations map added, got %v", ops[1])
+	}
+	if got, ok := ops[1]["value"].(map[string]any); !ok || len(got) != 1 || got[RotationStepAnnotation] != want[RotationStepAnnotation] {
+		t.Errorf("want only the idle annotation, got %v", ops[1]["value"])
 	}
 }
 
@@ -142,8 +153,10 @@ func TestPasswordKeysFollowTheRotationCondition(t *testing.T) {
 	}{
 		{"no condition", newTestCache(nil), one},
 		{"rotated", withCondition(metav1.ConditionTrue, "Rotated"), one},
-		{"rotating", withCondition(metav1.ConditionFalse, "Rotating"), both},
-		{"previous valid", withCondition(metav1.ConditionFalse, "PreviousPasswordValid"), both},
+		{"rotating, copy not confirmed", withCondition(metav1.ConditionFalse, "Rotating"), one},
+		{"copied", withCondition(metav1.ConditionFalse, ReasonPasswordCopied), both},
+		{"previous valid", withCondition(metav1.ConditionFalse, ReasonPreviousPasswordValid), both},
+		{"failed", withCondition(metav1.ConditionFalse, "RotationFailed"), one},
 	}
 	for _, tc := range cases {
 		if got := PasswordKeys(tc.cache); !slices.Equal(got, tc.want) {

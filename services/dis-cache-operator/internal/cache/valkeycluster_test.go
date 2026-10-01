@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	valkeyv1alpha1 "github.com/valkey-io/valkey-operator/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -177,7 +178,7 @@ func TestBuildValkeyClusterAppUser(t *testing.T) {
 
 	rotating := newTestCache(func(c *cachev1alpha1.Cache) {
 		meta.SetStatusCondition(&c.Status.Conditions, metav1.Condition{
-			Type: string(cachev1alpha1.ConditionPasswordRotated), Status: metav1.ConditionFalse, Reason: "Rotating",
+			Type: string(cachev1alpha1.ConditionPasswordRotated), Status: metav1.ConditionFalse, Reason: ReasonPasswordCopied,
 		})
 	})
 	rotatingUser := userByName(t, BuildValkeyCluster(rotating, Images{}).Spec.Users, AuthUsername)
@@ -265,5 +266,20 @@ func TestValkeyServiceNameFitsLongestAdmittedCacheName(t *testing.T) {
 	}
 	if got := len(serviceName); got != validation.DNS1035LabelMaxLength {
 		t.Errorf("service name length: want %d so the CRD limit is not stricter than needed, got %d", validation.DNS1035LabelMaxLength, got)
+	}
+}
+
+func TestBuildValkeyClusterCarriesTheRotationTime(t *testing.T) {
+	t.Parallel()
+
+	if got := BuildValkeyCluster(newTestCache(nil), Images{}).Annotations; len(got) != 0 {
+		t.Errorf("before a rotation: want no annotations, got %v", got)
+	}
+	rotated := time.Date(2026, 9, 19, 8, 0, 0, 0, time.UTC)
+	cache := newTestCache(func(c *cachev1alpha1.Cache) {
+		c.Status.PasswordRotation = &cachev1alpha1.PasswordRotationStatus{LastRotatedAt: &metav1.Time{Time: rotated}}
+	})
+	if got := BuildValkeyCluster(cache, Images{}).Annotations[PasswordRotatedAtAnnotation]; got != "2026-09-19T08:00:00Z" {
+		t.Errorf("after a rotation: want the rotation time, got %q", got)
 	}
 }
