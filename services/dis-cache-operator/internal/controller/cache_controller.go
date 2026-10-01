@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"crypto/rand"
+	"time"
 
 	policyv1alpha1 "github.com/linkerd/linkerd2/controller/gen/apis/policy/v1alpha1"
 	serverv1beta3 "github.com/linkerd/linkerd2/controller/gen/apis/server/v1beta3"
@@ -34,16 +35,23 @@ type CacheReconciler struct {
 	Scheme *runtime.Scheme
 	// Images are the container images set on every ValkeyCluster.
 	Images cachepkg.Images
+	// PreviousValidFor is the default period the previous password stays
+	// valid after a rotation. Zero means DefaultPreviousValidFor.
+	PreviousValidFor time.Duration
+	// Now returns the current time. Tests set it; nil means time.Now.
+	Now func() time.Time
 }
 
-// The operator only creates Secrets. It never reads one back, so it has no
-// get, list, or watch on Secrets, and the manager cache excludes them.
+// The operator creates and patches Secrets. It never reads one back: it has
+// no get, list, or watch on Secrets, the manager cache excludes them, and the
+// rotation patches go through a metadata-only handle, so their responses
+// carry no Secret data.
 // The other owned objects are watched (list, watch) and written with
 // server-side apply (create, patch). Owner references delete all of them.
 // The finalizers permission is for clusters that run the
 // OwnerReferencesPermissionEnforcement admission plugin: it checks that
 // permission when an owner reference sets blockOwnerDeletion.
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=create
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=create;patch
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=list;watch;create;patch
 // +kubebuilder:rbac:groups=policy.linkerd.io,resources=servers;meshtlsauthentications;authorizationpolicies,verbs=list;watch;create;patch
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches,verbs=get;list;watch
@@ -70,8 +78,14 @@ func (r *CacheReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, nil
 	}
 
-	if err := r.ensureAuthSecret(ctx, &cache); err != nil {
+	secretCreated, err := r.ensureAuthSecret(ctx, &cache)
+	if err != nil {
 		return ctrl.Result{}, r.failed(ctx, &cache, ReasonSecretCreateFailed, err)
+	}
+	// The rotation state decides how many password keys the ValkeyCluster
+	// lists, so it is settled before the apply.
+	if err := r.beginRotation(ctx, &cache, secretCreated); err != nil {
+		return ctrl.Result{}, r.rotationFailed(ctx, &cache, err)
 	}
 	if _, err := r.apply(ctx, &cache, cachepkg.BuildNetworkPolicy(&cache)); err != nil {
 		return ctrl.Result{}, r.failed(ctx, &cache, ReasonApplyFailed, err)
@@ -93,40 +107,38 @@ func (r *CacheReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 	specMismatch := !usersMatch(desired.Spec.Users, current.Spec.Users)
 
+	// The Secret changes only after the ValkeyCluster lists the matching keys.
+	requeueAfter, err := r.completeRotation(ctx, &cache)
+	if err != nil {
+		return ctrl.Result{}, r.rotationFailed(ctx, &cache, err)
+	}
+
 	if err := r.writeStatus(ctx, &cache, readyCondition(cache.Generation, current, specMismatch)); err != nil {
 		return ctrl.Result{}, err
 	}
 	logger.V(1).Info("reconciled", "valkeyCluster", desired.Name, "specMismatch", specMismatch)
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: requeueAfter}, nil
 }
 
-// ensureAuthSecret creates the credentials Secret with a new random password.
-// When the Secret exists, the create fails with AlreadyExists and the stored
-// password stays. The operator does not read the Secret back, so a new
-// password is generated on every reconcile and dropped when it is not needed.
-//
-// A Secret with the same name that someone else created is kept as it is: it
-// becomes the password source, it gets no owner reference, and the operator
-// cannot check its content. A missing password key shows up as a failed
-// ValkeyCluster.
-func (r *CacheReconciler) ensureAuthSecret(ctx context.Context, owner *cachev1alpha1.Cache) error {
+// ensureAuthSecret creates the auth Secret when it does not exist. It reports
+// whether it created one: that is the only signal that a new password exists.
+func (r *CacheReconciler) ensureAuthSecret(ctx context.Context, owner *cachev1alpha1.Cache) (bool, error) {
 	secret := cachepkg.BuildAuthSecret(owner, rand.Text())
 	if err := controllerutil.SetControllerReference(owner, secret, r.Scheme); err != nil {
-		return err
+		return false, err
 	}
 
 	if err := r.Create(ctx, secret); err != nil {
 		if apierrors.IsAlreadyExists(err) {
-			return nil
+			return false, nil
 		}
-		return err
+		return false, err
 	}
-	// This is the only signal that a password was generated; apps must read
-	// the Secret again after it.
+	// Apps must read the Secret again after this.
 	logf.FromContext(ctx).Info("created the auth Secret", "secret", secret.Name)
 
-	return nil
+	return true, nil
 }
 
 // applyMeshPolicies writes the linkerd objects that let clients reach the

@@ -18,6 +18,8 @@ limitations under the License.
 package cache
 
 import (
+	"time"
+
 	valkeyv1alpha1 "github.com/valkey-io/valkey-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -105,9 +107,10 @@ func BuildValkeyCluster(cache *cachev1alpha1.Cache, images Images) *valkeyv1alph
 
 	cluster := &valkeyv1alpha1.ValkeyCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ValkeyClusterName(cache),
-			Namespace: cache.Namespace,
-			Labels:    Labels(cache),
+			Name:        ValkeyClusterName(cache),
+			Namespace:   cache.Namespace,
+			Labels:      Labels(cache),
+			Annotations: rotationAnnotations(cache),
 		},
 		Spec: valkeyv1alpha1.ValkeyClusterSpec{
 			Image:              images.Valkey,
@@ -201,4 +204,21 @@ func evictionPolicy(cache *cachev1alpha1.Cache) string {
 	}
 
 	return string(cache.Spec.EvictionPolicy)
+}
+
+// PasswordRotatedAtAnnotation carries the time of the last password rotation
+// on the ValkeyCluster. The valkey-operator reads the auth Secret on its own
+// timer only; a change of this annotation gives it an event, so it loads both
+// passwords right after a rotation.
+const PasswordRotatedAtAnnotation = "cache.dis.altinn.cloud/password-rotated-at"
+
+// rotationAnnotations returns the ValkeyCluster annotations for a Cache: the
+// rotation time when a rotation happened, nothing before that.
+func rotationAnnotations(cache *cachev1alpha1.Cache) map[string]string {
+	status := cache.Status.PasswordRotation
+	if status == nil || status.LastRotatedAt == nil {
+		return nil
+	}
+
+	return map[string]string{PasswordRotatedAtAnnotation: status.LastRotatedAt.UTC().Format(time.RFC3339)}
 }

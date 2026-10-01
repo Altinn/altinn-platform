@@ -19,9 +19,9 @@ const (
 	// RotationStepAnnotation records on the Secret which rotation step is
 	// done. Every rotation patch tests it first, so a step out of order or a
 	// Secret that someone else made stops the patch. A failed test is one
-	// error without a reason, so the controller reads the annotation with a
-	// metadata-only get before it resumes a rotation. That read carries no
-	// Secret data.
+	// error without a reason, and the operator never reads the Secret, so the
+	// controller finds the step by trying the next guarded patch, and last a
+	// probe with tests only.
 	RotationStepAnnotation = "cache.dis.altinn.cloud/rotation-step"
 
 	// RotationStepIdle means no rotation is in progress.
@@ -116,29 +116,52 @@ func RotationRemovePatch(cache *cachev1alpha1.Cache) ([]byte, error) {
 	return json.Marshal(ops)
 }
 
-// RotationMarkIdlePatch returns the merge patch that sets the rotation step
-// annotation to idle. It is for Secrets the operator created before the
-// annotation existed. It has no guard and overwrites any step, so the
-// controller applies it only when the Cache status shows no rotation. For
-// that to be safe, the controller writes the status before the first
-// rotation patch, never after. Both a new Secret and an old Secret then
-// carry idle.
-func RotationMarkIdlePatch() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"metadata": map[string]any{
-			"annotations": map[string]string{RotationStepAnnotation: RotationStepIdle},
-		},
-	})
+// RotationReplacedProbe returns a JSON patch with tests only: the Secret
+// belongs to this Cache and the step is replaced. It changes nothing. The
+// controller uses it after a rejected copy and a rejected replace, to tell a
+// replace that already happened from a Secret that is not the operator's.
+func RotationReplacedProbe(cache *cachev1alpha1.Cache) ([]byte, error) {
+	return json.Marshal(rotationGuard(cache, RotationStepReplaced))
 }
 
+// RotationAdoptPatch returns the JSON patch that gives a Secret from before
+// the annotation existed its first step annotation, idle. It tests the Cache
+// label and then adds the whole annotations map, so it applies only to a
+// Secret of this Cache that has no annotations yet: a Secret with a step
+// annotation fails the add, because the controller probes for its step before
+// it tries to adopt it.
+func RotationAdoptPatch(cache *cachev1alpha1.Cache) ([]byte, error) {
+	ops := []jsonPatchOp{
+		{Op: opTest, Path: labelPath(CacheNameLabel), Value: cache.Name},
+		{Op: "add", Path: "/metadata/annotations", Value: map[string]string{RotationStepAnnotation: RotationStepIdle}},
+	}
+
+	return json.Marshal(ops)
+}
+
+// Reasons of the PasswordRotated condition that mean the previous password
+// key exists in the Secret. The controller sets them.
+const (
+	// ReasonPasswordCopied means the previous key holds a copy of the
+	// password and the new password is not written yet.
+	ReasonPasswordCopied = "PasswordCopied"
+	// ReasonPreviousPasswordValid means the new password is in place and the
+	// previous one is still valid.
+	ReasonPreviousPasswordValid = "PreviousPasswordValid"
+)
+
 // PreviousPasswordInUse reports whether the ValkeyCluster must accept the
-// previous password: from the start of a rotation until the previous
-// password is removed. The controller keeps the PasswordRotated condition
-// False during that time.
+// previous password: from the confirmed copy until the previous password is
+// removed. Before the copy is confirmed, and after a terminal failure, the
+// previous key may not exist, and a listed key that does not exist makes the
+// valkey-operator stop with an error.
 func PreviousPasswordInUse(cache *cachev1alpha1.Cache) bool {
 	cond := meta.FindStatusCondition(cache.Status.Conditions, string(cachev1alpha1.ConditionPasswordRotated))
+	if cond == nil || cond.Status != metav1.ConditionFalse {
+		return false
+	}
 
-	return cond != nil && cond.Status == metav1.ConditionFalse
+	return cond.Reason == ReasonPasswordCopied || cond.Reason == ReasonPreviousPasswordValid
 }
 
 // PasswordKeys returns the Secret keys the app user accepts as passwords.
