@@ -18,6 +18,16 @@ resource "azurerm_dashboard_grafana" "grafana" {
   azure_monitor_workspace_integrations {
     resource_id = azurerm_monitor_workspace.k6tests_amw.id
   }
+
+  smtp {
+    enabled          = true
+    host             = "smtp.azurecomm.net:587"
+    user             = local.grafana_smtp_username
+    password         = azuread_application_password.grafana_smtp.value
+    start_tls_policy = "MandatoryStartTLS"
+    from_address     = "grafana@altinn.cloud"
+    from_name        = "Altinn Grafana"
+  }
 }
 
 resource "azurerm_role_assignment" "tf_grafana_admin" {
