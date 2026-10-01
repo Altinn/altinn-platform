@@ -4,6 +4,16 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.0"
     }
+    azuread = {
+      source = "hashicorp/azuread"
+    }
+    azapi = {
+      source  = "Azure/azapi"
+      version = "~> 2.0"
+    }
+    time = {
+      source = "hashicorp/time"
+    }
   }
   backend "azurerm" {
     use_azuread_auth = true
