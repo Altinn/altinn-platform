@@ -1,0 +1,91 @@
+name: APP Cluster Decommission 🧹
+description: Request decommission of an APP cluster for a customer, preserving its data
+title: "APP Cluster Decommission for [CUSTOMER] - [ENVIRONMENT]"
+labels: ["kind/infrastructure", "kind/toil", "status/triage"]
+projects: Altinn/117
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This template is for requesting the decommission of an APP cluster for a customer.
+        The cluster is removed, but the customer's data is preserved by migrating the environment to dataonly.
+        Please fill in all required information below.
+
+  - type: input
+    id: customer-name
+    attributes:
+      label: Customer Name
+      description: Name of the customer (e.g., VIGO)
+      placeholder: "TTD"
+    validations:
+      required: true
+
+  - type: input
+    id: crm-ticket-link
+    attributes:
+      label: CRM Ticket Link
+      description: Link to the CRM ticket for this request
+      placeholder: "https://digdir.crm4.dynamics.com/main.aspx?appid=8bb89bb1-9c24-4d6e-951b-4653560a3656"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: In which environment should the APP cluster be decommissioned?
+      options:
+        - "Both test and production"
+        - "Produksjon (apps.altinn.no)"
+        - "Test (apps.tt02.altinn.no)"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: migrate-tasks
+    attributes:
+      label: Migrate to dataonly
+      description: Remove the cluster while keeping the data. Check off environments as they are completed
+      options:
+        - label: "tt02"
+          required: false
+        - label: "prod"
+          required: false
+
+  - type: checkboxes
+    id: destroy-tasks
+    attributes:
+      label: Destroy
+      description: Check off tasks as they are completed
+      options:
+        - label: "Container registry"
+          required: false
+
+  - type: checkboxes
+    id: remove-tasks
+    attributes:
+      label: Remove
+      description: Check off tasks as they are completed
+      options:
+        - label: "Altinn Uptime monitoring"
+          required: false
+        - label: "DNS A/AAAA records"
+          required: false
+        - label: "Azure virtual machine Reservations"
+          required: false
+        - label: "Assign CRM ticket to \"Altinn servicedesk\""
+          required: false
+
+  - type: textarea
+    id: additional-requirements
+    attributes:
+      label: Additional Requirements
+      description: Any additional requirements or special considerations for this cluster decommission
+      placeholder: "Describe any special requirements, dependencies, or considerations..."
+
+  - type: textarea
+    id: contact-information
+    attributes:
+      label: Contact Information
+      description: Primary contact person and any relevant stakeholder information
+      placeholder: "Primary contact: @username\nStakeholders: ..."
