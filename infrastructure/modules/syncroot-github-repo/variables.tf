@@ -46,9 +46,14 @@ variable "github_branches" {
   }
 }
 
-variable "product_name" {
-  type        = string
-  description = "Name of the team that owns this syncroot user managed identity"
+variable "product_names" {
+  type        = set(string)
+  description = "Product prefixes this repository's publishing identity may write to in ACR."
+
+  validation {
+    condition     = length(var.product_names) > 0 && alltrue([for product in var.product_names : can(regex("^[a-zA-Z0-9]+(-[a-zA-Z0-9]+)*$", product))])
+    error_message = "At least one product name is required; names must contain alphanumeric segments separated by single hyphens."
+  }
 }
 
 variable "subscription_id" {

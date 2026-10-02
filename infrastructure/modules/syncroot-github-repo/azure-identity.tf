@@ -1,10 +1,10 @@
 resource "azurerm_user_assigned_identity" "syncroot_pusher" {
-  name                = "${var.github_org_name}-${replace(var.github_repo_name, ".", "_")}-${var.product_name}-syncroot"
+  name                = "${local.credential_name_prefix}-syncroot"
   location            = var.location
   resource_group_name = var.resource_group_name
   tags = merge(var.tags, {
-    submodule = "oidc-syncroot-pusher"
-    product   = var.product_name
+    submodule         = "oidc-syncroot-pusher"
+    github_repository = "${var.github_org_name}/${var.github_repo_name}"
   })
 }
 

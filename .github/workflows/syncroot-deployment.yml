@@ -50,8 +50,33 @@ permissions:
   pull-requests: write
 
 jobs:
+  test:
+    name: Test configuration
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with:
+          # renovate: datasource=github-releases depName=terraform packageName=hashicorp/terraform versioning=semver
+          terraform_version: 1.15.6
+
+      - name: Validate and test without cloud credentials
+        working-directory: ${{ env.TF_PROJECT }}
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate -no-color
+          terraform test -no-color
+
   plan:
     name: Plan
+    needs: test
     environment: reader
     runs-on: self-hosted
     steps:
@@ -61,7 +86,7 @@ jobs:
       - name: Get GitHub Organization
         id: get_org
         shell: bash
-        run: echo "org=$(jq -r '.github_org_name' infrastructure/syncroots/terraform.tfvars.json)" >> $GITHUB_OUTPUT
+        run: echo "org=$(jq -r '.github_org_name' infrastructure/syncroots/terraform.tfvars.json)" >> "$GITHUB_OUTPUT"
 
       - name: Generate GitHub App Token
         id: generate_token
@@ -98,7 +123,7 @@ jobs:
       - name: Get GitHub Organization
         id: get_org
         shell: bash
-        run: echo "org=$(jq -r '.github_org_name' infrastructure/syncroots/terraform.tfvars.json)" >> $GITHUB_OUTPUT
+        run: echo "org=$(jq -r '.github_org_name' infrastructure/syncroots/terraform.tfvars.json)" >> "$GITHUB_OUTPUT"
 
       - name: Generate GitHub App Token
         id: generate_token
