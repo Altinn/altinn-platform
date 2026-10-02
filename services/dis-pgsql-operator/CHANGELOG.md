@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.13.0...dis-pgsql-v0.13.1) (2026-10-02)
+
+
+### Bug Fixes
+
+* **dis-pgsql-operator:** confirm child deletion with the API server during teardown ([#4104](https://github.com/Altinn/altinn-platform/issues/4104)) ([45faedc](https://github.com/Altinn/altinn-platform/commit/45faedcb54bb44647bb9e36dedd534a0c499ae82))
+
 ## [0.13.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.12.2...dis-pgsql-v0.13.0) (2026-09-17)
 
 
