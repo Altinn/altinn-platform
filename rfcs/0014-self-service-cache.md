@@ -2,7 +2,7 @@
 - Title: Self-service cache
 - Start Date: 2026-08-28
 - RFC PR: [altinn/altinn-platform#3952](https://github.com/Altinn/altinn-platform/pull/3952)
-- Github Issue: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/issues/0000)
+- Github Issue: [altinn/altinn-platform#3944](https://github.com/Altinn/altinn-platform/issues/3944)
 - Product/Category: Container Runtime
 - State: **REVIEW** (possible states are: **REVIEW**, **ACCEPTED** and **REJECTED**)
 
@@ -15,6 +15,8 @@ A team creates a `Cache` custom resource in its namespace. The operator creates 
 The operator does not run Valkey itself. It creates resources for the official [valkey-operator](https://github.com/valkey-io/valkey-operator), and that operator runs Valkey. This is the same pattern that `dis-pgsql-operator` and `dis-vault-operator` use with Azure Service Operator (ASO).
 
 This RFC replaces an earlier draft. The earlier draft used Azure Managed Redis (see [#3472](https://github.com/Altinn/altinn-platform/pull/3472)). That option is now listed under Future possibilities.
+
+**Status, 2026-10-02.** The alpha runs on at22 with operator 0.2.0. The dis-console agent is the first application that uses a `Cache`, through the mesh and with its own service account identity. The text below describes what is built and in use; the unresolved questions list what the alpha did not answer.
 
 # Motivation
 
@@ -104,7 +106,7 @@ The upstream operator runs in the platform-system layer on each cluster. The pla
 Valkey does not use Entra ID. Workload identity does not help here either: it gives a pod a token for Azure services, and Valkey cannot check such a token. The operator uses the cluster's own tools instead, in three layers:
 
 1. **Network.** Two policies, on two levels.
-   - A Kubernetes NetworkPolicy on the Valkey pods. It works on IP and port, and it applies to every pod. It allows only: pods in the same namespace (port 6379), the Valkey pods themselves (6379 and 16379, for replication), and the valkey-operator pods (6379). In DIS, the namespace is the team boundary.
+   - A Kubernetes NetworkPolicy on the Valkey pods. It works on IP and port, and it applies to every pod. It allows only: pods in the same namespace (port 6379), the Valkey pods themselves (6379 and 16379, for replication), and the valkey-operator pods (6379). Each rule also allows port 4143, the linkerd proxy inbound port. Traffic between two meshed pods arrives on that port and not on the application port, so a rule without it drops every mesh connection before linkerd can check the identity. In DIS, the namespace is the team boundary.
    - Linkerd policies. The DIS clusters run linkerd with default inbound policy `deny`. A meshed pod rejects all traffic until a `Server` and an `AuthorizationPolicy` allow it. The operator creates two `Server`s on the Valkey pods (6379 and 16379, both `opaque` so the proxy does not try to detect a protocol), one `MeshTLSAuthentication` (every service account in the namespace, plus the valkey-operator identity `valkey-operator.valkey-operator-system`), and one `AuthorizationPolicy` per `Server`. This layer works on identity, not on IP. The Valkey health probes are `exec` probes, so they never cross the proxy and need no rule. Never add a CIDR-based `NetworkAuthentication` to the cache Servers: it would let plaintext clients back in.
 2. **Encryption and identity: linkerd mTLS.** The Valkey pods and the app pods run in the mesh. Linkerd encrypts the traffic between them and checks both sides' identities. We do not create TLS certificates for Valkey. Two facts drive this:
    - The valkey-operator API has no pod-annotation field, so injection comes from the namespace annotation `linkerd.io/inject: enabled`. The whole team namespace is meshed. Team namespaces get this annotation from their syncroots.
@@ -116,12 +118,17 @@ Valkey does not use Entra ID. Workload identity does not help here either: it gi
 
 **Password rotation** has no downtime, because a Valkey user can have several valid passwords. The valkey-operator reads the Secret on every reconcile, every 30 seconds, and reloads the ACL when a password changed. A new value under the same key would lock out every app that still uses the old value, until the app reads the Secret again. The order below keeps both passwords valid during the change:
 
-1. The operator adds a new key to the Secret. The old key stays.
-2. The operator adds the new key to `passwordSecret.keys` on the `ValkeyCluster`. Within 30 seconds both passwords are valid.
-3. The apps pick up the new value. Apps that mount the Secret as a file get it without a restart. Apps that read it as an environment variable need a restart.
-4. After a fixed wait, the operator removes the old key from `keys` first, and from the Secret after. In the other order the valkey-operator fails with "missing password key" and does not update the ACL.
+1. The operator copies the value of the key `password` to the key `password-previous`, with a JSON patch `copy`. The API server copies the value; the operator never reads it. The key names do not change, so the applications keep their manifests.
+2. The operator sets `passwordSecret.keys` on the `ValkeyCluster` to both keys. Both hold the same value, so the ACL does not change.
+3. The operator replaces the value of `password` with a new password. Within 30 seconds both passwords are valid. Every state between these steps keeps all clients working, also after a crash between two steps.
+4. The apps pick up the new value. Apps that mount the Secret as a file get it without a restart. Apps that read it as an environment variable keep their open connections, reconnect with the old value during the period, and need a restart before the period ends.
+5. After the period, the operator removes `password-previous` from `keys` first, and from the Secret after. In the other order the valkey-operator fails with "missing password key" and does not update the ACL.
 
-v1 rotates on request. A schedule can come later. Rotation is the only reason the operator needs `patch` on Secrets. Until rotation lands, the operator has `create` only.
+Each Secret patch first tests the Cache label and a rotation step annotation the operator set at creation. The operator patches a metadata-only object, so the API server response carries no Secret data. A rejected patch gives no reason, and the operator does not read the Secret to find one. It records the confirmed step in the condition reason instead: `Rotating` until the copy is confirmed, `PasswordCopied` until the new password is in place. A passing error keeps the reason and sets only the message, so the next reconcile resumes at the same step. After a restart, or after lost status writes, the operator answers a rejected patch with the next guarded patch, then a probe with tests only for the step `replaced`, then an adoption patch that gives a Secret from before the annotation its first step. Only when all of them are rejected is the Secret not the operator's: the condition reports `RotationFailed`, the request counts as handled, and a later request starts over. The ValkeyCluster lists the previous key only from the confirmed copy on, because the valkey-operator stops with an error when a listed key does not exist. After the replace, the operator writes the rotation time on the ValkeyCluster as an annotation. That gives the valkey-operator an event, so it loads both passwords at once and not on its 30 second timer. When the operator's `create` of the Secret succeeds during a period, the Secret was deleted and came back with a new `password` only; the operator then sets `keys` back to `password`, clears the period, and records an event.
+
+**Triggers.** `spec.passwordRotation.requestedAt` asks for one rotation: a value later than `status.passwordRotation.requestedAt` starts it, the value itself is only a marker, and a request made during a period is carried out when the period ends. `spec.passwordRotation.intervalDays` rotates on a schedule, counted from `status.passwordRotation.lastRotatedAt`. The platform default is 0, off, until applications on the platform reload the password without a restart: an open connection survives a removed password, so an application that reads the password from an environment variable fails only at its next reconnect, long after the rotation. The target default is 90 days, and the dis-console agent is the first application to read the password from a file mount. `spec.passwordRotation.previousValidFor` sets how long the previous password stays valid, from 0 for a password that may have leaked to 7 days; an operator flag sets the default of 7 days. A removed password does not end open connections. A true revoke removes and re-creates the Valkey user, with a short outage; it is not part of v1. The condition `PasswordRotated` reports the state and every step, with reasons only and never values.
+
+**Permissions.** Rotation is the only reason the operator needs `patch` on Secrets. `patch` on all Secrets in team namespaces is a wider right than `create`: it could overwrite the valkey-operator's system password Secret or a TLS Secret. A `ValidatingAdmissionPolicy`, in-tree CEL and no webhook, bound to the operator's service account, will limit its patches to Secrets with a name that ends in `-cache-auth` and the operator's label, and forbid a change of type or labels. It is the first change after the alpha.
 
 **Why not cert-manager TLS.** The earlier version of this section used a cert-manager server certificate. We dropped it: the DIS clusters have no internal CA issuer (only Let's Encrypt, which cannot sign cluster-internal names and gives no `ca.crt`), a CA key would be one more secret to protect, and the mesh already gives encryption and client identity at once.
 
@@ -137,12 +144,12 @@ We accept this for v1: every password is per cache, so the damage stays inside t
 
 ## Operator permissions and safety
 
-- **Secrets.** dis-cache-operator gets `create` on Secrets, and `patch` when rotation lands. It has no `get`, `list`, or `watch`, it does not watch Secrets, and its client cache excludes them. It never reads a password back; it tracks which keys exist through `passwordSecret.keys`. On every reconcile it generates a password and tries to create the Secret. When the Secret exists, the create fails and the stored password stays. A compromised operator can then overwrite Secrets but not read them. dis-pgsql and dis-vault have no Secret permissions at all; this operator is the first.
+- **Secrets.** dis-cache-operator gets `create` and `patch` on Secrets. It has no `get`, `list`, or `watch`, it does not watch Secrets, and its client cache excludes them. It never reads a password back; it tracks which keys exist through `passwordSecret.keys`. On every reconcile it generates a password and tries to create the Secret. When the Secret exists, the create fails and the stored password stays. A compromised operator can then overwrite Secrets but not read them. dis-pgsql and dis-vault have no Secret permissions at all; this operator is the first.
 - **Deleted Secret.** The operator does not see the deletion. The valkey-operator does: it reads the Secret every 30 seconds and sets its `ValkeyCluster` to state `Failed` when the Secret is gone. That status change triggers a reconcile, which creates the Secret with a new password. Apps then read the Secret again.
 - **Writes.** The NetworkPolicy, the linkerd policies, and the `ValkeyCluster` are written with server-side apply, with the field owner `dis-cache-operator` and force. The API server fills the CRD defaults, and a repeated apply with the same content writes nothing. A field that someone changed by hand goes back to the operator's value on the next reconcile. The operator reconciles an owned object again only when its spec generation or its status changed. The `Cache` status is written with a merge patch, and only when it changed.
 - **Step failures.** When the Secret create or an apply fails, `Ready` becomes False with reason `SecretCreateFailed` or `ApplyFailed` and the error message. Without this a Cache that never reaches the `ValkeyCluster` step would show no status at all.
 - **Drift guard.** The upstream CRD upgrades with `CreateReplace`. If a chart bump renames `spec.users`, the API server prunes the field and the `default` user is open again. The apply response carries the stored `ValkeyCluster`; the operator compares `spec.users` from it, and on a mismatch it sets `Ready=False` with reason `UpstreamSpecMismatch`. It does not read the informer cache for this, because the cache can be one version behind the apply. The Helm chart and the Go module bump together in one PR.
-- **Permissions.** On `Cache`: `get`, `list`, `watch`; on its status: `patch`; on its finalizers: `update`, for clusters that run the owner-reference admission plugin. On the owned objects: `list` and `watch` for the informers, `create` and `patch` for server-side apply. No `update` or `delete` anywhere: owner references delete. On Secrets: `create` only.
+- **Permissions.** On `Cache`: `get`, `list`, `watch`; on its status: `patch`; on its finalizers: `update`, for clusters that run the owner-reference admission plugin. On the owned objects: `list` and `watch` for the informers, `create` and `patch` for server-side apply. No `update` or `delete` anywhere: owner references delete. On Secrets: `create` and `patch`.
 - **Linkerd types.** The operator uses the official `github.com/linkerd/linkerd2` API packages, pinned by pseudo-version to the linkerd chart version the clusters run (`edge-26.4.2`). Renovate cannot track edge tags, so this pin moves by hand with the chart. The versions match the served CRDs: `Server` v1beta3, `AuthorizationPolicy` and `MeshTLSAuthentication` v1alpha1.
 
 ## Pod and data hardening
@@ -159,7 +166,7 @@ The operator follows the release path of the other DIS operators. release-please
 
 Two rules for that package:
 
-- Its `Kustomization` sets the two cache images on the operator Deployment with a patch, each with a Renovate comment. Terraform passes no image settings and no variables; it only turns the configuration on.
+- Its `Kustomization` sets the two cache images with Flux substitution (`postBuild.substitute`), each with a Renovate comment. The operator manifest carries the variables as `${DISCACHE_VALKEY_IMAGE:=}` and `${DISCACHE_EXPORTER_IMAGE:=}`, the same way the dis-pgsql package sets its operator env. A patch on the Deployment does not work here: kustomize applies patches before it adds the name prefix, so a patch that targets the final Deployment name matches nothing and the build still passes. Terraform passes no image settings and no variables; it only turns the configuration on.
 - Its `multitenancy` overlay depends on the valkey-operator `Kustomization`. The operator watches `ValkeyCluster` and the linkerd policy kinds, so their CRDs must exist before the manager starts, or its cache never syncs and the pod exits about two minutes after start.
 
 ## One cache per application
@@ -237,11 +244,10 @@ Teams keep building their own cache setups, and the platform keeps missing the s
 
 # Unresolved questions
 
-- Mesh and Valkey: test on at22 that the cluster bus (16379) works through the proxy with `deny`, and that ACL reloads do not drop the `app` user's connections.
-- Metrics: how the exporter sidecar is scraped under NetworkPolicy and `deny`, or whether v1 ships without cache metrics.
-- Kubelet probes under `deny`: the linkerd policy controller authorizes HTTP probes on a port without a `Server`, from the probe networks, which default to all networks. The platform team's experience is that probes fail without a policy. The exporter sidecar has HTTP probes on 9121 and no `Server`. Verify on at22. If the probes fail, the operator must add a `Server` for 9121 with a kubelet `NetworkAuthentication`, and it then needs the cluster address ranges as configuration.
+- ACL reloads: confirm with the first rotation on at22 that a reload does not end the `app` user's open connections. The cluster bus through the proxy under `deny` is confirmed: the two nodes formed the cluster on at22 once the NetworkPolicy allowed the proxy port.
+- Metrics: the NetworkPolicy of a Cache does not allow the scraper to reach the exporter port 9121 or the proxy admin port 4191, so cache metrics are dark. The operator needs rules for the scraper, or v1 ships without cache metrics.
+- Early revoke: a rotation request made during a period waits for the period to end. For a password that may have leaked, a new request could end the period at once. Decide before the schedule goes on by default.
 - Per-team limits: a `ResourceQuota` per namespace and a cap on the number of `Cache` objects, reported as a status condition.
-- Password rotation: the trigger for v1 (an annotation or a spec field), and the wait before the old password is removed.
 - Upstream requests to file: pod annotations on `ValkeyCluster`, a `serviceAccountName` for the Valkey pods (today they use the namespace `default` account, so the mesh identity is shared), `--primaryauth` off the command line, and `*bool` for `enabled`.
 - Kyverno: the linkerd exception keys on a namespace label, injection on an annotation. Team namespaces need both or every injected pod audits against `disallow-capabilities`.
 - The exact CPU, memory, and replica values for each `size`.
