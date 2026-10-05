@@ -4,7 +4,7 @@
 - RFC PR: [altinn/altinn-platform#4051](https://github.com/Altinn/altinn-platform/pull/4051)
 - Github Issue: [altinn/altinn-platform#3938](https://github.com/Altinn/altinn-platform/issues/3938)
 - Product/Category: APIM
-- State: **REVIEW** (possible states are: **REVIEW**, **ACCEPTED** and **REJECTED**)
+- State: **ACCEPTED** (possible states are: **REVIEW**, **ACCEPTED** and **REJECTED**)
 
 # Summary
 
