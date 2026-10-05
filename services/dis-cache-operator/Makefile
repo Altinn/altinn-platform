@@ -16,7 +16,7 @@ VALKEY_OPERATOR_MODULE ?= github.com/valkey-io/valkey-operator
 VALKEY_CRD_DIR ?= $(LOCALBIN)/valkey-crds
 LINKERD_MODULE ?= github.com/linkerd/linkerd2
 LINKERD_CRD_DIR ?= $(LOCALBIN)/linkerd-crds
-LINKERD_POLICY_CRDS ?= server authorization-policy meshtls-authentication
+LINKERD_POLICY_CRDS ?= server authorization-policy meshtls-authentication network-authentication
 
 # The envtest controller suite needs the ValkeyCluster and linkerd policy
 # CRDs on disk. This rule has no recipe. It adds the CRD targets as

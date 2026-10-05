@@ -25,8 +25,8 @@ func TestBuildNetworkPolicy(t *testing.T) {
 	if len(policy.Spec.PolicyTypes) != 1 || policy.Spec.PolicyTypes[0] != netv1.PolicyTypeIngress {
 		t.Errorf("policy types: want [Ingress], got %v", policy.Spec.PolicyTypes)
 	}
-	if len(policy.Spec.Ingress) != 3 {
-		t.Fatalf("ingress rules: want 3, got %d", len(policy.Spec.Ingress))
+	if len(policy.Spec.Ingress) != 4 {
+		t.Fatalf("ingress rules: want 4, got %d", len(policy.Spec.Ingress))
 	}
 
 	sameNamespace := policy.Spec.Ingress[0]
@@ -63,6 +63,29 @@ func TestBuildNetworkPolicy(t *testing.T) {
 	}
 	if !portsEqual(operator.Ports, 6379, 4143) {
 		t.Errorf("rule 2 ports: want [6379 4143], got %+v", operator.Ports)
+	}
+}
+
+func TestBuildNetworkPolicyAllowsTheScraperOnTheExporterPort(t *testing.T) {
+	t.Parallel()
+
+	scraper := BuildNetworkPolicy(newTestCache(nil)).Spec.Ingress[3]
+	if len(scraper.From) != 2 {
+		t.Fatalf("scraper rule: want the replica set and the daemon set peers, got %+v", scraper.From)
+	}
+	for i, peer := range scraper.From {
+		if peer.NamespaceSelector == nil || peer.NamespaceSelector.MatchLabels["kubernetes.io/metadata.name"] != "kube-system" {
+			t.Errorf("scraper peer %d: want the kube-system namespace, got %+v", i, peer.NamespaceSelector)
+		}
+		if peer.PodSelector == nil || len(peer.PodSelector.MatchLabels) != 1 {
+			t.Errorf("scraper peer %d: want one pod label, got %+v", i, peer.PodSelector)
+		}
+	}
+	if scraper.From[0].PodSelector.MatchLabels["rsName"] != "ama-metrics" || scraper.From[1].PodSelector.MatchLabels["dsName"] != "ama-metrics-node" {
+		t.Errorf("scraper peers: want the ama-metrics replica set and daemon set, got %+v", scraper.From)
+	}
+	if !portsEqual(scraper.Ports, 9121) {
+		t.Errorf("scraper rule ports: want [9121] only, got %+v", scraper.Ports)
 	}
 }
 
