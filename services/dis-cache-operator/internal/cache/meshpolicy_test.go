@@ -64,3 +64,38 @@ func TestBuildMeshPoliciesAuthorizations(t *testing.T) {
 		t.Errorf("required authentication refs: got %+v", refs)
 	}
 }
+
+func TestBuildMetricsPolicies(t *testing.T) {
+	t.Parallel()
+
+	cache := newTestCache(nil)
+	metrics := BuildMetricsPolicies(cache, []string{"10.240.0.0/16", "fd00::/8"})
+
+	if metrics.Server.Name != "app-one-cache-cache-metrics" || metrics.Server.Spec.Port.IntValue() != 9121 {
+		t.Errorf("metrics server: want the exporter port 9121, got %s %v", metrics.Server.Name, metrics.Server.Spec.Port)
+	}
+	if metrics.Server.Spec.ProxyProtocol != "HTTP/1" {
+		t.Errorf("metrics server: want HTTP/1, got %q", metrics.Server.Spec.ProxyProtocol)
+	}
+	if metrics.Server.Spec.PodSelector.MatchLabels["valkey.io/cluster"] != "app-one-cache" {
+		t.Errorf("metrics server: want the Valkey pods selected, got %v", metrics.Server.Spec.PodSelector)
+	}
+	if metrics.Authentication.Name != "app-one-cache-cache-scrapers" || len(metrics.Authentication.Spec.Networks) != 2 {
+		t.Fatalf("scraper authentication: want two networks, got %s %+v", metrics.Authentication.Name, metrics.Authentication.Spec.Networks)
+	}
+	if metrics.Authentication.Spec.Networks[0].Cidr != "10.240.0.0/16" || metrics.Authentication.Spec.Networks[1].Cidr != "fd00::/8" {
+		t.Errorf("scraper authentication: want the given networks in order, got %+v", metrics.Authentication.Spec.Networks)
+	}
+	if metrics.Policy.Name != metrics.Server.Name || string(metrics.Policy.Spec.TargetRef.Name) != metrics.Server.Name {
+		t.Errorf("metrics policy: want it bound to the metrics server, got %s -> %s", metrics.Policy.Name, metrics.Policy.Spec.TargetRef.Name)
+	}
+	ref := metrics.Policy.Spec.RequiredAuthenticationRefs
+	if len(ref) != 1 || string(ref[0].Kind) != "NetworkAuthentication" || string(ref[0].Name) != metrics.Authentication.Name {
+		t.Errorf("metrics policy: want the scraper NetworkAuthentication required, got %+v", ref)
+	}
+	for _, obj := range []interface{ GetLabels() map[string]string }{metrics.Server, metrics.Authentication, metrics.Policy} {
+		if obj.GetLabels()[CacheNameLabel] != cache.Name {
+			t.Errorf("metrics object without the cache label: %v", obj.GetLabels())
+		}
+	}
+}

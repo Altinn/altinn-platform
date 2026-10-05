@@ -22,6 +22,7 @@ const (
 
 	linkerdPolicyGroup  = "policy.linkerd.io"
 	proxyProtocolOpaque = "opaque"
+	proxyProtocolHTTP1  = "HTTP/1"
 )
 
 // MeshPolicies are the linkerd objects that let clients reach a cache under
@@ -51,6 +52,52 @@ func MeshAuthenticationName(cache *cachev1alpha1.Cache) string {
 	return cache.Name + "-cache-clients"
 }
 
+// MetricsServerName returns the name of the Server for the metrics exporter port.
+func MetricsServerName(cache *cachev1alpha1.Cache) string {
+	return cache.Name + "-cache-metrics"
+}
+
+// ScraperAuthenticationName returns the name of the NetworkAuthentication
+// that describes the metrics scraper.
+func ScraperAuthenticationName(cache *cachev1alpha1.Cache) string {
+	return cache.Name + "-cache-scrapers"
+}
+
+// MetricsPolicies are the linkerd objects that let the metrics scraper reach
+// the exporter port of the Valkey pods. The scraper has no mesh identity, so
+// the authorization trusts the networks it runs in.
+type MetricsPolicies struct {
+	Server         *serverv1beta3.Server
+	Authentication *policyv1alpha1.NetworkAuthentication
+	Policy         *policyv1alpha1.AuthorizationPolicy
+}
+
+// BuildMetricsPolicies maps a Cache and the scraper networks to the linkerd
+// objects for the exporter port. The port speaks HTTP/1, so the proxy can
+// check the request.
+func BuildMetricsPolicies(cache *cachev1alpha1.Cache, networks []string) MetricsPolicies {
+	server := buildServer(cache, MetricsServerName(cache), valkeyMetricsPort, proxyProtocolHTTP1)
+
+	cidrs := make([]*policyv1alpha1.Network, 0, len(networks))
+	for _, network := range networks {
+		cidrs = append(cidrs, &policyv1alpha1.Network{Cidr: network})
+	}
+	authentication := &policyv1alpha1.NetworkAuthentication{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ScraperAuthenticationName(cache),
+			Namespace: cache.Namespace,
+			Labels:    Labels(cache),
+		},
+		Spec: policyv1alpha1.NetworkAuthenticationSpec{Networks: cidrs},
+	}
+
+	return MetricsPolicies{
+		Server:         server,
+		Authentication: authentication,
+		Policy:         buildAuthorizationPolicy(cache, server, "NetworkAuthentication", authentication.Name),
+	}
+}
+
 // MeshIdentity returns the linkerd identity of a service account.
 func MeshIdentity(serviceAccount, namespace string) string {
 	return serviceAccount + "." + namespace + ".serviceaccount.identity.linkerd." + meshTrustDomain
@@ -61,8 +108,8 @@ func MeshIdentity(serviceAccount, namespace string) string {
 // Both Valkey ports are opaque TCP: the proxy must not try to detect a
 // protocol on them.
 func BuildMeshPolicies(cache *cachev1alpha1.Cache) MeshPolicies {
-	clientServer := buildServer(cache, ClientServerName(cache), valkeyClientPort)
-	busServer := buildServer(cache, BusServerName(cache), valkeyClusterBusPort)
+	clientServer := buildServer(cache, ClientServerName(cache), valkeyClientPort, proxyProtocolOpaque)
+	busServer := buildServer(cache, BusServerName(cache), valkeyClusterBusPort, proxyProtocolOpaque)
 
 	authentication := &policyv1alpha1.MeshTLSAuthentication{
 		ObjectMeta: metav1.ObjectMeta{
@@ -82,12 +129,12 @@ func BuildMeshPolicies(cache *cachev1alpha1.Cache) MeshPolicies {
 		ClientServer:   clientServer,
 		BusServer:      busServer,
 		Authentication: authentication,
-		ClientPolicy:   buildAuthorizationPolicy(cache, clientServer, authentication),
-		BusPolicy:      buildAuthorizationPolicy(cache, busServer, authentication),
+		ClientPolicy:   buildAuthorizationPolicy(cache, clientServer, "MeshTLSAuthentication", authentication.Name),
+		BusPolicy:      buildAuthorizationPolicy(cache, busServer, "MeshTLSAuthentication", authentication.Name),
 	}
 }
 
-func buildServer(cache *cachev1alpha1.Cache, name string, port int32) *serverv1beta3.Server {
+func buildServer(cache *cachev1alpha1.Cache, name string, port int32, protocol string) *serverv1beta3.Server {
 	return &serverv1beta3.Server{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -99,15 +146,17 @@ func buildServer(cache *cachev1alpha1.Cache, name string, port int32) *serverv1b
 				MatchLabels: map[string]string{valkeyClusterLabel: ValkeyClusterName(cache)},
 			},
 			Port:          intstr.FromInt32(port),
-			ProxyProtocol: proxyProtocolOpaque,
+			ProxyProtocol: protocol,
 		},
 	}
 }
 
+// buildAuthorizationPolicy binds a Server to one authentication, named by
+// its kind and name.
 func buildAuthorizationPolicy(
 	cache *cachev1alpha1.Cache,
 	server *serverv1beta3.Server,
-	authentication *policyv1alpha1.MeshTLSAuthentication,
+	authenticationKind, authenticationName string,
 ) *policyv1alpha1.AuthorizationPolicy {
 	return &policyv1alpha1.AuthorizationPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -118,7 +167,7 @@ func buildAuthorizationPolicy(
 		Spec: policyv1alpha1.AuthorizationPolicySpec{
 			TargetRef: policyTargetRef("Server", server.Name),
 			RequiredAuthenticationRefs: []gatewayv1alpha2.PolicyTargetReference{
-				policyTargetRef("MeshTLSAuthentication", authentication.Name),
+				policyTargetRef(authenticationKind, authenticationName),
 			},
 		},
 	}

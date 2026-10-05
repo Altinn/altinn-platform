@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
+	"strings"
 	"time"
 
 	cachev1alpha1 "github.com/Altinn/altinn-platform/services/dis-cache-operator/api/v1alpha1"
@@ -70,7 +71,7 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
-	var valkeyImage, exporterImage string
+	var valkeyImage, exporterImage, scraperNetworks string
 	var previousValidFor time.Duration
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
@@ -94,6 +95,8 @@ func main() {
 		"How long the previous password stays valid after a rotation, unless the Cache sets its own period.")
 	flag.StringVar(&valkeyImage, "valkey-image", os.Getenv("DISCACHE_VALKEY_IMAGE"),
 		"Valkey image for the caches (optional; empty keeps the valkey-operator default)")
+	flag.StringVar(&scraperNetworks, "scraper-networks", envOr("DISCACHE_SCRAPER_NETWORKS", defaultScraperNetworks),
+		"Comma-separated networks the metrics scraper connects from; the exporter port of every Cache trusts them.")
 	flag.StringVar(&exporterImage, "exporter-image", os.Getenv("DISCACHE_EXPORTER_IMAGE"),
 		"Metrics exporter image for the caches (optional; empty keeps the valkey-operator default)")
 	opts := zap.Options{
@@ -189,6 +192,7 @@ func main() {
 		Scheme:           mgr.GetScheme(),
 		Images:           cachepkg.Images{Valkey: valkeyImage, Exporter: exporterImage},
 		PreviousValidFor: previousValidFor,
+		ScraperNetworks:  strings.Split(scraperNetworks, ","),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Cache")
 		os.Exit(1)
@@ -210,4 +214,20 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+// defaultScraperNetworks are the pod networks of the DIS clusters, where the
+// Azure Monitor scraper pods run. Every DIS cluster gets these two ranges
+// from the AKS Terraform module unless it sets its own; a cluster that does
+// sets DISCACHE_SCRAPER_NETWORKS in the gitops package instead.
+const defaultScraperNetworks = "10.240.0.0/16,fd10:59f0:8c79:240::/64"
+
+// envOr returns the environment variable, or the fallback when it is unset
+// or empty.
+func envOr(name, fallback string) string {
+	if value := os.Getenv(name); value != "" {
+		return value
+	}
+
+	return fallback
 }
