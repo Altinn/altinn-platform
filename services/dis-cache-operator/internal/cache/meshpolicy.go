@@ -57,45 +57,57 @@ func MetricsServerName(cache *cachev1alpha1.Cache) string {
 	return cache.Name + "-cache-metrics"
 }
 
-// ScraperAuthenticationName returns the name of the NetworkAuthentication
+// ScraperAuthenticationName returns the name of the MeshTLSAuthentication
 // that describes the metrics scraper.
 func ScraperAuthenticationName(cache *cachev1alpha1.Cache) string {
 	return cache.Name + "-cache-scrapers"
 }
 
+// Scraper is the meshed collector that scrapes the exporter port of every
+// Cache. Its service account gives the mesh identity the exporter port
+// accepts, and its namespace is the NetworkPolicy peer.
+type Scraper struct {
+	Namespace      string
+	ServiceAccount string
+}
+
+// Identity returns the linkerd identity of the scraper.
+func (s Scraper) Identity() string {
+	return MeshIdentity(s.ServiceAccount, s.Namespace)
+}
+
 // MetricsPolicies are the linkerd objects that let the metrics scraper reach
-// the exporter port of the Valkey pods. The scraper has no mesh identity, so
-// the authorization trusts the networks it runs in.
+// the exporter port of the Valkey pods: one Server for the port, one
+// authentication with the scraper identity, and the authorization that binds
+// the two.
 type MetricsPolicies struct {
 	Server         *serverv1beta3.Server
-	Authentication *policyv1alpha1.NetworkAuthentication
+	Authentication *policyv1alpha1.MeshTLSAuthentication
 	Policy         *policyv1alpha1.AuthorizationPolicy
 }
 
-// BuildMetricsPolicies maps a Cache and the scraper networks to the linkerd
-// objects for the exporter port. The port speaks HTTP/1. The proxy reads the
-// request, and linkerd lets the kubelet probes through on its own as long as
-// no HTTPRoute binds to this Server. An opaque Server would stop the probes.
-func BuildMetricsPolicies(cache *cachev1alpha1.Cache, networks []string) MetricsPolicies {
+// BuildMetricsPolicies maps a Cache and the scraper to the linkerd objects
+// for the exporter port. The port speaks HTTP/1. The proxy reads the request,
+// and linkerd lets the kubelet probes through on its own as long as no
+// HTTPRoute binds to this Server. An opaque Server would stop the probes.
+func BuildMetricsPolicies(cache *cachev1alpha1.Cache, scraper Scraper) MetricsPolicies {
 	server := buildServer(cache, MetricsServerName(cache), valkeyMetricsPort, proxyProtocolHTTP1)
 
-	cidrs := make([]*policyv1alpha1.Network, 0, len(networks))
-	for _, network := range networks {
-		cidrs = append(cidrs, &policyv1alpha1.Network{Cidr: network})
-	}
-	authentication := &policyv1alpha1.NetworkAuthentication{
+	authentication := &policyv1alpha1.MeshTLSAuthentication{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ScraperAuthenticationName(cache),
 			Namespace: cache.Namespace,
 			Labels:    Labels(cache),
 		},
-		Spec: policyv1alpha1.NetworkAuthenticationSpec{Networks: cidrs},
+		Spec: policyv1alpha1.MeshTLSAuthenticationSpec{
+			Identities: []string{scraper.Identity()},
+		},
 	}
 
 	return MetricsPolicies{
 		Server:         server,
 		Authentication: authentication,
-		Policy:         buildAuthorizationPolicy(cache, server, "NetworkAuthentication", authentication.Name),
+		Policy:         buildAuthorizationPolicy(cache, server, "MeshTLSAuthentication", authentication.Name),
 	}
 }
 

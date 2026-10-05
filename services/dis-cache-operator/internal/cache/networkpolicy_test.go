@@ -10,7 +10,7 @@ import (
 func TestBuildNetworkPolicy(t *testing.T) {
 	t.Parallel()
 
-	policy := BuildNetworkPolicy(newTestCache(nil))
+	policy := BuildNetworkPolicy(newTestCache(nil), testScraper)
 
 	if policy.Name != "app-one-cache-cache" || policy.Namespace != "team-a" {
 		t.Fatalf("unexpected name/namespace: %s/%s", policy.Namespace, policy.Name)
@@ -66,26 +66,25 @@ func TestBuildNetworkPolicy(t *testing.T) {
 	}
 }
 
-func TestBuildNetworkPolicyAllowsTheScraperOnTheExporterPort(t *testing.T) {
+// testScraper stands in for the meshed collector of the clusters.
+var testScraper = Scraper{Namespace: "observability", ServiceAccount: "collector"}
+
+func TestBuildNetworkPolicyAllowsTheScraperThroughTheMesh(t *testing.T) {
 	t.Parallel()
 
-	scraper := BuildNetworkPolicy(newTestCache(nil)).Spec.Ingress[3]
-	if len(scraper.From) != 2 {
-		t.Fatalf("scraper rule: want the replica set and the daemon set peers, got %+v", scraper.From)
+	scraper := BuildNetworkPolicy(newTestCache(nil), testScraper).Spec.Ingress[3]
+	if len(scraper.From) != 1 {
+		t.Fatalf("scraper rule: want one peer, got %+v", scraper.From)
 	}
-	for i, peer := range scraper.From {
-		if peer.NamespaceSelector == nil || peer.NamespaceSelector.MatchLabels["kubernetes.io/metadata.name"] != "kube-system" {
-			t.Errorf("scraper peer %d: want the kube-system namespace, got %+v", i, peer.NamespaceSelector)
-		}
-		if peer.PodSelector == nil || len(peer.PodSelector.MatchLabels) != 1 {
-			t.Errorf("scraper peer %d: want one pod label, got %+v", i, peer.PodSelector)
-		}
+	peer := scraper.From[0]
+	if peer.NamespaceSelector == nil || peer.NamespaceSelector.MatchLabels["kubernetes.io/metadata.name"] != "observability" {
+		t.Errorf("scraper peer: want the scraper namespace, got %+v", peer.NamespaceSelector)
 	}
-	if scraper.From[0].PodSelector.MatchLabels["rsName"] != "ama-metrics" || scraper.From[1].PodSelector.MatchLabels["dsName"] != "ama-metrics-node" {
-		t.Errorf("scraper peers: want the ama-metrics replica set and daemon set, got %+v", scraper.From)
+	if peer.PodSelector != nil {
+		t.Errorf("scraper peer: want the whole namespace, got pod selector %+v", peer.PodSelector)
 	}
-	if !portsEqual(scraper.Ports, 9121) {
-		t.Errorf("scraper rule ports: want [9121] only, got %+v", scraper.Ports)
+	if !portsEqual(scraper.Ports, 4143) {
+		t.Errorf("scraper rule ports: want the linkerd inbound port only, got %+v", scraper.Ports)
 	}
 }
 

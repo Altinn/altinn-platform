@@ -45,7 +45,6 @@ rules:
   resources:
   - authorizationpolicies
   - meshtlsauthentications
-  - networkauthentications
   - servers
   verbs:
   - create
