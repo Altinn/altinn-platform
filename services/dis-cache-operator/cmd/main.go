@@ -18,7 +18,10 @@ package main
 
 import (
 	"crypto/tls"
+	"errors"
 	"flag"
+	"fmt"
+	"net/netip"
 	"os"
 	"strings"
 	"time"
@@ -104,6 +107,12 @@ func main() {
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+
+	networks, err := parseNetworks(scraperNetworks)
+	if err != nil {
+		setupLog.Error(err, "invalid --scraper-networks")
+		os.Exit(1)
+	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
@@ -192,7 +201,7 @@ func main() {
 		Scheme:           mgr.GetScheme(),
 		Images:           cachepkg.Images{Valkey: valkeyImage, Exporter: exporterImage},
 		PreviousValidFor: previousValidFor,
-		ScraperNetworks:  strings.Split(scraperNetworks, ","),
+		ScraperNetworks:  networks,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Cache")
 		os.Exit(1)
@@ -221,6 +230,29 @@ func main() {
 // from the AKS Terraform module unless it sets its own; a cluster that does
 // sets DISCACHE_SCRAPER_NETWORKS in the gitops package instead.
 const defaultScraperNetworks = "10.240.0.0/16,fd10:59f0:8c79:240::/64"
+
+// parseNetworks turns the comma-separated flag value into CIDRs. An invalid
+// CIDR makes the linkerd policy controller skip the whole authentication, so
+// the operator refuses to start with one instead of denying the scraper.
+func parseNetworks(value string) ([]string, error) {
+	var networks []string
+	for part := range strings.SplitSeq(value, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		prefix, err := netip.ParsePrefix(part)
+		if err != nil {
+			return nil, fmt.Errorf("scraper network %q: %w", part, err)
+		}
+		networks = append(networks, prefix.String())
+	}
+	if len(networks) == 0 {
+		return nil, errors.New("at least one scraper network is required")
+	}
+
+	return networks, nil
+}
 
 // envOr returns the environment variable, or the fallback when it is unset
 // or empty.

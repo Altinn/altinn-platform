@@ -73,8 +73,9 @@ type MetricsPolicies struct {
 }
 
 // BuildMetricsPolicies maps a Cache and the scraper networks to the linkerd
-// objects for the exporter port. The port speaks HTTP/1, so the proxy can
-// check the request.
+// objects for the exporter port. The port speaks HTTP/1. The proxy reads the
+// request, and linkerd lets the kubelet probes through on its own as long as
+// no HTTPRoute binds to this Server. An opaque Server would stop the probes.
 func BuildMetricsPolicies(cache *cachev1alpha1.Cache, networks []string) MetricsPolicies {
 	server := buildServer(cache, MetricsServerName(cache), valkeyMetricsPort, proxyProtocolHTTP1)
 

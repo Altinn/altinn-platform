@@ -321,7 +321,10 @@ var _ = Describe("Cache reconciler", func() {
 		Expect(scrapers.Spec.Networks[0].Cidr).To(Equal("10.0.0.0/8"))
 		var metricsPolicy policyv1alpha1.AuthorizationPolicy
 		mustGet(cachepkg.MetricsServerName(cache), &metricsPolicy)
+		Expect(metav1.IsControlledBy(&metricsPolicy, owner)).To(BeTrue())
+		Expect(string(metricsPolicy.Spec.TargetRef.Name)).To(Equal(cachepkg.MetricsServerName(cache)))
 		Expect(string(metricsPolicy.Spec.RequiredAuthenticationRefs[0].Kind)).To(Equal("NetworkAuthentication"))
+		Expect(string(metricsPolicy.Spec.RequiredAuthenticationRefs[0].Name)).To(Equal(cachepkg.ScraperAuthenticationName(cache)))
 
 		for _, name := range []string{cachepkg.ClientServerName(cache), cachepkg.BusServerName(cache)} {
 			var authorization policyv1alpha1.AuthorizationPolicy

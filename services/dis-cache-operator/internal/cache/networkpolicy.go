@@ -42,7 +42,7 @@ const (
 
 	// The metrics scraper on the DIS clusters is Azure Monitor managed
 	// Prometheus: the ama-metrics pods in kube-system. The replica set runs
-	// the custom scrape jobs, the daemon set the node jobs; both get the port.
+	// the custom scrape jobs, the daemon set the node jobs; both may reach the port.
 	scraperNamespace       = "kube-system"
 	scraperReplicaSetLabel = "rsName"
 	scraperReplicaSetValue = "ama-metrics"
@@ -70,8 +70,9 @@ func NetworkPolicyName(cache *cachev1alpha1.Cache) string {
 // AuthorizationPolicy, which authorize the client by its identity. The
 // application ports stay in the rules for clients without a proxy. The
 // scraper has no proxy, so its rule names the exporter port only. Kubelet
-// probes and the proxy admin port 4191 are not listed: the probes are exec
-// probes, and the CNI on the clusters lets host traffic through.
+// probes and the proxy admin port 4191 are not listed: the Valkey probes are
+// exec probes, the exporter probes are HTTP requests from the node, and the
+// CNI on the clusters lets host traffic through.
 func BuildNetworkPolicy(cache *cachev1alpha1.Cache) *netv1.NetworkPolicy {
 	tcp := corev1.ProtocolTCP
 	clientPort := intstr.FromInt32(valkeyClientPort)
