@@ -100,3 +100,25 @@ func TestBuildMetricsPolicies(t *testing.T) {
 		}
 	}
 }
+
+func TestScraperValidate(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		scraper Scraper
+		valid   bool
+	}{
+		{"names", Scraper{Namespace: "observability", ServiceAccount: "collector"}, true},
+		{"wildcard service account", Scraper{Namespace: "observability", ServiceAccount: "*"}, false},
+		{"wildcard namespace", Scraper{Namespace: "*", ServiceAccount: "collector"}, false},
+		{"empty service account", Scraper{Namespace: "observability", ServiceAccount: ""}, false},
+		{"empty namespace", Scraper{Namespace: "", ServiceAccount: "collector"}, false},
+		{"upper case", Scraper{Namespace: "Observability", ServiceAccount: "collector"}, false},
+	}
+	for _, tc := range cases {
+		if err := tc.scraper.Validate(); (err == nil) != tc.valid {
+			t.Errorf("%s: want valid=%v, got %v", tc.name, tc.valid, err)
+		}
+	}
+}

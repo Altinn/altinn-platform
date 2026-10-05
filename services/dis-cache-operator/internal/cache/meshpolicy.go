@@ -1,10 +1,14 @@
 package cache
 
 import (
+	"fmt"
+	"strings"
+
 	policyv1alpha1 "github.com/linkerd/linkerd2/controller/gen/apis/policy/v1alpha1"
 	serverv1beta3 "github.com/linkerd/linkerd2/controller/gen/apis/server/v1beta3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/validation"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	cachev1alpha1 "github.com/Altinn/altinn-platform/services/dis-cache-operator/api/v1alpha1"
@@ -74,6 +78,20 @@ type Scraper struct {
 // Identity returns the linkerd identity of the scraper.
 func (s Scraper) Identity() string {
 	return MeshIdentity(s.ServiceAccount, s.Namespace)
+}
+
+// Validate checks that the namespace and the service account are Kubernetes
+// names. A value such as "*" would pass as a linkerd identity wildcard and
+// open the exporter port to every service account in the namespace.
+func (s Scraper) Validate() error {
+	if errs := validation.IsDNS1123Label(s.Namespace); len(errs) > 0 {
+		return fmt.Errorf("scraper namespace %q: %s", s.Namespace, strings.Join(errs, "; "))
+	}
+	if errs := validation.IsDNS1123Subdomain(s.ServiceAccount); len(errs) > 0 {
+		return fmt.Errorf("scraper service account %q: %s", s.ServiceAccount, strings.Join(errs, "; "))
+	}
+
+	return nil
 }
 
 // MetricsPolicies are the linkerd objects that let the metrics scraper reach

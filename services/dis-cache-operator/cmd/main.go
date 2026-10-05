@@ -18,7 +18,6 @@ package main
 
 import (
 	"crypto/tls"
-	"errors"
 	"flag"
 	"os"
 	"time"
@@ -99,7 +98,7 @@ func main() {
 		"Namespace of the meshed collector that scrapes the exporter port of every Cache.")
 	flag.StringVar(&scraperServiceAccount, "scraper-service-account",
 		envOr("DISCACHE_SCRAPER_SERVICE_ACCOUNT", defaultScraperServiceAccount),
-		"Service account of the collector; its mesh identity is the only one the exporter port accepts.")
+		"Service account of the collector. Its mesh identity is the only one the exporter port accepts.")
 	flag.StringVar(&exporterImage, "exporter-image", os.Getenv("DISCACHE_EXPORTER_IMAGE"),
 		"Metrics exporter image for the caches (optional; empty keeps the valkey-operator default)")
 	opts := zap.Options{
@@ -108,12 +107,13 @@ func main() {
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	if scraperNamespace == "" || scraperServiceAccount == "" {
-		setupLog.Error(errors.New("empty value"), "--scraper-namespace and --scraper-service-account are required")
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	scraper := cachepkg.Scraper{Namespace: scraperNamespace, ServiceAccount: scraperServiceAccount}
+	if err := scraper.Validate(); err != nil {
+		setupLog.Error(err, "invalid --scraper-namespace or --scraper-service-account")
 		os.Exit(1)
 	}
-
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -200,7 +200,7 @@ func main() {
 		Scheme:           mgr.GetScheme(),
 		Images:           cachepkg.Images{Valkey: valkeyImage, Exporter: exporterImage},
 		PreviousValidFor: previousValidFor,
-		Scraper:          cachepkg.Scraper{Namespace: scraperNamespace, ServiceAccount: scraperServiceAccount},
+		Scraper:          scraper,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Cache")
 		os.Exit(1)

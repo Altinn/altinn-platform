@@ -56,7 +56,7 @@ func NetworkPolicyName(cache *cachev1alpha1.Cache) string {
 // BuildNetworkPolicy limits who can reach the Valkey pods of a Cache:
 // pods in the same namespace and the valkey-operator on the client port,
 // the Valkey pods themselves on the client and cluster bus ports, and the
-// metrics scraper on the exporter port. Each rule also allows the linkerd
+// metrics scraper on the linkerd inbound port. Each rule also allows the linkerd
 // inbound port, because meshed traffic arrives there. For meshed peers the
 // port split is then enforced by the linkerd Server and AuthorizationPolicy,
 // which authorize the client by its identity. The application ports stay in

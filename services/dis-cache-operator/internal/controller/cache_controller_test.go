@@ -334,23 +334,26 @@ var _ = Describe("Cache reconciler", func() {
 		}
 	})
 
-	It("removes an identity that someone added to the mesh authentication", func() {
+	It("removes an identity that someone added to the client or scraper authentication", func() {
 		cache := newCache("cache-mesh-drift", nil)
 		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
 		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
 		reconcile("cache-mesh-drift")
 
-		var authentication policyv1alpha1.MeshTLSAuthentication
-		mustGet(cachepkg.MeshAuthenticationName(cache), &authentication)
-		authentication.Spec.Identities = append(authentication.Spec.Identities, "*")
-		Expect(k8sClient.Update(ctx, &authentication)).To(Succeed())
-		mustGet(authentication.Name, &authentication)
-		Expect(authentication.Spec.Identities).To(HaveLen(3))
+		for _, name := range []string{cachepkg.MeshAuthenticationName(cache), cachepkg.ScraperAuthenticationName(cache)} {
+			var authentication policyv1alpha1.MeshTLSAuthentication
+			mustGet(name, &authentication)
+			want := len(authentication.Spec.Identities)
+			authentication.Spec.Identities = append(authentication.Spec.Identities, "*")
+			Expect(k8sClient.Update(ctx, &authentication)).To(Succeed())
+			mustGet(name, &authentication)
+			Expect(authentication.Spec.Identities).To(HaveLen(want + 1))
 
-		reconcile("cache-mesh-drift")
-		mustGet(authentication.Name, &authentication)
-		Expect(authentication.Spec.Identities).To(HaveLen(2))
-		Expect(authentication.Spec.Identities).NotTo(ContainElement("*"))
+			reconcile("cache-mesh-drift")
+			mustGet(name, &authentication)
+			Expect(authentication.Spec.Identities).To(HaveLen(want), name)
+			Expect(authentication.Spec.Identities).NotTo(ContainElement("*"), name)
+		}
 	})
 
 	It("converges: repeated reconciles stop writing the owned objects and the status", func() {
