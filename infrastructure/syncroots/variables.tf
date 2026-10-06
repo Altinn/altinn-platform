@@ -31,9 +31,9 @@ variable "product_syncroot_source_repos" {
     condition = alltrue(flatten([
       for repo in var.product_syncroot_source_repos : [
         for other in var.product_syncroot_source_repos :
-        repo.repo_name != other.repo_name || (repo.branches == other.branches && repo.environments == other.environments)
+        repo.repo_name != other.repo_name || repo.branches == other.branches
       ]
     ]))
-    error_message = "Products sharing a repository must have identical branches and environments because they share one publishing identity."
+    error_message = "Products sharing a repository must have identical branches because they share one publishing identity."
   }
 }
