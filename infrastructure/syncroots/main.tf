@@ -19,11 +19,10 @@ module "syncroot_github_repo" {
   source   = "../modules/syncroot-github-repo"
   for_each = local.products_by_repo
 
-  github_repo_name = each.key
-  github_org_name  = var.github_org_name
-  github_org_id    = data.github_organization.this.id
-  # Validation requires identical federation settings for all products in a repository.
-  github_environments = var.product_syncroot_source_repos[each.value[0]].environments
+  github_repo_name    = each.key
+  github_org_name     = var.github_org_name
+  github_org_id       = data.github_organization.this.id
+  github_environments = toset(flatten([for product in each.value : tolist(var.product_syncroot_source_repos[product].environments)]))
   github_branches     = var.product_syncroot_source_repos[each.value[0]].branches
   subscription_id     = var.subscription_id
   resource_group_name = azurerm_resource_group.syncroot_pushers.name

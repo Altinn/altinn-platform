@@ -7,8 +7,8 @@ between alphanumeric segments and become ACR prefixes such as
 
 Products are grouped by `repo_name`. Each repository has one Terraform module,
 publishing identity and set of `DIS_SYNCROOT_AZURE_*` secrets, with write access
-to all its product prefixes. Shared entries must specify identical branches and
-environments. Adding or removing a product keeps the repository's identity and
+to all its product prefixes. Shared entries must specify identical branches; their environments are combined
+on the shared identity. Adding or removing a product keeps the repository's identity and
 credentials; removing its last product removes the publishing resources.
 
 Identity names use the organization and repository, such as
