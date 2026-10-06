@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/Altinn/altinn-platform/compare/dis-cache-v0.2.0...dis-cache-v0.3.0) (2026-10-06)
+
+
+### Features
+
+* **dis-cache-operator:** authorize the metrics scraper by its mesh identity ([#4166](https://github.com/Altinn/altinn-platform/issues/4166)) ([5ad62c2](https://github.com/Altinn/altinn-platform/commit/5ad62c2e5d32ba8245067bce109e105cd27fcb27))
+* **dis-cache-operator:** open the exporter port of a Cache to the metrics scraper ([#4163](https://github.com/Altinn/altinn-platform/issues/4163)) ([e12745b](https://github.com/Altinn/altinn-platform/commit/e12745b24c393c8505ed6c8c6ab96470a68f7ec5))
+
 ## [0.2.0](https://github.com/Altinn/altinn-platform/compare/dis-cache-v0.1.1...dis-cache-v0.2.0) (2026-10-01)
 
 
