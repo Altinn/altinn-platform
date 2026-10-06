@@ -49,9 +49,10 @@ func newCache(name string, mutate func(*cachev1alpha1.Cache)) *cachev1alpha1.Cac
 
 func newReconciler() *CacheReconciler {
 	return &CacheReconciler{
-		Client: k8sClient,
-		Scheme: k8sClient.Scheme(),
-		Images: cachepkg.Images{Valkey: "registry.example/valkey:9"},
+		Client:          k8sClient,
+		Scheme:          k8sClient.Scheme(),
+		Images:          cachepkg.Images{Valkey: "registry.example/valkey:9"},
+		ScraperNetworks: []string{"10.0.0.0/8"},
 	}
 }
 
@@ -307,6 +308,23 @@ var _ = Describe("Cache reconciler", func() {
 		mustGet(cachepkg.MeshAuthenticationName(cache), &authentication)
 		Expect(metav1.IsControlledBy(&authentication, owner)).To(BeTrue())
 		Expect(authentication.Spec.Identities).To(HaveLen(2))
+
+		var metricsServer serverv1beta3.Server
+		mustGet(cachepkg.MetricsServerName(cache), &metricsServer)
+		Expect(metav1.IsControlledBy(&metricsServer, owner)).To(BeTrue())
+		Expect(metricsServer.Spec.Port.IntValue()).To(Equal(9121))
+		Expect(metricsServer.Spec.ProxyProtocol).To(Equal("HTTP/1"))
+		var scrapers policyv1alpha1.NetworkAuthentication
+		mustGet(cachepkg.ScraperAuthenticationName(cache), &scrapers)
+		Expect(metav1.IsControlledBy(&scrapers, owner)).To(BeTrue())
+		Expect(scrapers.Spec.Networks).To(HaveLen(1))
+		Expect(scrapers.Spec.Networks[0].Cidr).To(Equal("10.0.0.0/8"))
+		var metricsPolicy policyv1alpha1.AuthorizationPolicy
+		mustGet(cachepkg.MetricsServerName(cache), &metricsPolicy)
+		Expect(metav1.IsControlledBy(&metricsPolicy, owner)).To(BeTrue())
+		Expect(string(metricsPolicy.Spec.TargetRef.Name)).To(Equal(cachepkg.MetricsServerName(cache)))
+		Expect(string(metricsPolicy.Spec.RequiredAuthenticationRefs[0].Kind)).To(Equal("NetworkAuthentication"))
+		Expect(string(metricsPolicy.Spec.RequiredAuthenticationRefs[0].Name)).To(Equal(cachepkg.ScraperAuthenticationName(cache)))
 
 		for _, name := range []string{cachepkg.ClientServerName(cache), cachepkg.BusServerName(cache)} {
 			var authorization policyv1alpha1.AuthorizationPolicy
