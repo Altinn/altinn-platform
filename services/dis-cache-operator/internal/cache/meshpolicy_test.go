@@ -112,6 +112,8 @@ func TestScraperValidate(t *testing.T) {
 		{"names", Scraper{Namespace: "observability", ServiceAccount: "collector"}, true},
 		{"wildcard service account", Scraper{Namespace: "observability", ServiceAccount: "*"}, false},
 		{"wildcard namespace", Scraper{Namespace: "*", ServiceAccount: "collector"}, false},
+		{"dotted namespace", Scraper{Namespace: "observability.svc", ServiceAccount: "collector"}, false},
+		{"dotted service account", Scraper{Namespace: "observability", ServiceAccount: "collector.v2"}, true},
 		{"empty service account", Scraper{Namespace: "observability", ServiceAccount: ""}, false},
 		{"empty namespace", Scraper{Namespace: "", ServiceAccount: "collector"}, false},
 		{"upper case", Scraper{Namespace: "Observability", ServiceAccount: "collector"}, false},

@@ -344,6 +344,7 @@ var _ = Describe("Cache reconciler", func() {
 			var authentication policyv1alpha1.MeshTLSAuthentication
 			mustGet(name, &authentication)
 			want := len(authentication.Spec.Identities)
+			Expect(want).To(BeNumerically(">", 0), name)
 			authentication.Spec.Identities = append(authentication.Spec.Identities, "*")
 			Expect(k8sClient.Update(ctx, &authentication)).To(Succeed())
 			mustGet(name, &authentication)
