@@ -18,12 +18,8 @@ package main
 
 import (
 	"crypto/tls"
-	"errors"
 	"flag"
-	"fmt"
-	"net/netip"
 	"os"
-	"strings"
 	"time"
 
 	cachev1alpha1 "github.com/Altinn/altinn-platform/services/dis-cache-operator/api/v1alpha1"
@@ -74,7 +70,7 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
-	var valkeyImage, exporterImage, scraperNetworks string
+	var valkeyImage, exporterImage, scraperNamespace, scraperServiceAccount string
 	var previousValidFor time.Duration
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
@@ -98,8 +94,11 @@ func main() {
 		"How long the previous password stays valid after a rotation, unless the Cache sets its own period.")
 	flag.StringVar(&valkeyImage, "valkey-image", os.Getenv("DISCACHE_VALKEY_IMAGE"),
 		"Valkey image for the caches (optional; empty keeps the valkey-operator default)")
-	flag.StringVar(&scraperNetworks, "scraper-networks", envOr("DISCACHE_SCRAPER_NETWORKS", defaultScraperNetworks),
-		"Comma-separated networks the metrics scraper connects from; the exporter port of every Cache trusts them.")
+	flag.StringVar(&scraperNamespace, "scraper-namespace", envOr("DISCACHE_SCRAPER_NAMESPACE", defaultScraperNamespace),
+		"Namespace of the meshed collector that scrapes the exporter port of every Cache.")
+	flag.StringVar(&scraperServiceAccount, "scraper-service-account",
+		envOr("DISCACHE_SCRAPER_SERVICE_ACCOUNT", defaultScraperServiceAccount),
+		"Service account of the collector. Its mesh identity is the only one the exporter port accepts.")
 	flag.StringVar(&exporterImage, "exporter-image", os.Getenv("DISCACHE_EXPORTER_IMAGE"),
 		"Metrics exporter image for the caches (optional; empty keeps the valkey-operator default)")
 	opts := zap.Options{
@@ -108,13 +107,13 @@ func main() {
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	networks, err := parseNetworks(scraperNetworks)
-	if err != nil {
-		setupLog.Error(err, "invalid --scraper-networks")
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	scraper := cachepkg.Scraper{Namespace: scraperNamespace, ServiceAccount: scraperServiceAccount}
+	if err := scraper.Validate(); err != nil {
+		setupLog.Error(err, "invalid --scraper-namespace or --scraper-service-account")
 		os.Exit(1)
 	}
-
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -201,7 +200,7 @@ func main() {
 		Scheme:           mgr.GetScheme(),
 		Images:           cachepkg.Images{Valkey: valkeyImage, Exporter: exporterImage},
 		PreviousValidFor: previousValidFor,
-		ScraperNetworks:  networks,
+		Scraper:          scraper,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Cache")
 		os.Exit(1)
@@ -225,34 +224,14 @@ func main() {
 	}
 }
 
-// defaultScraperNetworks are the pod networks of the DIS clusters, where the
-// Azure Monitor scraper pods run. Every DIS cluster gets these two ranges
-// from the AKS Terraform module unless it sets its own; a cluster that does
-// sets DISCACHE_SCRAPER_NETWORKS in the gitops package instead.
-const defaultScraperNetworks = "10.240.0.0/16,fd10:59f0:8c79:240::/64"
-
-// parseNetworks turns the comma-separated flag value into CIDRs. An invalid
-// CIDR makes the linkerd policy controller skip the whole authentication, so
-// the operator refuses to start with one instead of denying the scraper.
-func parseNetworks(value string) ([]string, error) {
-	var networks []string
-	for part := range strings.SplitSeq(value, ",") {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		prefix, err := netip.ParsePrefix(part)
-		if err != nil {
-			return nil, fmt.Errorf("scraper network %q: %w", part, err)
-		}
-		networks = append(networks, prefix.String())
-	}
-	if len(networks) == 0 {
-		return nil, errors.New("at least one scraper network is required")
-	}
-
-	return networks, nil
-}
+// The DIS clusters run one OpenTelemetry collector in the monitoring
+// namespace. It is meshed, so it scrapes with the identity of its service
+// account. A cluster with another collector sets the two DISCACHE_SCRAPER_*
+// variables in the gitops package.
+const (
+	defaultScraperNamespace      = "monitoring"
+	defaultScraperServiceAccount = "otel-collector"
+)
 
 // envOr returns the environment variable, or the fallback when it is unset
 // or empty.

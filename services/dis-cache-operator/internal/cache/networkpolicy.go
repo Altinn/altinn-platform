@@ -40,14 +40,6 @@ const (
 	// the valkey-operator adds to every Valkey pod.
 	valkeyMetricsPort = 9121
 
-	// The metrics scraper on the DIS clusters is Azure Monitor managed
-	// Prometheus: the ama-metrics pods in kube-system. The replica set runs
-	// the custom scrape jobs, the daemon set the node jobs; both may reach the port.
-	scraperNamespace       = "kube-system"
-	scraperReplicaSetLabel = "rsName"
-	scraperReplicaSetValue = "ama-metrics"
-	scraperDaemonSetLabel  = "dsName"
-	scraperDaemonSetValue  = "ama-metrics-node"
 	// linkerdInboundPort is where the linkerd proxy of a meshed pod accepts
 	// connections from other meshed pods. The proxy of a meshed client dials
 	// this port, not the application port. Each rule must allow it. If not,
@@ -64,24 +56,21 @@ func NetworkPolicyName(cache *cachev1alpha1.Cache) string {
 // BuildNetworkPolicy limits who can reach the Valkey pods of a Cache:
 // pods in the same namespace and the valkey-operator on the client port,
 // the Valkey pods themselves on the client and cluster bus ports, and the
-// metrics scraper on the exporter port. Each mesh rule also allows the
-// linkerd inbound port, because meshed traffic arrives there. For meshed
-// peers the port split is then enforced by the linkerd Server and
-// AuthorizationPolicy, which authorize the client by its identity. The
-// application ports stay in the rules for clients without a proxy. The
-// scraper has no proxy, so its rule names the exporter port only. Kubelet
-// probes and the proxy admin port 4191 are not listed: the Valkey probes are
-// exec probes, the exporter probes are HTTP requests from the node, and the
-// CNI on the clusters lets host traffic through.
-func BuildNetworkPolicy(cache *cachev1alpha1.Cache) *netv1.NetworkPolicy {
+// metrics scraper on the linkerd inbound port. Each rule also allows the linkerd
+// inbound port, because meshed traffic arrives there. For meshed peers the
+// port split is then enforced by the linkerd Server and AuthorizationPolicy,
+// which authorize the client by its identity. The application ports stay in
+// the first three rules for clients without a proxy. The scraper rule names
+// the inbound port only: the scraper is meshed, and the exporter port accepts
+// its identity and nothing else. Kubelet probes and the proxy admin port 4191
+// are not listed: the Valkey probes are exec probes, the exporter probes are
+// HTTP requests from the node, and the CNI on the clusters lets host traffic
+// through.
+func BuildNetworkPolicy(cache *cachev1alpha1.Cache, scraper Scraper) *netv1.NetworkPolicy {
 	tcp := corev1.ProtocolTCP
 	clientPort := intstr.FromInt32(valkeyClientPort)
 	busPort := intstr.FromInt32(valkeyClusterBusPort)
 	meshPort := intstr.FromInt32(linkerdInboundPort)
-	metricsPort := intstr.FromInt32(valkeyMetricsPort)
-	scraperNamespaceSelector := &metav1.LabelSelector{
-		MatchLabels: map[string]string{corev1.LabelMetadataName: scraperNamespace},
-	}
 
 	valkeyPods := metav1.LabelSelector{
 		MatchLabels: map[string]string{valkeyClusterLabel: ValkeyClusterName(cache)},
@@ -140,20 +129,15 @@ func BuildNetworkPolicy(cache *cachev1alpha1.Cache) *netv1.NetworkPolicy {
 				{
 					From: []netv1.NetworkPolicyPeer{
 						{
-							NamespaceSelector: scraperNamespaceSelector,
-							PodSelector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{scraperReplicaSetLabel: scraperReplicaSetValue},
-							},
-						},
-						{
-							NamespaceSelector: scraperNamespaceSelector,
-							PodSelector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{scraperDaemonSetLabel: scraperDaemonSetValue},
+							NamespaceSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									corev1.LabelMetadataName: scraper.Namespace,
+								},
 							},
 						},
 					},
 					Ports: []netv1.NetworkPolicyPort{
-						{Protocol: &tcp, Port: &metricsPort},
+						{Protocol: &tcp, Port: &meshPort},
 					},
 				},
 			},

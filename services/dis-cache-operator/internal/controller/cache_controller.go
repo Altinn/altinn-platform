@@ -40,9 +40,9 @@ type CacheReconciler struct {
 	PreviousValidFor time.Duration
 	// Now returns the current time. Tests set it; nil means time.Now.
 	Now func() time.Time
-	// ScraperNetworks are the networks the metrics scraper connects from.
-	// The scraper has no mesh identity, so the exporter port trusts them.
-	ScraperNetworks []string
+	// Scraper is the meshed collector that may read the exporter port of
+	// every Cache. The exporter port accepts its identity and nothing else.
+	Scraper cachepkg.Scraper
 }
 
 // The operator creates and patches Secrets. It never reads one back: it has
@@ -56,7 +56,7 @@ type CacheReconciler struct {
 // permission when an owner reference sets blockOwnerDeletion.
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=create;patch
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=list;watch;create;patch
-// +kubebuilder:rbac:groups=policy.linkerd.io,resources=servers;meshtlsauthentications;networkauthentications;authorizationpolicies,verbs=list;watch;create;patch
+// +kubebuilder:rbac:groups=policy.linkerd.io,resources=servers;meshtlsauthentications;authorizationpolicies,verbs=list;watch;create;patch
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches,verbs=get;list;watch
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches/status,verbs=patch
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches/finalizers,verbs=update
@@ -90,7 +90,7 @@ func (r *CacheReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	if err := r.beginRotation(ctx, &cache, secretCreated); err != nil {
 		return ctrl.Result{}, r.rotationFailed(ctx, &cache, err)
 	}
-	if _, err := r.apply(ctx, &cache, cachepkg.BuildNetworkPolicy(&cache)); err != nil {
+	if _, err := r.apply(ctx, &cache, cachepkg.BuildNetworkPolicy(&cache, r.Scraper)); err != nil {
 		return ctrl.Result{}, r.failed(ctx, &cache, ReasonApplyFailed, err)
 	}
 	if err := r.applyMeshPolicies(ctx, &cache); err != nil {
@@ -150,7 +150,7 @@ func (r *CacheReconciler) ensureAuthSecret(ctx context.Context, owner *cachev1al
 // its authorization.
 func (r *CacheReconciler) applyMeshPolicies(ctx context.Context, owner *cachev1alpha1.Cache) error {
 	policies := cachepkg.BuildMeshPolicies(owner)
-	metrics := cachepkg.BuildMetricsPolicies(owner, r.ScraperNetworks)
+	metrics := cachepkg.BuildMetricsPolicies(owner, r.Scraper)
 	for _, obj := range []client.Object{
 		policies.Authentication,
 		metrics.Authentication,
@@ -214,7 +214,6 @@ func (r *CacheReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&netv1.NetworkPolicy{}, generationChanged).
 		Owns(&serverv1beta3.Server{}, generationChanged).
 		Owns(&policyv1alpha1.MeshTLSAuthentication{}, generationChanged).
-		Owns(&policyv1alpha1.NetworkAuthentication{}, generationChanged).
 		Owns(&policyv1alpha1.AuthorizationPolicy{}, generationChanged).
 		Owns(&valkeyv1alpha1.ValkeyCluster{}, builder.WithPredicates(valkeyClusterChanged())).
 		Named("cache").
