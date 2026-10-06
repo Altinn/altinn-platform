@@ -60,18 +60,15 @@ run "shared_repository_rejects_different_branches" {
   expect_failures = [var.product_syncroot_source_repos]
 }
 
-run "shared_repository_accepts_different_environments" {
+run "shared_repository_rejects_different_environments" {
   command = plan
   variables {
     product_syncroot_source_repos = {
-      studio      = { repo_name = "altinn-studio", environments = ["adminservices_test", "adminservices_prod"], branches = ["main"] }
-      studio-pdf3 = { repo_name = "altinn-studio", environments = ["at22", "at23", "tt02", "prod"], branches = ["main"] }
+      access-management = { repo_name = "altinn-auth", environments = [], branches = ["main"] }
+      authorization     = { repo_name = "altinn-auth", environments = ["prod"], branches = ["main"] }
     }
   }
-  assert {
-    condition     = toset(keys(module.syncroot_github_repo)) == toset(["altinn-studio"])
-    error_message = "Different product environments must retain one shared publishing identity."
-  }
+  expect_failures = [var.product_syncroot_source_repos]
 }
 
 run "removing_original_product_keeps_repository_key" {
