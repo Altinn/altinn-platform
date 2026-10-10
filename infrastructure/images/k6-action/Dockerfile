@@ -58,7 +58,7 @@ RUN go build . && \
 FROM ghcr.io/altinn/altinn-platform/k6-image:v2.2.0@sha256:31b45631fe80a14855d9bcacdd0a645c9502d4a8637ae4dbb3788c8e921d86e8 AS k6image
 
 # Final image with the needed binaries and helper files
-FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /jsonnet/vendor /jsonnet/vendor
 
