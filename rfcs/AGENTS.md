@@ -29,7 +29,7 @@ All RFC text must follow ASD-STE100 (Simplified Technical English).
 1. Copy `0000-template.md` to `NNNN-<feature_name>.md`. `NNNN` is the next free number. Check the merged files and the open RFC pull requests, because an open pull request also claims a number.
 2. Fill in the header: `Feature Name` (snake_case), `Start Date`, `RFC PR`, `Github Issue`, `Product/Category` and `State`. `Title` and `Github Discussion` are optional.
 3. Set `State` to **REVIEW**. The team changes it to **ACCEPTED** or **REJECTED** when it decides.
-4. Open a pull request with the title `docs(rfcs): RFC NNNN <title>`. Put the pull request link in the header when you know it.
+4. Open a pull request with the title `docs(rfcs): RFC NNNN <title>`. Put a link to the rendered RFC file on the branch in the pull request description. Put the pull request link in the header when you know it.
 5. The team reviews in the pull request. Notes from meetings go into the pull request as comments.
 6. An accepted RFC gets a tracking issue for the implementation. The author does not have to implement it.
 
