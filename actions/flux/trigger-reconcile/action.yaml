@@ -48,10 +48,13 @@ runs:
         hook_url="${base_url}/hook/${digest}"
 
         encoded_audience=$(jq -rn --arg v "${audience}" '$v | @uri')
+        # curl reads the Authorization header from stdin (-H @-). A header given
+        # as an argument would show in the process list of the runner.
         token=$(curl -sSf \
           --connect-timeout 10 --max-time 30 \
-          -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+          -H @- \
           "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${encoded_audience}" \
+          <<< "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
           | jq -er '.value') || {
           echo "::error::Could not get an OIDC token from GitHub."
           exit 1
@@ -65,8 +68,8 @@ runs:
           --connect-timeout 10 --max-time 30 \
           --retry 3 --retry-delay 5 \
           -X POST \
-          -H "Authorization: Bearer ${token}" \
-          "${hook_url}") || {
+          -H @- \
+          "${hook_url}" <<< "Authorization: Bearer ${token}") || {
           echo "::error::Could not reach the Flux webhook receiver at ${base_url}."
           exit 1
         }
