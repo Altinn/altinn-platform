@@ -1,7 +1,7 @@
 - Feature Name: on_demand_flux_reconcile
 - Title: On-demand Flux reconcile for product artifacts
 - Start Date: 2026-10-12
-- RFC PR: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/pull/0000)
+- RFC PR: [altinn/altinn-platform#4180](https://github.com/altinn/altinn-platform/pull/4180)
 - Github Issue: N/A; implementation issues follow RFC acceptance
 - Product/Category: CI/CD
 - State: **REVIEW**
@@ -225,10 +225,10 @@ Dialogporten publishes one tag for all environments at this time. [Dialogporten 
 
 Dialogporten in `at23` is the pilot. These changes implement it:
 
-- The action `actions/flux/trigger-reconcile` in this repository.
-- The package `flux-webhook-receiver` in `dis-way/gitops-manifests`.
-- The Flux configuration for `dis-core-at23` in `dis-way/core`.
-- The `Receiver` and the workflow step in `Altinn/dialogporten-manifests`.
+- The action `actions/flux/trigger-reconcile` in this repository: [altinn-platform#4181](https://github.com/Altinn/altinn-platform/pull/4181).
+- The package `flux-webhook-receiver` in `dis-way/gitops-manifests`: [gitops-manifests#2005](https://github.com/dis-way/gitops-manifests/pull/2005).
+- The Flux configuration for `dis-core-at23` in `dis-way/core`: [core#396](https://github.com/dis-way/core/pull/396).
+- The `Receiver` and the workflow step in `Altinn/dialogporten-manifests`: [dialogporten-manifests#89](https://github.com/Altinn/dialogporten-manifests/pull/89).
 
 # Drawbacks
 [drawbacks]: #drawbacks
