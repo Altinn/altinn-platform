@@ -58,6 +58,17 @@ The operator then:
 
 The application connects to `host:port` inside the cluster and sends a password. The service mesh encrypts the traffic. The password is in a Secret in the team namespace. Only pods in the same namespace can reach the cache (see Access control).
 
+**Read the password from the Secret mount, not from an environment variable.** The password rotates. A rotation adds a new password and keeps the old one valid for a grace period, 7 days by default. An application that reads the Secret as a file picks up the new value and reconnects with it. An application that copied the password into an environment variable at start keeps its open connection, but reconnects with the old value and fails once the grace period ends, days after the rotation.
+
+**Rotation is automatic.** `spec.passwordRotation.intervalDays` rotates on a schedule. The team does not request a rotation and makes no change for it. The platform default is off until the applications on the platform read the password as described above; the target default is 90 days. The two other fields are for the exception: `requestedAt` asks for one rotation now, and `previousValidFor: 0s` drops the old password at once, for a password that may have leaked.
+
+```yaml
+spec:
+  size: small
+  passwordRotation:
+    intervalDays: 90
+```
+
 # Reference-level explanation
 
 ## CRD contract
@@ -67,6 +78,7 @@ The application connects to `host:port` inside the cluster and sends a password.
 - `size` (optional): one of `small | medium | large`. Default `small`. The platform maps each size to CPU, memory, and replica values.
 - `persistence` (optional `bool`): default `false`. A cache does not keep data by default.
 - `evictionPolicy` (optional): one of the Valkey `maxmemory-policy` values: `noeviction | allkeys-lru | allkeys-lfu | allkeys-random | volatile-lru | volatile-lfu | volatile-random | volatile-ttl`. Default `noeviction`.
+- `passwordRotation` (optional): `intervalDays` rotates on a schedule, 0 to 365, default 0 (off); `requestedAt` asks for one rotation now; `previousValidFor` is how long the old password stays valid after a rotation, 0 to 168h, default 7 days from an operator flag, and at most half of the interval. See Password rotation under Access control.
 
 The spec starts small on purpose. We can add fields later. We cannot remove fields later without breaking teams.
 
@@ -126,7 +138,7 @@ Valkey does not use Entra ID. Workload identity does not help here either: it gi
 
 Each Secret patch first tests the Cache label and a rotation step annotation the operator set at creation. The operator patches a metadata-only object, so the API server response carries no Secret data. A rejected patch gives no reason, and the operator does not read the Secret to find one. It records the confirmed step in the condition reason instead: `Rotating` until the copy is confirmed, `PasswordCopied` until the new password is in place. A passing error keeps the reason and sets only the message, so the next reconcile resumes at the same step. After a restart, or after lost status writes, the operator answers a rejected patch with the next guarded patch, then a probe with tests only for the step `replaced`, then an adoption patch that gives a Secret from before the annotation its first step. Only when all of them are rejected is the Secret not the operator's: the condition reports `RotationFailed`, the request counts as handled, and a later request starts over. The ValkeyCluster lists the previous key only from the confirmed copy on, because the valkey-operator stops with an error when a listed key does not exist. After the replace, the operator writes the rotation time on the ValkeyCluster as an annotation. That gives the valkey-operator an event, so it loads both passwords at once and not on its 30 second timer. When the operator's `create` of the Secret succeeds during a period, the Secret was deleted and came back with a new `password` only; the operator then sets `keys` back to `password`, clears the period, and records an event.
 
-**Triggers.** `spec.passwordRotation.requestedAt` asks for one rotation: a value later than `status.passwordRotation.requestedAt` starts it, the value itself is only a marker, and a request made during a period is carried out when the period ends. `spec.passwordRotation.intervalDays` rotates on a schedule, counted from `status.passwordRotation.lastRotatedAt`. The platform default is 0, off, until applications on the platform reload the password without a restart: an open connection survives a removed password, so an application that reads the password from an environment variable fails only at its next reconnect, long after the rotation. The target default is 90 days, and the dis-console agent is the first application to read the password from a file mount. `spec.passwordRotation.previousValidFor` sets how long the previous password stays valid, from 0 for a password that may have leaked to 7 days; an operator flag sets the default of 7 days. A removed password does not end open connections. A true revoke removes and re-creates the Valkey user, with a short outage; it is not part of v1. The condition `PasswordRotated` reports the state and every step, with reasons only and never values.
+**Triggers.** The schedule is the normal mode; a request is for a password that may have leaked, and for tests. `spec.passwordRotation.requestedAt` asks for one rotation: a value later than `status.passwordRotation.requestedAt` starts it, the value itself is only a marker, and a request made during a period is carried out when the period ends. `spec.passwordRotation.intervalDays` rotates on a schedule, counted from `status.passwordRotation.lastRotatedAt`. The platform default is 0, off, until applications on the platform reload the password without a restart: an open connection survives a removed password, so an application that reads the password from an environment variable fails only at its next reconnect, long after the rotation. The target default is 90 days, and the dis-console agent is the first application to read the password from a file mount. `spec.passwordRotation.previousValidFor` sets how long the previous password stays valid, from 0 for a password that may have leaked to 7 days; an operator flag sets the default of 7 days. A removed password does not end open connections. A true revoke removes and re-creates the Valkey user, with a short outage; it is not part of v1. The condition `PasswordRotated` reports the state and every step, with reasons only and never values.
 
 **Permissions.** Rotation is the only reason the operator needs `patch` on Secrets. `patch` on all Secrets in team namespaces is a wider right than `create`: it could overwrite the valkey-operator's system password Secret or a TLS Secret. A `ValidatingAdmissionPolicy`, in-tree CEL and no webhook, bound to the operator's service account, will limit its patches to Secrets with a name that ends in `-cache-auth` and the operator's label, and forbid a change of type or labels. It is the first change after the alpha.
 
@@ -265,6 +277,6 @@ Teams keep building their own cache setups, and the platform keeps missing the s
 - **A managed cloud cache as an option in the same CRD.** For example, a new field such as `type: managed` creates Azure Managed Redis through ASO instead of in-cluster Valkey. The building blocks exist: ASO v2.19.0 has `RedisEnterpriseDatabaseAccessPolicyAssignment` under `cache.azure.com/v20250401`, so Entra-only access is possible. The earlier draft of this RFC describes that design.
 - Valkey cluster mode for large workloads.
 - Connection values in a ConfigMap, in the same way `dis-pgsql-operator` publishes one.
-- Password rotation on a schedule, and per-application ACL users with command and key limits (the upstream API supports both).
+- Per-application ACL users with command and key limits (the upstream API supports them).
 - Alerts on cache metrics: memory near the configured maximum, a node down, evictions.
 - The `caches` scrape job in the collector goes away once valkey-operator passes pod labels through, so the Valkey pods opt in like every other pod.
