@@ -1,0 +1,95 @@
+name: Trigger a Flux reconcile
+description: "Ask Flux in a cluster to reconcile now by calling a generic-oidc Receiver with the job's GitHub OIDC token"
+
+inputs:
+  url:
+    description: "Base URL of the cluster's Flux webhook receiver, for example https://flux-webhook.at23.dis-core.altinn.cloud"
+    required: true
+  receiver_name:
+    description: "Name of the Flux Receiver to trigger"
+    required: true
+  receiver_namespace:
+    description: "Namespace of the Flux Receiver"
+    required: true
+  audience:
+    description: "Audience of the OIDC token. Must equal the audience the Receiver expects. Defaults to the base URL."
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Trigger Flux reconcile
+      shell: bash
+      env:
+        RECEIVER_URL: ${{ inputs.url }}
+        RECEIVER_NAME: ${{ inputs.receiver_name }}
+        RECEIVER_NAMESPACE: ${{ inputs.receiver_namespace }}
+        AUDIENCE: ${{ inputs.audience }}
+      run: |
+        set -euo pipefail
+
+        if [[ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]]; then
+          echo "::error::No OIDC token endpoint available. This action needs 'permissions: id-token: write' on the calling job."
+          exit 1
+        fi
+
+        base_url="${RECEIVER_URL%/}"
+        if [[ "${base_url}" != https://* ]]; then
+          echo "::error::The receiver URL must use https, got '${base_url}'. The request carries a bearer token."
+          exit 1
+        fi
+        audience="${AUDIENCE:-${base_url}}"
+
+        # A generic-oidc Receiver has no token, so Flux derives its webhook path
+        # from the name and namespace alone. The path is not a secret; the OIDC
+        # token is what authenticates the request.
+        digest=$(printf '%s%s' "${RECEIVER_NAME}" "${RECEIVER_NAMESPACE}" | sha256sum | cut -d' ' -f1)
+        hook_url="${base_url}/hook/${digest}"
+
+        encoded_audience=$(jq -rn --arg v "${audience}" '$v | @uri')
+        token=$(curl -sSf \
+          -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+          "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${encoded_audience}" \
+          | jq -er '.value')
+        echo "::add-mask::${token}"
+
+        # curl retries timeouts and HTTP 408, 429 and 5xx by itself. That covers a
+        # Receiver that is not ready yet (503) without hiding a rejected token.
+        body_file="${RUNNER_TEMP}/flux-receiver-response"
+        status=$(curl -sS -o "${body_file}" -w '%{http_code}' \
+          --connect-timeout 10 --max-time 30 \
+          --retry 3 --retry-delay 5 \
+          -X POST \
+          -H "Authorization: Bearer ${token}" \
+          "${hook_url}") || {
+          echo "::error::Could not reach the Flux webhook receiver at ${base_url}."
+          exit 1
+        }
+
+        receiver="${RECEIVER_NAMESPACE}/${RECEIVER_NAME}"
+        case "${status}" in
+          200)
+            echo "Flux accepted the reconcile request for Receiver ${receiver}."
+            ;;
+          400)
+            echo "::error::Flux rejected the request for Receiver ${receiver} (HTTP 400). Check that the token audience '${audience}' and this repository, ref and workflow match the Receiver's oidcProviders."
+            ;;
+          404)
+            echo "::error::No Receiver answers at ${hook_url} (HTTP 404). Check the receiver name, namespace and base URL, and that the Receiver has type generic-oidc."
+            ;;
+          503)
+            echo "::error::Receiver ${receiver} is suspended or not ready (HTTP 503)."
+            ;;
+          *)
+            echo "::error::Unexpected HTTP ${status} from the Flux webhook receiver for Receiver ${receiver}."
+            ;;
+        esac
+
+        if [[ "${status}" != "200" ]]; then
+          if [[ -s "${body_file}" ]]; then
+            head -c 2000 "${body_file}"
+            echo
+          fi
+          exit 1
+        fi
