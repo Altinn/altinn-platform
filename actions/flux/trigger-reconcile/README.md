@@ -19,7 +19,7 @@ The action fails when Flux does not accept the request. Polling still picks the 
 | `url` | Yes | Base URL of the cluster's Flux webhook receiver, for example `https://flux-webhook.at23.dis-core.altinn.cloud`. Must use `https`. |
 | `receiver_name` | Yes | Name of the `Receiver`. |
 | `receiver_namespace` | Yes | Namespace of the `Receiver`. |
-| `audience` | No | Audience of the OIDC token. Must equal the audience the `Receiver` expects. Defaults to `url`. |
+| `audience` | No | Audience of the OIDC token. Must equal the audience the `Receiver` expects. Defaults to `url` without trailing slashes. |
 
 ## Sample
 
@@ -79,8 +79,9 @@ List only the source (`OCIRepository`) under `resources`. Flux reconciles the `K
 
 | Response | Meaning |
 |----------|---------|
-| `400` | Flux rejected the token. The audience or a `validations` expression does not match. The reason is in the notification-controller log. |
-| `404` | No `Receiver` has this name and namespace, the `Receiver` has another type, or the base URL does not reach the notification-controller. |
-| `503` | The `Receiver` is suspended or not ready. |
+| `400` | Flux rejected the token. The audience or a `validations` expression does not match, or Flux could not reach the token issuer. The action prints the token's claims so you can compare them with the `Receiver`. The exact reason is in the notification-controller log. |
+| `404` | No `Receiver` has this name and namespace, the `Receiver` has another type or has never been ready, or the base URL does not reach the notification-controller. |
+| `500` | Flux could not request the reconcile. A resource listed in the `Receiver` does not exist, or the `Receiver` is not allowed to reference it. |
+| `503` | The `Receiver` is suspended or not ready, or the notification-controller is unavailable. |
 
-The action retries timeouts and `408`, `429` and `5xx` responses three times.
+The action retries connection errors, timeouts and `408`, `429` and `5xx` responses up to three times, and stops retrying after 60 seconds.

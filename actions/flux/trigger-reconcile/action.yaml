@@ -12,7 +12,7 @@ inputs:
     description: "Namespace of the Flux Receiver"
     required: true
   audience:
-    description: "Audience of the OIDC token. Must equal the audience the Receiver expects. Defaults to the base URL."
+    description: "Audience of the OIDC token. Must equal the audience the Receiver expects. Defaults to the base URL without trailing slashes."
     required: false
     default: ""
 
@@ -34,7 +34,19 @@ runs:
           exit 1
         fi
 
-        base_url="${RECEIVER_URL%/}"
+        # The runner does not enforce 'required: true', and Flux hashes the name
+        # and namespace into the webhook path. A bad value would only show up as
+        # a 404.
+        name_pattern='^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$'
+        if [[ ! "${RECEIVER_NAME}" =~ ${name_pattern} || ! "${RECEIVER_NAMESPACE}" =~ ${name_pattern} ]]; then
+          printf '::error::receiver_name and receiver_namespace must be Kubernetes object names, got %q and %q.\n' "${RECEIVER_NAME}" "${RECEIVER_NAMESPACE}"
+          exit 1
+        fi
+
+        base_url="${RECEIVER_URL}"
+        while [[ "${base_url}" == */ ]]; do
+          base_url="${base_url%/}"
+        done
         if [[ "${base_url}" != https://* ]]; then
           echo "::error::The receiver URL must use https, got '${base_url}'. The request carries a bearer token."
           exit 1
@@ -50,8 +62,9 @@ runs:
         encoded_audience=$(jq -rn --arg v "${audience}" '$v | @uri')
         # curl reads the Authorization header from stdin (-H @-). A header given
         # as an argument would show in the process list of the runner.
-        token=$(curl -sSf \
+        token=$(curl -f --no-progress-meter \
           --connect-timeout 10 --max-time 30 \
+          --retry 3 --retry-delay 2 --retry-max-time 60 --retry-connrefused \
           -H @- \
           "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${encoded_audience}" \
           <<< "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
@@ -61,16 +74,19 @@ runs:
         }
         echo "::add-mask::${token}"
 
-        # curl retries timeouts and HTTP 408, 429 and 5xx by itself. That covers a
-        # Receiver that is not ready yet (503) without hiding a rejected token.
+        # curl retries connection errors, timeouts and HTTP 408, 429 and 5xx by
+        # itself. That covers a Receiver or gateway that is briefly unavailable
+        # without hiding a rejected token. --retry-max-time bounds the retries,
+        # also when the server sends a long Retry-After.
         body_file="${RUNNER_TEMP}/flux-receiver-response"
-        status=$(curl -sS -o "${body_file}" -w '%{http_code}' \
+        status=$(curl --no-progress-meter -o "${body_file}" -w '%{http_code}' \
           --connect-timeout 10 --max-time 30 \
-          --retry 3 --retry-delay 5 \
-          -X POST \
+          --retry 3 --retry-delay 5 --retry-max-time 60 --retry-all-errors \
           -H @- \
+          -H 'Content-Type: application/json' \
+          --data '{}' \
           "${hook_url}" <<< "Authorization: Bearer ${token}") || {
-          echo "::error::Could not reach the Flux webhook receiver at ${base_url}."
+          echo "::error::The request to the Flux webhook receiver at ${base_url} failed (curl exit code $?). The curl error is in the log above."
           exit 1
         }
 
@@ -80,13 +96,19 @@ runs:
             echo "Flux accepted the reconcile request for Receiver ${receiver}."
             ;;
           400)
-            echo "::error::Flux rejected the request for Receiver ${receiver} (HTTP 400). Check that the token audience '${audience}' and this repository, ref and workflow match the Receiver's oidcProviders."
+            echo "::error::Flux rejected the request for Receiver ${receiver} (HTTP 400). Compare the token claims below with the audience and validations in the Receiver's oidcProviders. Flux also answers 400 when it cannot reach the token issuer."
+            # The claims are not secret. They are what the validations see.
+            jq -R 'split(".")[1] | gsub("-"; "+") | gsub("_"; "/") | @base64d | fromjson
+              | {iss, aud, sub, repository, repository_id, repository_owner_id, ref, workflow_ref}' <<< "${token}" || true
             ;;
           404)
-            echo "::error::No Receiver answers at ${hook_url} (HTTP 404). Check the receiver name, namespace and base URL, and that the Receiver has type generic-oidc."
+            echo "::error::No Receiver answers at ${hook_url} (HTTP 404). Check the receiver name, namespace and base URL, that the Receiver has type generic-oidc, and that it is Ready. Flux serves the path only after the Receiver has reconciled."
+            ;;
+          500)
+            echo "::error::Flux could not request the reconcile for Receiver ${receiver} (HTTP 500). Check that every resource the Receiver lists exists and that the Receiver is allowed to reference it."
             ;;
           503)
-            echo "::error::Receiver ${receiver} is suspended or not ready (HTTP 503)."
+            echo "::error::Receiver ${receiver} is suspended or not ready, or the notification-controller is unavailable (HTTP 503)."
             ;;
           *)
             echo "::error::Unexpected HTTP ${status} from the Flux webhook receiver for Receiver ${receiver}."
@@ -95,8 +117,13 @@ runs:
 
         if [[ "${status}" != "200" ]]; then
           if [[ -s "${body_file}" ]]; then
+            # The body is untrusted. Stop the runner from reading workflow
+            # commands out of it.
+            stop_token=$(head -c 32 /dev/urandom | sha256sum | cut -d' ' -f1)
+            echo "::stop-commands::${stop_token}"
             head -c 2000 "${body_file}"
             echo
+            echo "::${stop_token}::"
           fi
           exit 1
         fi
