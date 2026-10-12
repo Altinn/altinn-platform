@@ -16,7 +16,7 @@ The operator does not run Valkey itself. It creates resources for the official [
 
 This RFC replaces an earlier draft. The earlier draft used Azure Managed Redis (see [#3472](https://github.com/Altinn/altinn-platform/pull/3472)). That option is now listed under Future possibilities.
 
-**Status, 2026-10-12.** The alpha runs on at22 with operator 0.3.0. The dis-console agent is the first application that uses a `Cache`, through the mesh and with its own service account identity. The metrics of every Cache reach the cluster's Azure Monitor workspace through the OpenTelemetry collector, and the Caches dashboard in Grafana shows them. The text below describes what is built and in use; the unresolved questions list what the alpha did not answer.
+**Status, 2026-10-12.** The alpha runs on at22 with operator 0.3.0. The dis-console agent is the first application that uses a `Cache`, through the mesh and with its own service account identity. The metrics of every Cache reach the cluster's Azure Monitor workspace through the OpenTelemetry collector, and the Caches dashboard in Grafana shows them. The first password rotation ran on at22 on 2026-10-12: every step confirmed, the old password valid through the period, and one finding on the order of the steps, listed under Unresolved questions. The text below describes what is built and in use; the unresolved questions list what the alpha did not answer.
 
 # Motivation
 
@@ -264,7 +264,8 @@ Teams keep building their own cache setups, and the platform keeps missing the s
 
 # Unresolved questions
 
-- ACL reloads: confirm with the first rotation on at22 that a reload does not end the `app` user's open connections. The cluster bus through the proxy under `deny` is confirmed: the two nodes formed the cluster on at22 once the NetworkPolicy allowed the proxy port.
+- ACL reloads and open connections: still open. The first rotation on at22 ran with an application that connects once per sweep, so it does not show whether a reload ends a long-lived connection. The cluster bus through the proxy under `deny` is confirmed: the two nodes formed the cluster on at22 once the NetworkPolicy allowed the proxy port.
+- The start window after a replace: the new password reaches the Secret first and the ACL up to 30 seconds later, when the valkey-operator reconciles. A pod that starts in that window reads the new password and gets `WRONGPASS` until the reload; on at22 the window was about one minute, two failed sweeps of a pod that happened to start with the replace. A running pod never sees it. The fix is a different order: write the new password under a new key, list both keys on the `ValkeyCluster`, and move the new value into `password` only after that, so a pod reads a password Valkey already accepts at any moment. One more key and one more guarded patch; decide before the schedule goes on by default.
 - Early revoke: a rotation request made during a period waits for the period to end. For a password that may have leaked, a new request could end the period at once. Decide before the schedule goes on by default.
 - Per-team limits: a `ResourceQuota` per namespace and a cap on the number of `Cache` objects, reported as a status condition.
 - Upstream requests to file: pod annotations on `ValkeyCluster`, a `serviceAccountName` for the Valkey pods (today they use the namespace `default` account, so the mesh identity is shared), `--primaryauth` off the command line, and `*bool` for `enabled`.
