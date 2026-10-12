@@ -1,7 +1,7 @@
 - Feature Name: self_service_messaging
 - Title: Self-service messaging
 - Start Date: 2026-10-07
-- RFC PR: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/pull/0000)
+- RFC PR: [altinn/altinn-platform#4182](https://github.com/Altinn/altinn-platform/pull/4182)
 - Github Issue: [altinn/altinn-platform#2545](https://github.com/Altinn/altinn-platform/issues/2545)
 - Product/Category: Container Runtime
 - State: **REVIEW** (possible states are: **REVIEW**, **ACCEPTED** and **REJECTED**)
