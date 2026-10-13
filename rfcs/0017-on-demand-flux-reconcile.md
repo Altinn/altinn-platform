@@ -29,7 +29,7 @@ This wait has two effects:
 - Each deployment takes longer than necessary.
 - A test that runs after a deployment must wait for the maximum time, or it tests the previous release.
 
-A shorter poll interval decreases the wait, but it does not remove the wait. With a poll interval of 1 minute, the average wait is 30 seconds and the maximum wait is 1 minute. But the `OCIRepository` then polls the registry each minute, also when there is no new artifact. That is 1,440 polls each day for each product in each cluster. A poll interval of 10 minutes gives 144.
+A shorter poll interval decreases the wait, but it does not remove the wait. It also adds registry requests for each product in each cluster.
 
 The expected outcome is that Flux starts to fetch the artifact some seconds after the publishing workflow pushes it. No continuous integration (CI) system gets access to the Kubernetes API.
 
@@ -254,7 +254,7 @@ Dialogporten in `at23` is the pilot. These changes implement it:
 
 | Alternative | Why not |
 |---|---|
-| A poll interval of 1 minute | The change is one line in the `OCIRepository` of the product, and it needs no new component. The average wait decreases to 30 seconds and the maximum wait to 1 minute. But Flux then polls the registry each minute for each product in each cluster, also when there is no new artifact. That is 1,440 polls each day, where 10 minutes gives 144. A reconcile request starts a poll only when the workflow publishes an artifact, and it lets a product increase the poll interval. A product can use a short poll interval together with this feature. |
+| A shorter poll interval | It decreases the wait and does not remove it. It needs no new component, and a product can use it together with this feature. |
 | A `Receiver` of the type `generic-hmac` | It needs a shared secret in the cluster and in GitHub. It works with Flux versions before 2.9. |
 | A registry webhook to a `Receiver` of the type `acr` | The `Receiver` does not verify a signature. Each product and each cluster needs one webhook in the shared registry, and the registry has a webhook quota. |
 | `az aks command invoke` from the workflow | The workflow gets a path to the Kubernetes API. Microsoft states that the command is not for automated access. Each call starts a pod in the cluster. |
