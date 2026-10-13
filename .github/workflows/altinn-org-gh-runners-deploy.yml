@@ -68,7 +68,7 @@ jobs:
         run: echo "ip=$(curl -sf https://api.ipify.org)" >> $GITHUB_OUTPUT
 
       - name: Login to Azure
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
         with:
           client-id: ${{ env.ARM_CLIENT_ID }}
           tenant-id: ${{ env.ARM_TENANT_ID }}
@@ -90,7 +90,7 @@ jobs:
           done
 
       - name: Terraform Plan
-        uses: Altinn/altinn-platform/actions/terraform/plan@e095eaa67ba630897e9b488a933c8ebb82b36732 # main
+        uses: Altinn/altinn-platform/actions/terraform/plan@cd48d3d472e66fdb58c1305979d97a50d5edca0c # main
         env:
           TF_VAR_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
           TF_VAR_altinn_app_id: ${{ vars.GH_RUNNERS_APP_ID }}
@@ -143,7 +143,7 @@ jobs:
         run: echo "ip=$(curl -sf https://api.ipify.org)" >> $GITHUB_OUTPUT
 
       - name: Login to Azure
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
         with:
           client-id: ${{ env.ARM_CLIENT_ID }}
           tenant-id: ${{ env.ARM_TENANT_ID }}
@@ -165,7 +165,7 @@ jobs:
           done
 
       - name: Terraform Init
-        uses: Altinn/altinn-platform/actions/terraform/init@e095eaa67ba630897e9b488a933c8ebb82b36732 # main
+        uses: Altinn/altinn-platform/actions/terraform/init@cd48d3d472e66fdb58c1305979d97a50d5edca0c # main
         with:
           working_directory: ${{ env.TF_PROJECT }}
           oidc_type: environment

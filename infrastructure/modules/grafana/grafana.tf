@@ -1,3 +1,7 @@
+locals {
+  grafana_name = var.dashboard_name != "" ? var.dashboard_name : "grafana-${var.prefix}-${var.environment}"
+}
+
 # Create resource group only if create_resource_group is true
 resource "azurerm_resource_group" "grafana" {
   count    = var.create_resource_group ? 1 : 0
@@ -9,7 +13,7 @@ resource "azurerm_resource_group" "grafana" {
 }
 
 resource "azurerm_dashboard_grafana" "grafana" {
-  name                              = var.dashboard_name != "" ? var.dashboard_name : "grafana-${var.prefix}-${var.environment}"
+  name                              = local.grafana_name
   resource_group_name               = var.create_resource_group ? azurerm_resource_group.grafana[0].name : var.resource_group_name
   location                          = var.location
   api_key_enabled                   = true
@@ -28,6 +32,19 @@ resource "azurerm_dashboard_grafana" "grafana" {
 
   identity {
     type = "SystemAssigned"
+  }
+
+  dynamic "smtp" {
+    for_each = var.smtp == null ? [] : [var.smtp]
+    content {
+      enabled          = true
+      host             = "smtp.azurecomm.net:587"
+      user             = local.grafana_name
+      password         = azuread_application_password.smtp[0].value
+      start_tls_policy = "MandatoryStartTLS"
+      from_address     = smtp.value.from_address
+      from_name        = smtp.value.from_name
+    }
   }
 }
 

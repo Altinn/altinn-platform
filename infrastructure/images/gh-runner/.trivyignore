@@ -304,3 +304,47 @@ CVE-2026-56852
 
 # openssl: Heap use-after-free in PKCS7_verify()
 CVE-2026-45447
+
+# azure-cli bundled Python packages - resolved when azure-cli ships PyJWT >= 2.14.0
+# and urllib3 >= 2.8.0. Runners are used for our own private workflows only.
+# PyJWT: authentication bypass / token forgery (CVE-2026-102268 is CRITICAL)
+CVE-2026-102266
+CVE-2026-102267
+CVE-2026-102268
+CVE-2026-102271
+CVE-2026-102272
+CVE-2026-102273
+# urllib3: proxy TLS override, unbounded chunk parser memory
+CVE-2026-97687
+CVE-2026-97689
+
+# npm dependencies of node20 shipped in the actions-runner base image
+# (/home/runner/externals/node20) - resolved when actions/runner updates it
+# brace-expansion: DoS
+CVE-2026-102276
+CVE-2026-102278
+# pacote
+CVE-2026-9496
+# tar
+CVE-2026-73566
+# undici
+CVE-2026-19534
+
+# golang libraries in docker, containerd, runc, buildx (base image), gh (apt) and
+# yq - resolved when upstream rebuilds with Go >= 1.26.9 and fixed modules
+# stdlib net/http: DoS via crafted HTTP Range headers
+CVE-2026-78667
+# x/net/http2: DoS via excessive HTTP/2 SETTINGS
+CVE-2026-78669
+# stdlib crypto/tls: DoS via multiple ECH outer extension references
+CVE-2026-97031
+# x/crypto/ssh
+CVE-2026-56854
+# x/mod/sumdb
+CVE-2026-56864
+CVE-2026-56865
+# grpc
+CVE-2026-84304
+CVE-2026-84445
+# moby/go-archive: arbitrary file write (docker-buildx)
+CVE-2026-17106
