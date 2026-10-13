@@ -112,3 +112,30 @@ CVE-2026-69249
 GHSA-537c-gmf6-5ccf
 # https://github.com/advisories/GHSA-6v7p-g79w-8964
 GHSA-6v7p-g79w-8964
+
+# azure-cli bundled Python packages (from the azure-devops-agent base image) - resolved
+# when azure-cli ships PyJWT >= 2.14.0 and urllib3 >= 2.8.0
+# https://avd.aquasec.com/nvd/cve-2026-102268 (CRITICAL)
+CVE-2026-102268
+# https://avd.aquasec.com/nvd/cve-2026-102266
+CVE-2026-102266
+# https://avd.aquasec.com/nvd/cve-2026-102267
+CVE-2026-102267
+# https://avd.aquasec.com/nvd/cve-2026-102271
+CVE-2026-102271
+# https://avd.aquasec.com/nvd/cve-2026-102272
+CVE-2026-102272
+# https://avd.aquasec.com/nvd/cve-2026-102273
+CVE-2026-102273
+# https://avd.aquasec.com/nvd/cve-2026-97687
+CVE-2026-97687
+# https://avd.aquasec.com/nvd/cve-2026-97689
+CVE-2026-97689
+
+# golang library vulnerabilities in kubectl/helm binaries - will be resolved when upstream tools rebuild with Go >= 1.26.9 and x/net >= 0.60.0
+# https://avd.aquasec.com/nvd/cve-2026-78667
+CVE-2026-78667
+# https://avd.aquasec.com/nvd/cve-2026-78669
+CVE-2026-78669
+# https://avd.aquasec.com/nvd/cve-2026-97031
+CVE-2026-97031
