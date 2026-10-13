@@ -64,6 +64,31 @@ The operator then:
 
 The apps read the host name and the queue name from the ConfigMap and connect with their workload identity.
 
+## A queue that another product consumes
+
+A team can grant an identity from another product namespace. The queue owner decides who may use its queue:
+
+```yaml
+apiVersion: messaging.dis.altinn.cloud/v1alpha1
+kind: Queue
+metadata:
+  name: sync-requests
+  namespace: product-myproduct
+spec:
+  name: myproduct.sync.requests
+  access:
+    principals:
+      - role: sender
+        identityRef:
+          name: other-api
+          namespace: product-other
+      - role: consumer
+        identityRef:
+          name: my-worker
+```
+
+The reference follows the identity. When the other team recreates `other-api`, its managed identity gets a new principal ID, and the operator updates the grant.
+
 ## A queue that an Azure service delivers to
 
 Azure Event Grid delivers events over the public network with its own managed identity. The team grants that identity by principal ID, because it has no `ApplicationIdentity`:
@@ -207,7 +232,7 @@ The spec starts small on purpose. We can add fields later. We cannot remove a fi
 
 Each principal has a `role` and exactly one source, as in the `dis-pgsql-operator` `Database` API:
 
-- `identityRef.name`: an `ApplicationIdentity` in the same product namespace. The operator resolves it with `dis-common/identityref`. A missing or not-ready identity sets `AccessReady=False` with reason `IdentityNotReady`, and the operator requeues.
+- `identityRef{name, namespace}`: an `ApplicationIdentity`. `namespace` is optional and defaults to the namespace of the `Queue`. The operator resolves it with `dis-common/identityref`, whose source already carries a namespace. A missing or not-ready identity sets `AccessReady=False` with reason `IdentityNotReady`, and the operator requeues.
 - `group{name, principalId}`: an Entra group.
 - `servicePrincipal{name, principalId}`: any other principal, such as an Azure service or an app in another cluster.
 
@@ -219,6 +244,8 @@ Each principal has a `role` and exactly one source, as in the `dis-pgsql-operato
 | `owner` | Not granted in the first version |
 
 `consumer` exists because every listener needs both roles: Wolverine and MassTransit re-send a scheduled copy to the same queue when a handler fails.
+
+A reference to another product namespace departs from the same-namespace rule in [RFC 0013](https://github.com/Altinn/altinn-platform/blob/main/rfcs/0013-multitenant-dis-databases.md). That rule protects a team's objects from use by another team. Here the queue owner grants a role on its own queue, the other team's identity receives a permission and not an obligation, and the principal ID of an identity is not secret. A copied principal ID goes stale when the identity is recreated. A reference does not. `servicePrincipal` stays for principals without an `ApplicationIdentity` in the cluster.
 
 `owner` is in the API so that the platform can allow it later for a namespace that runs the trusted model. In the first version the reconciler sets `AccessReady=False` with reason `RoleNotAllowed`, and the Azure ABAC condition on the ASO identity does not contain the owner role. See Terraform changes.
 
@@ -289,7 +316,7 @@ aso->>az: Create queue, role assignments
 msgop->>kapi: Write status, update ConfigMap
 ```
 
-The operator watches `Queue` and `ApplicationIdentity`. Each reconcile re-applies the full ASO spec. `Ready` aggregates the other conditions, as in `dis-vault`.
+The operator watches `Queue` and `ApplicationIdentity` across the cluster, so a change to a referenced identity in any product namespace requeues the queues that reference it. Each reconcile re-applies the full ASO spec. `Ready` aggregates the other conditions, as in `dis-vault`.
 
 ## Deletion
 
