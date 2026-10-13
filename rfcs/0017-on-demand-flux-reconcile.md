@@ -24,11 +24,10 @@ After a publishing workflow completes, the cluster waits for the next poll. The 
 | Average | 5 minutes |
 | Maximum | 10 minutes |
 
-This wait has three effects:
+This wait has two effects:
 
 - Each deployment takes longer than necessary.
 - A test that runs after a deployment must wait for the maximum time, or it tests the previous release.
-- [RFC 0016](https://github.com/Altinn/altinn-platform/pull/4144) reports the deployment result to the workflow. That RFC states that the poll interval can be the largest part of the feedback time.
 
 A shorter poll interval decreases the wait, but it does not remove the wait. It also adds registry requests for each product in each cluster.
 
