@@ -1,10 +1,13 @@
-FROM ghcr.io/actions/actions-runner:2.334.0@sha256:b6614fce332517f74d0a76e7c762fb08e4f2ff13dcf333183397c8a5725b6e8e
+FROM ghcr.io/actions/actions-runner:2.338.0@sha256:4ffadc0002b2581327e06101fc8c06cd189232baf79fe561fac9caeb76f5e807
 # for latest release, see https://github.com/actions/runner/releases
 
 USER root
 
 # install additional utilities (curl, jq, unzip, git already in base image)
-RUN apt-get update && apt-get install -y --no-install-recommends wget uuid-runtime make xz-utils
+# and pick up Ubuntu security fixes newer than the base image (e.g. openssl)
+RUN apt-get update && \
+    apt-get upgrade -y --no-install-recommends && \
+    apt-get install -y --no-install-recommends wget uuid-runtime make xz-utils
 
 # Install Azure CLI
 RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
