@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.10.1](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.10.0...tf-azdev-agent-0.10.1) (2026-10-13)
+
+
+### Bug Fixes
+
+* **tf-azdev-agent:** ignore upstream CVEs in azure-cli and kubectl/helm ([#4189](https://github.com/Altinn/altinn-platform/issues/4189)) ([4f4c863](https://github.com/Altinn/altinn-platform/commit/4f4c86340a5f82018713b1f74770b4e5b04e7165))
+
+
+### Dependency Updates
+
+* update dependency helm to v4.3.0 ([#3708](https://github.com/Altinn/altinn-platform/issues/3708)) ([c7b8684](https://github.com/Altinn/altinn-platform/commit/c7b8684cc9ffdfda48ede8410bdcd65b1f39fd91))
+* update dependency kubectl to v1.37.0 ([#4073](https://github.com/Altinn/altinn-platform/issues/4073)) ([02584ff](https://github.com/Altinn/altinn-platform/commit/02584ff18b2b366b81cfabb0ee648f0a61108962))
+* update dependency kubectl to v1.37.1 ([#4187](https://github.com/Altinn/altinn-platform/issues/4187)) ([79b375c](https://github.com/Altinn/altinn-platform/commit/79b375c09cb3e9b1a50e0676f36d9286fb82c731))
+
 ## [0.10.0](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.9.6...tf-azdev-agent-0.10.0) (2026-09-02)
 
 

@@ -116,3 +116,24 @@ variable "localtags" {
   description = "A map of tags to assign to the created resources."
   default     = {}
 }
+
+variable "smtp" {
+  type = object({
+    communication_service_id  = string
+    sender_role_definition_id = string
+    tenant_id                 = string
+    from_address              = optional(string, "grafana@altinn.cloud")
+    from_name                 = optional(string, "Altinn Grafana")
+    secret_rotation_days      = optional(number, 180)
+  })
+  default     = null
+  description = <<-EOT
+    Send Grafana email through the dis-acs-relay Azure Communication Services SMTP relay. Disabled when null.
+    Creates an Entra app with a rotating client secret and registers it as the SMTP username on the relay.
+    The deploying identity needs the ACS Terraform Operations (dis-acs-relay) role on the relay.
+      communication_service_id  - communication_service_id output of dis-email-relay-acs-rg
+      sender_role_definition_id - smtp_sender_role_definition_id output of dis-email-relay-acs-rg
+      tenant_id                 - Entra tenant of the SMTP app, same as the relay
+      from_address              - must be a sender registered on the relay
+  EOT
+}

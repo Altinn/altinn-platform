@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.10.1](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.10.0...ghrunner-0.10.1) (2026-10-13)
+
+
+### Bug Fixes
+
+* **gh-runner:** ignore upstream CVEs not fixable in the image ([124e4d4](https://github.com/Altinn/altinn-platform/commit/124e4d456dfe70742f3b351e5d8afb01217b3782))
+* **gh-runner:** upgrade actions-runner to 2.338.0 and apply Ubuntu security updates ([#4188](https://github.com/Altinn/altinn-platform/issues/4188)) ([69ab3bf](https://github.com/Altinn/altinn-platform/commit/69ab3bf3cd7560da81efb5c2077128d2660e2154))
+* the image actually installs curl and jq, not netcat ([#3973](https://github.com/Altinn/altinn-platform/issues/3973)) ([d64238f](https://github.com/Altinn/altinn-platform/commit/d64238f4d7e42b4122fbe50c7d9ada78cbedfd7a))
+
+
+### Dependency Updates
+
+* update dependency yq to v4.54.1 ([#3928](https://github.com/Altinn/altinn-platform/issues/3928)) ([28077a9](https://github.com/Altinn/altinn-platform/commit/28077a9443a97b75715faafe694b8baa031f52fd))
+
 ## [0.10.0](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.9.1...ghrunner-0.10.0) (2026-08-17)
 
 
