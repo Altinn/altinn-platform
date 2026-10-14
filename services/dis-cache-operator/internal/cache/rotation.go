@@ -122,6 +122,20 @@ func RotationPromotePatch(cache *cachev1alpha1.Cache) ([]byte, error) {
 	return json.Marshal(ops)
 }
 
+// RotationRestagePatch returns the JSON patch that writes a fresh password
+// under the next key while the step stays staged. The operator uses it when a
+// Valkey node gives no proof that it loaded the staged password: a new value
+// is a new ACL change, so a working node reports a new transition. Nothing
+// reads the next key, so the earlier staged value is not in use.
+func RotationRestagePatch(cache *cachev1alpha1.Cache, password string) ([]byte, error) {
+	encoded := base64.StdEncoding.EncodeToString([]byte(password))
+	ops := append(rotationGuard(cache, RotationStepStaged),
+		jsonPatchOp{Op: opReplace, Path: dataPath(AuthSecretNextPasswordKey), Value: encoded},
+	)
+
+	return json.Marshal(ops)
+}
+
 // RotationRemovePatch returns the JSON patch for the last rotation step: the
 // previous and the next password are removed and the Secret is idle again.
 // The controller applies it after the ValkeyCluster lists the password key

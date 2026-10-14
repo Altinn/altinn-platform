@@ -806,34 +806,55 @@ var _ = Describe("Cache password rotation", func() {
 		Expect(getSecret(idle.Name).Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepReplaced))
 	})
 
-	It("promotes after the bound when a node reports the ACL applied without a transition", func() {
+	It("never promotes on a node without a transition, and stages again until a node proves it", func() {
 		now := time.Date(2026, 9, 19, 8, 45, 0, 0, time.UTC)
 		r := rotationReconciler(&now)
-		cache := newCache("cache-rotate-bound", nil)
+		cache := newCache("cache-rotate-restage", nil)
 		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
 		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
-		reconcileWith(r, "cache-rotate-bound")
-		aclApplied("cache-rotate-bound", "0-0", metav1.ConditionTrue, now.Add(-time.Hour))
+		reconcileWith(r, "cache-rotate-restage")
+		first := getSecret(cachepkg.AuthSecretName(cache)).Data[cachepkg.AuthSecretPasswordKey]
+		aclApplied("cache-rotate-restage", "0-0", metav1.ConditionTrue, now.Add(-time.Hour))
 
-		requestRotation("cache-rotate-bound", now)
-		reconcileWith(r, "cache-rotate-bound")
-		secret := getSecret(cachepkg.AuthSecretName(cache))
-		Expect(secret.Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepStaged))
+		requestRotation("cache-rotate-restage", now)
+		reconcileWith(r, "cache-rotate-restage")
+		staged := getSecret(cachepkg.AuthSecretName(cache))
+		Expect(staged.Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepStaged))
 
-		// The node read the new file on its first load: no transition. The
-		// operator waits for the bound, then promotes, but only once the
-		// valkey-operator has processed the new key list.
-		now = now.Add(aclApplyBound - time.Second)
-		reconcileWith(r, "cache-rotate-bound")
-		Expect(getSecret(secret.Name).Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepStaged))
-		now = now.Add(time.Second)
-		reconcileWith(r, "cache-rotate-bound")
-		Expect(getSecret(secret.Name).Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepStaged))
-		Expect(rotatedOf(getCache("cache-rotate-bound")).Message).To(ContainSubstring("the valkey-operator"))
-		markClusterProcessed("cache-rotate-bound")
-		reconcileWith(r, "cache-rotate-bound")
-		Expect(getSecret(secret.Name).Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepReplaced))
-		Expect(rotatedOf(getCache("cache-rotate-bound")).Reason).To(Equal(ReasonPreviousPasswordValid))
+		// While the valkey-operator has not read the new key list, nothing
+		// happens after the wait either: no promote, no new stage.
+		now = now.Add(restageAfter)
+		reconcileWith(r, "cache-rotate-restage")
+		Expect(getSecret(staged.Name).Data).To(Equal(staged.Data))
+		Expect(rotatedOf(getCache("cache-rotate-restage")).Message).To(ContainSubstring("the valkey-operator"))
+
+		// The valkey-operator has read the key list, but the node reports True
+		// without a transition. That is no proof: the operator stages a fresh
+		// password and moves the stage time. The key password does not change.
+		markClusterProcessed("cache-rotate-restage")
+		reconcileWith(r, "cache-rotate-restage")
+		restaged := getSecret(staged.Name)
+		Expect(restaged.Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepStaged))
+		Expect(restaged.Data[cachepkg.AuthSecretPasswordKey]).To(Equal(first))
+		Expect(restaged.Data[cachepkg.AuthSecretNextPasswordKey]).NotTo(Equal(staged.Data[cachepkg.AuthSecretNextPasswordKey]))
+		updated := getCache("cache-rotate-restage")
+		Expect(updated.Status.PasswordRotation.StagedAt.Time).To(BeTemporally("==", now))
+		Expect(rotatedOf(updated).Message).To(ContainSubstring("staged the new password again"))
+		Expect(rotatedOf(updated).Message).To(ContainSubstring("valkey-cache-rotate-restage-0-0"))
+
+		// Before the next wait ends, the old transition still gives no proof.
+		now = now.Add(restageAfter - time.Second)
+		reconcileWith(r, "cache-rotate-restage")
+		Expect(getSecret(staged.Name).Data).To(Equal(restaged.Data))
+
+		// The node reloads the fresh ACL: the transition is the proof, and the
+		// promote uses the fresh value.
+		aclApplied("cache-rotate-restage", "0-0", metav1.ConditionTrue, now)
+		reconcileWith(r, "cache-rotate-restage")
+		promoted := getSecret(staged.Name)
+		Expect(promoted.Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepReplaced))
+		Expect(promoted.Data[cachepkg.AuthSecretPasswordKey]).To(Equal(restaged.Data[cachepkg.AuthSecretNextPasswordKey]))
+		Expect(rotatedOf(getCache("cache-rotate-restage")).Reason).To(Equal(ReasonPreviousPasswordValid))
 	})
 
 	It("keeps the key list short when the stage patch fails, and stages on the next reconcile", func() {

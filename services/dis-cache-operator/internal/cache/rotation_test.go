@@ -89,6 +89,21 @@ func TestRotationPromotePatch(t *testing.T) {
 	}
 }
 
+func TestRotationRestagePatch(t *testing.T) {
+	t.Parallel()
+
+	body, err := RotationRestagePatch(newTestCache(nil), "fresh-password-789")
+	ops := decodePatch(t, body, err)
+	expectGuard(t, ops, RotationStepStaged)
+	if len(ops) != 3 {
+		t.Fatalf("want 3 operations, got %d: %v", len(ops), ops)
+	}
+	want := base64.StdEncoding.EncodeToString([]byte("fresh-password-789"))
+	if ops[2]["op"] != "replace" || ops[2]["path"] != "/data/password-next" || ops[2]["value"] != want {
+		t.Errorf("want only the next key replaced, the step unchanged, got %v", ops[2])
+	}
+}
+
 func TestRotationRemovePatch(t *testing.T) {
 	t.Parallel()
 
