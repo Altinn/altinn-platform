@@ -857,6 +857,85 @@ var _ = Describe("Cache password rotation", func() {
 		Expect(rotatedOf(getCache("cache-rotate-restage")).Reason).To(Equal(ReasonPreviousPasswordValid))
 	})
 
+	It("does not count a transition from before a new stage, also when another node proved the first value", func() {
+		now := time.Date(2026, 9, 19, 8, 47, 0, 0, time.UTC)
+		r := rotationReconciler(&now)
+		cache := newCache("cache-rotate-twonode", nil)
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+		reconcileWith(r, "cache-rotate-twonode")
+		first := getSecret(cachepkg.AuthSecretName(cache)).Data[cachepkg.AuthSecretPasswordKey]
+		aclApplied("cache-rotate-twonode", "0-0", metav1.ConditionTrue, now.Add(-time.Hour))
+		aclApplied("cache-rotate-twonode", "0-1", metav1.ConditionTrue, now.Add(-time.Hour))
+		requestRotation("cache-rotate-twonode", now)
+		reconcileWith(r, "cache-rotate-twonode")
+		markClusterProcessed("cache-rotate-twonode")
+
+		// Node A proves the first staged value; node B never transitions.
+		aclApplied("cache-rotate-twonode", "0-0", metav1.ConditionTrue, now.Add(time.Minute))
+		now = now.Add(restageAfter)
+		reconcileWith(r, "cache-rotate-twonode")
+		restaged := getSecret(cachepkg.AuthSecretName(cache))
+		Expect(rotatedOf(getCache("cache-rotate-twonode")).Message).To(ContainSubstring("valkey-cache-rotate-twonode-0-1"))
+		Expect(restaged.Data[cachepkg.AuthSecretPasswordKey]).To(Equal(first))
+
+		// Node B now reports a transition after the new stage. Node A only
+		// proved the first value, so the operator must wait for node A too.
+		now = now.Add(time.Minute)
+		aclApplied("cache-rotate-twonode", "0-1", metav1.ConditionFalse, now)
+		aclApplied("cache-rotate-twonode", "0-1", metav1.ConditionTrue, now)
+		reconcileWith(r, "cache-rotate-twonode")
+		Expect(getSecret(restaged.Name).Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepStaged))
+		Expect(getSecret(restaged.Name).Data[cachepkg.AuthSecretPasswordKey]).To(Equal(first))
+
+		aclApplied("cache-rotate-twonode", "0-0", metav1.ConditionFalse, now)
+		aclApplied("cache-rotate-twonode", "0-0", metav1.ConditionTrue, now)
+		reconcileWith(r, "cache-rotate-twonode")
+		promoted := getSecret(restaged.Name)
+		Expect(promoted.Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepReplaced))
+		Expect(promoted.Data[cachepkg.AuthSecretPasswordKey]).To(Equal(restaged.Data[cachepkg.AuthSecretNextPasswordKey]))
+	})
+
+	It("moves the stage time even when the re-stage patch fails", func() {
+		now := time.Date(2026, 9, 19, 8, 48, 0, 0, time.UTC)
+		good := rotationReconciler(&now)
+		cache := newCache("cache-rotate-restagefail", nil)
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+		reconcileWith(good, "cache-rotate-restagefail")
+		aclApplied("cache-rotate-restagefail", "0-0", metav1.ConditionTrue, now.Add(-time.Hour))
+		requestRotation("cache-rotate-restagefail", now)
+		reconcileWith(good, "cache-rotate-restagefail")
+		markClusterProcessed("cache-rotate-restagefail")
+		staged := getSecret(cachepkg.AuthSecretName(cache))
+
+		watchClient, err := client.NewWithWatch(cfg, client.Options{Scheme: k8sClient.Scheme()})
+		Expect(err).NotTo(HaveOccurred())
+		failing := interceptor.NewClient(watchClient, interceptor.Funcs{
+			Patch: func(callCtx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+				if _, isMeta := obj.(*metav1.PartialObjectMetadata); isMeta && patch.Type() == types.JSONPatchType {
+					return errors.New("the API server is not available")
+				}
+				return c.Patch(callCtx, obj, patch, opts...)
+			},
+		})
+		bad := rotationReconciler(&now)
+		bad.Client = failing
+		now = now.Add(restageAfter)
+		_, err = bad.Reconcile(ctx, ctrl.Request{
+			NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: "cache-rotate-restagefail"},
+		})
+		Expect(err).To(HaveOccurred())
+
+		// The Secret is unchanged, but the stage time moved: the old
+		// transition of the node counts for nothing any more.
+		Expect(getSecret(staged.Name).Data).To(Equal(staged.Data))
+		Expect(getCache("cache-rotate-restagefail").Status.PasswordRotation.StagedAt.Time).To(BeTemporally("==", now))
+		aclApplied("cache-rotate-restagefail", "0-0", metav1.ConditionTrue, now.Add(-time.Second))
+		reconcileWith(good, "cache-rotate-restagefail")
+		Expect(getSecret(staged.Name).Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepStaged))
+	})
+
 	It("keeps the key list short when the stage patch fails, and stages on the next reconcile", func() {
 		now := time.Date(2026, 9, 19, 8, 50, 0, 0, time.UTC)
 		cache := newCache("cache-rotate-stagefail", nil)

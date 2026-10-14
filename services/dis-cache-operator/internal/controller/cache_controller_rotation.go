@@ -304,16 +304,22 @@ func (r *CacheReconciler) recordStageWith(ctx context.Context, cache *cachev1alp
 }
 
 // restagePassword writes a fresh password under the next key and moves the
-// stage time. The stage time also moves the staged-time annotation on the
-// ValkeyCluster, so the valkey-operator builds the new ACL at once. A
-// rejected patch means the Secret is not at the staged step any more, and
-// findStep sorts that out.
+// stage time. The status goes first: a transition before the new stage time
+// must not count for the fresh value, also when the patch or a later status
+// write fails. A failed patch then only delays the rotation. The stage time
+// moves the staged-time annotation on the ValkeyCluster in the next
+// reconcile, and that change makes the valkey-operator build the new ACL. A
+// rejected patch means the Secret is not at the staged step any more; findStep
+// finds the step.
 func (r *CacheReconciler) restagePassword(ctx context.Context, cache *cachev1alpha1.Cache, node string) error {
 	body, err := cachepkg.RotationRestagePatch(cache, rand.Text())
 	if err != nil {
 		return err
 	}
-	stagedAt := r.now()
+	if err := r.recordStageWith(ctx, cache, r.now(),
+		"the operator staged the new password again, because "+node+" reported no new ACL change after the stage"); err != nil {
+		return err
+	}
 	switch err := r.patchAuthSecret(ctx, cache, body); {
 	case errors.Is(err, errPatchRejected):
 		return r.findStep(ctx, cache)
@@ -322,8 +328,7 @@ func (r *CacheReconciler) restagePassword(ctx context.Context, cache *cachev1alp
 	}
 	logf.FromContext(ctx).Info("password staged again", "secret", cachepkg.AuthSecretName(cache), "node", node)
 
-	return r.recordStageWith(ctx, cache, stagedAt,
-		"the operator staged the new password again, because "+node+" reported no ACL change")
+	return nil
 }
 
 // findStep runs after a rejected stage. It tells, with probes only, which
@@ -411,9 +416,9 @@ func (r *CacheReconciler) findStep(ctx context.Context, cache *cachev1alpha1.Cac
 // a transition at or after the stage. Without a node there is nothing that
 // accepts a password yet.
 //
-// unproven names the first node that reports True without such a transition,
-// when every other node counts. That node gives no proof either way, and the
-// caller stages again after a while.
+// unproven names the first node that reports True without such a
+// transition, when every node reports True. That node gives no proof, and the
+// caller stages again after restageAfter.
 func (r *CacheReconciler) nodesPendingACL(ctx context.Context, cache *cachev1alpha1.Cache, stagedAt *metav1.Time, cluster *valkeyv1alpha1.ValkeyCluster) (pending, unproven string, err error) {
 	if stagedAt != nil && !clusterProcessed(cluster) {
 		return "the valkey-operator to read the new key list", "", nil
@@ -554,43 +559,7 @@ func (r *CacheReconciler) completeRotation(ctx context.Context, cache *cachev1al
 		return time.Second, nil
 
 	case cond.Status == metav1.ConditionFalse && cond.Reason == ReasonPasswordStaged:
-		pending, unproven, err := r.nodesPendingACL(ctx, cache, status.StagedAt, cluster)
-		if err != nil {
-			return 0, err
-		}
-		if unproven != "" && !r.now().Before(status.StagedAt.Add(restageAfter)) {
-			err := r.restagePassword(ctx, cache, unproven)
-			switch {
-			case errors.Is(err, errAdopted), errors.Is(err, errResetCopied):
-				return time.Second, nil
-			case err != nil:
-				return 0, err
-			}
-
-			return aclApplyRequeue, nil
-		}
-		if pending != "" {
-			message := "the new password is staged; " + pending + " does not report it yet"
-			if message != cond.Message {
-				orig := cache.DeepCopy()
-				setRotationCondition(cache, metav1.ConditionFalse, ReasonPasswordStaged, message)
-				if err := r.patchStatus(ctx, cache, orig); err != nil {
-					return 0, err
-				}
-			}
-
-			return aclApplyRequeue, nil
-		}
-		err = r.promotePassword(ctx, cache)
-		switch {
-		case errors.Is(err, errAdopted), errors.Is(err, errResetCopied):
-			return time.Second, nil
-		case err != nil:
-			return 0, err
-		}
-
-		// The next reconcile writes the rotation time on the ValkeyCluster.
-		return time.Second, nil
+		return r.waitForStagedPassword(ctx, cache, cluster)
 
 	case cond.Status == metav1.ConditionTrue && status.PreviousValidUntil != nil:
 		// A rejected remove means the keys are already gone: only the
@@ -614,6 +583,57 @@ func (r *CacheReconciler) completeRotation(ctx context.Context, cache *cachev1al
 	}
 
 	return 0, nil
+}
+
+// waitForStagedPassword runs while a new password is staged. It promotes the
+// password once the valkey-operator has processed the new key list and every
+// Valkey node proves it with a transition after the stage. It stages a fresh
+// password when a node gives no proof within restageAfter.
+func (r *CacheReconciler) waitForStagedPassword(ctx context.Context, cache *cachev1alpha1.Cache, cluster *valkeyv1alpha1.ValkeyCluster) (time.Duration, error) {
+	cond := rotationCondition(cache)
+	status := rotationStatus(cache)
+	if status.StagedAt == nil {
+		// The stage time is lost. The wait starts over from now, which is
+		// later than the write, so it is safe.
+		return aclApplyRequeue, r.recordStage(ctx, cache, r.now())
+	}
+	pending, unproven, err := r.nodesPendingACL(ctx, cache, status.StagedAt, cluster)
+	if err != nil {
+		return 0, err
+	}
+	if unproven != "" && !r.now().Before(status.StagedAt.Add(restageAfter)) {
+		err := r.restagePassword(ctx, cache, unproven)
+		switch {
+		case errors.Is(err, errAdopted), errors.Is(err, errResetCopied):
+			return time.Second, nil
+		case err != nil:
+			return 0, err
+		}
+
+		return aclApplyRequeue, nil
+	}
+	if pending != "" {
+		message := "the new password is staged; " + pending + " does not report it yet"
+		if message != cond.Message {
+			orig := cache.DeepCopy()
+			setRotationCondition(cache, metav1.ConditionFalse, ReasonPasswordStaged, message)
+			if err := r.patchStatus(ctx, cache, orig); err != nil {
+				return 0, err
+			}
+		}
+
+		return aclApplyRequeue, nil
+	}
+	err = r.promotePassword(ctx, cache)
+	switch {
+	case errors.Is(err, errAdopted), errors.Is(err, errResetCopied):
+		return time.Second, nil
+	case err != nil:
+		return 0, err
+	}
+
+	// The next reconcile writes the rotation time on the ValkeyCluster.
+	return time.Second, nil
 }
 
 // rotationFailed records a rotation error in the PasswordRotated condition
