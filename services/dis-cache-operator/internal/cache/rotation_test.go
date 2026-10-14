@@ -45,38 +45,44 @@ func expectGuard(t *testing.T, ops []map[string]any, step string) {
 	}
 }
 
-func TestRotationCopyPatch(t *testing.T) {
+func TestRotationStagePatch(t *testing.T) {
 	t.Parallel()
 
-	body, err := RotationCopyPatch(newTestCache(nil))
+	body, err := RotationStagePatch(newTestCache(nil), "new-password-456")
 	ops := decodePatch(t, body, err)
 	expectGuard(t, ops, RotationStepIdle)
-	if len(ops) != 4 {
-		t.Fatalf("want 4 operations, got %d: %v", len(ops), ops)
+	if len(ops) != 5 {
+		t.Fatalf("want 5 operations, got %d: %v", len(ops), ops)
 	}
 	if ops[2]["op"] != "copy" || ops[2]["from"] != "/data/password" || ops[2]["path"] != "/data/password-previous" {
-		t.Errorf("want a copy of the password to the previous key, got %v", ops[2])
+		t.Errorf("want the password copied to the previous key, got %v", ops[2])
 	}
 	if _, hasValue := ops[2]["value"]; hasValue {
 		t.Errorf("the copy must carry no value: the operator never sees the password, got %v", ops[2])
 	}
-	if ops[3]["op"] != "replace" || ops[3]["path"] != annotationPathWant || ops[3]["value"] != RotationStepCopied {
-		t.Errorf("want the step set to copied, got %v", ops[3])
+	want := base64.StdEncoding.EncodeToString([]byte("new-password-456"))
+	if ops[3]["op"] != "add" || ops[3]["path"] != "/data/password-next" || ops[3]["value"] != want {
+		t.Errorf("want the new password added under the next key, got %v", ops[3])
+	}
+	if ops[4]["op"] != "replace" || ops[4]["path"] != annotationPathWant || ops[4]["value"] != RotationStepStaged {
+		t.Errorf("want the step set to staged, got %v", ops[4])
 	}
 }
 
-func TestRotationReplacePatch(t *testing.T) {
+func TestRotationPromotePatch(t *testing.T) {
 	t.Parallel()
 
-	body, err := RotationReplacePatch(newTestCache(nil), "new-password-456")
+	body, err := RotationPromotePatch(newTestCache(nil))
 	ops := decodePatch(t, body, err)
-	expectGuard(t, ops, RotationStepCopied)
+	expectGuard(t, ops, RotationStepStaged)
 	if len(ops) != 4 {
 		t.Fatalf("want 4 operations, got %d: %v", len(ops), ops)
 	}
-	want := base64.StdEncoding.EncodeToString([]byte("new-password-456"))
-	if ops[2]["op"] != "replace" || ops[2]["path"] != "/data/password" || ops[2]["value"] != want {
-		t.Errorf("want the password replaced with the base64 value, got %v", ops[2])
+	if ops[2]["op"] != "copy" || ops[2]["from"] != "/data/password-next" || ops[2]["path"] != "/data/password" {
+		t.Errorf("want the staged password copied to the password key, got %v", ops[2])
+	}
+	if _, hasValue := ops[2]["value"]; hasValue {
+		t.Errorf("the copy must carry no value: the operator never sees the password, got %v", ops[2])
 	}
 	if ops[3]["op"] != "replace" || ops[3]["path"] != annotationPathWant || ops[3]["value"] != RotationStepReplaced {
 		t.Errorf("want the step set to replaced, got %v", ops[3])
@@ -89,21 +95,41 @@ func TestRotationRemovePatch(t *testing.T) {
 	body, err := RotationRemovePatch(newTestCache(nil))
 	ops := decodePatch(t, body, err)
 	expectGuard(t, ops, RotationStepReplaced)
+	if len(ops) != 5 {
+		t.Fatalf("want 5 operations, got %d: %v", len(ops), ops)
+	}
+	if ops[2]["op"] != "remove" || ops[2]["path"] != "/data/password-previous" {
+		t.Errorf("want the previous key removed, got %v", ops[2])
+	}
+	if ops[3]["op"] != "remove" || ops[3]["path"] != "/data/password-next" {
+		t.Errorf("want the next key removed, got %v", ops[3])
+	}
+	if ops[4]["op"] != "replace" || ops[4]["path"] != annotationPathWant || ops[4]["value"] != RotationStepIdle {
+		t.Errorf("want the step set back to idle, got %v", ops[4])
+	}
+}
+
+func TestRotationResetCopiedPatch(t *testing.T) {
+	t.Parallel()
+
+	body, err := RotationResetCopiedPatch(newTestCache(nil))
+	ops := decodePatch(t, body, err)
+	expectGuard(t, ops, RotationStepCopied)
 	if len(ops) != 4 {
 		t.Fatalf("want 4 operations, got %d: %v", len(ops), ops)
 	}
 	if ops[2]["op"] != "remove" || ops[2]["path"] != "/data/password-previous" {
-		t.Errorf("want the previous key removed, got %v", ops[2])
+		t.Errorf("want the copied previous key removed, got %v", ops[2])
 	}
 	if ops[3]["op"] != "replace" || ops[3]["path"] != annotationPathWant || ops[3]["value"] != RotationStepIdle {
 		t.Errorf("want the step set back to idle, got %v", ops[3])
 	}
 }
 
-func TestRotationReplacedProbe(t *testing.T) {
+func TestRotationStepProbe(t *testing.T) {
 	t.Parallel()
 
-	body, err := RotationReplacedProbe(newTestCache(nil))
+	body, err := RotationStepProbe(newTestCache(nil), RotationStepReplaced)
 	ops := decodePatch(t, body, err)
 	expectGuard(t, ops, RotationStepReplaced)
 	if len(ops) != 2 {
@@ -122,12 +148,17 @@ func TestRotationAdoptPatch(t *testing.T) {
 	if ops[0]["op"] != "test" || ops[0]["path"] != labelPathWant || ops[0]["value"] != "app-one-cache" {
 		t.Errorf("want a test on the cache label first, got %v", ops[0])
 	}
-	want := map[string]any{RotationStepAnnotation: RotationStepIdle}
-	if ops[1]["op"] != "add" || ops[1]["path"] != "/metadata/annotations" {
-		t.Errorf("want the whole annotations map added, got %v", ops[1])
+	if ops[1]["op"] != "add" || ops[1]["path"] != annotationPathWant || ops[1]["value"] != RotationStepIdle {
+		t.Errorf("want the one idle annotation added, so other annotations stay, got %v", ops[1])
 	}
-	if got, ok := ops[1]["value"].(map[string]any); !ok || len(got) != 1 || got[RotationStepAnnotation] != want[RotationStepAnnotation] {
-		t.Errorf("want only the idle annotation, got %v", ops[1]["value"])
+
+	body, err = RotationAdoptMapPatch(newTestCache(nil))
+	ops = decodePatch(t, body, err)
+	if len(ops) != 2 || ops[0]["op"] != "test" || ops[1]["op"] != "add" || ops[1]["path"] != "/metadata/annotations" {
+		t.Fatalf("want a label test and the annotations map added, got %v", ops)
+	}
+	if got, ok := ops[1]["value"].(map[string]any); !ok || len(got) != 1 || got[RotationStepAnnotation] != RotationStepIdle {
+		t.Errorf("want only the idle annotation in the new map, got %v", ops[1]["value"])
 	}
 }
 
@@ -144,7 +175,7 @@ func TestPasswordKeysFollowTheRotationCondition(t *testing.T) {
 		})
 	}
 	one := []string{AuthSecretPasswordKey}
-	both := []string{AuthSecretPasswordKey, AuthSecretPreviousPasswordKey}
+	all := []string{AuthSecretPasswordKey, AuthSecretPreviousPasswordKey, AuthSecretNextPasswordKey}
 
 	cases := []struct {
 		name  string
@@ -153,9 +184,9 @@ func TestPasswordKeysFollowTheRotationCondition(t *testing.T) {
 	}{
 		{"no condition", newTestCache(nil), one},
 		{"rotated", withCondition(metav1.ConditionTrue, "Rotated"), one},
-		{"rotating, copy not confirmed", withCondition(metav1.ConditionFalse, "Rotating"), one},
-		{"copied", withCondition(metav1.ConditionFalse, ReasonPasswordCopied), both},
-		{"previous valid", withCondition(metav1.ConditionFalse, ReasonPreviousPasswordValid), both},
+		{"rotating, stage not confirmed", withCondition(metav1.ConditionFalse, "Rotating"), one},
+		{"staged", withCondition(metav1.ConditionFalse, ReasonPasswordStaged), all},
+		{"previous valid", withCondition(metav1.ConditionFalse, ReasonPreviousPasswordValid), all},
 		{"failed", withCondition(metav1.ConditionFalse, "RotationFailed"), one},
 	}
 	for _, tc := range cases {

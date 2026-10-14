@@ -212,13 +212,33 @@ func evictionPolicy(cache *cachev1alpha1.Cache) string {
 // passwords right after a rotation.
 const PasswordRotatedAtAnnotation = "cache.dis.altinn.cloud/password-rotated-at"
 
+// ValkeyClusterLabel is the label the valkey-operator puts on every object
+// of a ValkeyCluster, with the cluster name as the value.
+const ValkeyClusterLabel = "valkey.io/cluster"
+
+// PasswordStagedAtAnnotation carries the time the new password was staged.
+// A change of this annotation gives the valkey-operator an event, so it loads
+// the staged password right away and the wait for the nodes stays short.
+const PasswordStagedAtAnnotation = "cache.dis.altinn.cloud/password-staged-at"
+
 // rotationAnnotations returns the ValkeyCluster annotations for a Cache: the
-// rotation time when a rotation happened, nothing before that.
+// rotation time when a rotation happened, the staged time while a password
+// is staged, nothing before that.
 func rotationAnnotations(cache *cachev1alpha1.Cache) map[string]string {
 	status := cache.Status.PasswordRotation
-	if status == nil || status.LastRotatedAt == nil {
+	if status == nil {
+		return nil
+	}
+	annotations := map[string]string{}
+	if status.LastRotatedAt != nil {
+		annotations[PasswordRotatedAtAnnotation] = status.LastRotatedAt.UTC().Format(time.RFC3339)
+	}
+	if status.StagedAt != nil {
+		annotations[PasswordStagedAtAnnotation] = status.StagedAt.UTC().Format(time.RFC3339)
+	}
+	if len(annotations) == 0 {
 		return nil
 	}
 
-	return map[string]string{PasswordRotatedAtAnnotation: status.LastRotatedAt.UTC().Format(time.RFC3339)}
+	return annotations
 }

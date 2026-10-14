@@ -27,7 +27,7 @@ import (
 
 const (
 	// valkeyClusterLabel is the label the valkey-operator puts on every Valkey pod.
-	valkeyClusterLabel = "valkey.io/cluster"
+	valkeyClusterLabel = ValkeyClusterLabel
 	// operatorNamespace is where the valkey-operator runs on the clusters.
 	operatorNamespace = "valkey-operator-system"
 	// operatorPodLabelValue is the app.kubernetes.io/name label value the

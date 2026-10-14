@@ -60,3 +60,10 @@ rules:
   - list
   - patch
   - watch
+- apiGroups:
+  - valkey.io
+  resources:
+  - valkeynodes
+  verbs:
+  - list
+  - watch

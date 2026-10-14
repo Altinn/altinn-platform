@@ -219,6 +219,14 @@ spec:
                       the next rotation.
                     format: date-time
                     type: string
+                  stagedAt:
+                    description: |-
+                      StagedAt is the time the operator wrote the new password under the
+                      key "password-next". The password moves into the key "password" once
+                      every Valkey node reports the ACL loaded after this time. It is unset
+                      when no password is staged.
+                    format: date-time
+                    type: string
                 type: object
               port:
                 description: Port is the Valkey port.

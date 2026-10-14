@@ -178,12 +178,12 @@ func TestBuildValkeyClusterAppUser(t *testing.T) {
 
 	rotating := newTestCache(func(c *cachev1alpha1.Cache) {
 		meta.SetStatusCondition(&c.Status.Conditions, metav1.Condition{
-			Type: string(cachev1alpha1.ConditionPasswordRotated), Status: metav1.ConditionFalse, Reason: ReasonPasswordCopied,
+			Type: string(cachev1alpha1.ConditionPasswordRotated), Status: metav1.ConditionFalse, Reason: ReasonPasswordStaged,
 		})
 	})
 	rotatingUser := userByName(t, BuildValkeyCluster(rotating, Images{}).Spec.Users, AuthUsername)
-	if !slices.Equal(rotatingUser.PasswordSecret.Keys, []string{AuthSecretPasswordKey, AuthSecretPreviousPasswordKey}) {
-		t.Errorf("app user during a rotation: want both password keys, got %v", rotatingUser.PasswordSecret.Keys)
+	if !slices.Equal(rotatingUser.PasswordSecret.Keys, []string{AuthSecretPasswordKey, AuthSecretPreviousPasswordKey, AuthSecretNextPasswordKey}) {
+		t.Errorf("app user while a password is staged: want all three keys, got %v", rotatingUser.PasswordSecret.Keys)
 	}
 	if !slices.Equal(appUser.Commands.Allow, []string{aclAllCommands}) {
 		t.Errorf("app user: want +@all, got allow %v", appUser.Commands.Allow)
@@ -281,5 +281,13 @@ func TestBuildValkeyClusterCarriesTheRotationTime(t *testing.T) {
 	})
 	if got := BuildValkeyCluster(cache, Images{}).Annotations[PasswordRotatedAtAnnotation]; got != "2026-09-19T08:00:00Z" {
 		t.Errorf("after a rotation: want the rotation time, got %q", got)
+	}
+
+	staged := newTestCache(func(c *cachev1alpha1.Cache) {
+		c.Status.PasswordRotation = &cachev1alpha1.PasswordRotationStatus{StagedAt: &metav1.Time{Time: rotated.Add(time.Minute)}}
+	})
+	annotations := BuildValkeyCluster(staged, Images{}).Annotations
+	if annotations[PasswordStagedAtAnnotation] != "2026-09-19T08:01:00Z" || annotations[PasswordRotatedAtAnnotation] != "" {
+		t.Errorf("while staged: want the staged time only, got %v", annotations)
 	}
 }

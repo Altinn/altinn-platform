@@ -70,11 +70,13 @@ type CacheSpec struct {
 	PasswordRotation *PasswordRotationSpec `json:"passwordRotation,omitempty"`
 }
 
-// PasswordRotationSpec controls the password rotation. A rotation stores a
-// new password under the Secret key "password" and keeps the old value valid
-// under "password-previous" for a period, so applications can change to the
-// new password without downtime. The key names do not change, so
-// applications keep their manifests.
+// PasswordRotationSpec controls the password rotation. A rotation first
+// stores the new password under the Secret key "password-next" until every
+// Valkey node accepts it, then moves it to the key "password" and keeps the
+// old value valid under "password-previous" for a period, so applications can
+// change to the new password without downtime. An application reads the key
+// "password" only, and at every moment that key holds a password Valkey
+// accepts. The key names do not change, so applications keep their manifests.
 // +kubebuilder:validation:XValidation:rule="!has(self.intervalDays) || self.intervalDays == 0 || self.intervalDays >= 7",message="intervalDays is 0 (off) or at least 7"
 // +kubebuilder:validation:XValidation:rule="!has(self.previousValidFor) || duration(self.previousValidFor) <= duration('168h')",message="previousValidFor is at most 168h (7 days)"
 // +kubebuilder:validation:XValidation:rule="!has(self.previousValidFor) || !has(self.intervalDays) || self.intervalDays == 0 || duration(self.previousValidFor).getSeconds() <= self.intervalDays * 43200",message="previousValidFor is at most half of the interval"
@@ -149,6 +151,13 @@ type PasswordRotationStatus struct {
 	// exists.
 	// +optional
 	PreviousValidUntil *metav1.Time `json:"previousValidUntil,omitempty"`
+
+	// StagedAt is the time the operator wrote the new password under the
+	// key "password-next". The password moves into the key "password" once
+	// every Valkey node reports the ACL loaded after this time. It is unset
+	// when no password is staged.
+	// +optional
+	StagedAt *metav1.Time `json:"stagedAt,omitempty"`
 }
 
 // MaxCacheNameLength is the longest Cache name the CRD admits. The
@@ -166,11 +175,11 @@ const (
 
 	// ConditionPasswordRotated reports the password rotation state. True with
 	// reason Rotated when no rotation is in progress. False with reason
-	// Rotating until the operator has copied the previous password, with
-	// reason PasswordCopied until the new password is in place, and with
-	// reason PreviousPasswordValid while the previous password is still
-	// valid. False with reason RotationFailed when the Secret with the auth
-	// Secret name is not the operator's; a later request starts over.
+	// Rotating until the operator has staged the new password, with reason
+	// PasswordStaged until every Valkey node accepts it and it is in place,
+	// and with reason PreviousPasswordValid while the previous password is
+	// still valid. False with reason RotationFailed when the Secret with the
+	// auth Secret name is not the operator's; a later request starts over.
 	ConditionPasswordRotated ConditionType = "PasswordRotated"
 )
 
