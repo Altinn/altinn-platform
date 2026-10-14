@@ -154,8 +154,9 @@ type PasswordRotationStatus struct {
 
 	// StagedAt is the time the operator wrote the new password under the
 	// key "password-next". The password moves into the key "password" once
-	// every Valkey node reports the ACL loaded after this time. It is unset
-	// when no password is staged.
+	// the valkey-operator has processed the new key list and every Valkey
+	// node reports the ACL loaded after this time, or five minutes after it.
+	// It is unset when no password is staged.
 	// +optional
 	StagedAt *metav1.Time `json:"stagedAt,omitempty"`
 }

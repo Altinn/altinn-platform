@@ -653,6 +653,17 @@ func aclApplied(cacheName, node string, status metav1.ConditionStatus, at time.T
 	Expect(k8sClient.Status().Update(ctx, &vn)).To(Succeed())
 }
 
+// markClusterProcessed marks the ValkeyCluster of the Cache as reconciled by the
+// valkey-operator at its current generation, as the valkey-operator does
+// when it writes a condition.
+func markClusterProcessed(cacheName string) {
+	cluster := getValkeyCluster(cacheName)
+	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type: valkeyv1alpha1.ConditionReady, Status: metav1.ConditionTrue, Reason: "Test", ObservedGeneration: cluster.Generation,
+	})
+	Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
+}
+
 var _ = Describe("Cache password rotation", func() {
 	It("stages the password, promotes it once every node accepts it, and removes the old one after the period", func() {
 		now := time.Date(2026, 9, 19, 8, 0, 0, 0, time.UTC)
@@ -687,10 +698,18 @@ var _ = Describe("Cache password rotation", func() {
 		Expect(getValkeyCluster("cache-rotate").Annotations[cachepkg.PasswordStagedAtAnnotation]).To(Equal("2026-09-19T08:00:00Z"))
 		Expect(result.RequeueAfter).To(Equal(aclApplyRequeue))
 
-		// One node accepts the staged password, the other does not yet. The
-		// condition message names the node that blocks.
+		// Until the valkey-operator has processed the new key list, nothing
+		// else counts.
 		now = now.Add(20 * time.Second)
 		aclApplied("cache-rotate", "0-0", metav1.ConditionTrue, now)
+		result = reconcileWith(r, "cache-rotate")
+		Expect(getSecret(secret.Name).Data[cachepkg.AuthSecretPasswordKey]).To(Equal(first))
+		Expect(rotatedOf(getCache("cache-rotate")).Message).To(ContainSubstring("the valkey-operator"))
+		Expect(result.RequeueAfter).To(Equal(aclApplyRequeue))
+		markClusterProcessed("cache-rotate")
+
+		// One node accepts the staged password, the other does not yet. The
+		// condition message names the node that blocks.
 		aclApplied("cache-rotate", "0-1", metav1.ConditionFalse, now)
 		result = reconcileWith(r, "cache-rotate")
 		Expect(getSecret(secret.Name).Data[cachepkg.AuthSecretPasswordKey]).To(Equal(first))
@@ -780,6 +799,7 @@ var _ = Describe("Cache password rotation", func() {
 		Expect(getSecret(idle.Name).Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepStaged))
 
 		// A transition in the same second as the stage counts.
+		markClusterProcessed("cache-rotate-settle")
 		stagedAt := getCache("cache-rotate-settle").Status.PasswordRotation.StagedAt.Time
 		aclApplied("cache-rotate-settle", "0-0", metav1.ConditionTrue, stagedAt)
 		reconcileWith(r, "cache-rotate-settle")
@@ -801,11 +821,16 @@ var _ = Describe("Cache password rotation", func() {
 		Expect(secret.Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepStaged))
 
 		// The node read the new file on its first load: no transition. The
-		// operator waits for the bound, then promotes.
+		// operator waits for the bound, then promotes, but only once the
+		// valkey-operator has processed the new key list.
 		now = now.Add(aclApplyBound - time.Second)
 		reconcileWith(r, "cache-rotate-bound")
 		Expect(getSecret(secret.Name).Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepStaged))
 		now = now.Add(time.Second)
+		reconcileWith(r, "cache-rotate-bound")
+		Expect(getSecret(secret.Name).Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepStaged))
+		Expect(rotatedOf(getCache("cache-rotate-bound")).Message).To(ContainSubstring("the valkey-operator"))
+		markClusterProcessed("cache-rotate-bound")
 		reconcileWith(r, "cache-rotate-bound")
 		Expect(getSecret(secret.Name).Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepReplaced))
 		Expect(rotatedOf(getCache("cache-rotate-bound")).Reason).To(Equal(ReasonPreviousPasswordValid))
@@ -861,6 +886,7 @@ var _ = Describe("Cache password rotation", func() {
 		aclApplied("cache-rotate-promotelost", "0-0", metav1.ConditionTrue, now.Add(-time.Hour))
 		requestRotation("cache-rotate-promotelost", now)
 		reconcileWith(good, "cache-rotate-promotelost")
+		markClusterProcessed("cache-rotate-promotelost")
 		now = now.Add(time.Minute)
 		aclApplied("cache-rotate-promotelost", "0-0", metav1.ConditionTrue, now)
 
@@ -894,6 +920,7 @@ var _ = Describe("Cache password rotation", func() {
 		aclApplied("cache-rotate-again", "0-0", metav1.ConditionTrue, now.Add(-time.Hour))
 		requestRotation("cache-rotate-again", now)
 		reconcileWith(r, "cache-rotate-again")
+		markClusterProcessed("cache-rotate-again")
 		now = now.Add(time.Minute)
 		aclApplied("cache-rotate-again", "0-0", metav1.ConditionTrue, now)
 		reconcileWith(r, "cache-rotate-again")
@@ -928,6 +955,7 @@ var _ = Describe("Cache password rotation", func() {
 		aclApplied("cache-rotate-reset", "0-0", metav1.ConditionTrue, now.Add(-time.Hour))
 		requestRotation("cache-rotate-reset", now)
 		reconcileWith(r, "cache-rotate-reset")
+		markClusterProcessed("cache-rotate-reset")
 		now = now.Add(time.Minute)
 		aclApplied("cache-rotate-reset", "0-0", metav1.ConditionTrue, now)
 		reconcileWith(r, "cache-rotate-reset")
@@ -959,11 +987,14 @@ var _ = Describe("Cache password rotation", func() {
 
 		aclApplied("cache-rotate-old", "0-0", metav1.ConditionTrue, now.Add(-time.Hour))
 		requestRotation("cache-rotate-old", now)
-		// One reconcile adopts the Secret, the next stages.
-		reconcileWith(r, "cache-rotate-old")
-		Expect(getSecret(old.Name).Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepIdle))
+		// One reconcile adopts the Secret and stages; the key list grows on
+		// the next reconcile.
 		reconcileWith(r, "cache-rotate-old")
 		Expect(getSecret(old.Name).Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepStaged))
+		Expect(getValkeyCluster("cache-rotate-old").Spec.Users[1].PasswordSecret.Keys).To(Equal([]string{cachepkg.AuthSecretPasswordKey}))
+		reconcileWith(r, "cache-rotate-old")
+		Expect(getValkeyCluster("cache-rotate-old").Spec.Users[1].PasswordSecret.Keys).To(HaveLen(3))
+		markClusterProcessed("cache-rotate-old")
 		now = now.Add(time.Minute)
 		aclApplied("cache-rotate-old", "0-0", metav1.ConditionTrue, now)
 		reconcileWith(r, "cache-rotate-old")
@@ -988,16 +1019,45 @@ var _ = Describe("Cache password rotation", func() {
 
 		aclApplied("cache-rotate-copied", "0-0", metav1.ConditionTrue, now.Add(-time.Hour))
 		requestRotation("cache-rotate-copied", now)
-		reconcileWith(r, "cache-rotate-copied")
-		reset := getSecret(copied.Name)
-		Expect(reset.Data).NotTo(HaveKey(cachepkg.AuthSecretPreviousPasswordKey))
-		Expect(reset.Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepIdle))
-		Expect(rotatedOf(getCache("cache-rotate-copied")).Reason).To(Equal(ReasonRotating))
-
+		// One reconcile resets the Secret to idle and stages it again: the
+		// previous key holds the copy again, and the next key the new value.
 		reconcileWith(r, "cache-rotate-copied")
 		staged := getSecret(copied.Name)
 		Expect(staged.Data[cachepkg.AuthSecretPasswordKey]).To(Equal(first))
+		Expect(staged.Data[cachepkg.AuthSecretPreviousPasswordKey]).To(Equal(first))
+		Expect(staged.Data).To(HaveKey(cachepkg.AuthSecretNextPasswordKey))
 		Expect(staged.Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepStaged))
+		Expect(rotatedOf(getCache("cache-rotate-copied")).Reason).To(Equal(ReasonPasswordStaged))
+	})
+
+	It("stages again when someone takes the Secret back to idle while a password is staged", func() {
+		now := time.Date(2026, 9, 19, 11, 45, 0, 0, time.UTC)
+		r := rotationReconciler(&now)
+		cache := newCache("cache-rotate-idled", nil)
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+		reconcileWith(r, "cache-rotate-idled")
+		aclApplied("cache-rotate-idled", "0-0", metav1.ConditionTrue, now.Add(-time.Hour))
+		requestRotation("cache-rotate-idled", now)
+		reconcileWith(r, "cache-rotate-idled")
+		markClusterProcessed("cache-rotate-idled")
+
+		// Someone removes the extra keys and sets the step back to idle.
+		idled := getSecret(cachepkg.AuthSecretName(cache))
+		delete(idled.Data, cachepkg.AuthSecretPreviousPasswordKey)
+		delete(idled.Data, cachepkg.AuthSecretNextPasswordKey)
+		idled.Annotations[cachepkg.RotationStepAnnotation] = cachepkg.RotationStepIdle
+		Expect(k8sClient.Update(ctx, idled)).To(Succeed())
+
+		now = now.Add(time.Minute)
+		aclApplied("cache-rotate-idled", "0-0", metav1.ConditionTrue, now)
+		reconcileWith(r, "cache-rotate-idled")
+		Expect(rotatedOf(getCache("cache-rotate-idled")).Reason).To(Equal(ReasonRotating))
+		Expect(getCache("cache-rotate-idled").Status.PasswordRotation.StagedAt).To(BeNil())
+		now = now.Add(time.Minute)
+		reconcileWith(r, "cache-rotate-idled")
+		Expect(getSecret(idled.Name).Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepStaged))
+		Expect(getSecret(idled.Name).Data).To(HaveKey(cachepkg.AuthSecretNextPasswordKey))
 	})
 
 	It("removes the previous password at once when the Cache sets a zero period", func() {
@@ -1014,6 +1074,7 @@ var _ = Describe("Cache password rotation", func() {
 		aclApplied("cache-rotate-zero", "0-0", metav1.ConditionTrue, now.Add(-time.Hour))
 		requestRotation("cache-rotate-zero", now)
 		reconcileWith(r, "cache-rotate-zero")
+		markClusterProcessed("cache-rotate-zero")
 		now = now.Add(time.Minute)
 		aclApplied("cache-rotate-zero", "0-0", metav1.ConditionTrue, now)
 		reconcileWith(r, "cache-rotate-zero")
@@ -1078,6 +1139,7 @@ var _ = Describe("Cache password rotation after a passing error", func() {
 		aclApplied("cache-rotate-retry", "0-0", metav1.ConditionTrue, now.Add(-time.Hour))
 		requestRotation("cache-rotate-retry", now)
 		reconcileWith(good, "cache-rotate-retry")
+		markClusterProcessed("cache-rotate-retry")
 		now = now.Add(time.Minute)
 		aclApplied("cache-rotate-retry", "0-0", metav1.ConditionTrue, now)
 		reconcileWith(good, "cache-rotate-retry")
@@ -1145,6 +1207,7 @@ var _ = Describe("Cache password rotation after lost status writes", func() {
 		reconcileWith(good, "cache-rotate-lost")
 		Expect(rotatedOf(getCache("cache-rotate-lost")).Reason).To(Equal(ReasonPasswordStaged))
 		Expect(getCache("cache-rotate-lost").Status.PasswordRotation.StagedAt.Time).To(BeTemporally("==", now))
+		markClusterProcessed("cache-rotate-lost")
 		now = now.Add(time.Minute)
 		aclApplied("cache-rotate-lost", "0-0", metav1.ConditionTrue, now)
 		reconcileWith(good, "cache-rotate-lost")

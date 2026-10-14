@@ -116,7 +116,7 @@ func (r *CacheReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	specMismatch := !usersMatch(desired.Spec.Users, current.Spec.Users)
 
 	// The Secret changes only after the ValkeyCluster lists the matching keys.
-	requeueAfter, err := r.completeRotation(ctx, &cache)
+	requeueAfter, err := r.completeRotation(ctx, &cache, current)
 	if err != nil {
 		return ctrl.Result{}, r.rotationFailed(ctx, &cache, err)
 	}

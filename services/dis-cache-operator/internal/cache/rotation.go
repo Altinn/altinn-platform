@@ -25,9 +25,8 @@ const (
 	// RotationStepAnnotation records on the Secret which rotation step is
 	// done. Every rotation patch tests it first, so a step out of order or a
 	// Secret that someone else made stops the patch. A failed test is one
-	// error without a reason, and the operator never reads the Secret, so the
-	// controller finds the step by trying the next guarded patch, and last a
-	// probe with tests only.
+	// error without a reason. The operator never reads the Secret. So the
+	// controller finds the step with probes: patches with tests only.
 	RotationStepAnnotation = "cache.dis.altinn.cloud/rotation-step"
 
 	// RotationStepIdle means no rotation is in progress.
@@ -199,7 +198,9 @@ const (
 // the password key alone, or all three keys from the confirmed stage until
 // the removal. A listed key that does not exist makes the valkey-operator
 // stop with an error, so the keys are listed only from their confirmed write
-// on, and they stay listed while they exist.
+// on, and they stay listed while they exist. After the promote two keys hold
+// the same value; the valkey-operator removes duplicate hashes, so the ACL
+// does not change.
 func PasswordKeys(cache *cachev1alpha1.Cache) []string {
 	cond := meta.FindStatusCondition(cache.Status.Conditions, string(cachev1alpha1.ConditionPasswordRotated))
 	if cond == nil || cond.Status != metav1.ConditionFalse {

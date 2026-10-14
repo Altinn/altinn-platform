@@ -43,10 +43,11 @@ const (
 	// aclApplyBound is how long after the stage the operator accepts a node
 	// that reports the ACL applied without a transition. A node that reads
 	// the new file on its first load after the stage never flips its
-	// condition. By this time the valkey-operator has loaded the file on
-	// every node it could reach, or the rotation is stalled and the message
-	// names the node.
-	aclApplyBound = 3 * time.Minute
+	// condition. The bound counts only after the valkey-operator has
+	// processed the new key list, which its ValkeyCluster conditions show,
+	// so the bound covers the mount delay of the kubelet and not an outage
+	// of the valkey-operator.
+	aclApplyBound = 5 * time.Minute
 )
 
 // errPatchRejected means the API server refused a rotation patch because one
@@ -229,6 +230,21 @@ func (r *CacheReconciler) beginRotation(ctx context.Context, cache *cachev1alpha
 	}
 	logger.Info("password rotation started", "secret", cachepkg.AuthSecretName(cache))
 
+	// A Secret that is not idle gets its step found before the stage, so a
+	// Secret that is not the operator's fails here and does not wait for the
+	// nodes.
+	idle, err := r.probeStep(ctx, cache, cachepkg.RotationStepIdle)
+	if err != nil {
+		return err
+	}
+	if !idle {
+		err := r.findStep(ctx, cache)
+		if errors.Is(err, errAdopted) || errors.Is(err, errResetCopied) {
+			return nil
+		}
+
+		return err
+	}
 	if err := r.stagePassword(ctx, cache); err != nil && !errors.Is(err, errNodesPending) {
 		return err
 	}
@@ -243,7 +259,7 @@ func (r *CacheReconciler) beginRotation(ctx context.Context, cache *cachev1alpha
 // transition belongs to the staged file. A rejected stage is not an error
 // here: completeRotation probes the next step.
 func (r *CacheReconciler) stagePassword(ctx context.Context, cache *cachev1alpha1.Cache) error {
-	pending, err := r.nodesPendingACL(ctx, cache, nil)
+	pending, err := r.nodesPendingACL(ctx, cache, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -291,6 +307,20 @@ func (r *CacheReconciler) recordStage(ctx context.Context, cache *cachev1alpha1.
 // not the operator's.
 func (r *CacheReconciler) findStep(ctx context.Context, cache *cachev1alpha1.Cache) error {
 	logger := logf.FromContext(ctx)
+
+	idle, err := r.probeStep(ctx, cache, cachepkg.RotationStepIdle)
+	if err != nil {
+		return err
+	}
+	if idle {
+		// Someone took the Secret back to idle, for example with a new
+		// password. The rotation starts over from the stage.
+		orig := cache.DeepCopy()
+		rotationStatus(cache).StagedAt = nil
+		setRotationCondition(cache, metav1.ConditionFalse, ReasonRotating, "the Secret is idle again; the operator stages the new password again")
+
+		return r.patchStatus(ctx, cache, orig)
+	}
 
 	staged, err := r.probeStep(ctx, cache, cachepkg.RotationStepStaged)
 	if err != nil {
@@ -342,15 +372,23 @@ func (r *CacheReconciler) findStep(ctx context.Context, cache *cachev1alpha1.Cac
 	return fmt.Errorf("%w: %s", errForeignSecret, cachepkg.AuthSecretName(cache))
 }
 
-// nodesPendingACL names the first Valkey node of the Cache that does not
-// report its ACL applied, or "" when every node does. The valkey-operator
-// sets the ACLApplied condition of a ValkeyNode to True only after it has
-// reloaded the ACL file and verified the password hashes on that node, and
-// to False while the mounted file is stale. With a staged time, a node counts
-// only with a transition at or after that time, or once the bound has passed:
-// a node that reads the new file on its first load never flips. Without a
-// node there is nothing that accepts a password yet.
-func (r *CacheReconciler) nodesPendingACL(ctx context.Context, cache *cachev1alpha1.Cache, stagedAt *metav1.Time) (string, error) {
+// nodesPendingACL names what the rotation waits for, or "" when nothing is
+// pending. The valkey-operator sets the ACLApplied condition of a ValkeyNode
+// to True only after it has reloaded the ACL file and verified the password
+// hashes on that node, and to False while the mounted file is stale.
+//
+// Before the stage (stagedAt nil) every node must report True, with a
+// transition before this second, so a later transition belongs to the staged
+// file. After the stage, the valkey-operator must first have processed the
+// ValkeyCluster generation that lists the new key, which its conditions show
+// through the observed generation; then every node counts with a transition
+// at or after the stage, or once the bound has passed, because a node that
+// reads the new file on its first load never flips. Without a node there is
+// nothing that accepts a password yet.
+func (r *CacheReconciler) nodesPendingACL(ctx context.Context, cache *cachev1alpha1.Cache, stagedAt *metav1.Time, cluster *valkeyv1alpha1.ValkeyCluster) (string, error) {
+	if stagedAt != nil && !clusterProcessed(cluster) {
+		return "the valkey-operator to read the new key list", nil
+	}
 	var nodes valkeyv1alpha1.ValkeyNodeList
 	if err := r.List(ctx, &nodes, client.InNamespace(cache.Namespace),
 		client.MatchingLabels{cachepkg.ValkeyClusterLabel: cachepkg.ValkeyClusterName(cache)}); err != nil {
@@ -359,11 +397,15 @@ func (r *CacheReconciler) nodesPendingACL(ctx context.Context, cache *cachev1alp
 	if len(nodes.Items) == 0 {
 		return "a Valkey node", nil
 	}
-	boundPassed := stagedAt != nil && !r.now().Before(stagedAt.Add(aclApplyBound))
+	now := r.now()
+	boundPassed := stagedAt != nil && !now.Before(stagedAt.Add(aclApplyBound))
 	for i := range nodes.Items {
 		node := &nodes.Items[i]
 		cond := meta.FindStatusCondition(node.Status.Conditions, valkeyv1alpha1.ValkeyNodeConditionACLApplied)
 		if cond == nil || cond.Status != metav1.ConditionTrue {
+			return "Valkey node " + node.Name, nil
+		}
+		if stagedAt == nil && !cond.LastTransitionTime.Time.Before(now) {
 			return "Valkey node " + node.Name, nil
 		}
 		if stagedAt != nil && cond.LastTransitionTime.Before(stagedAt) && !boundPassed {
@@ -372,6 +414,22 @@ func (r *CacheReconciler) nodesPendingACL(ctx context.Context, cache *cachev1alp
 	}
 
 	return "", nil
+}
+
+// clusterProcessed reports whether the valkey-operator has reconciled the
+// current generation of the ValkeyCluster: it writes the generation it saw
+// into every condition it sets.
+func clusterProcessed(cluster *valkeyv1alpha1.ValkeyCluster) bool {
+	if cluster == nil {
+		return false
+	}
+	for i := range cluster.Status.Conditions {
+		if cluster.Status.Conditions[i].ObservedGeneration >= cluster.Generation {
+			return true
+		}
+	}
+
+	return false
 }
 
 // promotePassword moves the staged password into the password key. A
@@ -425,7 +483,7 @@ func (r *CacheReconciler) recordPromotion(ctx context.Context, cache *cachev1alp
 // password when the stage was not confirmed, promotes it once every Valkey
 // node accepts it, and removes the old passwords once the ValkeyCluster lists
 // one key again. It returns how long to wait before the next look.
-func (r *CacheReconciler) completeRotation(ctx context.Context, cache *cachev1alpha1.Cache) (time.Duration, error) {
+func (r *CacheReconciler) completeRotation(ctx context.Context, cache *cachev1alpha1.Cache, cluster *valkeyv1alpha1.ValkeyCluster) (time.Duration, error) {
 	logger := logf.FromContext(ctx)
 	cond := rotationCondition(cache)
 	if cond == nil {
@@ -465,7 +523,7 @@ func (r *CacheReconciler) completeRotation(ctx context.Context, cache *cachev1al
 		return time.Second, nil
 
 	case cond.Status == metav1.ConditionFalse && cond.Reason == ReasonPasswordStaged:
-		pending, err := r.nodesPendingACL(ctx, cache, status.StagedAt)
+		pending, err := r.nodesPendingACL(ctx, cache, status.StagedAt, cluster)
 		if err != nil {
 			return 0, err
 		}
