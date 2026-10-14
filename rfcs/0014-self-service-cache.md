@@ -181,7 +181,7 @@ A rotation has no downtime, because a Valkey user can have several valid passwor
 
 3. The operator lists the three keys on the `ValkeyCluster`. The valkey-operator loads the old and the new password into the ACL of every node.
 
-4. The operator waits until the `ValkeyCluster` shows that the valkey-operator processed the new key list, and until every `ValkeyNode` reports `ACLApplied` with a transition at or after the stage. The valkey-operator sets that condition only after it reloaded the ACL file on the node and verified the password hashes. A node that read the new file on its first load never flips, so 5 minutes after the stage the operator accepts a node that reports the condition without a transition.
+4. The operator waits until the `ValkeyCluster` shows that the valkey-operator processed the new key list, and until every `ValkeyNode` reports `ACLApplied` with a transition at or after the stage. The valkey-operator sets that condition only after it reloaded the ACL file on the node and verified the password hashes. A node that reports the condition without a transition gives no proof. After 5 minutes the operator writes a fresh password under `password-next` and moves the stage time, so a working node reports a new transition. While it waits, the key `password` does not change.
 
 5. The operator copies `password-next` to `password`. Both passwords are valid already, so a pod that starts now reads a password Valkey accepts. The apps read the new value (see the guide-level explanation for file mounts and environment variables).
 
