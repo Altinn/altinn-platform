@@ -140,13 +140,12 @@ spec:
               defaultMessageTimeToLive:
                 description: |-
                   defaultMessageTimeToLive is how long a message lives when the sender
-                  does not set a time to live.
-                maxLength: 64
-                pattern: ^P(\d+D)?(T(\d+H)?(\d+M)?(\d+(\.\d+)?S)?)?$
+                  does not set a time to live, for example 336h for 14 days.
+                pattern: ^([0-9]+([.][0-9]+)?(ns|us|ms|s|m|h))+$
                 type: string
                 x-kubernetes-validations:
-                - message: duration must have at least one value, for example PT1M
-                  rule: '!self.endsWith(''P'') && !self.endsWith(''T'')'
+                - message: defaultMessageTimeToLive must be more than 0s
+                  rule: duration(self) > duration('0s')
               deletionPolicy:
                 default: Retain
                 description: |-
@@ -159,19 +158,12 @@ spec:
               lockDuration:
                 description: |-
                   lockDuration is how long a received message stays locked for the
-                  receiver. Use minutes and seconds only. Azure allows up to PT5M.
-                maxLength: 64
-                pattern: ^P(\d+D)?(T(\d+H)?(\d+M)?(\d+(\.\d+)?S)?)?$
+                  receiver, for example 1m or 30s. Azure allows up to 5m.
+                pattern: ^([0-9]+([.][0-9]+)?(ns|us|ms|s|m|h))+$
                 type: string
                 x-kubernetes-validations:
-                - message: lockDuration must use minutes and seconds only and be at
-                    most PT5M, for example PT1M or PT30S
-                  rule: 'self.matches(''^PT([0-9]+M)?([0-9]+([.][0-9]+)?S)?$'') &&
-                    (self.find(''[0-9]+M'') == '''' ? 0.0 : double(self.find(''[0-9]+M'').replace(''M'',
-                    '''')) * 60.0) + (self.find(''[0-9.]+S'') == '''' ? 0.0 : double(self.find(''[0-9.]+S'').replace(''S'',
-                    ''''))) <= 300.0'
-                - message: duration must have at least one value, for example PT1M
-                  rule: '!self.endsWith(''P'') && !self.endsWith(''T'')'
+                - message: lockDuration must be more than 0s and at most 5m
+                  rule: duration(self) > duration('0s') && duration(self) <= duration('5m')
               maxDeliveryCount:
                 description: |-
                   maxDeliveryCount is how many times Azure delivers a message before it

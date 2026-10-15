@@ -186,7 +186,7 @@ func (in *QueueSpec) DeepCopyInto(out *QueueSpec) {
 	*out = *in
 	if in.LockDuration != nil {
 		in, out := &in.LockDuration, &out.LockDuration
-		*out = new(ISODuration)
+		*out = new(v1.Duration)
 		**out = **in
 	}
 	if in.MaxDeliveryCount != nil {
@@ -196,7 +196,7 @@ func (in *QueueSpec) DeepCopyInto(out *QueueSpec) {
 	}
 	if in.DefaultMessageTimeToLive != nil {
 		in, out := &in.DefaultMessageTimeToLive, &out.DefaultMessageTimeToLive
-		*out = new(ISODuration)
+		*out = new(v1.Duration)
 		**out = **in
 	}
 	if in.MaxSizeInMegabytes != nil {

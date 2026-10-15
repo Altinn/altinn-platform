@@ -1,11 +1,14 @@
 package controller
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -60,9 +63,9 @@ var _ = Describe("Queue CRD schema", func() {
 	It("admits a Queue with every field and every principal source", func() {
 		createQueue(newQueue("explicit", func(q *messagingv1alpha1.Queue) {
 			q.Spec.Name = "team-a.sync/requests_v2"
-			q.Spec.LockDuration = ptr.To(messagingv1alpha1.ISODuration("PT1M"))
+			q.Spec.LockDuration = &metav1.Duration{Duration: time.Minute}
 			q.Spec.MaxDeliveryCount = ptr.To[int32](10)
-			q.Spec.DefaultMessageTimeToLive = ptr.To(messagingv1alpha1.ISODuration("P14DT12H"))
+			q.Spec.DefaultMessageTimeToLive = &metav1.Duration{Duration: 348 * time.Hour}
 			q.Spec.MaxSizeInMegabytes = ptr.To[int32](5120)
 			q.Spec.DeadLetteringOnMessageExpiration = ptr.To(true)
 			q.Spec.RequiresSession = true
@@ -86,10 +89,25 @@ var _ = Describe("Queue CRD schema", func() {
 		}))
 	})
 
-	It("admits a lockDuration of exactly PT5M written in seconds", func() {
+	It("admits a lockDuration of exactly 5m", func() {
 		createQueue(newQueue("lock-max", func(q *messagingv1alpha1.Queue) {
-			q.Spec.LockDuration = ptr.To(messagingv1alpha1.ISODuration("PT4M60S"))
+			q.Spec.LockDuration = &metav1.Duration{Duration: 5 * time.Minute}
 		}))
+	})
+
+	It("rejects a duration with a unit Kubernetes does not know", func() {
+		queue := &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": messagingv1alpha1.GroupVersion.String(),
+			"kind":       "Queue",
+			"metadata":   map[string]any{"name": "days", "namespace": testNamespace},
+			"spec": map[string]any{
+				"name":                     "team-a.days",
+				"defaultMessageTimeToLive": "14d",
+			},
+		}}
+		err := k8sClient.Create(ctx, queue)
+		Expect(apierrors.IsInvalid(err)).To(BeTrue(), "expected an Invalid error, got %v", err)
+		Expect(err.Error()).To(ContainSubstring("spec.defaultMessageTimeToLive"))
 	})
 
 	DescribeTable("rejects an invalid Queue",
@@ -104,18 +122,15 @@ var _ = Describe("Queue CRD schema", func() {
 		Entry("a name that ends with a dot", func(q *messagingv1alpha1.Queue) {
 			q.Spec.Name = "team-a."
 		}, "spec.name"),
-		Entry("a duration without a value", func(q *messagingv1alpha1.Queue) {
-			q.Spec.LockDuration = ptr.To(messagingv1alpha1.ISODuration("PT"))
-		}, "duration must have at least one value"),
-		Entry("a lockDuration above PT5M", func(q *messagingv1alpha1.Queue) {
-			q.Spec.LockDuration = ptr.To(messagingv1alpha1.ISODuration("PT4M60.5S"))
-		}, "lockDuration must use minutes and seconds only and be at most PT5M"),
-		Entry("a lockDuration in hours", func(q *messagingv1alpha1.Queue) {
-			q.Spec.LockDuration = ptr.To(messagingv1alpha1.ISODuration("PT1H"))
-		}, "lockDuration must use minutes and seconds only and be at most PT5M"),
-		Entry("a duration that is not ISO 8601", func(q *messagingv1alpha1.Queue) {
-			q.Spec.DefaultMessageTimeToLive = ptr.To(messagingv1alpha1.ISODuration("1h"))
-		}, "spec.defaultMessageTimeToLive"),
+		Entry("a lockDuration above 5m", func(q *messagingv1alpha1.Queue) {
+			q.Spec.LockDuration = &metav1.Duration{Duration: 5*time.Minute + time.Second}
+		}, "lockDuration must be more than 0s and at most 5m"),
+		Entry("a lockDuration of zero", func(q *messagingv1alpha1.Queue) {
+			q.Spec.LockDuration = &metav1.Duration{}
+		}, "lockDuration must be more than 0s and at most 5m"),
+		Entry("a time to live of zero", func(q *messagingv1alpha1.Queue) {
+			q.Spec.DefaultMessageTimeToLive = &metav1.Duration{}
+		}, "defaultMessageTimeToLive must be more than 0s"),
 		Entry("a size Azure does not offer", func(q *messagingv1alpha1.Queue) {
 			q.Spec.MaxSizeInMegabytes = ptr.To[int32](1000)
 		}, "spec.maxSizeInMegabytes"),

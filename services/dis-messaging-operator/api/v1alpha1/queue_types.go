@@ -37,12 +37,6 @@ const (
 	QueueDeletionPolicyDelete QueueDeletionPolicy = "Delete"
 )
 
-// ISODuration is an ISO 8601 duration, for example PT1M or P14D.
-// +kubebuilder:validation:MaxLength=64
-// +kubebuilder:validation:Pattern=`^P(\d+D)?(T(\d+H)?(\d+M)?(\d+(\.\d+)?S)?)?$`
-// +kubebuilder:validation:XValidation:rule="!self.endsWith('P') && !self.endsWith('T')",message="duration must have at least one value, for example PT1M"
-type ISODuration string
-
 // ApplicationIdentityRef points to an ApplicationIdentity.
 type ApplicationIdentityRef struct {
 	// name is the ApplicationIdentity name.
@@ -118,10 +112,12 @@ type QueueSpec struct {
 	Name string `json:"name"`
 
 	// lockDuration is how long a received message stays locked for the
-	// receiver. Use minutes and seconds only. Azure allows up to PT5M.
+	// receiver, for example 1m or 30s. Azure allows up to 5m.
 	// +optional
-	// +kubebuilder:validation:XValidation:rule="self.matches('^PT([0-9]+M)?([0-9]+([.][0-9]+)?S)?$') && (self.find('[0-9]+M') == '' ? 0.0 : double(self.find('[0-9]+M').replace('M', '')) * 60.0) + (self.find('[0-9.]+S') == '' ? 0.0 : double(self.find('[0-9.]+S').replace('S', ''))) <= 300.0",message="lockDuration must use minutes and seconds only and be at most PT5M, for example PT1M or PT30S"
-	LockDuration *ISODuration `json:"lockDuration,omitempty"`
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Pattern=`^([0-9]+([.][0-9]+)?(ns|us|ms|s|m|h))+$`
+	// +kubebuilder:validation:XValidation:rule="duration(self) > duration('0s') && duration(self) <= duration('5m')",message="lockDuration must be more than 0s and at most 5m"
+	LockDuration *metav1.Duration `json:"lockDuration,omitempty"`
 
 	// maxDeliveryCount is how many times Azure delivers a message before it
 	// moves the message to the dead-letter queue.
@@ -131,9 +127,12 @@ type QueueSpec struct {
 	MaxDeliveryCount *int32 `json:"maxDeliveryCount,omitempty"`
 
 	// defaultMessageTimeToLive is how long a message lives when the sender
-	// does not set a time to live.
+	// does not set a time to live, for example 336h for 14 days.
 	// +optional
-	DefaultMessageTimeToLive *ISODuration `json:"defaultMessageTimeToLive,omitempty"`
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Pattern=`^([0-9]+([.][0-9]+)?(ns|us|ms|s|m|h))+$`
+	// +kubebuilder:validation:XValidation:rule="duration(self) > duration('0s')",message="defaultMessageTimeToLive must be more than 0s"
+	DefaultMessageTimeToLive *metav1.Duration `json:"defaultMessageTimeToLive,omitempty"`
 
 	// maxSizeInMegabytes is the maximum size of the queue.
 	// +optional

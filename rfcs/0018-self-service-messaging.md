@@ -219,7 +219,7 @@ One kind, `Queue`, namespaced, in the group `messaging.dis.altinn.cloud/v1alpha1
 Spec:
 
 - `name` (required): the Azure queue name. Immutable. It must start with the product prefix. Azure allows dots and slashes here.
-- `lockDuration`, `maxDeliveryCount`, `defaultMessageTimeToLive`, `maxSizeInMegabytes`, `deadLetteringOnMessageExpiration` (optional): Azure defaults apply. Durations are ISO 8601.
+- `lockDuration`, `maxDeliveryCount`, `defaultMessageTimeToLive`, `maxSizeInMegabytes`, `deadLetteringOnMessageExpiration` (optional): Azure defaults apply. Durations are Kubernetes durations, for example `1m` or `336h`. The operator converts them to the ISO 8601 form that Azure uses.
 - `requiresSession`, `requiresDuplicateDetection` (optional): default `false`. Immutable, because Azure fixes them at creation.
 - `access.principals[]` (optional): grants on the queue. See Roles.
 - `deletionPolicy` (optional): `Retain | Delete`. Default `Retain`.
