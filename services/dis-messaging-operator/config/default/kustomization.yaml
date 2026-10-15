@@ -1,0 +1,12 @@
+namespace: dis-messaging-operator-system
+namePrefix: dis-messaging-operator-
+
+resources:
+- ../rbac
+- ../manager
+- metrics_service.yaml
+
+patches:
+- path: manager_metrics_patch.yaml
+  target:
+    kind: Deployment
