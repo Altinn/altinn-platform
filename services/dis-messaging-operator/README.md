@@ -8,7 +8,7 @@ See [RFC 0018 - Self-service messaging](../../rfcs/0018-self-service-messaging.m
 
 ## Status
 
-This is the `kubebuilder init` scaffold. It has no API and no controller yet. The `Queue` CRD (`messaging.dis.altinn.cloud/v1alpha1`) and the logic that creates the ASO resources land in follow-up pull requests.
+This is a scaffold. It serves the `Queue` CRD (`messaging.dis.altinn.cloud/v1alpha1`) and registers an empty controller. The logic that creates the ASO resources lands in follow-up pull requests.
 
 ## Development
 
