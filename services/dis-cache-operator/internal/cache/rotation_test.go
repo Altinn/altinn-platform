@@ -110,17 +110,20 @@ func TestRotationRemovePatch(t *testing.T) {
 	body, err := RotationRemovePatch(newTestCache(nil))
 	ops := decodePatch(t, body, err)
 	expectGuard(t, ops, RotationStepReplaced)
-	if len(ops) != 5 {
-		t.Fatalf("want 5 operations, got %d: %v", len(ops), ops)
+	if len(ops) != 6 {
+		t.Fatalf("want 6 operations, got %d: %v", len(ops), ops)
 	}
 	if ops[2]["op"] != "remove" || ops[2]["path"] != "/data/password-previous" {
 		t.Errorf("want the previous key removed, got %v", ops[2])
 	}
-	if ops[3]["op"] != "remove" || ops[3]["path"] != "/data/password-next" {
-		t.Errorf("want the next key removed, got %v", ops[3])
+	if ops[3]["op"] != "add" || ops[3]["path"] != "/data/password-next" {
+		t.Errorf("want the next key added first, so the remove works when it is missing, got %v", ops[3])
 	}
-	if ops[4]["op"] != "replace" || ops[4]["path"] != annotationPathWant || ops[4]["value"] != RotationStepIdle {
-		t.Errorf("want the step set back to idle, got %v", ops[4])
+	if ops[4]["op"] != "remove" || ops[4]["path"] != "/data/password-next" {
+		t.Errorf("want the next key removed, got %v", ops[4])
+	}
+	if ops[5]["op"] != "replace" || ops[5]["path"] != annotationPathWant || ops[5]["value"] != RotationStepIdle {
+		t.Errorf("want the step set back to idle, got %v", ops[5])
 	}
 }
 
@@ -201,7 +204,8 @@ func TestPasswordKeysFollowTheRotationCondition(t *testing.T) {
 		{"rotated", withCondition(metav1.ConditionTrue, "Rotated"), one},
 		{"rotating, stage not confirmed", withCondition(metav1.ConditionFalse, "Rotating"), one},
 		{"staged", withCondition(metav1.ConditionFalse, ReasonPasswordStaged), all},
-		{"previous valid", withCondition(metav1.ConditionFalse, ReasonPreviousPasswordValid), all},
+		{"previous valid", withCondition(metav1.ConditionFalse, ReasonPreviousPasswordValid), []string{AuthSecretPasswordKey, AuthSecretPreviousPasswordKey}},
+		{"legacy copied", withCondition(metav1.ConditionFalse, "PasswordCopied"), one},
 		{"failed", withCondition(metav1.ConditionFalse, "RotationFailed"), one},
 	}
 	for _, tc := range cases {

@@ -31,6 +31,12 @@ const (
 	ReasonPreviousPasswordValid = cachepkg.ReasonPreviousPasswordValid
 	ReasonRotationFailed        = "RotationFailed"
 
+	// reasonPasswordCopied is the reason the operator before the staged key
+	// used after it copied the password to the previous key. A Cache can
+	// still carry it after an upgrade. The operator treats it as Rotating:
+	// the stage is rejected, and findStep takes the Secret back to idle.
+	reasonPasswordCopied = "PasswordCopied"
+
 	// DefaultPreviousValidFor is the period the previous password stays valid
 	// when neither the Cache nor the operator flag sets one.
 	DefaultPreviousValidFor = 7 * 24 * time.Hour
@@ -528,7 +534,7 @@ func (r *CacheReconciler) completeRotation(ctx context.Context, cache *cachev1al
 	status := rotationStatus(cache)
 
 	switch {
-	case cond.Status == metav1.ConditionFalse && cond.Reason == ReasonRotating:
+	case cond.Status == metav1.ConditionFalse && (cond.Reason == ReasonRotating || cond.Reason == reasonPasswordCopied):
 		// The stage was not confirmed: a restart, a wait for the nodes, or a
 		// rejected stage. The stage is safe to repeat, and its result decides
 		// the probes.

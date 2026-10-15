@@ -139,10 +139,13 @@ func RotationRestagePatch(cache *cachev1alpha1.Cache, password string) ([]byte, 
 // RotationRemovePatch returns the JSON patch for the last rotation step: the
 // previous and the next password are removed and the Secret is idle again.
 // The controller applies it after the ValkeyCluster lists the password key
-// only.
+// only. A rotation that the operator before the staged key started has no
+// next key at this step. The add before the remove makes the remove work in
+// both cases: add creates the key or replaces its value.
 func RotationRemovePatch(cache *cachev1alpha1.Cache) ([]byte, error) {
 	ops := append(rotationGuard(cache, RotationStepReplaced),
 		jsonPatchOp{Op: opRemove, Path: dataPath(AuthSecretPreviousPasswordKey)},
+		jsonPatchOp{Op: opAdd, Path: dataPath(AuthSecretNextPasswordKey), Value: ""},
 		jsonPatchOp{Op: opRemove, Path: dataPath(AuthSecretNextPasswordKey)},
 		jsonPatchOp{Op: opReplace, Path: rotationStepPath(), Value: RotationStepIdle},
 	)
@@ -209,20 +212,24 @@ const (
 )
 
 // PasswordKeys returns the Secret keys the app user accepts as passwords:
-// the password key alone, or all three keys from the confirmed stage until
-// the removal. A listed key that does not exist makes the valkey-operator
-// stop with an error, so the keys are listed only from their confirmed write
-// on, and they stay listed while they exist. After the promote two keys hold
-// the same value; the valkey-operator removes duplicate hashes, so the ACL
-// does not change.
+// the password key alone, all three keys while a password is staged, and the
+// password and the previous key during the period. A listed key that does
+// not exist makes the valkey-operator stop with an error, so a key is listed
+// only while it is sure to exist. After the promote the password key and the
+// next key hold the same value, so the period lists the same passwords as the
+// stage did, and the ACL does not change. A rotation that the operator before
+// the staged key started has no next key during the period, so the period
+// does not list it.
 func PasswordKeys(cache *cachev1alpha1.Cache) []string {
 	cond := meta.FindStatusCondition(cache.Status.Conditions, string(cachev1alpha1.ConditionPasswordRotated))
 	if cond == nil || cond.Status != metav1.ConditionFalse {
 		return []string{AuthSecretPasswordKey}
 	}
 	switch cond.Reason {
-	case ReasonPasswordStaged, ReasonPreviousPasswordValid:
+	case ReasonPasswordStaged:
 		return []string{AuthSecretPasswordKey, AuthSecretPreviousPasswordKey, AuthSecretNextPasswordKey}
+	case ReasonPreviousPasswordValid:
+		return []string{AuthSecretPasswordKey, AuthSecretPreviousPasswordKey}
 	}
 
 	return []string{AuthSecretPasswordKey}

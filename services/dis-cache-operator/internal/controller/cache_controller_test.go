@@ -738,7 +738,7 @@ var _ = Describe("Cache password rotation", func() {
 		Expect(result.RequeueAfter).To(Equal(time.Second))
 		result = reconcileWith(r, "cache-rotate")
 		Expect(result.RequeueAfter).To(Equal(time.Hour))
-		Expect(getValkeyCluster("cache-rotate").Spec.Users[1].PasswordSecret.Keys).To(Equal([]string{cachepkg.AuthSecretPasswordKey, cachepkg.AuthSecretPreviousPasswordKey, cachepkg.AuthSecretNextPasswordKey}))
+		Expect(getValkeyCluster("cache-rotate").Spec.Users[1].PasswordSecret.Keys).To(Equal([]string{cachepkg.AuthSecretPasswordKey, cachepkg.AuthSecretPreviousPasswordKey}))
 		Expect(getValkeyCluster("cache-rotate").Annotations).To(HaveKeyWithValue(cachepkg.PasswordRotatedAtAnnotation, "2026-09-19T08:00:30Z"))
 		Expect(getValkeyCluster("cache-rotate").Annotations).NotTo(HaveKey(cachepkg.PasswordStagedAtAnnotation))
 
@@ -1160,6 +1160,78 @@ var _ = Describe("Cache password rotation", func() {
 		Expect(getSecret(idled.Name).Data).To(HaveKey(cachepkg.AuthSecretNextPasswordKey))
 	})
 
+	It("finishes a rotation that the operator before the staged key left in its period", func() {
+		now := time.Date(2026, 9, 19, 11, 50, 0, 0, time.UTC)
+		r := rotationReconciler(&now)
+		cache := newCache("cache-rotate-legacy-period", nil)
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+		reconcileWith(r, "cache-rotate-legacy-period")
+
+		// The state the previous operator left: step replaced, the previous
+		// key, no next key, and the period in the status.
+		legacy := getSecret(cachepkg.AuthSecretName(cache))
+		current := legacy.Data[cachepkg.AuthSecretPasswordKey]
+		legacy.Data[cachepkg.AuthSecretPreviousPasswordKey] = []byte("old-password")
+		legacy.Annotations[cachepkg.RotationStepAnnotation] = cachepkg.RotationStepReplaced
+		Expect(k8sClient.Update(ctx, legacy)).To(Succeed())
+		withStatus := getCache("cache-rotate-legacy-period")
+		meta.SetStatusCondition(&withStatus.Status.Conditions, metav1.Condition{
+			Type: string(cachev1alpha1.ConditionPasswordRotated), Status: metav1.ConditionFalse,
+			Reason: ReasonPreviousPasswordValid, Message: "left by the previous operator",
+		})
+		withStatus.Status.PasswordRotation = &cachev1alpha1.PasswordRotationStatus{
+			LastRotatedAt: &metav1.Time{Time: now}, PreviousValidUntil: &metav1.Time{Time: now.Add(time.Hour)},
+		}
+		Expect(k8sClient.Status().Update(ctx, withStatus)).To(Succeed())
+
+		// The key list names only keys that exist.
+		reconcileWith(r, "cache-rotate-legacy-period")
+		Expect(getValkeyCluster("cache-rotate-legacy-period").Spec.Users[1].PasswordSecret.Keys).To(Equal(
+			[]string{cachepkg.AuthSecretPasswordKey, cachepkg.AuthSecretPreviousPasswordKey}))
+
+		// After the period the remove works without a next key.
+		now = now.Add(time.Hour)
+		reconcileWith(r, "cache-rotate-legacy-period")
+		final := getSecret(legacy.Name)
+		Expect(final.Data).NotTo(HaveKey(cachepkg.AuthSecretPreviousPasswordKey))
+		Expect(final.Data).NotTo(HaveKey(cachepkg.AuthSecretNextPasswordKey))
+		Expect(final.Data[cachepkg.AuthSecretPasswordKey]).To(Equal(current))
+		Expect(final.Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepIdle))
+		Expect(rotatedOf(getCache("cache-rotate-legacy-period")).Reason).To(Equal(ReasonRotated))
+	})
+
+	It("takes over a rotation that the operator before the staged key left at PasswordCopied", func() {
+		now := time.Date(2026, 9, 19, 11, 55, 0, 0, time.UTC)
+		r := rotationReconciler(&now)
+		cache := newCache("cache-rotate-legacy-copied", nil)
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+		reconcileWith(r, "cache-rotate-legacy-copied")
+		aclApplied("cache-rotate-legacy-copied", "0-0", metav1.ConditionTrue, now.Add(-time.Hour))
+		legacy := getSecret(cachepkg.AuthSecretName(cache))
+		current := legacy.Data[cachepkg.AuthSecretPasswordKey]
+		legacy.Data[cachepkg.AuthSecretPreviousPasswordKey] = current
+		legacy.Annotations[cachepkg.RotationStepAnnotation] = cachepkg.RotationStepCopied
+		Expect(k8sClient.Update(ctx, legacy)).To(Succeed())
+		withStatus := getCache("cache-rotate-legacy-copied")
+		meta.SetStatusCondition(&withStatus.Status.Conditions, metav1.Condition{
+			Type: string(cachev1alpha1.ConditionPasswordRotated), Status: metav1.ConditionFalse,
+			Reason: "PasswordCopied", Message: "left by the previous operator",
+		})
+		Expect(k8sClient.Status().Update(ctx, withStatus)).To(Succeed())
+
+		// One reconcile takes the Secret back to idle, the next stages.
+		reconcileWith(r, "cache-rotate-legacy-copied")
+		Expect(getSecret(legacy.Name).Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepIdle))
+		now = now.Add(time.Second)
+		reconcileWith(r, "cache-rotate-legacy-copied")
+		staged := getSecret(legacy.Name)
+		Expect(staged.Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepStaged))
+		Expect(staged.Data[cachepkg.AuthSecretPasswordKey]).To(Equal(current))
+		Expect(rotatedOf(getCache("cache-rotate-legacy-copied")).Reason).To(Equal(ReasonPasswordStaged))
+	})
+
 	It("removes the previous password at once when the Cache sets a zero period", func() {
 		now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
 		r := rotationReconciler(&now)
@@ -1316,6 +1388,6 @@ var _ = Describe("Cache password rotation after lost status writes", func() {
 		Expect(rotated.Data[cachepkg.AuthSecretPreviousPasswordKey]).To(Equal(first))
 		Expect(rotated.Data[cachepkg.AuthSecretPasswordKey]).NotTo(Equal(first))
 		Expect(rotatedOf(getCache("cache-rotate-lost")).Reason).To(Equal(ReasonPreviousPasswordValid))
-		Expect(getValkeyCluster("cache-rotate-lost").Spec.Users[1].PasswordSecret.Keys).To(Equal([]string{cachepkg.AuthSecretPasswordKey, cachepkg.AuthSecretPreviousPasswordKey, cachepkg.AuthSecretNextPasswordKey}))
+		Expect(getValkeyCluster("cache-rotate-lost").Spec.Users[1].PasswordSecret.Keys).To(Equal([]string{cachepkg.AuthSecretPasswordKey, cachepkg.AuthSecretPreviousPasswordKey}))
 	})
 })
