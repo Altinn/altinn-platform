@@ -9,7 +9,7 @@
 # Summary
 [summary]: #summary
 
-A publishing workflow can ask Flux to fetch a new product artifact immediately. The workflow sends an authenticated reconcile request to the DIS edge gateway of the environment. The edge gateway verifies the token, limits the request rate and forwards the request to the DIS core cluster. A Flux `Receiver` in the product namespace verifies the token again and starts the reconcile. The reconcile request contains no deployment data, and Flux continues to pull the artifact from the registry. Polling stays as the fallback.
+A publishing workflow can ask Flux to fetch a new product artifact immediately. The workflow sends an authenticated reconcile request to the DIS edge gateway of the environment. The edge gateway verifies the token, limits the request rate and forwards the request to the DIS core cluster. A dedicated load balancer Service admits only the edge cluster's outbound addresses in every environment. A Flux `Receiver` in the product namespace verifies the token again and starts the reconcile. The reconcile request contains no deployment data, and Flux continues to pull the artifact from the registry. Polling stays as the fallback.
 
 # Motivation
 [motivation]: #motivation
@@ -46,6 +46,7 @@ The expected outcome is that Flux starts to fetch the artifact some seconds afte
 | Edge gateway | The Envoy Gateway in the DIS edge cluster of an environment. It is the public entry point for the Altinn APIs. [RFC 0015](0015-envoy-gateway-api-edge.md) describes it. |
 | Webhook endpoint | The address on the edge gateway where a workflow sends a reconcile request. |
 | Cluster route | The route on the gateway of a DIS core cluster to the Flux notification-controller. The edge gateway forwards each reconcile request to it. |
+| Dedicated listener | The Traefik listener for reconcile requests. A separate Kubernetes `LoadBalancer` Service exposes it only to the edge cluster's outbound addresses. |
 
 The webhook endpoint of an environment is `https://<platform host name>/flux-webhook`.
 
@@ -136,12 +137,71 @@ The action reports the response of the webhook endpoint.
 | Component | Owner | Location | Function |
 |---|---|---|---|
 | Edge route | Platform team | `dis-way/gitops-manifests`, package `flux-webhook-receiver`, layer `edge` | Exposes the webhook endpoint on the edge gateway. Verifies the token, limits the request rate and forwards the request to the cluster route. |
-| Cluster route | Platform team | `dis-way/gitops-manifests`, package `flux-webhook-receiver`, layer `multitenancy` | Exposes the notification-controller through the Traefik gateway of a DIS core cluster. |
+| Dedicated listener | Platform team | `dis-way/gitops-manifests`, package `traefik`, an optional layer | Adds the load balancer Service, entrypoint and Gateway listener to the existing Traefik release. |
+| Cluster route | Platform team | `dis-way/gitops-manifests`, package `flux-webhook-receiver`, layer `multitenancy` | Exposes the notification-controller through the dedicated listener. |
 | Edge configuration | Platform team | `dis-way/core`, `flux/clusters/dis-edge-<environment>-aks` | Deploys the edge layer to an edge cluster. |
-| Cluster configuration | Platform team | `dis-way/core`, the Terraform configuration of each DIS core cluster | Deploys the multitenancy layer to a DIS core cluster. |
+| Cluster configuration | Platform team | `dis-way/core`, the Terraform configuration of each DIS core cluster | Provisions the dedicated public addresses and Domain Name System (DNS) records. Enables the listener and the cluster route. |
+| Module inputs | Platform team | `dis-way/terraform-azurerm-dis-modules`, the cluster and `dis_aks_resources_multitenancy` modules | Passes the enable flag, public addresses and edge source ranges to the Traefik configuration. |
 | `trigger-reconcile` action | Platform team | `Altinn/altinn-platform`, `actions/flux/trigger-reconcile` | Gets the token and sends the reconcile request. |
 | `Receiver` | Product team | Product syncroot | Verifies the caller and names the resources. |
 | Workflow step | Product team | Publishing workflow | Calls the action after the push. |
+
+## Network boundaries
+
+The diagram shows the reconcile request path. The sequence below also shows the artifact publication and the Flux reconcile.
+
+```mermaid
+flowchart TB
+    workflow["`GitHub Actions
+Publishing workflow`"]
+
+    subgraph edgeCluster["DIS edge · public webhook endpoint"]
+        edgeGateway["`Envoy Gateway · HTTPS 443
+Token and organization checks
+Request rate limit`"]
+    end
+
+    subgraph coreCluster["DIS core · dedicated webhook access"]
+        webhookService["`Webhook LoadBalancer · 443
+Dedicated IPv4 and IPv6
+Edge source ranges only`"]
+        traefik["`Existing Traefik pods · HTTPS 9443
+flux-webhook listener
+Routes from flux-system only`"]
+        receiver["`Flux webhook-receiver · HTTP 80
+Token, repository and branch checks`"]
+        source["`OCIRepository
+Reconcile requested`"]
+    end
+
+    subgraph sharedIngress["Existing shared core ingress"]
+        sharedService["`Shared LoadBalancer · 443
+No Flux webhook route`"]
+    end
+
+    workflow -->|"Webhook POST + token"| edgeGateway
+    edgeGateway -->|"Verified TLS + token"| webhookService
+    webhookService -->|"Forward to port 9443"| traefik
+    traefik -->|"Same path + token"| receiver
+    receiver -->|"Annotate"| source
+    workflow -. "Direct core request blocked" .-> webhookService
+    workflow -. "Shared IP: no webhook route" .-> sharedService
+
+    classDef client fill:#eff6ff,stroke:#2563eb,color:#172554
+    classDef gateway fill:#ecfdf5,stroke:#059669,color:#064e3b
+    classDef restricted fill:#fff7ed,stroke:#ea580c,color:#7c2d12
+    classDef flux fill:#f5f3ff,stroke:#7c3aed,color:#2e1065
+    classDef shared fill:#f8fafc,stroke:#64748b,color:#334155
+    class workflow client
+    class edgeGateway gateway
+    class webhookService,traefik restricted
+    class receiver,source flux
+    class sharedService shared
+    linkStyle 5,6 stroke:#b91c1c,stroke-width:2px,stroke-dasharray:5 5
+```
+
+The dedicated Service selects the existing Traefik pods. The design adds no application or ingress controller.
+The source ranges restrict public access. They do not authenticate individual workloads within the edge cluster.
 
 ## Sequence
 
@@ -151,6 +211,7 @@ sequenceDiagram
     participant gh as GitHub token service
     participant acr as Registry
     participant eg as Edge gateway
+    participant lb as Dedicated core LoadBalancer Service
     participant gw as Traefik gateway in DIS core
     participant nc as Flux notification-controller
     participant sc as Flux source-controller
@@ -160,14 +221,15 @@ sequenceDiagram
     wf->>eg: 3. POST /flux-webhook/hook/<digest> with the token
     eg->>gh: 4. get the signing keys
     eg->>eg: 5. verify the token, the organization and the request rate
-    eg->>gw: 6. forward POST /hook/<digest> with the token
-    gw->>nc: 7. forward the request
-    nc->>gh: 8. get the signing keys
-    nc->>nc: 9. verify the token and the validations
-    nc->>sc: 10. annotate the OCIRepository
-    sc->>acr: 11. fetch the new artifact
-    sc->>kc: 12. report the new revision
-    kc->>kc: 13. apply the manifests
+    eg->>lb: 6. forward POST /hook/<digest> with the token
+    lb->>gw: 7. admit the edge source address and forward to port 9443
+    gw->>nc: 8. forward the request through the dedicated listener
+    nc->>gh: 9. get the signing keys
+    nc->>nc: 10. verify the token and the validations
+    nc->>sc: 11. annotate the OCIRepository
+    sc->>acr: 12. fetch the new artifact
+    sc->>kc: 13. report the new revision
+    kc->>kc: 14. apply the manifests
 ```
 
 ## Authentication
@@ -255,6 +317,7 @@ The layer `edge` of the package `flux-webhook-receiver` contains the edge route 
 | Gateway | `eg` in the namespace `envoy-gateway-system` |
 | Listener | `https` |
 | Host name | The platform host name of the environment |
+| Method | `POST` |
 | Path | Prefix `/flux-webhook/hook` |
 | Rewrite | Host name `flux-webhook.<DEFAULT_GATEWAY_HOSTNAME>` of the DIS core cluster, and path prefix `/hook` |
 | Target | A `Backend` with the host name of the cluster route and port 443 |
@@ -265,12 +328,122 @@ The Dialogporten route on `dis-edge-at23` uses the same `Backend`, `BackendTLSPo
 
 The edge route guard admits the route only if the annotation of the namespace allows the path.
 
+The target host name resolves to the dedicated public addresses of the cluster route.
+The edge gateway uses that host name for the TLS connection and certificate verification.
+
 A `BackendTrafficPolicy` on the edge route sets a global rate limit:
 
 - The rate limit service of the edge cluster keeps the counters in Valkey.
 - The policy must set `mergeType`. Without `mergeType`, the route policy replaces the gateway policy, and the route loses the limits and timeouts of the gateway.
 - Envoy verifies the token and the organization before it applies the rate limit. A request without a valid token does not use the limit.
 - The rate limiter fails open. If Valkey is not available, the edge gateway forwards each request that has a valid token.
+
+## Dedicated core listener
+
+Each participating DIS core cluster has a separate Kubernetes Service of type `LoadBalancer` for reconcile requests.
+The existing Traefik Helm release creates this Service through `service.additionalServices`.
+The Service selects the existing Traefik pods. It needs no custom application, additional deployment or separate ingress controller.
+Azure can attach its frontend addresses to the existing load balancer.
+
+The Traefik `kubernetesCRD` provider remains disabled in the multi-tenant configuration.
+The design uses the existing Kubernetes Gateway API provider and no Traefik `Middleware` resources.
+
+| Property | Value |
+|---|---|
+| Service | `altinn-traefik-flux-webhook` in the namespace `traefik` |
+| Public addresses | One dedicated static IPv4 address and one dedicated static IPv6 address per participating cluster |
+| Service port | TCP 443, with the target port `flux-webhook` |
+| Traefik entrypoint | `flux-webhook`, container port 9443 |
+| Source ranges | Only the corresponding edge cluster's IPv4 and IPv6 outbound ranges |
+| External traffic policy | `Local`, to preserve the source address |
+| Gateway listener | `flux-webhook`, HTTPS on port 9443 |
+| Listener host name | `flux-webhook.<DEFAULT_GATEWAY_HOSTNAME>` |
+| Admitted route namespace | Only `flux-system`, selected by the label `kubernetes.io/metadata.name` |
+| TLS certificate | The existing wildcard certificate in the Secret `ssl-cert` |
+
+The shared Traefik Service must not expose port 9443.
+The dedicated Service must expose only the `flux-webhook` entrypoint.
+The existing product listeners and their source ranges do not change.
+
+### Helm values
+
+These values extend the existing Traefik configuration. They do not replace its other ports, listeners or annotations.
+The example uses the structure of the pinned Traefik chart, version 41.6.1.
+
+```yaml
+ports:
+  flux-webhook:
+    port: 9443
+    exposedPort: 443
+    protocol: TCP
+    expose:
+      default: false
+      flux-webhook: true
+    http:
+      tls:
+        enabled: true
+    transport:
+      lifeCycle:
+        requestAcceptGraceTimeout: 15s
+
+service:
+  additionalServices:
+    flux-webhook:
+      enabled: true
+      single: true
+      annotations:
+        service.beta.kubernetes.io/azure-load-balancer-resource-group: "${AKS_NODE_RG}"
+        service.beta.kubernetes.io/azure-load-balancer-ipv4: "${FLUX_WEBHOOK_IPV4}"
+        service.beta.kubernetes.io/azure-load-balancer-ipv6: "${FLUX_WEBHOOK_IPV6}"
+      spec:
+        type: LoadBalancer
+        externalTrafficPolicy: Local
+        ipFamilyPolicy: RequireDualStack
+        ipFamilies:
+          - IPv4
+          - IPv6
+        loadBalancerSourceRanges:
+          - "${LB_SOURCE_RANGE_DIS_EDGE}"
+          - "${LB_SOURCE_RANGE_DIS_EDGE_IPV6}"
+
+gateway:
+  listeners:
+    flux-webhook:
+      port: 9443
+      protocol: HTTPS
+      hostname: "flux-webhook.${DEFAULT_GATEWAY_HOSTNAME}"
+      namespacePolicy:
+        from: Selector
+        selector:
+          matchLabels:
+            kubernetes.io/metadata.name: flux-system
+      certificateRefs:
+        - name: ssl-cert
+```
+
+Add port 9443 to the existing `config.linkerd.io/skip-inbound-ports` pod annotation.
+Keep ports 8000, 8443 and 9100 in that annotation.
+This preserves the existing TLS handling in Traefik.
+
+### Addresses and source ranges
+
+Terraform provisions the dedicated public addresses and grants the cluster identity access to them.
+The addresses use the resource group named in the Service annotation.
+
+Create explicit DNS `A` and `AAAA` records for `flux-webhook.<DEFAULT_GATEWAY_HOSTNAME>`.
+Point these records to the dedicated addresses.
+The wildcard DNS record continues to point to the shared ingress addresses.
+The existing wildcard certificate covers the webhook host name.
+
+The Service uses `loadBalancerSourceRanges` to restrict inbound traffic.
+Azure Kubernetes Service (AKS) applies these restrictions through network security group and host rules.
+Use only the environment's `LB_SOURCE_RANGE_DIS_EDGE` and `LB_SOURCE_RANGE_DIS_EDGE_IPV6` values.
+Do not inherit the shared Service's Cloudflare, monitoring, API Management or unrestricted source ranges.
+The implementation must reject missing source ranges and the unrestricted ranges `0.0.0.0/0` and `::/0`.
+
+Verify the actual outbound addresses of the edge gateway before enabling the edge route.
+Keep the AKS load balancer health probes working with `externalTrafficPolicy: Local`.
+Do not admit public webhook traffic to make a health probe pass.
 
 ## Cluster route
 
@@ -279,23 +452,22 @@ The layer `multitenancy` of the package `flux-webhook-receiver` contains one `HT
 | Property | Value |
 |---|---|
 | Gateway | `traefik-gateway` in the namespace `traefik` |
-| Listener | `https-wildcard` only |
+| Listener | `flux-webhook` only, selected by `parentRefs[].sectionName` |
 | Host name | `flux-webhook.<DEFAULT_GATEWAY_HOSTNAME>` |
+| Method | `POST` |
 | Path | Prefix `/hook` |
 | Target | Service `webhook-receiver`, port 80 |
 
 The route must not change the path. The notification-controller finds the `Receiver` from the exact path of the request.
 
-The wildcard record in the cluster zone gives the host name. The wildcard certificate of the gateway gives the TLS certificate. The route needs no new record and no new certificate.
+Do not attach the route to `https`, `https-wildcard` or another shared listener.
+Remove an existing shared-listener attachment before enabling the edge route.
+A request to the shared ingress address must not reach Flux, even with the webhook host name and a valid token.
 
-The source ranges of the Traefik load balancer apply to the route.
-
-| Cluster | Load balancer admits | Edge gateway can reach the cluster route | Runner can reach the cluster route directly |
-|---|---|---|---|
-| `at22`, `at23`, `at24`, `yt01`, `tt02` | All sources | Yes | Yes |
-| `prod` | Cloudflare, altinn-uptime and the DIS edge cluster | Yes | No |
-
-In the test and staging environments, a caller can send a request to the cluster route without the edge gateway. The checks of the edge gateway do not apply to that request. The notification-controller continues to verify the token.
+The source restriction applies in every environment, including test and staging.
+It restricts public access through the dedicated Service. It does not isolate pods inside either cluster.
+Workloads that share the admitted edge outbound addresses can reach the listener.
+The notification-controller must continue to verify every reconcile request.
 
 ## Prerequisites
 
@@ -303,7 +475,9 @@ In the test and staging environments, a caller can send a request to the cluster
 - The notification-controller can connect to `https://token.actions.githubusercontent.com`. It gets the provider configuration and the signing keys from that address.
 - The edge gateway can connect to `https://token.actions.githubusercontent.com`. It gets the signing keys from that address.
 - The edge gateway serves the platform host name of the environment.
-- The load balancer of the DIS core cluster admits the edge cluster.
+- The dedicated Service admits the actual outbound addresses of the edge gateway for both IP families.
+- The webhook DNS records point to the dedicated addresses, and the Gateway listener has a valid TLS certificate.
+- The cluster route attaches only to the dedicated listener.
 
 ## Environment selection
 
@@ -323,6 +497,10 @@ Dialogporten publishes one tag for all environments at this time. [Dialogporten 
 | Valkey is not available. | The rate limiter fails open. The edge gateway and the notification-controller continue to verify each token. |
 | The edge gateway cannot get the signing keys from GitHub. | The edge gateway rejects the request. The next poll fetches the artifact. |
 | The edge gateway is not available. | The action reports an error. The next poll fetches the artifact. |
+| A public caller connects directly to the dedicated core address. | The source ranges block the connection unless the caller uses an admitted edge outbound address. |
+| A caller sends the webhook host name to the shared core address. | No route forwards the request to Flux. |
+| The edge outbound addresses change before the source ranges change. | The dedicated Service blocks the edge gateway. The next poll fetches the artifact. |
+| The dedicated Service or its DNS records are not ready. | The edge gateway cannot reach Flux. The next poll fetches the artifact. |
 | Two publishing workflows send a reconcile request at the same time. | Flux reconciles the `OCIRepository` one time or two times. The result is the same. |
 | The reconcile request arrives before the registry has the new tag. | Flux finds no new revision. The next poll fetches the artifact. The step order in the workflow prevents this case. |
 | A person captures a token and sends it again. | The token expires after some minutes. A second reconcile request causes one more poll. |
@@ -334,17 +512,42 @@ Dialogporten publishes one tag for all environments at this time. [Dialogporten 
 Dialogporten in `at23` is the pilot. The pilot needs these changes:
 
 - The action `actions/flux/trigger-reconcile` in this repository: [altinn-platform#4181](https://github.com/Altinn/altinn-platform/pull/4181). The action must also explain the responses `401`, `403` and `429`.
-- The layer `multitenancy` of the package `flux-webhook-receiver`: [gitops-manifests#2005](https://github.com/dis-way/gitops-manifests/pull/2005). The layer `edge` does not exist yet.
-- The Flux configuration for `dis-core-at23` in `dis-way/core`: [core#396](https://github.com/dis-way/core/pull/396).
+- The layer `multitenancy` of the package `flux-webhook-receiver`: [gitops-manifests#2005](https://github.com/dis-way/gitops-manifests/pull/2005). Its route must use the dedicated listener. The layer `edge` does not exist yet.
+- An optional layer in the `traefik` package for the dedicated Service, entrypoint, listener and Linkerd annotation.
+- The cluster and `dis_aks_resources_multitenancy` modules need an explicit enable flag, public addresses and edge source ranges. The feature defaults to disabled.
+- The configuration for `dis-core-at23` in `dis-way/core`: [core#396](https://github.com/dis-way/core/pull/396). Add the dedicated addresses and DNS records, and enable the Traefik layer.
 - The Flux configuration for `dis-edge-at23` in `dis-way/core`. This change does not exist yet. [core#387](https://github.com/dis-way/core/pull/387) deploys the edge route guard to `dis-edge-at23`.
 - The `Receiver` and the workflow step in `Altinn/dialogporten-manifests`: [dialogporten-manifests#89](https://github.com/Altinn/dialogporten-manifests/pull/89). The audience and the address must change to the webhook endpoint on the edge gateway.
+
+Enable the feature for each cluster explicitly. Start with `at23`.
+Create the restricted Service, listener and DNS records before enabling the edge route.
+Enable the workflow step after the following checks pass.
+
+### Pilot acceptance checks
+
+| Check | Required result |
+|---|---|
+| Render the Helm and Kustomize configuration. | The dedicated Service exposes only port 443 to target port 9443. The shared Service has no webhook port. |
+| Examine the rendered listener and route. | Only `flux-system` can attach routes. The webhook route selects only the `flux-webhook` listener. |
+| Omit an edge source range or supply an unrestricted range. | Configuration validation fails before deployment. |
+| Send a valid request through the edge gateway. | Flux accepts the request and reconciles the intended `OCIRepository`. |
+| Send a request without a token or with an incorrect audience through the edge gateway. | The edge gateway rejects it before it reaches Flux. |
+| Send a valid token from a different repository to the same `Receiver`. | The notification-controller rejects it. |
+| Connect from outside the admitted ranges to each dedicated public address with a valid token. | Both IPv4 and IPv6 connections fail before they reach Traefik. |
+| Connect through the edge gateway to each dedicated address. | Both IPv4 and IPv6 connections succeed. The edge gateway verifies the core TLS certificate. |
+| Send the webhook host name and a valid token to each shared public address. | No request reaches the notification-controller. |
+| Check existing product routes and load balancer health probes. | They continue to work. |
+| Disable the workflow step or make the webhook unavailable. | Polling continues to fetch artifacts. |
 
 # Drawbacks
 [drawbacks]: #drawbacks
 
 - The webhook endpoint is on the public platform host name. Through the edge gateway, it connects to a Flux controller in each DIS core cluster.
 - Each reconcile request crosses two gateways. More components can fail, and each component can return an error.
-- In the test and staging environments, a caller can reach the cluster route without the edge gateway. There, the notification-controller must verify each request, also the requests without a valid token.
+- Each participating core cluster needs two public addresses, DNS records and additional load balancer configuration.
+- The platform team must keep the admitted source ranges aligned with the actual edge outbound addresses.
+- The dedicated listener shares Traefik pods and capacity with product ingress. It does not give separate capacity or isolate failures.
+- The source ranges identify edge outbound addresses. They do not identify the Envoy process or block access from inside the core cluster.
 - The edge gateway and each `Receiver` must use the same audience.
 - The platform team must keep the list of admitted GitHub organizations.
 - The feature needs a minimum version of the `microsoft.flux` extension. Azure controls when a cluster gets a new version.
@@ -360,9 +563,9 @@ Dialogporten in `at23` is the pilot. The pilot needs these changes:
 - The cluster continues to pull. The workflow gets no access to the Kubernetes API and no credentials for the cluster.
 - The workflow connects only to the edge gateway, which is the public entry point for the Altinn APIs.
 - The edge gateway rejects a request without a valid token before the request reaches a DIS core cluster.
-- The edge gateway can limit the request rate. The Traefik gateway in DIS core cannot do this at this time, because the multi-tenant Traefik configuration disables the Traefik `Middleware` resources.
-- The production DIS core cluster admits the edge cluster. Thus the design works in production with no change to the load balancer.
-- The design uses standard Flux and Envoy Gateway functions. The platform does not operate a new service.
+- The edge gateway limits the request rate. The multi-tenant Traefik configuration keeps its `kubernetesCRD` provider disabled.
+- The dedicated Service applies the same source restriction in every environment without changing the source ranges of existing product ingress.
+- The design uses standard Flux, Envoy Gateway and Traefik functions. The extra Kubernetes Service needs no custom application.
 - The design uses no shared secret. Thus there is no secret to store, to rotate or to leak.
 - A product team adds and controls its `Receiver`. The platform team does one change for each DIS core cluster and one change for each edge cluster.
 
@@ -370,6 +573,10 @@ Dialogporten in `at23` is the pilot. The pilot needs these changes:
 
 | Alternative | Why not |
 |---|---|
+| The existing shared core listener with only Flux authentication | Public callers in test environments can bypass edge authentication and rate limits. |
+| A Traefik `IPAllowList` Middleware on the shared listener | It requires enabling the `kubernetesCRD` provider. That changes the multi-tenant ingress configuration and needs additional resource controls. |
+| A private core listener | It needs private connectivity and DNS between each edge and core cluster. The selected design uses existing public connectivity. |
+| A separate authentication proxy or ingress controller | It adds an application or controller to operate. The existing gateways and the dedicated Service provide the required controls. |
 | A route directly to the DIS core gateway, without the edge gateway | The production load balancer does not admit the runners. The Traefik gateway cannot limit the request rate. The notification-controller gets all requests from the internet. |
 | A shorter poll interval | It decreases the wait and does not remove it. It needs no new component, and a product can use it together with this feature. |
 | A `Receiver` of the type `generic-hmac` | It needs a shared secret in the cluster and in GitHub. It works with Flux versions before 2.9. |
@@ -387,6 +594,8 @@ Each deployment continues to wait for the poll interval.
 [prior-art]: #prior-art
 
 - [Flux Receivers](https://fluxcd.io/flux/components/notification/receivers/) describes the `Receiver` types and the `generic-oidc` type.
+- [Traefik chart 41.6.1](https://github.com/traefik/traefik-helm-chart/blob/v41.6.1/traefik/templates/service.yaml) creates additional Services and selects ports for each Service.
+- [AKS load balancer source restrictions](https://learn.microsoft.com/en-us/azure/aks/configure-load-balancer-standard#restrict-inbound-traffic-to-specific-ip-ranges) describes `loadBalancerSourceRanges` and the network rules.
 - [`flux trigger receiver`](https://fluxcd.io/flux/cmd/flux_trigger_receiver/) is the Flux command that sends the same request. The action does not use it, because the shared publishing actions install an earlier Flux version.
 - [RFC 0001](0001-pull-based-cd.md) sets the pull model. This RFC keeps that model.
 - [RFC 0015](0015-envoy-gateway-api-edge.md) makes Envoy Gateway in the DIS edge cluster the public API edge for Altinn. This RFC adds one route to that edge.
@@ -402,15 +611,15 @@ Before the team accepts this RFC:
 - Which address must the webhook endpoint use: the path `/flux-webhook` on the platform host name, or a separate host name? A separate host name needs a `ListenerSet`, a DNS record and a certificate.
 - Which rate limit must the edge route use? Must it be one limit for the environment, or one limit for each repository?
 - Which GitHub organizations must the edge gateway admit?
-- Must the cluster route admit only the edge cluster in all environments? At this time, only the production load balancer limits the sources.
-- Must the platform deploy the cluster route to all multi-tenant clusters from `dis_aks_resources_multitenancy`, or to each cluster on request?
-- Must a policy reject a `Receiver` of the type `generic`? That type does no authentication, and the cluster route exposes all `Receiver` resources in the cluster.
+- Must a policy admit only authenticated `Receiver` types? Types such as `generic` and `acr` do no authentication. The cluster route exposes all `Receiver` resources in the cluster.
 
 Before the feature is stable:
 
 - Do all DIS core clusters run the `microsoft.flux` extension 1.26.1 or later? The implementation must examine each cluster before a product adds a `Receiver`.
 - Can the notification-controller and the edge gateway connect to the GitHub token service in all environments?
 - Can the applier service account of a product namespace create a `Receiver`?
+- Do the observed edge outbound addresses match the configured source ranges for both IP families in every participating environment?
+- Do the source restrictions and health probes pass the pilot checks with the deployed AKS networking configuration?
 - Where must the action be after [the action migration](https://github.com/Altinn/altinn-platform/pull/3926): in this repository or in `dis-way/actions`?
 
 Out of scope:
