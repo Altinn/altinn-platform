@@ -1,7 +1,7 @@
 - Feature Name: flux_workflow_notifications
 - Title: Trigger GitHub workflows from Flux reconciliation results
 - Start Date: 2026-10-15
-- RFC PR: Not opened.
+- RFC PR: [altinn/altinn-platform#4214](https://github.com/Altinn/altinn-platform/pull/4214)
 - Github Issue: N/A; implementation issues follow RFC acceptance.
 - Product/Category: CI/CD
 - State: **REVIEW**
