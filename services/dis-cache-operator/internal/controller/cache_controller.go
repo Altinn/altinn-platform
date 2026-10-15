@@ -11,14 +11,18 @@ import (
 	netv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
@@ -61,6 +65,7 @@ type CacheReconciler struct {
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches/status,verbs=patch
 // +kubebuilder:rbac:groups=cache.dis.altinn.cloud,resources=caches/finalizers,verbs=update
 // +kubebuilder:rbac:groups=valkey.io,resources=valkeyclusters,verbs=list;watch;create;patch
+// +kubebuilder:rbac:groups=valkey.io,resources=valkeynodes,verbs=list;watch
 
 // Reconcile creates the objects for a Cache and mirrors the ValkeyCluster
 // readiness into the Cache status. The Secret and the access policies come
@@ -111,7 +116,7 @@ func (r *CacheReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	specMismatch := !usersMatch(desired.Spec.Users, current.Spec.Users)
 
 	// The Secret changes only after the ValkeyCluster lists the matching keys.
-	requeueAfter, err := r.completeRotation(ctx, &cache)
+	requeueAfter, err := r.completeRotation(ctx, &cache, current)
 	if err != nil {
 		return ctrl.Result{}, r.rotationFailed(ctx, &cache, err)
 	}
@@ -216,8 +221,44 @@ func (r *CacheReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&policyv1alpha1.MeshTLSAuthentication{}, generationChanged).
 		Owns(&policyv1alpha1.AuthorizationPolicy{}, generationChanged).
 		Owns(&valkeyv1alpha1.ValkeyCluster{}, builder.WithPredicates(valkeyClusterChanged())).
+		Watches(&valkeyv1alpha1.ValkeyNode{}, handler.EnqueueRequestsFromMapFunc(valkeyNodeToCache),
+			builder.WithPredicates(aclAppliedChanged())).
 		Named("cache").
 		Complete(r)
+}
+
+// valkeyNodeToCache maps a ValkeyNode to the Cache with the same name as its
+// ValkeyCluster. The valkey-operator labels every node with the cluster name,
+// and the operator names the ValkeyCluster after the Cache.
+func valkeyNodeToCache(_ context.Context, obj client.Object) []ctrl.Request {
+	name, ok := obj.GetLabels()[cachepkg.ValkeyClusterLabel]
+	if !ok {
+		return nil
+	}
+
+	return []ctrl.Request{{NamespacedName: types.NamespacedName{Namespace: obj.GetNamespace(), Name: name}}}
+}
+
+// aclAppliedChanged lets a ValkeyNode event through when its ACLApplied
+// condition changed. That is the event a staged password waits for; every
+// other node change is the valkey-operator's business.
+func aclAppliedChanged() predicate.Funcs {
+	aclApplied := func(obj client.Object) *metav1.Condition {
+		node, ok := obj.(*valkeyv1alpha1.ValkeyNode)
+		if !ok {
+			return nil
+		}
+
+		return meta.FindStatusCondition(node.Status.Conditions, valkeyv1alpha1.ValkeyNodeConditionACLApplied)
+	}
+
+	return predicate.Funcs{
+		CreateFunc: func(e event.CreateEvent) bool { return aclApplied(e.Object) != nil },
+		DeleteFunc: func(event.DeleteEvent) bool { return false },
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			return !equality.Semantic.DeepEqual(aclApplied(e.ObjectOld), aclApplied(e.ObjectNew))
+		},
+	}
 }
 
 func valkeyClusterChanged() predicate.Funcs {
