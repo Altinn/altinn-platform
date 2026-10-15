@@ -8,6 +8,8 @@ import (
 func TestPrefix(t *testing.T) {
 	t.Parallel()
 
+	longestPrefix := strings.Repeat("a", maxQueueNameLength-2) + "."
+
 	tests := map[string]struct {
 		namespace   string
 		annotations map[string]string
@@ -24,7 +26,8 @@ func TestPrefix(t *testing.T) {
 		"annotation without separator":       {namespace: "product-team-a", annotations: map[string]string{PrefixAnnotation: "team-a"}, wantErr: true},
 		"annotation starts with a separator": {namespace: "product-team-a", annotations: map[string]string{PrefixAnnotation: ".team-a."}, wantErr: true},
 		"annotation with a space":            {namespace: "product-team-a", annotations: map[string]string{PrefixAnnotation: "team a."}, wantErr: true},
-		"annotation leaves no room":          {namespace: "product-team-a", annotations: map[string]string{PrefixAnnotation: strings.Repeat("a", 259) + "."}, wantErr: true},
+		"annotation at the maximum length":   {namespace: "product-team-a", annotations: map[string]string{PrefixAnnotation: longestPrefix}, want: longestPrefix},
+		"annotation leaves no room":          {namespace: "product-team-a", annotations: map[string]string{PrefixAnnotation: "a" + longestPrefix}, wantErr: true},
 	}
 
 	for name, tt := range tests {
