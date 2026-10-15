@@ -122,11 +122,11 @@ The action reports the response of the webhook endpoint.
 | Response | Source | Meaning | Correction |
 |---|---|---|---|
 | `200` | Flux | Flux accepted the reconcile request. | None. |
-| `400` | Flux | Flux rejected the token. | Compare the audience and the validations of the `Receiver` with the workflow. |
+| `400` | Flux | Flux rejected the token, or Flux could not get the provider configuration or the signing keys from GitHub. | Compare the audience and the validations of the `Receiver` with the workflow. If they match, examine the connection from the notification-controller to GitHub. |
 | `401` | Edge gateway | The token is missing, not valid or expired, or it has a different audience. | Compare the address and the audience with the webhook endpoint of the environment. |
 | `403` | Edge gateway | The token does not identify the `Altinn` GitHub organization. | Run the publishing workflow from a repository in `Altinn`. |
 | `404` | Flux | No `Receiver` has this name and namespace. | Examine the name, the namespace and the address. |
-| `429` | Edge gateway | The request rate is more than the limit. | None. The action tries again, and the next poll fetches the artifact. |
+| `429` | Edge gateway | The request rate of the repository or of the environment is more than its limit. | None. The action tries again, and the next poll fetches the artifact. |
 | `503` | Flux | The `Receiver` is suspended or not ready. | Examine the status of the `Receiver`. |
 
 # Reference-level explanation
@@ -224,7 +224,7 @@ sequenceDiagram
     eg->>lb: 6. forward POST /hook/<digest> with the token
     lb->>gw: 7. admit the edge source address and forward to port 9443
     gw->>nc: 8. forward the request through the dedicated listener
-    nc->>gh: 9. get the signing keys
+    nc->>gh: 9. get the provider configuration and the signing keys
     nc->>nc: 10. verify the token and the validations
     nc->>sc: 11. annotate the OCIRepository
     sc->>acr: 12. fetch the new artifact
@@ -240,12 +240,19 @@ Two components verify each token: the edge gateway and the notification-controll
 
 A `SecurityPolicy` on the edge route does these checks for each reconcile request:
 
-1. It reads the token from the `Authorization: Bearer` header.
+1. It reads the token only from the `Authorization: Bearer` header.
 2. It verifies the signature with the keys from `https://token.actions.githubusercontent.com/.well-known/jwks`.
 3. It verifies the issuer, the expiry time and the audience of the token.
 4. It admits the request only if the `repository_owner_id` claim equals `5949420`, the numeric id of the `Altinn` GitHub organization.
+5. It copies the `repository_id` claim to the header `x-flux-webhook-repository-id` for the rate limit.
 
 The edge gateway forwards the token to the cluster route without a change.
+
+The policy sets `extractFrom` to the `Authorization` header.
+Without `extractFrom`, Envoy also accepts the token in the `access_token` query parameter.
+The notification-controller reads the token only from the header.
+A token in a query parameter can also show in access logs.
+The access logs of the edge gateway and Traefik must not record the `Authorization` header.
 
 ```yaml
 apiVersion: gateway.envoyproxy.io/v1alpha1
@@ -266,6 +273,13 @@ spec:
           - https://platform.at23.altinn.cloud/flux-webhook
         remoteJWKS:
           uri: https://token.actions.githubusercontent.com/.well-known/jwks
+        extractFrom:
+          headers:
+            - name: Authorization
+              valuePrefix: "Bearer "
+        claimToHeaders:
+          - claim: repository_id
+            header: x-flux-webhook-repository-id
   authorization:
     defaultAction: Deny
     rules:
@@ -287,6 +301,22 @@ The `Receiver` has the type `generic-oidc`. This type is available from Flux 2.9
 2. It finds the provider whose `issuerURL` is the same as the `iss` claim of the token.
 3. It verifies the signature, the expiry time and the audience of the token.
 4. It evaluates each Common Expression Language (CEL) expression in `validations` against the claims of the token.
+
+The notification-controller does not cache the provider configuration or the signing keys.
+It gets both from GitHub again for each request to a `Receiver` path with a token that claims the GitHub issuer.
+Thus each such request causes two requests from the DIS core cluster to GitHub.
+The [notification-controller v1.9.4 source](https://github.com/fluxcd/notification-controller/blob/v1.9.4/internal/server/receiver_oidc.go) shows this behaviour.
+
+### Why the edge gateway is the only public path
+
+The edge gateway rejects a request without a valid token before the request reaches a DIS core cluster.
+Thus a request without a valid token does not cause requests from the core cluster to GitHub.
+The rate limits of the edge gateway also limit the requests from the notification-controller to GitHub.
+
+A public path to the notification-controller without the edge gateway removes these two protections.
+Any public caller can then make a core cluster send two requests to GitHub for each request.
+If GitHub limits these requests, valid reconcile requests to all `Receiver` resources in the cluster fail.
+This is the primary reason for the dedicated listener and its source ranges.
 
 ### Why both components verify the token
 
@@ -344,12 +374,48 @@ The edge route guard admits the route only if the annotation of the namespace al
 The target host name resolves to the dedicated public addresses of the cluster route.
 The edge gateway uses that host name for the TLS connection and certificate verification.
 
-A `BackendTrafficPolicy` on the edge route sets a global rate limit:
+A `BackendTrafficPolicy` on the edge route sets two global rate limits:
 
+| Limit | Counter | Function |
+|---|---|---|
+| Repository limit | One counter for each value of the header `x-flux-webhook-repository-id` | Limits the requests from each publishing repository. One repository cannot use the limit of a different repository. |
+| Environment limit | One counter for all requests to the edge route | Limits the total requests to the notification-controller, and from the notification-controller to GitHub. |
+
+- The `SecurityPolicy` copies the `repository_id` claim to the header `x-flux-webhook-repository-id` after it verifies the token.
+- Envoy removes this header from the client request before it verifies the token. A caller cannot select a different counter.
+- The repository rule uses a header selector of the type `Distinct`. Each repository id gets a separate counter.
 - The rate limit service of the edge cluster keeps the counters in Valkey.
 - The policy must set `mergeType`. Without `mergeType`, the route policy replaces the gateway policy, and the route loses the limits and timeouts of the gateway.
-- Envoy verifies the token and the organization before it applies the rate limit. A request without a valid token does not use the limit.
+- Envoy verifies the token and the organization before it applies the rate limits. A request without a valid token does not use a limit.
 - The rate limiter fails open. If Valkey is not available, the edge gateway forwards each request that has a valid token.
+- Valkey has one replica and no persistent storage. A restart of Valkey sets all counters to zero. The limits are not a hard bound.
+
+```yaml
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: flux-webhook-rate-limit
+  namespace: flux-webhook
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: flux-webhook
+  mergeType: StrategicMerge
+  rateLimit:
+    global:
+      rules:
+        - clientSelectors:
+            - headers:
+                - name: x-flux-webhook-repository-id
+                  type: Distinct
+          limit:
+            requests: <repository limit>
+            unit: Minute
+        - limit:
+            requests: <environment limit>
+            unit: Minute
+```
 
 ## Dedicated core listener
 
@@ -506,9 +572,14 @@ Dialogporten publishes one tag for all environments at this time. [Dialogporten 
 | The cluster runs a Flux version before 2.9. | The API server rejects the `Receiver`. The syncroot `Kustomization` fails until the product removes the `Receiver`. |
 | The token is missing, expired or not valid. | The edge gateway returns `401`. The request does not reach the DIS core cluster. |
 | The repository is outside the `Altinn` GitHub organization. | The edge gateway returns `403`. The request does not reach the DIS core cluster. |
-| Workflows send more requests than the limit. | The edge gateway returns `429`. The next poll fetches the artifact. |
+| A repository sends more requests than the repository limit. | The edge gateway returns `429` to that repository. Requests from other repositories continue. |
+| All repositories together send more requests than the environment limit. | The edge gateway returns `429`. The next poll fetches the artifact. |
+| A caller sends a false `x-flux-webhook-repository-id` header. | Envoy removes the header. The repository limit uses the `repository_id` claim of the token. |
+| A caller sends the token in the `access_token` query parameter. | The edge gateway returns `401`. It reads the token only from the `Authorization` header. |
 | Valkey is not available. | The rate limiter fails open. The edge gateway and the notification-controller continue to verify each token. |
+| Valkey restarts. | All counters start again from zero. |
 | The edge gateway cannot get the signing keys from GitHub. | The edge gateway rejects the request. The next poll fetches the artifact. |
+| The notification-controller cannot get the provider configuration or the signing keys from GitHub. | Flux returns `400`. The next poll fetches the artifact. |
 | The edge gateway is not available. | The action reports an error. The next poll fetches the artifact. |
 | A public caller connects directly to the dedicated core address. | The source ranges block the connection unless the caller uses an admitted edge outbound address. |
 | A caller sends the webhook host name to the shared core address. | No route forwards the request to Flux. |
@@ -547,6 +618,10 @@ Enable the workflow step after the following checks pass.
 | Send a request without a token or with an incorrect audience through the edge gateway. | The edge gateway rejects it before it reaches Flux. |
 | Send a valid token from a repository outside `Altinn` through the edge gateway. | The edge gateway returns `403` before the request reaches Flux. |
 | Send a valid token from a different Altinn repository to the same `Receiver`. | The notification-controller rejects it. |
+| Send a valid token in the `access_token` query parameter without an `Authorization` header. | The edge gateway returns `401`. |
+| Send more requests from one repository than the repository limit. | The edge gateway returns `429` to that repository. A request from a different repository succeeds. |
+| Send requests with a false `x-flux-webhook-repository-id` header. | The repository limit counts each request for the repository in the token. |
+| Examine the access logs of the edge gateway and Traefik after a reconcile request. | No log entry contains the `Authorization` header or the token. |
 | Connect from outside the admitted ranges to each dedicated public address with a valid token. | Both IPv4 and IPv6 connections fail before they reach Traefik. |
 | Connect through the edge gateway to each dedicated address. | Both IPv4 and IPv6 connections succeed. The edge gateway verifies the core TLS certificate. |
 | Send the webhook host name and a valid token to each shared public address. | No request reaches the notification-controller. |
@@ -565,6 +640,7 @@ Enable the workflow step after the following checks pass.
 - The edge gateway and each `Receiver` must use the same audience.
 - The feature needs a minimum version of the `microsoft.flux` extension. Azure controls when a cluster gets a new version.
 - The edge gateway and the notification-controller need a connection to GitHub to verify a token.
+- The notification-controller does not cache the provider configuration or the signing keys. Each reconcile request causes two requests to GitHub.
 - Each product must add a `Receiver` and a workflow step.
 - A failed reconcile request is easy to miss, because the deployment continues.
 
@@ -576,7 +652,7 @@ Enable the workflow step after the following checks pass.
 - The cluster continues to pull. The workflow gets no access to the Kubernetes API and no credentials for the cluster.
 - The workflow connects only to the edge gateway, which is the public entry point for the Altinn APIs.
 - The edge gateway rejects a request without a valid token before the request reaches a DIS core cluster.
-- The edge gateway limits the request rate. The multi-tenant Traefik configuration keeps its `kubernetesCRD` provider disabled.
+- The edge gateway limits the request rate for each repository and for the environment. The multi-tenant Traefik configuration keeps its `kubernetesCRD` provider disabled.
 - The dedicated Service applies the same source restriction in every environment without changing the source ranges of existing product ingress.
 - The design uses standard Flux, Envoy Gateway and Traefik functions. The extra Kubernetes Service needs no custom application.
 - The design uses no shared secret. Thus there is no secret to store, to rotate or to leak.
@@ -586,7 +662,7 @@ Enable the workflow step after the following checks pass.
 
 | Alternative | Why not |
 |---|---|
-| The existing shared core listener with only Flux authentication | Public callers in test environments can bypass edge authentication and rate limits. |
+| The existing shared core listener with only Flux authentication | Public callers in test environments can bypass edge authentication and rate limits. Each of their requests can cause two requests from the core cluster to GitHub. |
 | A Traefik `IPAllowList` Middleware on the shared listener | It requires enabling the `kubernetesCRD` provider. That changes the multi-tenant ingress configuration and needs additional resource controls. |
 | A private core listener | It needs private connectivity and DNS between each edge and core cluster. The selected design uses existing public connectivity. |
 | A separate authentication proxy or ingress controller | It adds an application or controller to operate. The existing gateways and the dedicated Service provide the required controls. |
@@ -622,7 +698,7 @@ Each deployment continues to wait for the poll interval.
 Before the team accepts this RFC:
 
 - Which address must the webhook endpoint use: the path `/flux-webhook` on the platform host name, or a separate host name? A separate host name needs a `ListenerSet`, a DNS record and a certificate.
-- Which rate limit must the edge route use? Must it be one limit for the environment, or one limit for each repository?
+- Which values must the repository limit and the environment limit use?
 - Must a policy admit only authenticated `Receiver` types? Types such as `generic` and `acr` do no authentication. The cluster route exposes all `Receiver` resources in the cluster.
 
 Before the feature is stable:
