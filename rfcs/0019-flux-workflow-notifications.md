@@ -9,23 +9,25 @@
 # Summary
 [summary]: #summary
 
-Flux sends reconciliation events directly to product repositories through its notification-controller and the `githubdispatch` provider. Product workflows use the result and environment to start end-to-end tests or report failures. Each event identifies the product, cluster, resource and available release information. This completes the reverse direction of [RFC 0017](https://github.com/Altinn/altinn-platform/pull/4180). The design requires a verified Flux fix before rollout, because the inspected notification-controller filters out the final success event. Delivery is best effort, and workflows must tolerate missing, repeated and late events.
+Flux sends reconciliation events directly to product repositories through its notification-controller and the `githubdispatch` provider. After a deployment succeeds or a reconciliation attempt fails, product-owned GitHub workflows run the required follow-up jobs. Examples include Slack notifications, end-to-end tests and Bruno tests. Each event identifies the product, environment, cluster, resource and available release information. This completes the reverse direction of [RFC 0017](https://github.com/Altinn/altinn-platform/pull/4180). The design requires a verified Flux fix before rollout, because the inspected notification-controller filters out the final success event. Delivery is best effort, and workflows must tolerate missing, repeated and late events.
 
 # Motivation
 [motivation]: #motivation
 
-A publishing workflow finishes before Flux finishes the application rollout. A fixed delay can start tests against the previous release. A long delay also wastes time after a fast rollout.
+A publishing workflow finishes before Flux finishes the application rollout. Product teams need the deployment result before they run follow-up jobs. A fixed delay can start tests against the previous release. A long delay also wastes time after a fast rollout.
 
 RFC 0017 lets GitHub request a reconcile after it publishes an artifact. That request does not report the result. This RFC sends the result from Flux to GitHub, including reconciles that start through polling or manual requests.
 
-The initial use cases are:
+Example use cases are:
 
-- Start the staging tests when the application reconciles successfully in staging.
-- Start the test environment tests when the application reconciles successfully in that environment.
-- Report a failed reconciliation with the resource, revision and failure details.
-- Let Dialogporten and Authentication select their own workflows in their own repositories.
+- Send a Slack message when a deployment fails, with the environment, revision and failure details.
+- Run end-to-end tests when a deployment succeeds.
+- Run Bruno tests or other application checks when a deployment succeeds.
+- Run any other product-owned GitHub workflow jobs selected by the deployment result and environment.
 
-The expected outcome is a workflow that starts soon after Flux reports the result. GitHub queue time and runner availability still affect the start time. No workflow needs access to the Kubernetes application programming interface (API).
+These examples do not limit the supported workflow jobs. Dialogporten, Authentication and other products choose the jobs in their own repositories. Adding a new follow-up job does not require a change to the platform event integration.
+
+The expected outcome is a workflow that starts soon after Flux reports the result. GitHub queue time and runner availability still affect the start time. A workflow receives the result without access to the Kubernetes application programming interface (API).
 
 # Guide-level explanation
 [guide-level-explanation]: #guide-level-explanation
@@ -50,16 +52,15 @@ flowchart LR
     nc -->|"githubdispatch: result and metadata"| auth["Authentication repository"]
     dp --> dpjobs["Product workflows"]
     auth --> route{"Result and environment"}
-    route -->|"Success: staging"| staging["Staging end-to-end tests"]
-    route -->|"Success: test"| test["Test environment end-to-end tests"]
-    route -->|"Failure"| failure["Failure workflow"]
+    route -->|"Success"| success["Success workflows: end-to-end tests, Bruno tests, other jobs"]
+    route -->|"Failure"| failure["Failure workflows: Slack notifications, other jobs"]
 ```
 
 Each arrow to GitHub represents a separate subscription. A product event goes only to the repository configured by that subscription.
 
-For example, Authentication version `1.0.0` finishes reconciliation in staging at 13:05. GitHub receives the event and starts the staging tests when a runner is available. The test environment job does not run. A reconciliation failure starts the failure workflow instead.
+For example, Authentication version `1.0.0` finishes reconciliation in staging at 13:05. GitHub receives the event and starts the configured staging jobs when a runner is available. These jobs can run end-to-end tests, Bruno tests and other tasks. Jobs for the test environment do not run. If the deployment fails, a failure workflow can send a Slack message with the failure details.
 
-The platform sends one event to the repository. The product owns the workflow selection inside that repository. The platform does not select a workflow filename or a Git branch.
+The platform sends one event to the repository. The product owns the workflow selection, job logic, test tools and notification destinations inside that repository. The platform does not select a workflow filename or a Git branch.
 
 The event starts a new workflow run. It does not resume the workflow that requested reconciliation. Correlation uses the artifact revision, because the RFC 0017 request contains no deployment data.
 
@@ -70,7 +71,7 @@ The event starts a new workflow run. It does not resume the workflow that reques
 3. Register the destination repository and its GitHub App credentials with the platform team.
 4. Add the Provider and Alert to the product syncroot.
 5. Add the receiving workflow to the destination repository's default branch.
-6. Validate both success and failure events before enabling the tests.
+6. Validate both success and failure events before enabling the follow-up jobs.
 
 The examples use illustrative Authentication resource names and cluster names. They are not verified deployment configuration.
 
@@ -153,13 +154,20 @@ spec:
   timeout: 5m
 ```
 
-The product must include every workload needed by its tests. A parent Kustomization that creates child Kustomizations is not sufficient unless its health checks cover those children. A downloaded OCI artifact does not prove application readiness. End-to-end tests remain separate from Flux health checks.
+The product must include every workload required for a completed application rollout. A parent Kustomization that creates child Kustomizations is not sufficient unless its health checks cover those children. A downloaded OCI artifact does not prove application readiness. End-to-end tests and Bruno tests run as follow-up jobs, separate from Flux health checks.
 
 ## Receive the event in GitHub
 
 The native Provider derives `event_type` from the resource: `{Kind}/{Name}.{Namespace}`. It puts the Flux event in `client_payload`. It does not support a custom event name such as `deployment-succeeded`.
 
-The following workflow shows environment routing. It assumes a product-owned `e2e.yml` reusable workflow with `environment` and `expected_revision` inputs. That workflow verifies the running release before testing it. The cluster names and App sender identifier must match the subscription.
+The following workflow shows result and environment routing. It assumes two product-owned reusable workflows:
+
+| Workflow | Inputs | Example jobs |
+|---|---|---|
+| `deployment-succeeded.yml` | `environment`, `expected_revision` | End-to-end tests, Bruno tests and other tasks after success. |
+| `deployment-failed.yml` | `environment`, `flux_event` | A Slack notification with the failure details, or other tasks after failure. |
+
+These filenames are examples. Each product supplies its workflows, job configuration and required credentials. Jobs that test the running application verify its release before testing. The cluster names and App sender identifier must match the subscription.
 
 ```yaml
 name: Application reconciled
@@ -215,33 +223,29 @@ jobs:
             core.setOutput('environment', m.environment);
             core.setOutput('revision', m.revision ?? '');
 
-  e2e-staging:
+  success-staging:
     needs: classify
     if: needs.classify.outputs.outcome == 'succeeded' && needs.classify.outputs.environment == 'staging'
-    uses: ./.github/workflows/e2e.yml
+    uses: ./.github/workflows/deployment-succeeded.yml
     with:
       environment: staging
       expected_revision: ${{ needs.classify.outputs.revision }}
 
-  e2e-test:
+  success-test:
     needs: classify
     if: needs.classify.outputs.outcome == 'succeeded' && needs.classify.outputs.environment == 'test'
-    uses: ./.github/workflows/e2e.yml
+    uses: ./.github/workflows/deployment-succeeded.yml
     with:
       environment: test
       expected_revision: ${{ needs.classify.outputs.revision }}
 
-  report-failure:
+  failure:
     needs: classify
     if: needs.classify.outputs.outcome == 'failed'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        with:
-          script: |
-            const e = context.payload.client_payload;
-            core.info(JSON.stringify({reason: e.reason, message: e.message, metadata: e.metadata}));
-            core.setFailed('Flux reported a failed reconciliation attempt');
+    uses: ./.github/workflows/deployment-failed.yml
+    with:
+      environment: ${{ needs.classify.outputs.environment }}
+      flux_event: ${{ toJSON(github.event.client_payload) }}
 ```
 
 The receiving workflow must exist on the default branch. `github.sha` identifies that branch's commit, not the deployed application commit. A checkout at the deployed application commit requires a separate, validated application commit value.
@@ -273,11 +277,11 @@ These findings follow the [success event implementation](https://github.com/flux
 
 | Event | Consumer result | Action |
 |---|---|---|
-| Application Kustomization, `ReconciliationSucceeded`, severity `info` | `succeeded` | Run the tests for the configured environment after release verification. |
-| Application Kustomization, severity `error` | `failed` | Report the failed attempt and its reason. |
-| Selected OCIRepository, severity `error` | `failed` | Report a source failure. The attempted artifact can be unknown. |
+| Application Kustomization, `ReconciliationSucceeded`, severity `info` | `succeeded` | Run the product's success jobs for the configured environment. |
+| Application Kustomization, severity `error` | `failed` | Run the product's failure jobs with the failed attempt and its reason. |
+| Selected OCIRepository, severity `error` | `failed` | Run the product's failure jobs for a source failure. The attempted artifact can be unknown. |
 | `DependencyNotReady` with severity `info` | `ignored` | Flux is waiting. Do not report successful deployment. |
-| Progress, resource changes or source success | `ignored` | Do not start the tests. |
+| Progress, resource changes or source success | `ignored` | Do not start deployment result jobs. |
 | An unknown schema, sender, resource or environment | Invalid | Reject the event and report the configuration error. |
 
 Failures can include `HealthCheckFailed`, `BuildFailed` and `ReconciliationFailed`. Consumers preserve the actual reason instead of requiring a fixed failure list. A failure describes one attempt. Flux can retry the same revision and later report success.
@@ -393,13 +397,13 @@ The native Provider does not provide a durable event queue, an event replay API 
 
 Flux event rate limiting reduces some repeated notifications. It is not deployment deduplication. GitHub concurrency groups also do not suppress events after a previous run completes.
 
-Initially, repeated end-to-end tests are acceptable. Tests must leave the environment safe for another run. Workflows that perform non-repeatable actions need durable deduplication before onboarding.
+Each product defines how its jobs handle repeated events. Notifications can suppress repeated Slack messages, and tests must leave the environment safe for another run. Workflows that perform non-repeatable actions need durable deduplication before onboarding.
 
 For such consumers, a deduplication key includes the cluster, resource identity, artifact revision, outcome and consumer. Failure and success must use different keys. Missing revisions must not collapse unrelated failures into one key.
 
-The product must verify the running release before and after its tests. It can use an application version endpoint and its trusted artifact-to-release mapping. A mismatch makes the result stale; it must not certify another release. Exact validation across concurrent deployments requires product-level deployment serialization or a separate deployment tracking design.
+Notification jobs can report historical results with the event time and revision. Jobs that act on the current environment must verify that the event still applies. Test jobs must verify the running release before and after their tests. They can use an application version endpoint and a trusted artifact-to-release mapping. A mismatch makes the result stale; it must not certify another release. Exact validation across concurrent deployments requires product-level deployment serialization or a separate deployment tracking design.
 
-No delivery promise depends on a particular retry count. The implementation must measure the supported controller's behavior during GitHub failures. Automatic rollback, promotion and completion of the publishing workflow are outside this initial scope.
+No delivery promise depends on a particular retry count. The implementation must measure the supported controller's behavior during GitHub failures. This RFC defines the event trigger and its contract. Products define the downstream job logic in GitHub, including tests, notifications and other actions.
 
 ## Ownership and rollout
 
@@ -418,13 +422,13 @@ The rollout sequence is:
 1. Verify the Flux fix in the supported distribution.
 2. Verify namespace isolation, credentials, network policy and outbound connectivity.
 3. Pilot Authentication in one non-production environment with a workflow that only records events.
-4. Add end-to-end tests after the event contract passes validation.
+4. Enable the product's success and failure jobs after the event contract passes validation.
 5. Add the second environment and Dialogporten.
 6. Expand to other products after the platform and product teams review the pilot.
 
 Suspend the Alerts to stop dispatches during rollback. Application reconciliation continues. Revoke the App credentials if access must stop immediately.
 
-Monitor `NotificationDispatchFailed` events, controller errors, credential failures and event rate limiting. Keep resource readiness alerts independent from GitHub delivery. A successful workflow can report test results through the product's existing reporting mechanism.
+Monitor `NotificationDispatchFailed` events, controller errors, credential failures and event rate limiting. Keep resource readiness alerts independent from GitHub delivery. Products monitor their follow-up jobs and report their results through their existing mechanisms.
 
 ## Implementation validation
 
@@ -433,11 +437,13 @@ These are rollout acceptance checks, not checks completed by this documentation 
 | Check | Required result |
 |---|---|
 | Reconcile a healthy application on the deployed Flux versions | GitHub receives the final `ReconciliationSucceeded` event with its artifact revision. |
-| Keep old replicas healthy while the replacement fails | Required health checks fail. No success-triggered tests start for the failed rollout. |
+| Keep old replicas healthy while the replacement fails | Required health checks fail. No success jobs start for the failed rollout. |
 | Cause a build error and a health-check timeout | The failure workflow receives the actual reason and available revision. |
-| Recover the same revision after failure | The success event remains eligible for tests. |
+| Configure a Slack notification for failure | A failed deployment starts the notification job with the correct environment and failure details. |
+| Configure end-to-end tests, Bruno tests and another success job | A successful deployment starts all configured jobs. The platform configuration does not depend on their tools. |
+| Recover the same revision after failure | The success event remains eligible for the success jobs. |
 | Fail the OCI source before an artifact exists | The source failure remains useful without a revision. |
-| Publish distinct staging and test releases | Only the corresponding environment's test job runs. |
+| Publish distinct staging and test releases | Only the corresponding environment's follow-up jobs run. |
 | Repeat a reconciliation and restart notification-controller | Consumers tolerate repeated or missing events. |
 | Publish two releases while a workflow waits for a runner | The older event cannot certify the newer release. |
 | Send a payload with stale application annotations | The consumer rejects the application version and commit mapping. |
@@ -452,7 +458,7 @@ These are rollout acceptance checks, not checks completed by this documentation 
 - Rollout depends on an upstream Flux fix and its availability in the supported distribution.
 - Native events expose Flux resource names and reasons to product workflows.
 - Best-effort delivery cannot replace a durable deployment history or guarantee a result for every release.
-- Repeated reconciliations can create additional workflow runs and test costs.
+- Repeated reconciliations can create additional workflow runs, notification noise and job costs.
 - A dedicated GitHub App per product adds credential administration.
 - GitHub requires `Contents: write`, which grants more access than dispatch alone needs.
 - Incorrect health checks or stale release metadata can produce misleading test results.
@@ -460,7 +466,7 @@ These are rollout acceptance checks, not checks completed by this documentation 
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
 
-The direct path follows the proposed architecture and uses the existing notification-controller. Product repositories keep control of their tests and failure workflows. An upstream compatibility fix is preferable to a new platform service for this initial scope.
+The direct path follows the proposed architecture and uses the existing notification-controller. Product repositories keep control of all jobs that follow a deployment result. An upstream compatibility fix is preferable to a new platform service for this initial scope.
 
 | Alternative | Assessment |
 |---|---|
@@ -470,10 +476,10 @@ The direct path follows the proposed architecture and uses the existing notifica
 | Flux's `github` commit-status Provider | Updates commit status. A manifest commit can belong to a different repository from the application workflow. |
 | Central Providers and Alerts with a shared App key | Keeps the key outside product namespaces, but needs cross-namespace event selection and an explicit authorization design. |
 | Repository-scoped installation tokens in product namespaces | Avoids multiple App registrations, but requires a platform token renewal mechanism. The shared App private key must remain protected. |
-| Durable deployment tracking and polling | Supports exact attempts and reliable completion. It is a larger contract than event-triggered tests. |
+| Durable deployment tracking and polling | Supports exact attempts and reliable completion. It is a larger contract than triggering follow-up workflows. |
 | Fixed waits or scheduled tests | Needs no new event integration, but delays tests and does not establish which release they test. |
 
-Without this feature, products continue to wait, poll or start tests independently of reconciliation results.
+Without this feature, products continue to wait, poll or start follow-up jobs independently of reconciliation results.
 
 # Prior art
 [prior-art]: #prior-art
@@ -492,7 +498,7 @@ Without this feature, products continue to wait, poll or start tests independent
 
 Before the team accepts this RFC:
 
-- Does the platform accept best-effort delivery for the initial end-to-end test use case?
+- Does best-effort delivery meet the requirements of the pilot's notifications, tests and other follow-up jobs?
 - Does the platform accept dedicated product Apps, or must it provide repository-scoped token renewal before onboarding?
 - Which Authentication resource and environment form the first pilot?
 
@@ -507,7 +513,7 @@ Before rollout:
 Out of scope:
 
 - Exactly-once processing, durable replay and a deployment history API.
-- Automatic rollback or promotion.
+- Implementing or standardizing product-owned workflow jobs.
 - A guarantee that every intermediate published artifact reaches the cluster.
 - Completing the publishing workflow from the asynchronous result.
 
