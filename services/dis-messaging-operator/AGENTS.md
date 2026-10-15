@@ -60,7 +60,7 @@ Before opening a PR, ensure:
 
 ## PR description file
 - When working on a branch and making changes, always create or update `pr_description.md` in the repository root.
-- `pr_description.md` must contain an `ASCII Diagram` section.
+- `pr_description.md` must contain a `Diagram` section with a Mermaid diagram in a `mermaid` code block. Do not use ASCII diagrams.
 - Do not add extra sections (for example test-delta summaries) unless explicitly requested by the user.
 - Keep this file in sync as the branch evolves so it is ready to use in the PR.
 
