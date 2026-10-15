@@ -5,3 +5,6 @@ metadata:
   namespace: product-dis
 spec:
   size: small
+  passwordRotation:
+    requestedAt: "2026-10-15T12:07:33Z"
+    previousValidFor: 15m
