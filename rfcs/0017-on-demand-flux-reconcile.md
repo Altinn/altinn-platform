@@ -80,7 +80,7 @@ spec:
     - issuerURL: https://token.actions.githubusercontent.com
       audience: https://platform.at23.altinn.cloud/flux-webhook
       validations:
-        - expression: claims.repository_owner_id == '<organization id>' && claims.repository_id == '<repository id>'
+        - expression: claims.repository_owner_id == '5949420' && claims.repository_id == '<repository id>'
           message: token is not issued to the publishing repository
         - expression: claims.ref == 'refs/heads/main'
           message: token is not issued for the main branch
@@ -112,7 +112,7 @@ The job must have the permission `id-token: write`.
 - Use the webhook endpoint as the audience in the `Receiver`. The action uses the same value as the audience of the token.
 - Name only the `OCIRepository` in the `Receiver`. Flux reconciles the `Kustomization` when the `OCIRepository` reports a new revision.
 - Use the numeric repository id and organization id in the validations. A different repository can get a name again after a rename or a transfer.
-- Publish from a GitHub organization that the edge gateway admits. Ask the platform team to add a new organization.
+- Publish from a repository in the `Altinn` GitHub organization. The edge gateway admits only this organization, with the numeric id `5949420`.
 - The reconcile request does not report the deployment result.
 
 ## Error messages
@@ -124,7 +124,7 @@ The action reports the response of the webhook endpoint.
 | `200` | Flux | Flux accepted the reconcile request. | None. |
 | `400` | Flux | Flux rejected the token. | Compare the audience and the validations of the `Receiver` with the workflow. |
 | `401` | Edge gateway | The token is missing, not valid or expired, or it has a different audience. | Compare the address and the audience with the webhook endpoint of the environment. |
-| `403` | Edge gateway | The edge gateway does not admit the GitHub organization of the repository. | Ask the platform team to add the organization. |
+| `403` | Edge gateway | The token does not identify the `Altinn` GitHub organization. | Run the publishing workflow from a repository in `Altinn`. |
 | `404` | Flux | No `Receiver` has this name and namespace. | Examine the name, the namespace and the address. |
 | `429` | Edge gateway | The request rate is more than the limit. | None. The action tries again, and the next poll fetches the artifact. |
 | `503` | Flux | The `Receiver` is suspended or not ready. | Examine the status of the `Receiver`. |
@@ -243,7 +243,7 @@ A `SecurityPolicy` on the edge route does these checks for each reconcile reques
 1. It reads the token from the `Authorization: Bearer` header.
 2. It verifies the signature with the keys from `https://token.actions.githubusercontent.com/.well-known/jwks`.
 3. It verifies the issuer, the expiry time and the audience of the token.
-4. It admits the request only if the `repository_owner_id` claim is in the list of admitted organizations.
+4. It admits the request only if the `repository_owner_id` claim equals `5949420`, the numeric id of the `Altinn` GitHub organization.
 
 The edge gateway forwards the token to the cluster route without a change.
 
@@ -269,7 +269,7 @@ spec:
   authorization:
     defaultAction: Deny
     rules:
-      - name: admitted-organizations
+      - name: altinn-only
         action: Allow
         principal:
           jwt:
@@ -287,6 +287,19 @@ The `Receiver` has the type `generic-oidc`. This type is available from Flux 2.9
 2. It finds the provider whose `issuerURL` is the same as the `iss` claim of the token.
 3. It verifies the signature, the expiry time and the audience of the token.
 4. It evaluates each Common Expression Language (CEL) expression in `validations` against the claims of the token.
+
+### Why both components verify the token
+
+The edge gateway admits the `Altinn` organization. It does not authorize a repository or branch for a specific `Receiver`.
+A workflow in another Altinn repository can request the same audience and send a request to that `Receiver`.
+The repository and branch validations of the `Receiver` reject this request.
+
+The `generic-oidc` `Receiver` verifies the signed token before it uses the claims for authorization.
+It does not trust a request only because the request passes through the edge gateway.
+This also protects the `Receiver` from unauthorized requests through an admitted edge address or from inside the core cluster.
+
+Moving authorization to the edge gateway requires a repository and branch policy for each receiver path.
+This design keeps that policy in the product's `Receiver` resource.
 
 ### Token
 
@@ -492,7 +505,7 @@ Dialogporten publishes one tag for all environments at this time. [Dialogporten 
 | The `Receiver` does not exist yet. | Flux returns `404`. The next poll fetches the artifact. |
 | The cluster runs a Flux version before 2.9. | The API server rejects the `Receiver`. The syncroot `Kustomization` fails until the product removes the `Receiver`. |
 | The token is missing, expired or not valid. | The edge gateway returns `401`. The request does not reach the DIS core cluster. |
-| The repository is in an organization that the edge gateway does not admit. | The edge gateway returns `403`. The request does not reach the DIS core cluster. |
+| The repository is outside the `Altinn` GitHub organization. | The edge gateway returns `403`. The request does not reach the DIS core cluster. |
 | Workflows send more requests than the limit. | The edge gateway returns `429`. The next poll fetches the artifact. |
 | Valkey is not available. | The rate limiter fails open. The edge gateway and the notification-controller continue to verify each token. |
 | The edge gateway cannot get the signing keys from GitHub. | The edge gateway rejects the request. The next poll fetches the artifact. |
@@ -532,7 +545,8 @@ Enable the workflow step after the following checks pass.
 | Omit an edge source range or supply an unrestricted range. | Configuration validation fails before deployment. |
 | Send a valid request through the edge gateway. | Flux accepts the request and reconciles the intended `OCIRepository`. |
 | Send a request without a token or with an incorrect audience through the edge gateway. | The edge gateway rejects it before it reaches Flux. |
-| Send a valid token from a different repository to the same `Receiver`. | The notification-controller rejects it. |
+| Send a valid token from a repository outside `Altinn` through the edge gateway. | The edge gateway returns `403` before the request reaches Flux. |
+| Send a valid token from a different Altinn repository to the same `Receiver`. | The notification-controller rejects it. |
 | Connect from outside the admitted ranges to each dedicated public address with a valid token. | Both IPv4 and IPv6 connections fail before they reach Traefik. |
 | Connect through the edge gateway to each dedicated address. | Both IPv4 and IPv6 connections succeed. The edge gateway verifies the core TLS certificate. |
 | Send the webhook host name and a valid token to each shared public address. | No request reaches the notification-controller. |
@@ -549,7 +563,6 @@ Enable the workflow step after the following checks pass.
 - The dedicated listener shares Traefik pods and capacity with product ingress. It does not give separate capacity or isolate failures.
 - The source ranges identify edge outbound addresses. They do not identify the Envoy process or block access from inside the core cluster.
 - The edge gateway and each `Receiver` must use the same audience.
-- The platform team must keep the list of admitted GitHub organizations.
 - The feature needs a minimum version of the `microsoft.flux` extension. Azure controls when a cluster gets a new version.
 - The edge gateway and the notification-controller need a connection to GitHub to verify a token.
 - Each product must add a `Receiver` and a workflow step.
@@ -610,7 +623,6 @@ Before the team accepts this RFC:
 
 - Which address must the webhook endpoint use: the path `/flux-webhook` on the platform host name, or a separate host name? A separate host name needs a `ListenerSet`, a DNS record and a certificate.
 - Which rate limit must the edge route use? Must it be one limit for the environment, or one limit for each repository?
-- Which GitHub organizations must the edge gateway admit?
 - Must a policy admit only authenticated `Receiver` types? Types such as `generic` and `acr` do no authentication. The cluster route exposes all `Receiver` resources in the cluster.
 
 Before the feature is stable:
