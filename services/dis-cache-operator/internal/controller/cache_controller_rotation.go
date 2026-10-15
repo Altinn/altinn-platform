@@ -310,7 +310,14 @@ func (r *CacheReconciler) recordStageWith(ctx context.Context, cache *cachev1alp
 }
 
 // restagePassword writes a fresh password under the next key and moves the
-// stage time. The status goes first: a transition before the new stage time
+// stage time.
+//
+// Known limit: a fresh stage does not change the ValkeyCluster generation,
+// so the processed check still holds from the first stage. A node whose
+// mount stayed stale for the first value longer than restageAfter can flip
+// in the seconds before the valkey-operator builds the fresh ACL, and that
+// flip counts. The ACL revision in the valkey-operator status closes this;
+// until then the window stays open on purpose. The status goes first: a transition before the new stage time
 // must not count for the fresh value, also when the patch or a later status
 // write fails. A failed patch then only delays the rotation. The stage time
 // moves the staged-time annotation on the ValkeyCluster in the next
