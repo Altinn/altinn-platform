@@ -86,6 +86,12 @@ var _ = Describe("Queue CRD schema", func() {
 		}))
 	})
 
+	It("admits a lockDuration of exactly PT5M written in seconds", func() {
+		createQueue(newQueue("lock-max", func(q *messagingv1alpha1.Queue) {
+			q.Spec.LockDuration = ptr.To(messagingv1alpha1.ISODuration("PT4M60S"))
+		}))
+	})
+
 	DescribeTable("rejects an invalid Queue",
 		func(mutate func(*messagingv1alpha1.Queue), message string) {
 			err := k8sClient.Create(ctx, newQueue("invalid", mutate))
@@ -101,6 +107,12 @@ var _ = Describe("Queue CRD schema", func() {
 		Entry("a duration without a value", func(q *messagingv1alpha1.Queue) {
 			q.Spec.LockDuration = ptr.To(messagingv1alpha1.ISODuration("PT"))
 		}, "duration must have at least one value"),
+		Entry("a lockDuration above PT5M", func(q *messagingv1alpha1.Queue) {
+			q.Spec.LockDuration = ptr.To(messagingv1alpha1.ISODuration("PT4M60.5S"))
+		}, "lockDuration must use minutes and seconds only and be at most PT5M"),
+		Entry("a lockDuration in hours", func(q *messagingv1alpha1.Queue) {
+			q.Spec.LockDuration = ptr.To(messagingv1alpha1.ISODuration("PT1H"))
+		}, "lockDuration must use minutes and seconds only and be at most PT5M"),
 		Entry("a duration that is not ISO 8601", func(q *messagingv1alpha1.Queue) {
 			q.Spec.DefaultMessageTimeToLive = ptr.To(messagingv1alpha1.ISODuration("1h"))
 		}, "spec.defaultMessageTimeToLive"),

@@ -159,11 +159,17 @@ spec:
               lockDuration:
                 description: |-
                   lockDuration is how long a received message stays locked for the
-                  receiver. Azure allows up to PT5M.
+                  receiver. Use minutes and seconds only. Azure allows up to PT5M.
                 maxLength: 64
                 pattern: ^P(\d+D)?(T(\d+H)?(\d+M)?(\d+(\.\d+)?S)?)?$
                 type: string
                 x-kubernetes-validations:
+                - message: lockDuration must use minutes and seconds only and be at
+                    most PT5M, for example PT1M or PT30S
+                  rule: 'self.matches(''^PT([0-9]+M)?([0-9]+([.][0-9]+)?S)?$'') &&
+                    (self.find(''[0-9]+M'') == '''' ? 0.0 : double(self.find(''[0-9]+M'').replace(''M'',
+                    '''')) * 60.0) + (self.find(''[0-9.]+S'') == '''' ? 0.0 : double(self.find(''[0-9.]+S'').replace(''S'',
+                    ''''))) <= 300.0'
                 - message: duration must have at least one value, for example PT1M
                   rule: '!self.endsWith(''P'') && !self.endsWith(''T'')'
               maxDeliveryCount:

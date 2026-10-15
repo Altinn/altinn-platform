@@ -118,8 +118,9 @@ type QueueSpec struct {
 	Name string `json:"name"`
 
 	// lockDuration is how long a received message stays locked for the
-	// receiver. Azure allows up to PT5M.
+	// receiver. Use minutes and seconds only. Azure allows up to PT5M.
 	// +optional
+	// +kubebuilder:validation:XValidation:rule="self.matches('^PT([0-9]+M)?([0-9]+([.][0-9]+)?S)?$') && (self.find('[0-9]+M') == '' ? 0.0 : double(self.find('[0-9]+M').replace('M', '')) * 60.0) + (self.find('[0-9.]+S') == '' ? 0.0 : double(self.find('[0-9.]+S').replace('S', ''))) <= 300.0",message="lockDuration must use minutes and seconds only and be at most PT5M, for example PT1M or PT30S"
 	LockDuration *ISODuration `json:"lockDuration,omitempty"`
 
 	// maxDeliveryCount is how many times Azure delivers a message before it
