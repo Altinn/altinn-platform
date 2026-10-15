@@ -112,7 +112,7 @@ We choose it although it is alpha:
 
 The upstream operator runs in the platform-system layer on each cluster. Teams never create `ValkeyCluster` resources directly. Only the `Cache` CRD is part of the tenant contract.
 
-**Installation.** The platform installs the Helm chart (`oci://ghcr.io/valkey-io/valkey-helm`, version 0.5.0) through the `valkey-operator` package in gitops-manifests, promoted ring by ring. A Terraform flag per cluster, `enable_valkey_operator`, creates the Flux configuration. at22 and at23 are the first clusters.
+**Installation.** The platform installs the Helm chart (`oci://ghcr.io/valkey-io/valkey-helm`, version 0.5.0) through the `valkey-operator` package in gitops-manifests, promoted ring by ring. A flag per cluster in the cluster configuration, `enable_valkey_operator`, creates the Flux configuration.
 
 ## Access control
 
@@ -359,9 +359,7 @@ The valkey-operator names the Service `valkey-<name>`. A Service name is one DNS
 
 7. **Password in the Key Vault of the app, synced by External Secrets Operator (ESO).** Not chosen for v1. Every `Cache` would depend on a `Vault`. The operator would need write access to team vaults. The password lands in a Kubernetes Secret either way.
 
-## Decisions taken during the alpha
-
-- **Scraper identity, not a pod CIDR.** The first metrics change added an IP-range `NetworkAuthentication` for the Azure Monitor scraper, which has no proxy. Such a rule lets plaintext clients back in. The collector identity replaced it before a release carried it (see Linkerd policies and Metrics).
+8. **Metrics scraped by the Azure Monitor managed Prometheus addon.** Rejected: the addon has no proxy, so the exporter port would have to trust its pod network with an IP-range `NetworkAuthentication`. Such a rule lets plaintext clients back in. The meshed collector is trusted by its identity instead (see Metrics).
 
 ## Impact of not doing this
 
@@ -377,7 +375,7 @@ Teams keep building their own cache setups, and the platform keeps missing the s
 # Unresolved questions
 [unresolved-questions]: #unresolved-questions
 
-- Does an ACL reload end the open connections of the `app` user? The first rotation on at22 ran with an application that connects on every sweep, so it did not answer this. A long-lived connection must be tested.
+- Does an ACL reload end the open connections of the `app` user?
 - Must a rotation request during a grace period end the period at once, for a password that may have leaked? Today the request waits for the period to end.
 - How do we limit caches per team: a `ResourceQuota` per namespace, a cap on the number of `Cache` objects reported as a condition, or both?
 - Which CPU, memory and replica values does each `size` get?
