@@ -1,0 +1,300 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.0
+  name: queues.messaging.dis.altinn.cloud
+spec:
+  group: messaging.dis.altinn.cloud
+  names:
+    kind: Queue
+    listKind: QueueList
+    plural: queues
+    singular: queue
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.name
+      name: Queue
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].reason
+      name: Reason
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Queue is the Schema for the queues API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: Spec defines the desired state of Queue.
+            properties:
+              access:
+                description: access lists the principals that get a role on the queue.
+                properties:
+                  principals:
+                    description: principals is the list of principals and their roles.
+                    items:
+                      description: QueueAccessPrincipalSpec describes one principal
+                        and the role it gets.
+                      properties:
+                        group:
+                          description: group identifies an Entra group.
+                          properties:
+                            name:
+                              description: name is the Entra group display name.
+                              minLength: 1
+                              type: string
+                            principalId:
+                              description: principalId is the Entra group object ID.
+                              minLength: 1
+                              type: string
+                          required:
+                          - name
+                          - principalId
+                          type: object
+                        identityRef:
+                          description: |-
+                            identityRef points to an ApplicationIdentity. The operator reads the
+                            principal ID from its status.
+                          properties:
+                            name:
+                              description: name is the ApplicationIdentity name.
+                              minLength: 1
+                              type: string
+                            namespace:
+                              description: |-
+                                namespace is the ApplicationIdentity namespace. Defaults to the
+                                namespace of the Queue.
+                              minLength: 1
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        role:
+                          description: role is the role the principal gets on the
+                            queue.
+                          enum:
+                          - sender
+                          - receiver
+                          - consumer
+                          - owner
+                          type: string
+                        servicePrincipal:
+                          description: servicePrincipal identifies an Entra service
+                            principal by object ID.
+                          properties:
+                            name:
+                              description: name is a label for the principal, for
+                                example the managed identity name.
+                              minLength: 1
+                              type: string
+                            principalId:
+                              description: principalId is the Entra object ID of the
+                                service principal.
+                              minLength: 1
+                              type: string
+                          required:
+                          - name
+                          - principalId
+                          type: object
+                      required:
+                      - role
+                      type: object
+                      x-kubernetes-validations:
+                      - message: 'Provide exactly one principal source: identityRef,
+                          group, or servicePrincipal.'
+                        rule: '(has(self.identityRef) ? 1 : 0) + (has(self.group)
+                          ? 1 : 0) + (has(self.servicePrincipal) ? 1 : 0) == 1'
+                    maxItems: 50
+                    type: array
+                    x-kubernetes-list-type: atomic
+                required:
+                - principals
+                type: object
+              deadLetteringOnMessageExpiration:
+                description: |-
+                  deadLetteringOnMessageExpiration moves expired messages to the
+                  dead-letter queue.
+                type: boolean
+              defaultMessageTimeToLive:
+                description: |-
+                  defaultMessageTimeToLive is how long a message lives when the sender
+                  does not set a time to live, for example 336h for 14 days.
+                pattern: ^([0-9]+([.][0-9]+)?(ns|us|ms|s|m|h))+$
+                type: string
+                x-kubernetes-validations:
+                - message: defaultMessageTimeToLive must be more than 0s
+                  rule: duration(self) > duration('0s')
+              deletionPolicy:
+                default: Retain
+                description: |-
+                  deletionPolicy controls what happens to the Azure queue when this
+                  resource is deleted.
+                enum:
+                - Retain
+                - Delete
+                type: string
+              lockDuration:
+                description: |-
+                  lockDuration is how long a received message stays locked for the
+                  receiver, for example 1m or 30s. Azure allows up to 5m.
+                pattern: ^([0-9]+([.][0-9]+)?(ns|us|ms|s|m|h))+$
+                type: string
+                x-kubernetes-validations:
+                - message: lockDuration must be more than 0s and at most 5m
+                  rule: duration(self) > duration('0s') && duration(self) <= duration('5m')
+              maxDeliveryCount:
+                description: |-
+                  maxDeliveryCount is how many times Azure delivers a message before it
+                  moves the message to the dead-letter queue.
+                format: int32
+                maximum: 2000
+                minimum: 1
+                type: integer
+              maxSizeInMegabytes:
+                description: maxSizeInMegabytes is the maximum size of the queue.
+                enum:
+                - 1024
+                - 2048
+                - 3072
+                - 4096
+                - 5120
+                - 10240
+                - 20480
+                - 40960
+                - 81920
+                format: int32
+                type: integer
+              name:
+                description: name is the Azure queue name. It must start with the
+                  product prefix.
+                maxLength: 260
+                minLength: 1
+                pattern: ^[A-Za-z0-9]([A-Za-z0-9._/-]*[A-Za-z0-9])?$
+                type: string
+                x-kubernetes-validations:
+                - message: name is immutable
+                  rule: self == oldSelf
+              requiresDuplicateDetection:
+                default: false
+                description: |-
+                  requiresDuplicateDetection turns on duplicate detection. Azure fixes it
+                  at creation.
+                type: boolean
+                x-kubernetes-validations:
+                - message: requiresDuplicateDetection is immutable
+                  rule: self == oldSelf
+              requiresSession:
+                default: false
+                description: requiresSession makes the queue session-aware. Azure
+                  fixes it at creation.
+                type: boolean
+                x-kubernetes-validations:
+                - message: requiresSession is immutable
+                  rule: self == oldSelf
+            required:
+            - name
+            type: object
+          status:
+            description: Status defines the observed state of Queue.
+            properties:
+              conditions:
+                description: conditions represent the current state of this Queue.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              name:
+                description: name is the Azure queue name the operator manages.
+                type: string
+              observedGeneration:
+                description: observedGeneration is the latest generation reconciled
+                  by the controller.
+                format: int64
+                type: integer
+              resourceId:
+                description: resourceId is the Azure resource ID of the queue.
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
