@@ -2,9 +2,13 @@ package sweepcache
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/Altinn/altinn-platform/services/dis-console/internal/flux"
+
+	"github.com/valkey-io/valkey-go"
 )
 
 func testClient(prefix string) *Client { return &Client{prefix: prefix} }
@@ -98,4 +102,55 @@ func names(resources []flux.Resource) []string {
 	}
 
 	return out
+}
+
+func TestFileCredentialsReadsTheFileOnEveryCall(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "password")
+	if err := os.WriteFile(path, []byte("first-password"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	credentials := FileCredentials("app", path)
+
+	got, err := credentials(valkey.AuthCredentialsContext{})
+	if err != nil || got.Username != "app" || got.Password != "first-password" {
+		t.Fatalf("first call: want app/first-password, got %q/%q (%v)", got.Username, got.Password, err)
+	}
+
+	// A rotation replaces the file content; the next connection reads it.
+	if err := os.WriteFile(path, []byte("second-password\r\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err = credentials(valkey.AuthCredentialsContext{})
+	if err != nil || got.Password != "second-password" {
+		t.Fatalf("after the rotation: want second-password, got %q (%v)", got.Password, err)
+	}
+}
+
+func TestFileCredentialsFailsWithoutAPassword(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := FileCredentials("app", filepath.Join(dir, "missing"))(valkey.AuthCredentialsContext{}); err == nil {
+		t.Error("a missing file: want an error")
+	}
+
+	empty := filepath.Join(dir, "empty")
+	if err := os.WriteFile(empty, []byte("\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := FileCredentials("app", empty)(valkey.AuthCredentialsContext{}); err == nil {
+		t.Error("an empty file: want an error")
+	}
+}
+
+func TestClientOptionPrefersThePasswordFile(t *testing.T) {
+	withFile := clientOption(Config{Address: "cache:6379", Username: "app", Password: "from-env", PasswordFile: "/run/password"})
+	if withFile.AuthCredentialsFn == nil || withFile.Password != "" {
+		t.Errorf("with a file: want the credentials function and no fixed password, got fn=%v password=%q",
+			withFile.AuthCredentialsFn != nil, withFile.Password)
+	}
+
+	withoutFile := clientOption(Config{Address: "cache:6379", Username: "app", Password: "from-env"})
+	if withoutFile.AuthCredentialsFn != nil || withoutFile.Password != "from-env" {
+		t.Errorf("without a file: want the fixed password, got fn=%v password=%q",
+			withoutFile.AuthCredentialsFn != nil, withoutFile.Password)
+	}
 }

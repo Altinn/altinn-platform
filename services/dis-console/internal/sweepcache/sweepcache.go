@@ -12,6 +12,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/valkey-io/valkey-go"
@@ -31,10 +33,34 @@ const (
 )
 
 // Config holds the connection settings. An empty Address disables the cache.
+// PasswordFile, when set, wins over Password: the client reads the file on
+// every new connection, so a rotated password needs no restart.
 type Config struct {
-	Address  string
-	Username string
-	Password string
+	Address      string
+	Username     string
+	Password     string
+	PasswordFile string
+}
+
+// FileCredentials returns a valkey-go credentials function that reads the
+// password from path on every call. valkey-go calls it for every new
+// connection. A Kubernetes Secret mounted as a volume updates the file in
+// place after a rotation; an environment variable never changes. The error
+// names the path and never the content. The username stays fixed: a
+// rotation changes only the password.
+func FileCredentials(username, path string) func(valkey.AuthCredentialsContext) (valkey.AuthCredentials, error) {
+	return func(valkey.AuthCredentialsContext) (valkey.AuthCredentials, error) {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return valkey.AuthCredentials{}, fmt.Errorf("read the cache password file: %w", err)
+		}
+		password := strings.TrimRight(string(raw), "\r\n")
+		if password == "" {
+			return valkey.AuthCredentials{}, fmt.Errorf("the cache password file %s is empty", path)
+		}
+
+		return valkey.AuthCredentials{Username: username, Password: password}, nil
+	}
 }
 
 // Client is a fingerprint memory backed by Valkey. A nil *Client is valid
@@ -42,6 +68,28 @@ type Config struct {
 type Client struct {
 	client valkey.Client
 	prefix string
+}
+
+// clientOption builds the valkey-go options. A password file wins over a
+// fixed password, so the client reads the current password on every new
+// connection.
+func clientOption(cfg Config) valkey.ClientOption {
+	option := valkey.ClientOption{
+		InitAddress: []string{cfg.Address},
+		Username:    cfg.Username,
+		Password:    cfg.Password,
+		Dialer:      net.Dialer{Timeout: dialTimeout},
+		// Client-side caching is not used; this skips its handshake and
+		// its per-connection memory.
+		DisableCache: true,
+		DisableRetry: true,
+	}
+	if cfg.PasswordFile != "" {
+		option.Password = ""
+		option.AuthCredentialsFn = FileCredentials(cfg.Username, cfg.PasswordFile)
+	}
+
+	return option
 }
 
 // New connects to the cache. It returns nil, nil when cfg.Address is empty.
@@ -52,16 +100,7 @@ func New(ctx context.Context, cfg Config, prefix string) (*Client, error) {
 	if cfg.Address == "" {
 		return nil, nil
 	}
-	client, err := valkey.NewClient(valkey.ClientOption{
-		InitAddress: []string{cfg.Address},
-		Username:    cfg.Username,
-		Password:    cfg.Password,
-		Dialer:      net.Dialer{Timeout: dialTimeout},
-		// Client-side caching is not used; this skips its handshake and
-		// its per-connection memory.
-		DisableCache: true,
-		DisableRetry: true,
-	})
+	client, err := valkey.NewClient(clientOption(cfg))
 	if err != nil {
 		return nil, fmt.Errorf("connect to %s: %w", cfg.Address, err)
 	}
