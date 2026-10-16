@@ -13,7 +13,7 @@ run "configured_repositories_have_one_identity_each" {
       "altinn-auth", "altinn-dashboards-grafana", "altinn-platform",
       "altinn-platform-dis-proxies", "altinn-studio", "altinn-verification-dis-poc",
       "dialogporten-frontend-manifests", "dialogporten-manifests", "info.altinn.no",
-      "pre-invoice-system", "dis-padawan"
+      "pre-invoice-system", "dis-padawan", "altinn-profile"
     ])
     error_message = "Each repository must have exactly one publishing identity keyed by its repository name."
   }
