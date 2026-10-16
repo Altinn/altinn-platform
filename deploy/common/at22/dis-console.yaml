@@ -54,6 +54,8 @@ spec:
                   name: dis-console-cache-cache-auth
                   key: password
                   optional: true
+            - name: CACHE_PASSWORD_FILE
+              value: /var/run/secrets/cache/password
           livenessProbe:
             httpGet:
               path: /healthz
@@ -62,12 +64,24 @@ spec:
             httpGet:
               path: /readyz
               port: http
+          volumeMounts:
+            - name: cache-auth
+              mountPath: /var/run/secrets/cache
+              readOnly: true
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
               drop:
                 - ALL
+      volumes:
+        - name: cache-auth
+          secret:
+            secretName: dis-console-cache-cache-auth
+            optional: true
+            items:
+              - key: password
+                path: password
 ---
 apiVersion: v1
 kind: Service
