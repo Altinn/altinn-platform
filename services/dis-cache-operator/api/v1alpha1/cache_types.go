@@ -81,15 +81,16 @@ type CacheSpec struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.previousValidFor) || duration(self.previousValidFor) <= duration('168h')",message="previousValidFor is at most 168h (7 days)"
 // +kubebuilder:validation:XValidation:rule="!has(self.previousValidFor) || !has(self.intervalDays) || self.intervalDays == 0 || duration(self.previousValidFor).getSeconds() <= self.intervalDays * 43200",message="previousValidFor is at most half of the interval"
 type PasswordRotationSpec struct {
-	// IntervalDays rotates the password on a schedule, every IntervalDays
-	// days after the last rotation. 0 turns the schedule off. The platform
-	// default is 0 until applications on the platform reload the password
-	// without a restart. The target default is 90.
+	// IntervalDays sets the schedule. The operator rotates the password
+	// every IntervalDays days. It counts from the time the current password
+	// was written. 0 turns the schedule off. The default is 90. Read the
+	// password from the mounted Secret file for each new connection. Then a
+	// rotation needs no restart.
 	// +optional
-	// +kubebuilder:default=0
+	// +kubebuilder:default=90
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=365
-	IntervalDays int32 `json:"intervalDays,omitempty"`
+	IntervalDays *int32 `json:"intervalDays,omitempty"`
 
 	// RequestedAt asks for one rotation. A value later than
 	// status.passwordRotation.requestedAt starts it. The operator does not
@@ -103,6 +104,7 @@ type PasswordRotationSpec struct {
 	// rotation. Zero removes it at once, for a password that may have leaked.
 	// A removed password does not end open connections. An operator flag sets
 	// the default, 7 days on the platform. The maximum is 168h.
+	// With a schedule, the period is at most half of the interval.
 	// +optional
 	PreviousValidFor *metav1.Duration `json:"previousValidFor,omitempty"`
 }
@@ -140,8 +142,9 @@ type PasswordRotationStatus struct {
 	// +optional
 	RequestedAt *metav1.Time `json:"requestedAt,omitempty"`
 
-	// LastRotatedAt is the time of the last rotation. The schedule counts
-	// from this time.
+	// LastRotatedAt is the time the current password was written: at the
+	// last rotation, or when the operator created the Secret. The schedule
+	// counts from this time.
 	// +optional
 	LastRotatedAt *metav1.Time `json:"lastRotatedAt,omitempty"`
 
