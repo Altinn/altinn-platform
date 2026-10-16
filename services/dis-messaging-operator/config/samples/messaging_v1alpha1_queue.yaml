@@ -1,0 +1,17 @@
+apiVersion: messaging.dis.altinn.cloud/v1alpha1
+kind: Queue
+metadata:
+  labels:
+    app.kubernetes.io/name: dis-messaging-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: orders
+spec:
+  name: myproduct.orders
+  access:
+    principals:
+      - role: sender
+        identityRef:
+          name: my-api
+      - role: consumer
+        identityRef:
+          name: my-worker

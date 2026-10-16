@@ -1,0 +1,2 @@
+resources:
+- bases/messaging.dis.altinn.cloud_queues.yaml

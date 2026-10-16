@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/Altinn/altinn-platform/compare/dis-cache-v0.3.0...dis-cache-v0.4.0) (2026-10-15)
+
+
+### Features
+
+* **dis-cache-operator:** stage a new password and wait for every Valkey node before it replaces the old one ([#4206](https://github.com/Altinn/altinn-platform/issues/4206)) ([b27812c](https://github.com/Altinn/altinn-platform/commit/b27812c041821467bbe07865cabd09bcd39f47ff))
+
+
+### Dependency Updates
+
+* **dis-cache-operator:** update golang.org/x/net to v0.60.0 and build with Go 1.26.9 ([#4207](https://github.com/Altinn/altinn-platform/issues/4207)) ([f0157a3](https://github.com/Altinn/altinn-platform/commit/f0157a3dfa8df63b43ddb2dd1cc7853f810a5857))
+
 ## [0.3.0](https://github.com/Altinn/altinn-platform/compare/dis-cache-v0.2.0...dis-cache-v0.3.0) (2026-10-06)
 
 
