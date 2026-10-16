@@ -60,9 +60,8 @@ Before opening a PR, ensure:
 
 ## PR description file
 - When working on a branch and making changes, always create or update `pr_description.md` in the repository root.
-- `pr_description.md` must contain:
-  1. `Feature Behavior (BDD)`
-  2. `Diagram`, with a Mermaid diagram in a `mermaid` code block. Do not use ASCII diagrams.
+- `pr_description.md` must contain a `Feature Behavior (BDD)` section.
+- Add a `Diagram` section with a Mermaid diagram in a `mermaid` code block when the change has a flow that prose does not show well. Examples: a reconcile sequence, a state machine, ownership between resources. Do not draw a diagram that only repeats the text. Do not use ASCII diagrams.
 - The BDD section must be based on implemented behavior and use explicit BDD keywords highlighted in text:
   - `**Given**`
   - `**When**`
