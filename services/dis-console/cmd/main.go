@@ -88,7 +88,10 @@ func runAgent(args []string) {
 	cacheAddress := fs.String("cache-address", os.Getenv("CACHE_ADDRESS"),
 		"host:port of the Valkey sweep cache (default from CACHE_ADDRESS env); empty runs without a cache")
 	cacheUsername := fs.String("cache-username", os.Getenv("CACHE_USERNAME"),
-		"Valkey user of the sweep cache (default from CACHE_USERNAME env); the password comes from CACHE_PASSWORD only")
+		"Valkey user of the sweep cache (default from CACHE_USERNAME env)")
+	cachePasswordFile := fs.String("cache-password-file", os.Getenv("CACHE_PASSWORD_FILE"),
+		"File with the password of the sweep cache, read on every new connection, so a rotated password needs "+
+			"no restart (default from CACHE_PASSWORD_FILE env). When empty, the password comes from CACHE_PASSWORD")
 	dbDisableEntra := fs.Bool("db-disable-entra", envBool("DB_DISABLE_ENTRA"),
 		"Skip Entra token auth; use PGPASSWORD or trust auth instead. For Kind/CI/local "+
 			"without Azure workload identity (default from DB_DISABLE_ENTRA env)")
@@ -148,7 +151,10 @@ func runAgent(args []string) {
 	}
 
 	cache := &sweepCache{
-		cfg:    sweepcache.Config{Address: *cacheAddress, Username: *cacheUsername, Password: os.Getenv("CACHE_PASSWORD")},
+		cfg: sweepcache.Config{
+			Address: *cacheAddress, Username: *cacheUsername,
+			Password: os.Getenv("CACHE_PASSWORD"), PasswordFile: *cachePasswordFile,
+		},
 		prefix: "dis-console:" + version,
 	}
 	if *cacheAddress == "" {
