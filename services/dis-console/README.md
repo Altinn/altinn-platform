@@ -191,11 +191,14 @@ for the central database.
 Sweep cache (optional): `--cache-address` (default `CACHE_ADDRESS`, `host:port`
 of a Valkey; empty runs without a cache), `--cache-username` (default
 `CACHE_USERNAME`), and the password from `--cache-password-file` (default
-`CACHE_PASSWORD_FILE`). The agent reads that file on every new connection. A
-password that dis-cache-operator rotates then needs no restart. Mount the auth
-Secret of the Cache as a volume. Do not use `subPath`: the kubelet does not
-update a `subPath` mount. Without a file, the agent reads `CACHE_PASSWORD` once
-at start. The agent
+`CACHE_PASSWORD_FILE`).
+
+The agent reads the password file on every new connection. So a rotated
+password needs no restart. Mount the auth Secret of the Cache as a volume. Do
+not use `subPath`: the kubelet does not update a `subPath` mount. Without a
+file, the agent reads `CACHE_PASSWORD` once at start.
+
+The agent
 remembers a fingerprint per object in the cache and skips the full database
 upsert for objects that did not change. When the cache is unreachable or a
 call fails, the agent logs it and upserts everything, as without a cache.
