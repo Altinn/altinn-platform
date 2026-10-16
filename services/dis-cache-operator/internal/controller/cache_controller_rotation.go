@@ -41,6 +41,11 @@ const (
 	// when neither the Cache nor the operator flag sets one.
 	DefaultPreviousValidFor = 7 * 24 * time.Hour
 
+	// scheduleRecheck is the longest time an idle Cache with a schedule waits
+	// before the operator looks again. A rotation that is due earlier gets a
+	// requeue at its own time.
+	scheduleRecheck = 24 * time.Hour
+
 	// aclApplyRequeue is how long the operator waits between two looks at the
 	// ValkeyNodes while the staged password is not live on every node. The
 	// ValkeyNode watch ends the wait early.
@@ -77,9 +82,59 @@ var errResetCopied = errors.New("the Secret from the previous rotation order wen
 // stage waits. The ValkeyNode watch and the requeue end the wait.
 var errNodesPending = errors.New("a Valkey node does not report its ACL applied")
 
-// rotationDue reports whether the team asked for a rotation that the operator
-// has not carried out yet. The schedule comes in a later change.
-func rotationDue(cache *cachev1alpha1.Cache) bool {
+// intervalDays returns the schedule of the Cache in days, 0 when it is off.
+// The API server sets the default, so nil only happens in memory.
+func intervalDays(cache *cachev1alpha1.Cache) int32 {
+	spec := cache.Spec.PasswordRotation
+	if spec == nil || spec.IntervalDays == nil {
+		return 0
+	}
+
+	return *spec.IntervalDays
+}
+
+// nextScheduledRotation returns when the schedule makes the next rotation
+// due: intervalDays after the last rotation, or after the creation of the
+// Cache when it never rotated. ok is false when the schedule is off.
+func nextScheduledRotation(cache *cachev1alpha1.Cache) (at time.Time, ok bool) {
+	days := intervalDays(cache)
+	if days <= 0 {
+		return time.Time{}, false
+	}
+	base := cache.CreationTimestamp.Time
+	if status := cache.Status.PasswordRotation; status != nil && status.LastRotatedAt != nil {
+		base = status.LastRotatedAt.Time
+	}
+
+	return base.Add(time.Duration(days) * 24 * time.Hour), true
+}
+
+// scheduleDue reports whether the schedule makes a rotation due now.
+func (r *CacheReconciler) scheduleDue(cache *cachev1alpha1.Cache) bool {
+	at, ok := nextScheduledRotation(cache)
+
+	return ok && !r.now().Before(at)
+}
+
+// untilScheduledRotation returns how long an idle Cache waits for its next
+// scheduled rotation, at most scheduleRecheck. It returns 0 when the
+// schedule is off or a rotation is in progress; the rotation steps set their
+// own requeue.
+func (r *CacheReconciler) untilScheduledRotation(cache *cachev1alpha1.Cache) time.Duration {
+	if cond := rotationCondition(cache); cond != nil && cond.Status == metav1.ConditionFalse {
+		return 0
+	}
+	at, ok := nextScheduledRotation(cache)
+	if !ok {
+		return 0
+	}
+
+	return min(max(at.Sub(r.now()), time.Second), scheduleRecheck)
+}
+
+// requestDue reports whether the team asked for a rotation that the operator
+// has not carried out yet.
+func requestDue(cache *cachev1alpha1.Cache) bool {
 	spec := cache.Spec.PasswordRotation
 	if spec == nil || spec.RequestedAt == nil {
 		return false
@@ -95,14 +150,21 @@ func rotationDue(cache *cachev1alpha1.Cache) bool {
 // previousValidFor returns the period for this Cache: the spec value, the
 // operator flag, or the default.
 func (r *CacheReconciler) previousValidFor(cache *cachev1alpha1.Cache) time.Duration {
-	if spec := cache.Spec.PasswordRotation; spec != nil && spec.PreviousValidFor != nil {
-		return spec.PreviousValidFor.Duration
+	period := DefaultPreviousValidFor
+	switch spec := cache.Spec.PasswordRotation; {
+	case spec != nil && spec.PreviousValidFor != nil:
+		period = spec.PreviousValidFor.Duration
+	case r.PreviousValidFor > 0:
+		period = r.PreviousValidFor
 	}
-	if r.PreviousValidFor > 0 {
-		return r.PreviousValidFor
+	// With a schedule, the period is at most half of the interval, so the
+	// old password is gone well before the next rotation. The API checks
+	// this only for a period that the Cache sets itself.
+	if days := intervalDays(cache); days > 0 {
+		period = min(period, time.Duration(days)*12*time.Hour)
 	}
 
-	return DefaultPreviousValidFor
+	return period
 }
 
 func (r *CacheReconciler) now() time.Time {
@@ -205,9 +267,24 @@ func (r *CacheReconciler) beginRotation(ctx context.Context, cache *cachev1alpha
 		return r.patchStatus(ctx, cache, orig)
 	}
 
-	if inProgress && cond.Reason == ReasonRotationFailed && rotationDue(cache) {
-		// A newer request after the terminal failure starts over, for example
-		// after someone removed the foreign Secret.
+	if secretCreated && !inProgress {
+		// A new Secret holds a new password, so the schedule counts from now.
+		// This covers a new Cache and a Secret that someone deleted while
+		// the Cache was idle. When this status write fails, later reconciles
+		// do not see the create again, and the count stays on the older time:
+		// the worst case is one early rotation, which is safe.
+		rotationStatus(cache).LastRotatedAt = &metav1.Time{Time: r.now()}
+		if err := r.patchStatus(ctx, cache, orig); err != nil {
+			return err
+		}
+		orig = cache.DeepCopy()
+	}
+
+	if inProgress && cond.Reason == ReasonRotationFailed && requestDue(cache) {
+		// A newer request after the terminal failure starts over. A deleted
+		// foreign Secret also ends the failure, through the reset above when
+		// the operator creates its own Secret. The schedule does not start
+		// over: it would try the foreign Secret again on every reconcile.
 		inProgress = false
 	}
 
@@ -225,15 +302,20 @@ func (r *CacheReconciler) beginRotation(ctx context.Context, cache *cachev1alpha
 		return nil
 	}
 
-	if !rotationDue(cache) {
+	requested := requestDue(cache)
+	if !requested && !r.scheduleDue(cache) {
 		return nil
 	}
 
-	setRotationCondition(cache, metav1.ConditionFalse, ReasonRotating, "the operator rotates the password")
+	message := "the operator rotates the password on request"
+	if !requested {
+		message = "the operator rotates the password on schedule"
+	}
+	setRotationCondition(cache, metav1.ConditionFalse, ReasonRotating, message)
 	if err := r.patchStatus(ctx, cache, orig); err != nil {
 		return err
 	}
-	logger.Info("password rotation started", "secret", cachepkg.AuthSecretName(cache))
+	logger.Info("password rotation started", "secret", cachepkg.AuthSecretName(cache), "requested", requested)
 
 	// A Secret that is not idle gets its step found before the stage, so a
 	// Secret that is not the operator's fails here and does not wait for the

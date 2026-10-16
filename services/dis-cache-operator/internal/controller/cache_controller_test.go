@@ -759,7 +759,8 @@ var _ = Describe("Cache password rotation", func() {
 		Expect(rotatedOf(updated).Status).To(Equal(metav1.ConditionTrue))
 		Expect(rotatedOf(updated).Reason).To(Equal(ReasonRotated))
 		Expect(updated.Status.PasswordRotation.PreviousValidUntil).To(BeNil())
-		Expect(result.RequeueAfter).To(BeZero())
+		// The default schedule of 90 days wakes the operator once a day.
+		Expect(result.RequeueAfter).To(Equal(scheduleRecheck))
 	})
 
 	It("stages only once every node reports its ACL applied", func() {
@@ -966,7 +967,7 @@ var _ = Describe("Cache password rotation", func() {
 		Expect(getSecret(idle.Name).Data).To(Equal(idle.Data))
 		cond := rotatedOf(getCache("cache-rotate-stagefail"))
 		Expect(cond.Reason).To(Equal(ReasonRotating))
-		Expect(getCache("cache-rotate-stagefail").Status.PasswordRotation).To(BeNil())
+		Expect(getCache("cache-rotate-stagefail").Status.PasswordRotation.StagedAt).To(BeNil())
 
 		// The next reconcile stages, and only then the key list grows.
 		reconcileWith(good, "cache-rotate-stagefail")
@@ -1257,6 +1258,197 @@ var _ = Describe("Cache password rotation", func() {
 		Expect(final.Data).NotTo(HaveKey(cachepkg.AuthSecretNextPasswordKey))
 		Expect(final.Data[cachepkg.AuthSecretPasswordKey]).NotTo(Equal(first))
 		Expect(rotatedOf(getCache("cache-rotate-zero")).Status).To(Equal(metav1.ConditionTrue))
+	})
+})
+
+// setLastRotated writes the time of the last rotation into the Cache status,
+// as an earlier rotation would.
+func setLastRotated(name string, at time.Time) {
+	cache := getCache(name)
+	cache.Status.PasswordRotation = &cachev1alpha1.PasswordRotationStatus{LastRotatedAt: &metav1.Time{Time: at}}
+	Expect(k8sClient.Status().Update(ctx, cache)).To(Succeed())
+}
+
+func withInterval(days int32) func(*cachev1alpha1.Cache) {
+	return func(c *cachev1alpha1.Cache) {
+		c.Spec.PasswordRotation = &cachev1alpha1.PasswordRotationSpec{IntervalDays: &days}
+	}
+}
+
+var _ = Describe("Cache password rotation on a schedule", func() {
+	It("defaults the schedule to 90 days", func() {
+		cache := newCache("cache-schedule-default", nil)
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+
+		stored := getCache("cache-schedule-default")
+		Expect(stored.Spec.PasswordRotation).NotTo(BeNil())
+		Expect(stored.Spec.PasswordRotation.IntervalDays).To(HaveValue(Equal(int32(90))))
+	})
+
+	It("starts a rotation when the interval has passed since the last rotation, and wakes up for it", func() {
+		start := time.Date(2026, 9, 20, 8, 0, 0, 0, time.UTC)
+		now := start
+		r := rotationReconciler(&now)
+		cache := newCache("cache-schedule", withInterval(7))
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+		reconcileWith(r, "cache-schedule")
+		aclApplied("cache-schedule", "0-0", metav1.ConditionTrue, start.Add(-time.Hour))
+		setLastRotated("cache-schedule", start)
+
+		// Two hours before the interval ends: no rotation, and the operator
+		// asks to be woken when it ends.
+		now = start.Add(7*24*time.Hour - 2*time.Hour)
+		result := reconcileWith(r, "cache-schedule")
+		Expect(rotatedOf(getCache("cache-schedule"))).To(BeNil())
+		Expect(getSecret(cachepkg.AuthSecretName(cache)).Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepIdle))
+		Expect(result.RequeueAfter).To(Equal(2 * time.Hour))
+
+		// The interval ends: the rotation starts with no request.
+		now = start.Add(7 * 24 * time.Hour)
+		reconcileWith(r, "cache-schedule")
+		Expect(getSecret(cachepkg.AuthSecretName(cache)).Annotations[cachepkg.RotationStepAnnotation]).To(Equal(cachepkg.RotationStepStaged))
+		Expect(rotatedOf(getCache("cache-schedule")).Reason).To(Equal(ReasonPasswordStaged))
+	})
+
+	It("counts from the time the operator wrote the first password", func() {
+		start := time.Date(2026, 9, 20, 9, 0, 0, 0, time.UTC)
+		now := start
+		r := rotationReconciler(&now)
+		cache := newCache("cache-schedule-new", withInterval(7))
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+		reconcileWith(r, "cache-schedule-new")
+		Expect(getCache("cache-schedule-new").Status.PasswordRotation.LastRotatedAt.Time).To(BeTemporally("==", start))
+		aclApplied("cache-schedule-new", "0-0", metav1.ConditionTrue, start)
+
+		now = start.Add(7*24*time.Hour - time.Second)
+		reconcileWith(r, "cache-schedule-new")
+		Expect(rotatedOf(getCache("cache-schedule-new"))).To(BeNil())
+
+		now = now.Add(time.Second)
+		reconcileWith(r, "cache-schedule-new")
+		Expect(rotatedOf(getCache("cache-schedule-new")).Reason).To(Equal(ReasonPasswordStaged))
+	})
+
+	It("counts again from now when the Secret comes back while the Cache is idle", func() {
+		start := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+		now := start
+		r := rotationReconciler(&now)
+		cache := newCache("cache-schedule-recreated", withInterval(7))
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+		reconcileWith(r, "cache-schedule-recreated")
+
+		now = start.Add(6 * 24 * time.Hour)
+		Expect(k8sClient.Delete(ctx, getSecret(cachepkg.AuthSecretName(cache)))).To(Succeed())
+		result := reconcileWith(r, "cache-schedule-recreated")
+		Expect(getCache("cache-schedule-recreated").Status.PasswordRotation.LastRotatedAt.Time).To(BeTemporally("==", now))
+		Expect(result.RequeueAfter).To(Equal(scheduleRecheck))
+	})
+
+	It("keeps the period at most half of a short interval", func() {
+		start := time.Date(2026, 9, 20, 11, 0, 0, 0, time.UTC)
+		now := start
+		r := newReconciler()
+		r.Now = func() time.Time { return now }
+		cache := newCache("cache-schedule-short", withInterval(7))
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+		reconcileWith(r, "cache-schedule-short")
+		aclApplied("cache-schedule-short", "0-0", metav1.ConditionTrue, start.Add(-time.Hour))
+
+		// The default period is 7 days, as long as the interval itself.
+		requestRotation("cache-schedule-short", now)
+		reconcileWith(r, "cache-schedule-short")
+		markClusterProcessed("cache-schedule-short")
+		now = now.Add(time.Minute)
+		aclApplied("cache-schedule-short", "0-0", metav1.ConditionTrue, now)
+		reconcileWith(r, "cache-schedule-short")
+		status := getCache("cache-schedule-short").Status.PasswordRotation
+		Expect(status.PreviousValidUntil.Time).To(BeTemporally("==", now.Add(84*time.Hour)))
+	})
+
+	It("counts the next interval from the last rotation, also a requested one", func() {
+		start := time.Date(2026, 9, 21, 8, 0, 0, 0, time.UTC)
+		now := start
+		r := rotationReconciler(&now)
+		cache := newCache("cache-schedule-request", withInterval(7))
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+		reconcileWith(r, "cache-schedule-request")
+		aclApplied("cache-schedule-request", "0-0", metav1.ConditionTrue, start.Add(-time.Hour))
+		setLastRotated("cache-schedule-request", start)
+
+		// A request on day 5 rotates at once.
+		now = start.Add(5 * 24 * time.Hour)
+		requestRotation("cache-schedule-request", now)
+		reconcileWith(r, "cache-schedule-request")
+		markClusterProcessed("cache-schedule-request")
+		now = now.Add(time.Minute)
+		aclApplied("cache-schedule-request", "0-0", metav1.ConditionTrue, now)
+		reconcileWith(r, "cache-schedule-request")
+		rotatedAt := getCache("cache-schedule-request").Status.PasswordRotation.LastRotatedAt.Time
+		Expect(rotatedAt).To(BeTemporally("==", now))
+		now = now.Add(time.Hour)
+		reconcileWith(r, "cache-schedule-request")
+		Expect(rotatedOf(getCache("cache-schedule-request")).Reason).To(Equal(ReasonRotated))
+
+		// Day 7 of the first count passes without a rotation: the count
+		// started again at the requested rotation.
+		now = start.Add(7*24*time.Hour + time.Hour)
+		result := reconcileWith(r, "cache-schedule-request")
+		Expect(rotatedOf(getCache("cache-schedule-request")).Reason).To(Equal(ReasonRotated))
+		Expect(result.RequeueAfter).To(Equal(scheduleRecheck))
+	})
+
+	It("never rotates and never requeues for the schedule when intervalDays is 0", func() {
+		start := time.Date(2026, 9, 22, 8, 0, 0, 0, time.UTC)
+		now := start
+		r := rotationReconciler(&now)
+		cache := newCache("cache-schedule-off", withInterval(0))
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+		Expect(getCache("cache-schedule-off").Spec.PasswordRotation.IntervalDays).To(HaveValue(Equal(int32(0))))
+		reconcileWith(r, "cache-schedule-off")
+		setLastRotated("cache-schedule-off", start)
+
+		now = start.Add(400 * 24 * time.Hour)
+		result := reconcileWith(r, "cache-schedule-off")
+		Expect(rotatedOf(getCache("cache-schedule-off"))).To(BeNil())
+		Expect(result.RequeueAfter).To(BeZero())
+	})
+
+	It("does not try a foreign Secret again on schedule", func() {
+		start := time.Date(2026, 9, 23, 8, 0, 0, 0, time.UTC)
+		now := start
+		r := rotationReconciler(&now)
+		cache := newCache("cache-schedule-foreign", withInterval(7))
+		foreign := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: cachepkg.AuthSecretName(cache), Namespace: testNamespace},
+			Data:       map[string][]byte{cachepkg.AuthSecretPasswordKey: []byte("theirs")},
+		}
+		Expect(k8sClient.Create(ctx, foreign)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, foreign)).To(Succeed()) })
+		Expect(k8sClient.Create(ctx, cache)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, cache)).To(Succeed()) })
+		reconcileWith(r, "cache-schedule-foreign")
+		setLastRotated("cache-schedule-foreign", start)
+
+		now = start.Add(7 * 24 * time.Hour)
+		_, err := r.Reconcile(ctx, ctrl.Request{
+			NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: "cache-schedule-foreign"},
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(rotatedOf(getCache("cache-schedule-foreign")).Reason).To(Equal(ReasonRotationFailed))
+
+		// The schedule is still due, but the operator does not try again.
+		now = now.Add(time.Hour)
+		result := reconcileWith(r, "cache-schedule-foreign")
+		Expect(rotatedOf(getCache("cache-schedule-foreign")).Reason).To(Equal(ReasonRotationFailed))
+		Expect(getSecret(foreign.Name).Annotations).NotTo(HaveKey(cachepkg.RotationStepAnnotation))
+		Expect(result.RequeueAfter).To(BeZero())
 	})
 })
 
