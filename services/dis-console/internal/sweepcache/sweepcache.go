@@ -46,7 +46,8 @@ type Config struct {
 // password from path on every call. valkey-go calls it for every new
 // connection. A Kubernetes Secret mounted as a volume updates the file in
 // place after a rotation; an environment variable never changes. The error
-// names the path and never the content.
+// names the path and never the content. The username stays fixed: a
+// rotation changes only the password.
 func FileCredentials(username, path string) func(valkey.AuthCredentialsContext) (valkey.AuthCredentials, error) {
 	return func(valkey.AuthCredentialsContext) (valkey.AuthCredentials, error) {
 		raw, err := os.ReadFile(path)
