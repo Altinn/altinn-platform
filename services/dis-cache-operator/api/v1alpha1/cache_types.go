@@ -83,9 +83,9 @@ type CacheSpec struct {
 type PasswordRotationSpec struct {
 	// IntervalDays sets the schedule. The operator rotates the password
 	// every IntervalDays days. It counts from the time the current password
-	// was written. 0 turns the schedule off. The default is 90. Read the
-	// password from the mounted Secret file for each new connection. Then a
-	// rotation needs no restart.
+	// was written. 0 turns the schedule off. The default is 90. An app that
+	// reads the password from the mounted Secret file for each new
+	// connection needs no restart after a rotation.
 	// +optional
 	// +kubebuilder:default=90
 	// +kubebuilder:validation:Minimum=0

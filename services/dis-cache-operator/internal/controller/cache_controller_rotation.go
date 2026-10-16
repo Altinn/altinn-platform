@@ -270,7 +270,9 @@ func (r *CacheReconciler) beginRotation(ctx context.Context, cache *cachev1alpha
 	if secretCreated && !inProgress {
 		// A new Secret holds a new password, so the schedule counts from now.
 		// This covers a new Cache and a Secret that someone deleted while
-		// the Cache was idle.
+		// the Cache was idle. When this status write fails, later reconciles
+		// do not see the create again, and the count stays on the older time:
+		// the worst case is one early rotation, which is safe.
 		rotationStatus(cache).LastRotatedAt = &metav1.Time{Time: r.now()}
 		if err := r.patchStatus(ctx, cache, orig); err != nil {
 			return err
@@ -279,9 +281,10 @@ func (r *CacheReconciler) beginRotation(ctx context.Context, cache *cachev1alpha
 	}
 
 	if inProgress && cond.Reason == ReasonRotationFailed && requestDue(cache) {
-		// A newer request after the terminal failure starts over, for example
-		// after someone removed the foreign Secret. The schedule does not: it
-		// would try the foreign Secret again on every reconcile.
+		// A newer request after the terminal failure starts over. A deleted
+		// foreign Secret also ends the failure, through the reset above when
+		// the operator creates its own Secret. The schedule does not start
+		// over: it would try the foreign Secret again on every reconcile.
 		inProgress = false
 	}
 
