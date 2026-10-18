@@ -21,12 +21,23 @@ This removes the manual step "add the user to the correct ACL group(s)" from VPN
 
 Headscale keeps the ACL policy in one of two modes:
 
-| Mode | Where the policy is | Edit in Headplane or API | History in Git |
-|---|---|---|---|
-| `database` | The Headscale database | Yes | No |
-| `file` | A file on disk | No. Headscale rejects policy writes through the API. | Yes |
+| Mode | Where the policy is | Edit in Headplane or API | History in Git | Apply a change |
+|---|---|---|---|---|
+| `database` | The Headscale database | Yes | No | Immediately, without a restart |
+| `file` | A file on disk | No. Headscale rejects policy writes through the API. | Yes | Restart of Headscale |
 
-We want both properties. We want to edit the policy in Headplane and with the API. We also want a full history of the policy in Git.
+In file mode, Headscale reads the policy file at startup.
+Headscale can also reload the file on a `SIGHUP` signal.
+In Kubernetes, nothing sends this signal when a ConfigMap or Secret changes.
+Thus each change to the policy needs a restart of the Headscale pod.
+Headscale supports only one replica, so the control plane is not available during the restart.
+Clients keep their connections, but they cannot log in, register or get new peers during this time.
+
+We want these three properties:
+
+- Edits in Headplane and with the API.
+- A full history of the policy in Git.
+- A change to the policy applies without a restart of Headscale. We want to edit the policy in Headplane and with the API. We also want a full history of the policy in Git.
 
 The current process has these problems:
 
@@ -272,12 +283,17 @@ The CronJob has `concurrencyPolicy: Forbid`. Only one run occurs at a time.
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
 
-This design is the only one that we found that gives all three properties: edits in Headplane and the API, full history in Git, and group membership from Entra ID.
+This design is the only one that we found that gives all these properties:
+
+- Edits in Headplane and with the API.
+- A full history in Git.
+- Changes apply without a restart of Headscale.
+- Group membership from Entra ID.
 
 | Alternative | Why we do not choose it |
 |---|---|
-| `policy.mode: file` with a ConfigMap | Headplane and the API cannot edit the policy. |
-| Policy in Azure Key Vault, written by Terraform, read by an ExternalSecret | This is the same as file mode, with more steps. Edits in Headplane do not go back to Key Vault or Terraform. The policy is configuration, not a secret. |
+| `policy.mode: file` with a ConfigMap | Headplane and the API cannot edit the policy. Each change needs a restart of Headscale. |
+| Policy in Azure Key Vault, written by Terraform, read by an ExternalSecret | This is the same as file mode, with more steps. Each change needs a restart of Headscale. Edits in Headplane do not go back to Key Vault or Terraform. The policy is configuration, not a secret. |
 | ExternalSecret and PushSecret for two-way sync | The live policy is in the Headscale database, not in a Kubernetes Secret. An ExternalSecret and a PushSecret on the same Secret overwrite each other. Key Vault versions are not a Git history. |
 | A Job that writes the policy file to the live policy when Git changes | The next change in Git removes edits from Headplane without a message. |
 | A CronJob that only exports the live policy to Git | Git is a backup only. Admins cannot change the policy in Git. |
