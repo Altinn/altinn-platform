@@ -64,7 +64,9 @@ The admin does not edit Headscale or Entra ID.
 }
 ```
 
-**What is lost.** An edit in Headplane or with the Headscale API lasts until the next CronJob run, at most 5 minutes.
+**Headplane.** Admins have the [Headplane role](https://headplane.net/features/sso) IT Admin. This role can manage machines and users, but it cannot change ACLs.
+
+**What is lost.** An edit with the Headscale API, or by an Owner or Admin in Headplane, lasts until the next CronJob run, at most 5 minutes.
 The CronJob writes a warning with the difference to the job log before it overwrites the edit.
 
 # Reference-level explanation
@@ -126,6 +128,18 @@ Each CronJob run:
 
 If `policy set` fails, the live policy does not change and the run fails.
 
+## Headplane roles
+
+| Role | Users | ACL access |
+|---|---|---|
+| Owner | The first user who logged in. One break-glass account. | Edit |
+| Admin, Network Admin | Nobody | Edit |
+| IT Admin | Platform admins | Cannot change ACLs |
+| Member | All other users. This is the default role for a new OIDC user. | No UI access |
+
+An Owner or Admin assigns roles on the Users page in Headplane. Headplane does not get roles from an OIDC claim, so the roles are not in Git.
+Headplane keeps the roles in its database in `/var/lib/headplane`. This directory must be on a persistent volume.
+
 ## Emergency edit
 
 Use this procedure only if a change cannot wait for a pull request.
@@ -148,7 +162,8 @@ The next `terraform apply` in the root writes the policy from Git to Key Vault. 
 # Drawbacks
 [drawbacks]: #drawbacks
 
-- Headplane can still edit the ACL policy, but the CronJob removes the edit within 5 minutes.
+- An Owner in Headplane can still edit the ACL policy, but the CronJob removes the edit within 5 minutes.
+- Headplane roles are not in Git.
 - An emergency edit is lost if nobody adds it to Git before the next `terraform apply`.
 - A change takes up to approximately 15 minutes: the apply, the ESO refresh and the CronJob schedule.
 - The Terraform identity of the workflow needs permission to write Entra ID groups and Key Vault secrets.
@@ -179,7 +194,8 @@ If we do not do this, the ACL policy stays outside Git, and admins copy group me
 - Which Key Vault contains `headscale-acl`, and does the workflow identity have the role Key Vault Secrets Officer on it?
 - Where are the Kubernetes manifests for the ExternalSecrets and the CronJob? The Headscale manifests come from `oci://altinncr.azurecr.io/manifests/infra/headscale`.
 - Which image does the CronJob use? The Headscale image does not contain a shell.
-- Can Headplane roles make the ACL editor read-only for most admins?
+- IT Admin can "configure IAM". Can an IT Admin assign the role Network Admin or Admin to a user? We must test this.
+- Is `/var/lib/headplane` on a persistent volume in our Headplane deployment?
 
 # Future possibilities
 [future-possibilities]: #future-possibilities
