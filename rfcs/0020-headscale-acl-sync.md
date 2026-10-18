@@ -347,6 +347,78 @@ This design is the only one that we found that gives all these properties:
 | Policy file in Git without the `groups` section, and the tool adds groups before `policy set` | A person who writes a rule cannot see the group names and members in Git. |
 | Group mapping from a name prefix in Entra ID | A new Entra ID group can appear in the ACL policy without a review in Git. |
 
+## CronJob or operator
+
+An alternative to the CronJob is an operator with a custom resource for the group mapping.
+
+### Sources of change
+
+An operator reacts to changes in Kubernetes objects. Most sources of change in this design are outside Kubernetes.
+
+| Source of change | Can an operator watch it? |
+|---|---|
+| Group membership in Entra ID | No. Microsoft Graph change notifications need a public webhook endpoint and subscriptions that the operator must renew. |
+| Live policy in Headscale | No. Headscale does not send change events. |
+| `acl.hujson` in GitHub | Only with a GitHub webhook. |
+| Group mapping custom resource | Yes. |
+
+Thus the operator must also poll every 5 minutes (`RequeueAfter: 5m`). Only a change to the group mapping starts a reconcile immediately.
+
+### Benefits of an operator
+
+| Benefit | Value in this design |
+|---|---|
+| Status on the custom resource: last sync, conflict and warnings | Medium. The job log and an alert on a failed run give most of this information. |
+| A change to the group mapping applies immediately | Low. The group mapping changes seldom. 5 minutes is sufficient. |
+| Validation of the group mapping in the API server (CRD schema and CEL rules) | Low. The CI check validates `acl-groups.yaml` before the merge. |
+| Prometheus metrics from controller-runtime | Low. Alerts on failed jobs from kube-state-metrics are sufficient. |
+| Teams own a group mapping custom resource in their namespace | High, but only for a self-service model. Today, admins approve and grant VPN access. |
+| No new pod every 5 minutes | Low. This is 288 short pods each day. |
+
+An operator also has a disadvantage. The custom resource must be in the Flux manifests for Headscale, and not in `dis-way/adminservices`. Thus `acl.hujson` and the group mapping are in two different locations.
+
+### Estimate of work
+
+The estimates are in person-days for one developer who knows Go. The two alternatives use the same sync core.
+
+| Work item | CronJob | Operator |
+|---|---|---|
+| Sync core: hashes, change detection, HuJSON edits, conflicts | 4 | 4 |
+| Microsoft Graph client, normalization of guest users, domain filter | 2 | 2 |
+| Headscale gRPC client | 1 | 1 |
+| GitHub App commits and conflict pull request | 2 | 2 |
+| CI check workflow | 1 | 1 |
+| Unit tests for the sync core | 3 | 3 |
+| CRD API types, CEL validation and status conditions | 0 | 2 |
+| Reconciler: requeue, status updates and backoff | 0 | 2–3 |
+| Integration tests with envtest | 0 | 2–3 |
+| Packaging: image, manifests, RBAC, ExternalSecrets and Terraform | 2 | 3 |
+| **Total for the first version** | **15** | **22–24** |
+
+| Maintenance item for each year | CronJob | Operator |
+|---|---|---|
+| Dependency updates: Microsoft Graph SDK, GitHub client, Renovate pull requests | 1–2 | 1–2 |
+| Changes in the Headscale gRPC API. Headscale is version 0.x and can change the API in a minor release. | 2–3 | 2–3 |
+| Updates of controller-runtime and Kubernetes libraries, and CRD version upgrades | 0 | 3–5 |
+| Troubleshooting | 1 | 1–2 |
+| **Total for each year** | **4–6** | **7–12** |
+
+The platform team already builds operators with kubebuilder, for example `dis-apim-operator`, `dis-messaging-operator` and `dis-cache-operator`.
+The existing scaffolding and release pipelines decrease the first version of an operator by approximately 2–3 days.
+The updates of controller-runtime then occur together with the updates of the other operators.
+The largest maintenance risk is the Headscale gRPC API. This risk is the same for the two alternatives.
+
+### Decision
+
+We use a CronJob.
+
+- The sync core is a Go package with one function, for example `sync.Run(ctx, cfg) (Result, error)`.
+- The CronJob calls this function one time for each run.
+- A later reconciler can call the same function and write `Result` to the status of a custom resource.
+
+We change to an operator only when we have a specific need, for example a self-service group mapping for teams.
+An intermediate step is to run the same program as a Deployment with a loop every 5 minutes. This gives a `/metrics` endpoint and no new pod for each run, without a CRD.
+
 If we do not do this, the ACL policy stays outside Git, and admins continue to copy group membership by hand for each VPN access request.
 
 # Prior art
@@ -372,5 +444,5 @@ If we do not do this, the ACL policy stays outside Git, and admins continue to c
 - Set `oidc.allowed_groups` to the union of the mapped Entra ID groups. Only users in a mapped group can log in.
 - Change the VPN access request template to remove the manual ACL group step.
 - Sync `tagOwners` from Entra ID groups with the same group mapping.
-- Replace the CronJob with an operator and a custom resource for the group mapping.
+- Replace the CronJob with an operator and a custom resource for the group mapping, if teams need a self-service group mapping. See [CronJob or operator](#cronjob-or-operator).
 - Add a Grafana alert for a failed sync run and for a conflict.
