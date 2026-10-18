@@ -234,12 +234,13 @@ The sync tool uses the Go library [`github.com/tailscale/hujson`](https://github
 The library changes one value in a HuJSON document and keeps the comments and the format of all other values.
 The sync tool changes only the member lists of mapped groups.
 A library that converts HuJSON to plain JSON removes the comments. Do not use such a library.
+[headscale-pf](https://github.com/YouSysAdmin/headscale-pf) uses the same library for the same task. See [Prior art](#prior-art).
 
 ## Rules for groups
 
 | Case | Behaviour |
 |---|---|
-| Mapped group | The sync tool replaces the members on each run. |
+| Mapped group | The sync tool replaces the members on each run. If the members in the live policy are different from the members at the last sync, a person changed them. The tool writes a warning with the removed and added members to the job log. |
 | Manual group | The sync tool does not change the group. |
 | Mapped group is empty in Entra ID | The tool writes `"group:x": []`. The group stays in the policy, so the rules that use it stay valid. |
 | Mapped group is not in the policy | The tool adds the group with its members. |
@@ -323,7 +324,8 @@ The CronJob has `concurrencyPolicy: Forbid`. Only one run occurs at a time.
 - The sync tool is new code that the team must maintain.
 - Changes in Entra ID and Headplane make commits from a bot in Git.
 - A change in Headplane takes effect before a review. Git shows the change after it occurred.
-- An admin can edit the members of a mapped group in Headplane. The sync tool removes the edit without a message to the admin.
+- An admin can edit the members of a mapped group in Headplane. The sync tool removes the edit at the next run. The tool writes a warning to the job log, but Headplane does not show a message to the admin. Headplane has a structured editor for groups since [tale/headplane#608](https://github.com/tale/headplane/pull/608), so this edit is easy to do by mistake.
+- Headplane writes the full policy when an admin saves it. If Headplane changes the format or removes comments, each save is a change of the live policy, and the sync tool commits the new format to Git.
 - The sync tool needs three credentials: a Headscale API key, a GitHub App key, and an Entra ID federated identity.
 - A change in Git takes effect up to 5 minutes after the merge.
 
@@ -346,6 +348,8 @@ This design is the only one that we found that gives all these properties:
 | A CronJob that only exports the live policy to Git | Git is a backup only. Admins cannot change the policy in Git. |
 | Policy file in Git without the `groups` section, and the tool adds groups before `policy set` | A person who writes a rule cannot see the group names and members in Git. |
 | Group mapping from a name prefix in Entra ID | A new Entra ID group can appear in the ACL policy without a review in Git. |
+| OIDC groups in Headscale ([juanfont/headscale#3216](https://github.com/juanfont/headscale/pull/3216)) | The pull request is open and not merged. Headscale updates the groups of a user only when the user logs in. If an admin removes a user from an Entra ID group, the user keeps the access until the next login. The time until the next login depends on `node.expiry`. The sync tool removes the access within 5 minutes. |
+| [headscale-pf](https://github.com/YouSysAdmin/headscale-pf) without other code | headscale-pf writes group members from an identity provider into a policy template. It does not support Entra ID. It is one-way, so it does not commit edits from Headplane to Git, and it does not detect conflicts. |
 
 ## CronJob or operator
 
@@ -408,6 +412,12 @@ The existing scaffolding and release pipelines decrease the first version of an 
 The updates of controller-runtime then occur together with the updates of the other operators.
 The largest maintenance risk is the Headscale gRPC API. This risk is the same for the two alternatives.
 
+The estimates do not include reuse of headscale-pf.
+headscale-pf already writes group members into a HuJSON template and keeps the comments.
+If we add an Entra ID source to headscale-pf, the work items "Microsoft Graph client" and "HuJSON edits" decrease by approximately 2 days for the two alternatives.
+The sources of headscale-pf are in a Go `internal/` package, so other Go modules cannot import them.
+Thus we must contribute the source upstream and run headscale-pf as a program, or keep a fork.
+
 ### Decision
 
 We use a CronJob.
@@ -424,7 +434,19 @@ If we do not do this, the ACL policy stays outside Git, and admins continue to c
 # Prior art
 [prior-art]: #prior-art
 
-- [tailscale/gitops-acl-action](https://github.com/tailscale/gitops-acl-action) writes a policy file from Git to Tailscale. It is one-way. An edit in the admin console is lost at the next run of the action.
+We did not find a tool that syncs the Headscale ACL policy in two directions between Git and the live policy. Some tools do parts of this design.
+
+| Project | What it does | Relation to this RFC |
+|---|---|---|
+| [tailscale/gitops-acl-action](https://github.com/tailscale/gitops-acl-action) | Writes a policy file from Git to Tailscale. It stores the ETag of the last policy that it wrote in `version-cache.json`. If the ETag in Tailscale is different, an admin changed the policy in the admin console. The action then writes a warning, or fails with `--fail-on-manual-edits`. | One-way. The ETag cache is the same idea as the `hash_last` in the sync state. |
+| [YouSysAdmin/headscale-pf](https://github.com/YouSysAdmin/headscale-pf) | Reads group members from JumpCloud, Authentik, LDAP or Keycloak. Writes them into a HuJSON policy template, and keeps comments, key order and format. Go, MIT licence, supports Headscale 0.26 and later. | Does the Entra ID to groups part, but without an Entra ID source. A candidate for reuse. See [Estimate of work](#estimate-of-work). |
+| [juanfont/headscale#3216](https://github.com/juanfont/headscale/pull/3216) | Open pull request. Headscale stores the OIDC `groups` claim at each login. A rule can use `group:<name>@<domain>`. The author runs it with Entra ID and Headplane. | Groups update only at login, so a removal from an Entra ID group does not remove access immediately. See [Rationale and alternatives](#rationale-and-alternatives). |
+| [infradohq/headscale-operator](https://github.com/infradohq/headscale-operator) | Kubernetes operator. Merges entries into a HuJSON base policy and writes it with the gRPC `SetPolicy` call. | A Go example for the Headscale gRPC client. The custom resource is the source of truth, so it overwrites edits in Headplane. |
+| [potatonode/headmaster](https://github.com/potatonode/headmaster) | Rust operator with a SCIM sidecar for users and groups. | The custom resource owns the policy, so it overwrites edits in Headplane. |
+| [gyurci08/headscale-oidc-sync](https://github.com/gyurci08/headscale-oidc-sync) | Writes LDAP groups into an ACL file and restarts the Headscale container. | File mode only. |
+
+Other prior art:
+
 - Tailscale can get users and groups from Entra ID with SCIM (System for Cross-domain Identity Management). Headscale does not support SCIM.
 - Headscale supports `oidc.allowed_groups`. It controls which Entra ID groups can log in. It does not write ACL groups.
 - Flux and Argo CD use Git as the only source of truth and overwrite changes in the cluster. This RFC does not do that, because we want edits in Headplane to stay.
@@ -437,6 +459,9 @@ If we do not do this, the ACL policy stays outside Git, and admins continue to c
 - Which Entra ID groups and ACL group names do we start with?
 - Where must the source code of the sync tool be, and which GitHub App must it use?
 - Is 5 minutes the correct interval?
+- Must we contribute an Entra ID source to headscale-pf, or write the Microsoft Graph client and the HuJSON edits in the sync tool?
+- Does a save in our version of Headplane keep the comments and the format of the policy? We must test this before the implementation.
+- If juanfont/headscale#3216 is merged, can the sync tool and OIDC groups work together? For example, OIDC groups for access at login, and the sync tool for fast removal.
 
 # Future possibilities
 [future-possibilities]: #future-possibilities
