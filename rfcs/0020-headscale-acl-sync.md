@@ -1,7 +1,7 @@
 - Feature Name: headscale_acl_sync
 - Title: Headscale ACL policy in Git with Entra ID group sync
 - Start Date: 2026-10-18
-- RFC PR: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/pull/0000)
+- RFC PR: [altinn/altinn-platform#4233](https://github.com/Altinn/altinn-platform/pull/4233)
 - Github Issue: None.
 - Product/Category: VPN (Headscale)
 - State: **REVIEW** (possible states are: **REVIEW**, **ACCEPTED** and **REJECTED**)
