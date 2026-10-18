@@ -85,6 +85,7 @@ Pull request → headscale-access.yml → Terraform
 | Resource | Use |
 |---|---|
 | `azuread_group.headscale_vpn_access` and members | The members are all users in `headscale_groups`. Only these users can log in to Headscale. |
+| `azuread_app_role_assignment.headscale_vpn_access` | Assigns the group to the Headscale OIDC app. The app registration stays in `admin-prod-aks-rg`, and `data.azuread_service_principal` gets it. |
 | `data.azuread_user` for each member | Gets `mail` and `user_principal_name`. |
 | `azurerm_key_vault_secret.headscale_acl` | The rendered policy: `templatefile("acl.hujson.tftpl", { groups = jsonencode(local.groups) })`. |
 | `output.headscale_acl` | The rendered policy as a non-sensitive output. The plan shows a readable diff, because the value of a Key Vault secret is sensitive. |
@@ -172,8 +173,8 @@ The next `terraform apply` in the root writes the policy from Git to Key Vault. 
 ## Migration
 
 1. Export the live policy with `headscale policy get`. Make it into `acl.hujson.tftpl`, and move the ACL group members into `headscale_groups`.
-2. Move `azuread_group.headscale_vpn_access` and its members from `admin-prod-aks-rg` to `headscale-access`. Use `removed` blocks with `destroy = false` in the old root, and `import` blocks in the new root.
-3. `azuread_app_role_assignment.headscale_vpn_access` stays with the OIDC app in `admin-prod-aks-rg`. It gets the group with `data.azuread_group`.
+2. Move `azuread_group.headscale_vpn_access`, its members and `azuread_app_role_assignment.headscale_vpn_access` from `admin-prod-aks-rg` to `headscale-access`. Use `removed` blocks with `destroy = false` in the old root, and `import` blocks in the new root.
+3. The OIDC app registration stays in `admin-prod-aks-rg`. The new root gets its service principal with `data.azuread_service_principal`.
 4. Check that no plan shows a destroy.
 
 # Drawbacks
