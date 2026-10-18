@@ -116,17 +116,38 @@ The check is a required status check. An invalid policy does not get to Key Vaul
 | Resource | Use |
 |---|---|
 | ExternalSecret `headscale-acl` | Copies the Key Vault secret to a Kubernetes Secret. `refreshInterval: 5m`. |
-| ExternalSecret for the API key | Gets the Headscale API key from Key Vault. |
+| ExternalSecret `headscale-cli-apikey` | Gets the Headscale API key from Key Vault. |
+| ConfigMap `headscale-acl-apply` | The script of the CronJob. |
 | CronJob `headscale-acl-apply` | Runs every 5 minutes with `concurrencyPolicy: Forbid`. |
 
-Each CronJob run:
+These resources are in the same Kustomization as the Headscale Deployment, in `manifests/infra/headscale`.
+Flux deploys them together with Headscale. A new Headscale database gets the policy within 5 minutes of the first deploy.
 
-1. Read the policy from the Secret and the live policy with `headscale policy get`.
-2. If they are equal, stop.
-3. Write a warning with the difference to the job log.
-4. Run `headscale policy check` and `headscale policy set`.
+**Image.** The CronJob uses `ghcr.io/juanfont/headscale:<version>-debug`.
+Headscale publishes this image for each release. It contains the `headscale` binary and a busybox shell.
+The CronJob and the Deployment use the same version. One Renovate group updates the two tags in one pull request.
+
+**Connection.** The CronJob connects to `headscale.headscale.svc:50443` with `HEADSCALE_CLI_ADDRESS` and `HEADSCALE_CLI_API_KEY`.
+Do not use `--bypass-server-and-access-database-directly`. It opens the SQLite database while Headscale uses it.
+
+**Script.**
+
+```sh
+set -eu
+headscale policy get > /tmp/live.hujson 2>/dev/null || : > /tmp/live.hujson
+if cmp -s /tmp/live.hujson /policy/acl.hujson; then
+  echo "policy in sync"; exit 0
+fi
+echo "WARNING: live policy differs from Git, overwriting"
+diff -u /tmp/live.hujson /policy/acl.hujson || true
+headscale policy check -f /policy/acl.hujson
+headscale policy set -f /policy/acl.hujson
+```
 
 If `policy set` fails, the live policy does not change and the run fails.
+
+**Pod.** The same security context as Headscale: user 65532, `readOnlyRootFilesystem: true` and `capabilities.drop: [ALL]`.
+The pod mounts an `emptyDir` on `/tmp`, the Secret `headscale-acl` on `/policy`, and the ConfigMap with the script.
 
 ## Headplane roles
 
@@ -187,8 +208,9 @@ If we do not do this, the ACL policy stays outside Git, and admins copy group me
 [unresolved-questions]: #unresolved-questions
 
 - Which Key Vault contains `headscale-acl`, and does the workflow identity have the role Key Vault Secrets Officer on it?
-- Where are the Kubernetes manifests for the ExternalSecrets and the CronJob? The Headscale manifests come from `oci://altinncr.azurecr.io/manifests/infra/headscale`.
-- Which image does the CronJob use? The Headscale image does not contain a shell.
+- Does `headscale policy get` return the policy byte for byte, with the same last newline? If not, the script must remove trailing white space before `cmp`.
+- Is `grpc_allow_insecure` set in the Headscale configuration, or does the CronJob need TLS for gRPC?
+- How do we rotate the API key? Headscale API keys expire after 90 days by default. We must use the same procedure as for the Headplane API key.
 
 # Future possibilities
 [future-possibilities]: #future-possibilities
