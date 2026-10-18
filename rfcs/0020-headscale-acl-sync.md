@@ -142,10 +142,28 @@ The group names and the members are in the file. A person who writes a rule can 
 | Headscale | Stays in `policy.mode: database`. |
 | Sync tool | A Go program in a container image. It runs as a Kubernetes CronJob every 5 minutes. |
 | Sync state | A ConfigMap. It contains the SHA-256 hash of the policy at the last successful sync. |
-| Policy file | `acl.hujson` in a Git repository. |
-| Group mapping | `acl-groups.yaml` in the same directory as the policy file. |
+| Policy file | `headscale-acl/acl.hujson` in [`dis-way/adminservices`](https://github.com/dis-way/adminservices). |
+| Group mapping | `headscale-acl/acl-groups.yaml` in the same repository. |
 | GitHub App | Gives the sync tool permission to read and write the policy file. |
 | Entra ID identity | A managed identity with a federated credential for the sync tool service account. |
+
+## Location in Git
+
+The policy file and the group mapping are in the private repository `dis-way/adminservices`, in the directory `headscale-acl/`.
+
+- The repository already contains the Terraform code for Headscale: the OIDC (OpenID Connect) app registration and the Entra ID group `headscale-vpn-access`.
+- The Entra ID groups for the group mapping are also in Terraform in this repository. They use the same pattern as `headscale-vpn-access`. A change of group membership is thus also a reviewed change in Git.
+- The directory `headscale-acl/` is outside `tf/`. The Terraform workflows filter on paths under `tf/`, so a commit from the sync tool does not start a Terraform run.
+
+The group mapping also contains the allowed email domains:
+
+```yaml
+allowedDomains:
+  - digdir.no
+groups:
+  group:team-core: headscale-team-core
+  group:team-tilgangsinfo: headscale-team-tilgangsinfo
+```
 
 ## Access to Headscale
 
@@ -180,7 +198,7 @@ The managed identity has these Microsoft Graph application permissions:
 The sync tool reads the members with this request:
 
 ```
-GET /v1.0/groups/{id}/transitiveMembers/microsoft.graph.user?$select=mail,userPrincipalName
+GET /v1.0/groups/{id}/transitiveMembers/microsoft.graph.user?$select=mail,userPrincipalName,userType
 ```
 
 `transitiveMembers` includes the members of nested groups.
@@ -230,10 +248,38 @@ A library that converts HuJSON to plain JSON removes the comments. Do not use su
 
 ## User identifier
 
-Headscale matches an ACL user by the identifier that Headscale stores for the OIDC user.
+Headscale matches an ACL user by the email that Headscale stores for the OIDC user.
+For our users, this email has the format `name@digdir.no`.
 The sync tool must write the same identifier.
-The default is the `mail` attribute in lowercase.
-If `mail` is empty, the tool uses `userPrincipalName` and writes a warning.
+
+The users are guest users (Entra ID B2B) in the tenant of the Headscale app registration.
+The `userPrincipalName` of a guest user is not the email. It has this format:
+
+```
+first.last_digdir.no#EXT#@<tenant>.onmicrosoft.com
+```
+
+The sync tool normalizes each member to an identifier with these steps:
+
+1. If `mail` is not empty, use `mail`.
+2. If `mail` is empty and `userPrincipalName` contains `#EXT#`, use the part before `#EXT#`. Replace the last `_` in this part with `@`.
+3. If `mail` is empty and `userPrincipalName` does not contain `#EXT#`, use `userPrincipalName`.
+4. Change the identifier to lowercase.
+5. If the domain of the identifier is not in `allowedDomains`, do not add the member. Write a warning to the job log.
+
+Step 2 replaces the last `_`, because the local part of an email can contain `_`.
+
+| `mail` | `userPrincipalName` | Identifier |
+|---|---|---|
+| `First.Last@digdir.no` | `first.last_digdir.no#EXT#@<tenant>.onmicrosoft.com` | `first.last@digdir.no` |
+| (empty) | `first.last_digdir.no#EXT#@<tenant>.onmicrosoft.com` | `first.last@digdir.no` |
+| (empty) | `first_last_digdir.no#EXT#@<tenant>.onmicrosoft.com` | `first_last@digdir.no` |
+| `aas-user@ai-dev.no` | `aas-user_ai-dev.no#EXT#@<tenant>.onmicrosoft.com` | Not added. The domain is not allowed. |
+| (empty) | `user@<tenant>.onmicrosoft.com` | Not added. The domain is not allowed. |
+
+The domain filter applies to mapped groups only.
+The sync tool does not remove members from manual groups.
+The [CI check](#ci-check) rejects a member with a domain that is not allowed in all groups.
 
 A user does not have to log in to Headscale before the sync tool adds the user to a group.
 
@@ -264,7 +310,8 @@ The tool must not change the live policy if it does not have all data.
 A GitHub Actions workflow runs on each pull request that changes the policy file or the group mapping.
 
 1. Check that each group in the group mapping is in `acl.hujson`.
-2. Run `headscale policy check -f acl.hujson` with the same Headscale version as the cluster.
+2. Check that each member of each group has a domain in `allowedDomains`.
+3. Run `headscale policy check -f acl.hujson` with the same Headscale version as the cluster.
 
 ## Concurrency
 
@@ -313,10 +360,8 @@ If we do not do this, the ACL policy stays outside Git, and admins continue to c
 # Unresolved questions
 [unresolved-questions]: #unresolved-questions
 
-- Which Git repository and directory must contain `acl.hujson` and `acl-groups.yaml`?
 - Must the sync tool commit directly to the default branch, or open a pull request for each change from the live policy?
-- Which identifier does Headscale store for our OIDC users: `mail`, `userPrincipalName` or the username? We must check `headscale users list -o json` before the implementation.
-- How must the tool handle guest users, where `userPrincipalName` contains `#EXT#`?
+- The ruleset `protect-main` in `dis-way/adminservices` requires a pull request, but it is disabled now. If we enable it, the GitHub App must be a bypass actor, or the sync tool must open pull requests.
 - Which Entra ID groups and ACL group names do we start with?
 - Where must the source code of the sync tool be, and which GitHub App must it use?
 - Is 5 minutes the correct interval?
