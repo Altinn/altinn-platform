@@ -12,13 +12,14 @@ mock_provider "azurerm" {
 mock_provider "github" {}
 
 variables {
-  github_repo_name    = "altinn-auth"
-  github_org_id       = "12345"
-  github_environments = []
-  github_branches     = ["main"]
-  product_names       = ["access-management"]
-  subscription_id     = "00000000-0000-0000-0000-000000000001"
-  resource_group_name = "syncroots"
+  github_repo_name        = "altinn-auth"
+  github_org_id           = "12345"
+  github_sub_claim_prefix = "repo:Altinn/altinn-auth"
+  github_environments     = []
+  github_branches         = ["main"]
+  product_names           = ["access-management"]
+  subscription_id         = "00000000-0000-0000-0000-000000000001"
+  resource_group_name     = "syncroots"
 }
 
 run "single_product_permissions_are_unchanged" {
@@ -62,9 +63,67 @@ run "shared_identity_can_publish_all_product_prefixes" {
     error_message = "The product prefixes must be alternatives in the write condition."
   }
   assert {
-    condition     = toset(keys(azurerm_federated_identity_credential.syncroot_pusher_branches)) == toset(["main"]) && toset(keys(azurerm_federated_identity_credential.syncroot_pusher_branches_immutable)) == toset(["main"]) && length(azurerm_federated_identity_credential.syncroot_pusher_envs) == 0 && length(azurerm_federated_identity_credential.syncroot_pusher_envs_immutable) == 0
+    condition     = toset(keys(azurerm_federated_identity_credential.syncroot_pusher_branches)) == toset(["main"]) && length(azurerm_federated_identity_credential.syncroot_pusher_branches_immutable) == 0 && length(azurerm_federated_identity_credential.syncroot_pusher_envs) == 0 && length(azurerm_federated_identity_credential.syncroot_pusher_envs_immutable) == 0
     error_message = "Shared publishing must remain restricted to main, with no environment federation."
   }
+}
+
+run "name_based_repo_federates_only_on_name_based_subjects" {
+  command = plan
+  module {
+    source = "../modules/syncroot-github-repo"
+  }
+  variables {
+    github_environments = ["at22"]
+  }
+  assert {
+    condition     = azurerm_federated_identity_credential.syncroot_pusher_envs["at22"].subject == "repo:Altinn/altinn-auth:environment:at22" && azurerm_federated_identity_credential.syncroot_pusher_branches["main"].subject == "repo:Altinn/altinn-auth:ref:refs/heads/main"
+    error_message = "A repo on name-based subjects must federate on the name-based subject for each environment and branch."
+  }
+  assert {
+    condition     = length(azurerm_federated_identity_credential.syncroot_pusher_envs_immutable) == 0 && length(azurerm_federated_identity_credential.syncroot_pusher_branches_immutable) == 0
+    error_message = "A repo on name-based subjects must not get immutable credentials."
+  }
+}
+
+run "immutable_repo_federates_only_on_immutable_subjects" {
+  command = plan
+  module {
+    source = "../modules/syncroot-github-repo"
+  }
+  override_data {
+    target = data.github_repository.syncroot_source
+    values = {
+      repo_id = 854445147
+    }
+  }
+  variables {
+    github_environments     = ["at22"]
+    github_sub_claim_prefix = "repo:Altinn@12345/altinn-auth@854445147"
+  }
+  assert {
+    condition     = azurerm_federated_identity_credential.syncroot_pusher_envs_immutable["at22"].subject == "repo:Altinn@12345/altinn-auth@854445147:environment:at22" && azurerm_federated_identity_credential.syncroot_pusher_branches_immutable["main"].subject == "repo:Altinn@12345/altinn-auth@854445147:ref:refs/heads/main"
+    error_message = "A repo on immutable subjects must federate on the immutable subject for each environment and branch."
+  }
+  assert {
+    condition     = azurerm_federated_identity_credential.syncroot_pusher_envs_immutable["at22"].name == "Altinn-altinn-auth-env-at22-immutable" && azurerm_federated_identity_credential.syncroot_pusher_branches_immutable["main"].name == "Altinn-altinn-auth-ref-main-immutable"
+    error_message = "Immutable credentials must keep their existing names so repos already on immutable subjects keep them."
+  }
+  assert {
+    condition     = length(azurerm_federated_identity_credential.syncroot_pusher_envs) == 0 && length(azurerm_federated_identity_credential.syncroot_pusher_branches) == 0
+    error_message = "A repo on immutable subjects must not get name-based credentials."
+  }
+}
+
+run "unknown_subject_prefix_is_rejected" {
+  command = plan
+  module {
+    source = "../modules/syncroot-github-repo"
+  }
+  variables {
+    github_sub_claim_prefix = "repo:Altinn/altinn-auth:context"
+  }
+  expect_failures = [azurerm_user_assigned_identity.syncroot_pusher]
 }
 
 run "changing_products_keeps_identity_and_role_names" {

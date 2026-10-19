@@ -11,6 +11,18 @@ to all its product prefixes. Shared entries must specify identical branches; the
 on the shared identity. Adding or removing a product keeps the repository's identity and
 credentials; removing its last product removes the publishing resources.
 
+Each identity federates only on the OIDC subject format GitHub uses for its
+repository. Repositories created, renamed or transferred after 2026-07-15, and
+repositories that opt in, get the immutable format with the org and repo ids
+(`repo:Altinn@<org id>/<repo>@<repo id>:...`); older ones keep the name-based format
+(`repo:Altinn/<repo>:...`). Every plan reads the current format from
+`GET /repos/{owner}/{repo}/actions/oidc/customization/sub`, which needs the Actions
+(read) permission on the GitHub App. When a repository switches format, run this
+workflow so its identity swaps credentials; publishing from that repository fails until
+then. Entra allows at most 20 credentials per identity, one per environment and branch.
+An identity near that limit may need a second apply after a switch, because the new
+credentials can be created before the old ones are deleted.
+
 Identity names use the organization and repository, such as
 `Altinn-altinn-auth-syncroot`. This replaces all existing product-based publishing
 modules. Tear down those modules before creating the replacements: both use the

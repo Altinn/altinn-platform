@@ -6,6 +6,15 @@ resource "azurerm_user_assigned_identity" "syncroot_pusher" {
     submodule         = "oidc-syncroot-pusher"
     github_repository = "${var.github_org_name}/${var.github_repo_name}"
   })
+
+  lifecycle {
+    # An unknown prefix (such as a customized subject template) matches neither form. Fail
+    # the plan instead of guessing, which could delete the credentials the repo relies on.
+    precondition {
+      condition     = contains([local.subject_repo, local.subject_repo_immutable], var.github_sub_claim_prefix)
+      error_message = "GitHub reports the OIDC subject prefix '${var.github_sub_claim_prefix}' for ${var.github_org_name}/${var.github_repo_name}, which is neither '${local.subject_repo}' nor '${local.subject_repo_immutable}'. Customized subject templates are not supported."
+    }
+  }
 }
 
 data "github_repository" "syncroot_source" {
@@ -23,18 +32,19 @@ locals {
   branch_slugs = { for b in var.github_branches : b => replace(b, "/[^a-zA-Z0-9_-]/", "_") }
   env_slugs    = { for e in var.github_environments : e => replace(e, "/[^a-zA-Z0-9_-]/", "_") }
 
-  # Repos created, renamed or transferred after 2026-07-15 get OIDC subject claims that
-  # embed the immutable org and repo ids instead of the mutable names, and repos can opt
-  # in ahead of that. Entra compares subjects verbatim, so federate on both forms and let
-  # GitHub decide which one the token carries. The name-based credentials can go once
-  # every repo below has flipped.
+  # Repos created, renamed or transferred after 2026-07-15, or opted in, get OIDC subject
+  # claims that embed the immutable org and repo ids; older repos keep the name-based form.
+  # Entra compares subjects verbatim and allows at most 20 credentials per identity, so
+  # federate only on the form GitHub reports for the repo rather than on both. The resource
+  # addresses stay fixed, so a repo that switches form swaps one set for the other.
   # https://github.blog/changelog/2026-04-23-immutable-subject-claims-for-github-actions-oidc-tokens/
   subject_repo           = "repo:${var.github_org_name}/${var.github_repo_name}"
   subject_repo_immutable = "repo:${var.github_org_name}@${var.github_org_id}/${var.github_repo_name}@${data.github_repository.syncroot_source.repo_id}"
+  use_immutable_subject  = var.github_sub_claim_prefix == local.subject_repo_immutable
 }
 
 resource "azurerm_federated_identity_credential" "syncroot_pusher_envs" {
-  for_each            = var.github_environments
+  for_each            = local.use_immutable_subject ? toset([]) : var.github_environments
   name                = "${local.credential_name_prefix}-env-${local.env_slugs[each.value]}"
   resource_group_name = var.resource_group_name
   parent_id           = azurerm_user_assigned_identity.syncroot_pusher.id
@@ -44,7 +54,7 @@ resource "azurerm_federated_identity_credential" "syncroot_pusher_envs" {
 }
 
 resource "azurerm_federated_identity_credential" "syncroot_pusher_envs_immutable" {
-  for_each            = var.github_environments
+  for_each            = local.use_immutable_subject ? var.github_environments : toset([])
   name                = "${local.credential_name_prefix}-env-${local.env_slugs[each.value]}-immutable"
   resource_group_name = var.resource_group_name
   parent_id           = azurerm_user_assigned_identity.syncroot_pusher.id
@@ -54,7 +64,7 @@ resource "azurerm_federated_identity_credential" "syncroot_pusher_envs_immutable
 }
 
 resource "azurerm_federated_identity_credential" "syncroot_pusher_branches" {
-  for_each            = var.github_branches
+  for_each            = local.use_immutable_subject ? toset([]) : var.github_branches
   name                = "${local.credential_name_prefix}-ref-${local.branch_slugs[each.value]}"
   resource_group_name = var.resource_group_name
   parent_id           = azurerm_user_assigned_identity.syncroot_pusher.id
@@ -64,7 +74,7 @@ resource "azurerm_federated_identity_credential" "syncroot_pusher_branches" {
 }
 
 resource "azurerm_federated_identity_credential" "syncroot_pusher_branches_immutable" {
-  for_each            = var.github_branches
+  for_each            = local.use_immutable_subject ? var.github_branches : toset([])
   name                = "${local.credential_name_prefix}-ref-${local.branch_slugs[each.value]}-immutable"
   resource_group_name = var.resource_group_name
   parent_id           = azurerm_user_assigned_identity.syncroot_pusher.id
