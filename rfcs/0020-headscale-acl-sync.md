@@ -58,10 +58,29 @@ After the merge, the user is a member of `headscale-vpn-access` and of `group:te
 The admin does not edit Headscale or Entra ID.
 A user can be in more than one group.
 
+**Add a host.** The admin adds an alias for an IP prefix to `headscale_hosts` in `terraform.tfvars`:
+
+```hcl
+headscale_hosts = {
+  dis-core-prod-aks          = "10.205.0.0/24"
+  admin-prod-aks-internal-lb = "10.90.1.250/32"
+}
+```
+
+A rule uses the alias as a destination, for example `dis-core-prod-aks:443`.
+The variable validates that each value is an IPv4 or IPv6 prefix in CIDR notation.
+
 **Change a rule.** The admin changes `acl.hujson.tftpl` in the same root:
 
 ```hujson
 {
+  // Terraform writes the hosts from headscale_hosts.
+  "hosts": {
+%{ for name, prefix in hosts ~}
+    "${name}": "${prefix}",
+%{ endfor ~}
+  },
+
   // Terraform writes the groups from headscale_groups, one member on each line.
   "groups": {
 %{ for name, members in groups ~}
@@ -79,10 +98,10 @@ A user can be in more than one group.
 }
 ```
 
-The template also contains `hosts`, `tagOwners` and `ssh`. The admin edits them by hand.
+The template also contains `tagOwners` and `ssh`. The admin edits them by hand.
 
-**Remove a group.** Remove the key from `headscale_groups`, and remove all uses of `group:<name>` from the template in the same pull request.
-If a rule uses a group that does not exist, `headscale policy check` fails.
+**Remove a group or a host.** Remove the key from `headscale_groups` or `headscale_hosts`, and remove all uses of it from the template in the same pull request.
+If a rule uses a group or a host that does not exist, `headscale policy check` fails.
 
 **Headplane.** Admins get the [Headplane role](https://headplane.net/features/sso) IT Admin. This role can manage machines and users, but it cannot change ACLs.
 
@@ -108,10 +127,11 @@ Pull request → headscale-access.yml → Terraform
 | `azuread_group.headscale_vpn_access` and members | The members are all users in `headscale_groups`. Only these users can log in to Headscale. |
 | `azuread_app_role_assignment.headscale_vpn_access` | Assigns the group to the Headscale OIDC app. The app registration stays in `admin-prod-aks-rg`, and `data.azuread_service_principal` gets it. |
 | `data.azuread_user` for each member | Gets `mail` and `user_principal_name`. The workflow identity needs the Microsoft Graph permission `User.Read.All`. |
-| `azurerm_key_vault_secret.headscale_acl` | The rendered policy: `templatefile("acl.hujson.tftpl", { groups = local.groups })`. It is in the dis-system Key Vault of admin-prod-aks (`module.dis_system_kv` in `admin-prod-aks-rg`). The workflow identity already has the role Key Vault Secrets Officer on it. |
+| `azurerm_key_vault_secret.headscale_acl` | The rendered policy: `templatefile("acl.hujson.tftpl", { groups = local.groups, hosts = var.headscale_hosts })`. It is in the dis-system Key Vault of admin-prod-aks (`module.dis_system_kv` in `admin-prod-aks-rg`). The workflow identity already has the role Key Vault Secrets Officer on it. |
 | `output.headscale_acl` | The rendered policy as a non-sensitive output. The plan shows a readable diff, because the value of a Key Vault secret is sensitive. |
 
 The ACL groups come directly from `headscale_groups`. We do not create an Entra ID group for each ACL group.
+The hosts come directly from `headscale_hosts`. The template writes groups and hosts sorted by name.
 
 Some users are in more than one group. The member resources and the user lookups use the set of unique object IDs as keys:
 
@@ -258,7 +278,7 @@ The next `terraform apply` in the root writes the policy from Git to Key Vault. 
 
 ## Migration
 
-1. Export the live policy with `headscale policy get`. Make it into `acl.hujson.tftpl`, and move the ACL group members into `headscale_groups`.
+1. Export the live policy with `headscale policy get`. Make it into `acl.hujson.tftpl`, move the ACL group members into `headscale_groups`, and move the hosts into `headscale_hosts`.
    Keep the groups that have no members as empty lists.
    On 2026-10-19, the 49 users in the ACL groups were the same 49 users as in `headscale_vpn_access_members`. The migration does not change who can log in.
 2. Move `azuread_group.headscale_vpn_access`, its members and `azuread_app_role_assignment.headscale_vpn_access` from `admin-prod-aks-rg` to `headscale-access`. Use `removed` blocks with `destroy = false` in the old root, and `import` blocks in the new root.
@@ -326,5 +346,5 @@ None. The questions from the review are resolved:
 [future-possibilities]: #future-possibilities
 
 - Change the VPN access request template: one pull request replaces the manual steps.
-- Manage `tagOwners` and `hosts` from Terraform variables.
+- Manage `tagOwners` from a Terraform variable.
 - Add a Grafana alert for a failed CronJob run and for an overwritten edit.
