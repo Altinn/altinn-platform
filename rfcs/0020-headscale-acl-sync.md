@@ -2,6 +2,10 @@
 - Title: Headscale ACL policy and VPN access from Git
 - Start Date: 2026-10-18
 - RFC PR: [altinn/altinn-platform#4233](https://github.com/Altinn/altinn-platform/pull/4233)
+- Implementation PRs, in merge order:
+  1. [dis-way/adminservices#414](https://github.com/dis-way/adminservices/pull/414): Terraform root `headscale-access` and its workflow
+  2. [dis-way/gitops-manifests#2128](https://github.com/dis-way/gitops-manifests/pull/2128): `oci/headscale/acl-sync` (ExternalSecret and CronJob)
+  3. [dis-way/adminservices#415](https://github.com/dis-way/adminservices/pull/415): migration in `admin-prod-aks-rg` and the Headplane `it_admin` role
 - Github Issue: None.
 - Product/Category: VPN (Headscale)
 - State: **REVIEW** (possible states are: **REVIEW**, **ACCEPTED** and **REJECTED**)
