@@ -182,6 +182,21 @@ The resources are in the layer `oci/headscale/acl-sync` in [`dis-way/gitops-mani
 `dis-system-store` is a namespaced SecretStore in `flux-system`, so the ExternalSecret and its Secret are there.
 The CronJob reads the Secret with `kubectl`, so it does not need a SecretStore in `headscale`.
 
+**Why the CronJob does not mount the Secret.** A Secret volume must be in the namespace of the pod.
+To mount `headscale-acl`, the Secret must be in `headscale`, or the CronJob must run in `flux-system`:
+
+| Option | What it needs | Disadvantage |
+|---|---|---|
+| A. `kubectl get` across namespaces (chosen) | A Role in `flux-system` with `get` on only `headscale-acl`. | The job can read one Secret in `flux-system`, and the script decodes base64. |
+| B. SecretStore in `headscale` for the dis-system Key Vault | A ServiceAccount in `headscale` and a federated credential on the identity `dis-sys-kv-admin-prod`. | A user who can create an ExternalSecret in `headscale` can read all dis-system secrets, for example for Grafana and PostgreSQL. |
+| C. SecretStore in `headscale` with the ESO Kubernetes provider, which copies `flux-system/headscale-acl` | A ServiceAccount and a Role with `get` on the same Secret, now used by ESO, and a second ExternalSecret. | The same permission, with more objects. The second copy adds up to one more refresh interval. |
+| D. Run the CronJob in `flux-system` and mount the Secret | A Role in `headscale` with `pods/exec` for a ServiceAccount in `flux-system`. | An application workload in the namespace of the Flux controllers, with the network policies of that namespace. |
+
+A mount updates the file automatically and removes the permission to read a Secret.
+The CronJob reads the Secret again on each run, so the automatic update does not help.
+Option A has the fewest objects, and its permission is limited to one Secret.
+If we want a mount later, option C is the best, because it does not need an Azure identity and does not give access to more of the Key Vault.
+
 The flux configuration `headscale` deploys the layer as its own Kustomization, `headscale-acl-sync` (path `./acl-sync/`, `dependsOn: headscale`, `wait: false`).
 Flux deploys it together with Headscale, so a new Headscale database gets the policy within 5 minutes of the first deploy.
 With `wait: false`, a failing ExternalSecret does not block the Headscale Kustomization.
