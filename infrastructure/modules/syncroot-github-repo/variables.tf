@@ -14,6 +14,11 @@ variable "github_org_id" {
   description = "Immutable numeric id of the Github org, used in the immutable OIDC subject claim"
 }
 
+variable "github_sub_claim_prefix" {
+  type        = string
+  description = "OIDC subject prefix GitHub uses for the repo (sub_claim_prefix from GET /repos/{owner}/{repo}/actions/oidc/customization/sub). Decides whether the credentials use the name-based or the immutable subject."
+}
+
 variable "github_environments" {
   type        = set(string)
   description = "Github action environments with matching federation"
