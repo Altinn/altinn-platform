@@ -2,9 +2,9 @@
 - Title: On-demand Flux reconcile for product artifacts
 - Start Date: 2026-10-12
 - RFC PR: [altinn/altinn-platform#4180](https://github.com/altinn/altinn-platform/pull/4180)
-- Github Issue: N/A; implementation issues follow RFC acceptance
+- Github Issue: [altinn/altinn-platform#4237](https://github.com/altinn/altinn-platform/issues/4237)
 - Product/Category: CI/CD
-- State: **REVIEW**
+- State: **ACCEPTED**
 
 # Summary
 [summary]: #summary
