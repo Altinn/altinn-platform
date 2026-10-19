@@ -1,9 +1,9 @@
 name: Trigger a Flux reconcile
-description: "Ask Flux in a cluster to reconcile now by calling a generic-oidc Receiver with the job's GitHub OIDC token"
+description: "Ask Flux to reconcile now: send a reconcile request with the job's GitHub OIDC token through the DIS edge gateway to a generic-oidc Receiver"
 
 inputs:
   url:
-    description: "Base URL of the cluster's Flux webhook receiver, for example https://flux-webhook.at23.dis-core.altinn.cloud"
+    description: "Webhook endpoint of the environment on the DIS edge gateway, https://<platform host>/flux-webhook, for example https://platform.at23.altinn.cloud/flux-webhook. The action also uses it, without trailing slashes, as the audience of the OIDC token."
     required: true
   receiver_name:
     description: "Name of the Flux Receiver to trigger"
@@ -11,10 +11,6 @@ inputs:
   receiver_namespace:
     description: "Namespace of the Flux Receiver"
     required: true
-  audience:
-    description: "Audience of the OIDC token. Must equal the audience the Receiver expects. Defaults to the base URL without trailing slashes."
-    required: false
-    default: ""
 
 runs:
   using: composite
@@ -22,10 +18,9 @@ runs:
     - name: Trigger Flux reconcile
       shell: bash
       env:
-        RECEIVER_URL: ${{ inputs.url }}
+        WEBHOOK_URL: ${{ inputs.url }}
         RECEIVER_NAME: ${{ inputs.receiver_name }}
         RECEIVER_NAMESPACE: ${{ inputs.receiver_namespace }}
-        AUDIENCE: ${{ inputs.audience }}
       run: |
         set -euo pipefail
 
@@ -43,19 +38,25 @@ runs:
           exit 1
         fi
 
-        base_url="${RECEIVER_URL}"
+        base_url="${WEBHOOK_URL}"
         while [[ "${base_url}" == */ ]]; do
           base_url="${base_url%/}"
         done
         if [[ "${base_url}" != https://* ]]; then
-          echo "::error::The receiver URL must use https, got '${base_url}'. The request carries a bearer token."
+          echo "::error::The url must use https, got '${base_url}'. The request carries a bearer token."
           exit 1
         fi
-        audience="${AUDIENCE:-${base_url}}"
+        if [[ "${base_url}" != */flux-webhook ]]; then
+          echo "::warning::The url '${base_url}' does not end in /flux-webhook. The webhook endpoint of an environment is https://<platform host>/flux-webhook, for example https://platform.at23.altinn.cloud/flux-webhook."
+        fi
+        # The edge gateway accepts only its webhook endpoint as the audience,
+        # and the Receiver must expect the same value.
+        audience="${base_url}"
 
         # A generic-oidc Receiver has no token, so Flux derives its webhook path
         # from the name and namespace alone. The path is not a secret; the OIDC
-        # token is what authenticates the request.
+        # token is what authenticates the request. The edge gateway forwards
+        # <url>/hook/<digest> to /hook/<digest> in the cluster.
         digest=$(printf '%s%s' "${RECEIVER_NAME}" "${RECEIVER_NAMESPACE}" | sha256sum | cut -d' ' -f1)
         hook_url="${base_url}/hook/${digest}"
 
@@ -74,21 +75,96 @@ runs:
         }
         echo "::add-mask::${token}"
 
-        # curl retries connection errors, timeouts and HTTP 408, 429 and 5xx by
-        # itself. That covers a Receiver or gateway that is briefly unavailable
-        # without hiding a rejected token. --retry-max-time bounds the retries,
-        # also when the server sends a long Retry-After.
         body_file="${RUNNER_TEMP}/flux-receiver-response"
-        status=$(curl --no-progress-meter -o "${body_file}" -w '%{http_code}' \
-          --connect-timeout 10 --max-time 30 \
-          --retry 3 --retry-delay 5 --retry-max-time 60 --retry-all-errors \
-          -H @- \
-          -H 'Content-Type: application/json' \
-          --data '{}' \
-          "${hook_url}" <<< "Authorization: Bearer ${token}") || {
-          echo "::error::The request to the Flux webhook receiver at ${base_url} failed (curl exit code $?). The curl error is in the log above."
-          exit 1
+        headers_file="${RUNNER_TEMP}/flux-receiver-headers"
+
+        # Prints the value of the last response header with this name.
+        response_header() {
+          { grep -i "^$1:" "${headers_file}" || true; } | tail -n 1 | cut -d: -f2- | tr -d '[:space:]'
         }
+
+        # Prints the seconds to wait after a 429. Envoy Gateway sends the
+        # seconds until its rate limit counter resets in X-RateLimit-Reset.
+        # Retry-After can also be a date. A date, a missing value or a number
+        # with more than four digits gives the longest wait.
+        rate_limit_wait() {
+          local hint
+          hint=$(response_header retry-after)
+          if [[ -z "${hint}" ]]; then
+            hint=$(response_header x-ratelimit-reset)
+          fi
+          if [[ ! "${hint}" =~ ^[0-9]{1,4}$ ]] || (( 10#${hint} > 30 )); then
+            echo 30
+          elif (( 10#${hint} < 5 )); then
+            echo 5
+          else
+            echo $(( 10#${hint} ))
+          fi
+        }
+
+        # The claims are not secret. They are what the edge gateway and the
+        # validations of the Receiver examine.
+        print_claims() {
+          jq -R 'split(".")[1] | gsub("-"; "+") | gsub("_"; "/") | @base64d | fromjson
+            | {iss, aud, sub, repository, repository_id, repository_owner_id, ref, workflow_ref}' <<< "${token}" || true
+        }
+
+        # Retries of the reconcile request:
+        # - 429: the edge gateway counts requests per minute, so a retry after a
+        #   few seconds mostly gets a 429 again. Wait as long as the response
+        #   asks, at least 5 s and at most 30 s, and 30 s if it gives no time.
+        #   No 429 retry starts later than 120 s after the first request.
+        # - Connection errors, timeouts, 408 and 5xx: at most 3 retries, 5 s
+        #   apart, and none later than 60 s after the first request.
+        # - Other responses, such as 400, 401, 403 and 404: no retry. The same
+        #   request gets the same answer.
+        # Each request can take 30 s (--max-time), so the retries end at most
+        # about 150 s after the first request, also when a server asks for a
+        # longer wait. curl's own --retry is not used: it also retries 429, and
+        # it waits as long as Retry-After asks.
+        transient_status='^(408|500|502|503|504)$'
+        start=$(date +%s)
+        attempt=0
+        transient_retries=0
+        while true; do
+          attempt=$((attempt + 1))
+          : > "${body_file}"
+          : > "${headers_file}"
+          curl_exit=0
+          status=$(curl --no-progress-meter -o "${body_file}" -D "${headers_file}" -w '%{http_code}' \
+            --connect-timeout 10 --max-time 30 \
+            -H @- \
+            -H 'Content-Type: application/json' \
+            --data '{}' \
+            "${hook_url}" <<< "Authorization: Bearer ${token}") || curl_exit=$?
+
+          if (( curl_exit != 0 )) || [[ "${status}" =~ ${transient_status} ]]; then
+            (( transient_retries < 3 )) || break
+            transient_retries=$((transient_retries + 1))
+            wait_seconds=5
+            retry_until=60
+          elif [[ "${status}" == "429" ]]; then
+            wait_seconds=$(rate_limit_wait)
+            retry_until=120
+          else
+            break
+          fi
+          elapsed=$(( $(date +%s) - start ))
+          (( elapsed + wait_seconds <= retry_until )) || break
+
+          if (( curl_exit != 0 )); then
+            echo "Attempt ${attempt} failed (curl exit code ${curl_exit}). Trying again in ${wait_seconds} s."
+          else
+            echo "Attempt ${attempt} got HTTP ${status}. Trying again in ${wait_seconds} s."
+          fi
+          sleep "${wait_seconds}"
+        done
+        elapsed=$(( $(date +%s) - start ))
+
+        if (( curl_exit != 0 )); then
+          echo "::error::The request to the webhook endpoint ${base_url} failed (curl exit code ${curl_exit}) after ${attempt} attempts in ${elapsed} s. The curl error is in the log above. The next poll fetches the artifact."
+          exit 1
+        fi
 
         receiver="${RECEIVER_NAMESPACE}/${RECEIVER_NAME}"
         case "${status}" in
@@ -96,22 +172,34 @@ runs:
             echo "Flux accepted the reconcile request for Receiver ${receiver}."
             ;;
           400)
-            echo "::error::Flux rejected the request for Receiver ${receiver} (HTTP 400). Compare the token claims below with the audience and validations in the Receiver's oidcProviders. Flux also answers 400 when it cannot reach the token issuer."
-            # The claims are not secret. They are what the validations see.
-            jq -R 'split(".")[1] | gsub("-"; "+") | gsub("_"; "/") | @base64d | fromjson
-              | {iss, aud, sub, repository, repository_id, repository_owner_id, ref, workflow_ref}' <<< "${token}" || true
+            echo "::error::Flux rejected the request for Receiver ${receiver} (HTTP 400). Flux rejected the token, or it could not get the provider configuration or the signing keys from GitHub. Compare the token claims below with the audience and the validations of the Receiver. If they match, examine the connection from the notification-controller to GitHub."
+            print_claims
+            ;;
+          401)
+            echo "::error::The edge gateway rejected the token (HTTP 401). The token is missing, not valid or expired, or its audience is not the webhook endpoint of the environment. The action used the url ${base_url} as the audience. Compare it with the webhook endpoint of the environment. The request did not reach Flux."
+            print_claims
+            ;;
+          403)
+            echo "::error::The edge gateway refused the request (HTTP 403). The token does not identify the Altinn GitHub organization. The edge gateway admits only repository_owner_id 5949420. Run the publishing workflow from a repository in Altinn. The request did not reach Flux."
+            print_claims
             ;;
           404)
-            echo "::error::No Receiver answers at ${hook_url} (HTTP 404). Check the receiver name, namespace and base URL, that the Receiver has type generic-oidc, and that it is Ready. Flux serves the path only after the Receiver has reconciled."
+            echo "::error::No Receiver answers at ${hook_url} (HTTP 404). Flux has no Receiver ${receiver}, or the Receiver has never been Ready. Check the receiver name, namespace and url, that the Receiver has type generic-oidc, and that it is Ready. Flux serves the path only after the Receiver has reconciled."
+            ;;
+          429)
+            echo "::error::The edge gateway limited the request rate (HTTP 429). This repository or the environment sent more requests than its limit. The action tried ${attempt} times in ${elapsed} s. The next poll fetches the artifact."
             ;;
           500)
             echo "::error::Flux could not request the reconcile for Receiver ${receiver} (HTTP 500). Check that every resource the Receiver lists exists and that the Receiver is allowed to reference it."
             ;;
+          502 | 504)
+            echo "::error::The edge gateway could not reach Flux in the DIS core cluster (HTTP ${status}). The next poll fetches the artifact. If this continues, tell the platform team."
+            ;;
           503)
-            echo "::error::Receiver ${receiver} is suspended or not ready, or the notification-controller is unavailable (HTTP 503)."
+            echo "::error::Receiver ${receiver} is suspended or not ready, or the edge gateway could not reach the DIS core cluster (HTTP 503). Flux answers 503 with an empty body. A response body below comes from a gateway. Examine the status of the Receiver. The next poll fetches the artifact."
             ;;
           *)
-            echo "::error::Unexpected HTTP ${status} from the Flux webhook receiver for Receiver ${receiver}."
+            echo "::error::Unexpected HTTP ${status} from the webhook endpoint for Receiver ${receiver}."
             ;;
         esac
 
