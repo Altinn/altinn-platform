@@ -1,6 +1,103 @@
 mock_provider "azurerm" {}
 mock_provider "github" {}
 
+# GitHub reports each repo's OIDC subject format through data.github_rest_api. Mock every
+# repo these tests plan on the name-based form; the module tests cover both forms.
+override_data {
+  target = data.github_rest_api.oidc_subject["altinn-auth"]
+  values = {
+    code = 200
+    body = "{\"use_default\":true,\"use_immutable_subject\":false,\"sub_claim_prefix\":\"repo:Altinn/altinn-auth\"}"
+  }
+}
+
+override_data {
+  target = data.github_rest_api.oidc_subject["altinn-dashboards-grafana"]
+  values = {
+    code = 200
+    body = "{\"use_default\":true,\"use_immutable_subject\":false,\"sub_claim_prefix\":\"repo:Altinn/altinn-dashboards-grafana\"}"
+  }
+}
+
+override_data {
+  target = data.github_rest_api.oidc_subject["altinn-platform"]
+  values = {
+    code = 200
+    body = "{\"use_default\":true,\"use_immutable_subject\":false,\"sub_claim_prefix\":\"repo:Altinn/altinn-platform\"}"
+  }
+}
+
+override_data {
+  target = data.github_rest_api.oidc_subject["altinn-platform-dis-proxies"]
+  values = {
+    code = 200
+    body = "{\"use_default\":true,\"use_immutable_subject\":false,\"sub_claim_prefix\":\"repo:Altinn/altinn-platform-dis-proxies\"}"
+  }
+}
+
+override_data {
+  target = data.github_rest_api.oidc_subject["altinn-profile"]
+  values = {
+    code = 200
+    body = "{\"use_default\":true,\"use_immutable_subject\":false,\"sub_claim_prefix\":\"repo:Altinn/altinn-profile\"}"
+  }
+}
+
+override_data {
+  target = data.github_rest_api.oidc_subject["altinn-studio"]
+  values = {
+    code = 200
+    body = "{\"use_default\":true,\"use_immutable_subject\":false,\"sub_claim_prefix\":\"repo:Altinn/altinn-studio\"}"
+  }
+}
+
+override_data {
+  target = data.github_rest_api.oidc_subject["altinn-verification-dis-poc"]
+  values = {
+    code = 200
+    body = "{\"use_default\":true,\"use_immutable_subject\":false,\"sub_claim_prefix\":\"repo:Altinn/altinn-verification-dis-poc\"}"
+  }
+}
+
+override_data {
+  target = data.github_rest_api.oidc_subject["dialogporten-frontend-manifests"]
+  values = {
+    code = 200
+    body = "{\"use_default\":true,\"use_immutable_subject\":false,\"sub_claim_prefix\":\"repo:Altinn/dialogporten-frontend-manifests\"}"
+  }
+}
+
+override_data {
+  target = data.github_rest_api.oidc_subject["dialogporten-manifests"]
+  values = {
+    code = 200
+    body = "{\"use_default\":true,\"use_immutable_subject\":false,\"sub_claim_prefix\":\"repo:Altinn/dialogporten-manifests\"}"
+  }
+}
+
+override_data {
+  target = data.github_rest_api.oidc_subject["dis-padawan"]
+  values = {
+    code = 200
+    body = "{\"use_default\":true,\"use_immutable_subject\":false,\"sub_claim_prefix\":\"repo:Altinn/dis-padawan\"}"
+  }
+}
+
+override_data {
+  target = data.github_rest_api.oidc_subject["info.altinn.no"]
+  values = {
+    code = 200
+    body = "{\"use_default\":true,\"use_immutable_subject\":false,\"sub_claim_prefix\":\"repo:Altinn/info.altinn.no\"}"
+  }
+}
+
+override_data {
+  target = data.github_rest_api.oidc_subject["pre-invoice-system"]
+  values = {
+    code = 200
+    body = "{\"use_default\":true,\"use_immutable_subject\":false,\"sub_claim_prefix\":\"repo:Altinn/pre-invoice-system\"}"
+  }
+}
 variables {
   subscription_id = "00000000-0000-0000-0000-000000000001"
 }
