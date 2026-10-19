@@ -42,27 +42,43 @@ The workflow `headscale-access.yml` runs only for this root.
 
 ```hcl
 headscale_groups = {
-  team-core = [
+  team-core-prod = [
     "272b7fb3-d973-4046-b0db-1b5a8c9f5e8e", # first.last@digdir.no
   ]
+  # Keep a group that has no members as an empty list. The ACL rules still use it.
+  team-core-test = []
 }
 ```
 
-After the merge, the user is a member of `headscale-vpn-access` and of `group:team-core` in the ACL policy.
+After the merge, the user is a member of `headscale-vpn-access` and of `group:team-core-prod` in the ACL policy.
 The admin does not edit Headscale or Entra ID.
+A user can be in more than one group.
 
 **Change a rule.** The admin changes `acl.hujson.tftpl` in the same root:
 
 ```hujson
 {
-  // Terraform writes the groups from headscale_groups.
-  "groups": ${groups},
+  // Terraform writes the groups from headscale_groups, one member on each line.
+  "groups": {
+%{ for name, members in groups ~}
+    "group:${name}": [
+%{ for member in members ~}
+      "${member}",
+%{ endfor ~}
+    ],
+%{ endfor ~}
+  },
 
   "acls": [
-    {"action": "accept", "src": ["group:team-core"], "dst": ["tag:core-db:5432"]},
+    {"action": "accept", "src": ["group:team-core-prod"], "dst": ["dis-core-prod-aks:443"]},
   ],
 }
 ```
+
+The template also contains `hosts`, `tagOwners` and `ssh`. The admin edits them by hand.
+
+**Remove a group.** Remove the key from `headscale_groups`, and remove all uses of `group:<name>` from the template in the same pull request.
+If a rule uses a group that does not exist, `headscale policy check` fails.
 
 **Headplane.** Admins get the [Headplane role](https://headplane.net/features/sso) IT Admin. This role can manage machines and users, but it cannot change ACLs.
 
@@ -87,10 +103,37 @@ Pull request → headscale-access.yml → Terraform
 | `azuread_group.headscale_vpn_access` and members | The members are all users in `headscale_groups`. Only these users can log in to Headscale. |
 | `azuread_app_role_assignment.headscale_vpn_access` | Assigns the group to the Headscale OIDC app. The app registration stays in `admin-prod-aks-rg`, and `data.azuread_service_principal` gets it. |
 | `data.azuread_user` for each member | Gets `mail` and `user_principal_name`. |
-| `azurerm_key_vault_secret.headscale_acl` | The rendered policy: `templatefile("acl.hujson.tftpl", { groups = jsonencode(local.groups) })`. |
+| `azurerm_key_vault_secret.headscale_acl` | The rendered policy: `templatefile("acl.hujson.tftpl", { groups = local.groups })`. |
 | `output.headscale_acl` | The rendered policy as a non-sensitive output. The plan shows a readable diff, because the value of a Key Vault secret is sensitive. |
 
 The ACL groups come directly from `headscale_groups`. We do not create an Entra ID group for each ACL group.
+
+Some users are in more than one group. The member resources and the user lookups use the set of unique object IDs as keys:
+
+```hcl
+locals {
+  headscale_members = toset(flatten(values(var.headscale_groups)))
+
+  # Group name without the "group:" prefix → user identifiers. The template adds the prefix.
+  groups = {
+    for name, ids in var.headscale_groups :
+    name => [for id in ids : local.headscale_identifier[id]]
+  }
+}
+
+resource "azuread_group_member" "headscale_vpn_access" {
+  for_each         = local.headscale_members
+  group_object_id  = azuread_group.headscale_vpn_access.object_id
+  member_object_id = each.value
+}
+```
+
+`local.headscale_identifier` maps each object ID to the identifier in [User identifier](#user-identifier).
+
+The template writes each group member on its own line.
+With `jsonencode`, all groups would be on one line, and the plan would show one long changed line for each change.
+
+The rendered policy is approximately 12 KB. The maximum size of a Key Vault secret value is 25 KB.
 
 ## User identifier
 
@@ -173,9 +216,18 @@ The next `terraform apply` in the root writes the policy from Git to Key Vault. 
 ## Migration
 
 1. Export the live policy with `headscale policy get`. Make it into `acl.hujson.tftpl`, and move the ACL group members into `headscale_groups`.
+   Keep the groups that have no members as empty lists.
+   On 2026-10-19, the 49 users in the ACL groups were the same 49 users as in `headscale_vpn_access_members`. The migration does not change who can log in.
 2. Move `azuread_group.headscale_vpn_access`, its members and `azuread_app_role_assignment.headscale_vpn_access` from `admin-prod-aks-rg` to `headscale-access`. Use `removed` blocks with `destroy = false` in the old root, and `import` blocks in the new root.
+   The members need one import for each object ID. Use `for_each` on the `import` block with the ID format `<group object ID>/member/<member object ID>`.
 3. The OIDC app registration stays in `admin-prod-aks-rg`. The new root gets its service principal with `data.azuread_service_principal`.
-4. Check that no plan shows a destroy.
+4. The flux configuration `headscale` in `admin-prod-aks-rg` sets `HEADSCALE_APP_ALLOWED_GROUP` from `azuread_group.headscale_vpn_access.object_id`.
+   Change it to `data.azuread_group.headscale_vpn_access.object_id` in the same change as the `removed` block. The object ID does not change.
+5. Check that no plan shows a destroy, and that the plan for the flux configuration `headscale` shows no change.
+
+The first CronJob run always overwrites the live policy and writes a large diff to the job log.
+The live policy has different formatting, comments and trailing white space from the rendered template. This is expected.
+Compare the diff with the export from step 1 to make sure that only formatting changed.
 
 # Drawbacks
 [drawbacks]: #drawbacks
@@ -209,7 +261,7 @@ If we do not do this, the ACL policy stays outside Git, and admins copy group me
 [unresolved-questions]: #unresolved-questions
 
 - Which Key Vault contains `headscale-acl`, and does the workflow identity have the role Key Vault Secrets Officer on it?
-- Does `headscale policy get` return the policy byte for byte, with the same last newline? If not, the script must remove trailing white space before `cmp`.
+- After a `headscale policy set`, does `headscale policy get` return the same bytes, with the same last newline? If not, the script must remove trailing white space before `cmp`. Test this after the first run. Before that run, the live policy is always different (see [Migration](#migration)).
 - Is `grpc_allow_insecure` set in the Headscale configuration, or does the CronJob need TLS for gRPC?
 - How do we rotate the API key? Headscale API keys expire after 90 days by default. We must use the same procedure as for the Headplane API key.
 
