@@ -83,14 +83,6 @@ body:
     validations:
       required: true
 
-  - type: textarea
-    id: justification
-    attributes:
-      label: Business justification
-      placeholder: Explain why this access is required
-    validations:
-      required: true
-
   - type: input
     id: approver
     attributes:
