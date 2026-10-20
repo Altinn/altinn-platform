@@ -14,6 +14,10 @@ body:
 
         See the [VPN Altinn Cloud User Guide](https://digdir.atlassian.net/wiki/x/aoDN7w) for setup instructions.
 
+        Access normally follows your team: you are added to your team's VPN group for the requested environments.
+        First check [VPN-Exposed Services](https://digdir.atlassian.net/wiki/spaces/DIS/pages/4034527234/VPN-Exposed+Services+Altinn+Cloud). If the services you need are listed there, your team's group covers them, and you do not need to list them below.
+        We are most interested in services that are **not yet** reachable over the VPN.
+
         Access requires documented approval from:
         - Product Owner
         - Team Lead
@@ -55,15 +59,16 @@ body:
   - type: textarea
     id: requested_access
     attributes:
-      label: Requested access
+      label: Services not yet reachable over the VPN
       description: |
-        List each resource you need access to. For each entry, include the product/area and the service type so admins can locate it in the infrastructure.
+        Only services that are not on [VPN-Exposed Services](https://digdir.atlassian.net/wiki/spaces/DIS/pages/4034527234/VPN-Exposed+Services+Altinn+Cloud). Leave empty if your team's access covers what you need.
+        For each entry, include the product/area and the service type so admins can locate it in the infrastructure.
         Service types: keyvault, storage, database, vm, kubernetes
       placeholder: |
         - Product A – database (server: foo-db)
         - Product B – keyvault (vault: bar-kv)
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: environments
