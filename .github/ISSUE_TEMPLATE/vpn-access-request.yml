@@ -40,16 +40,8 @@ body:
     id: full_name
     attributes:
       label: Full name
+      description: First and last name as in your Digdir account. Admins use it to find you in Entra ID.
       placeholder: John Doe
-    validations:
-      required: true
-
-  - type: input
-    id: email
-    attributes:
-      label: Digdir email
-      description: Your @digdir.no address. VPN access is granted only to @digdir.no accounts, not to aas-* admin accounts.
-      placeholder: first.last@digdir.no
     validations:
       required: true
 
