@@ -23,6 +23,8 @@ body:
         - Team Lead
         - Team Architect
 
+        **It is your responsibility to get the approver to confirm the approval in a comment on this issue.** Admins do not contact the approver, and the request waits until the approval is in the issue.
+
         Do not grant access before the approver has confirmed in a comment on this issue.
 
   - type: textarea
@@ -93,7 +95,7 @@ body:
     id: approver
     attributes:
       label: Approver (Product Owner / Team Lead / Architect)
-      description: Name and role of the approving person.
+      description: Name and role of the approving person. Ask them to confirm the approval in a comment on this issue.
       placeholder: Jane Smith, Product Owner
     validations:
       required: true
