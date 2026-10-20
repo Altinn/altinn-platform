@@ -14,6 +14,9 @@ body:
 
         See the [VPN Altinn Cloud User Guide](https://digdir.atlassian.net/wiki/x/aoDN7w) for setup instructions.
 
+        > [!IMPORTANT]
+        > VPN access gives **network access only**: a network path to the services. It does not give access to the services, resources or data themselves. You still need your own access to each service (for example a database user, a Key Vault role or a Kubernetes role), which you request from the team that owns the service.
+
         Access normally follows your team: you are added to your team's VPN group for the requested environments.
         First check [VPN-Exposed Services](https://digdir.atlassian.net/wiki/spaces/DIS/pages/4034527234/VPN-Exposed+Services+Altinn+Cloud). If the services you need are listed there, your team's group covers them, and you do not need to list them below.
         We are most interested in services that are **not yet** reachable over the VPN.
