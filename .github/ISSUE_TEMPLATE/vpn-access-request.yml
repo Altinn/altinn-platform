@@ -102,7 +102,7 @@ body:
       description: Do not edit. Checklist for admins processing this request.
       value: |
         - [ ] Approver has confirmed this issue
-        - [ ] PR in dis-way/adminservices adds the user's object ID to the ACL group(s) in `headscale_groups` (tf/adminservices-prod/headscale-access/terraform.tfvars) and references this issue. This grants VPN login (headscale-vpn-access) and the ACL groups.
+        - [ ] PR granting VPN login and access
         - [ ] PR merged and applied (live within about 15 minutes)
         - [ ] status/triage label updated as appropriate
         - [ ] Comment confirming completion, with a link to the PR
