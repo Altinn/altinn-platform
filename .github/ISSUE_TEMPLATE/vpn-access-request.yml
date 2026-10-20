@@ -36,6 +36,15 @@ body:
       required: true
 
   - type: input
+    id: email
+    attributes:
+      label: Digdir email
+      description: Your @digdir.no address. VPN access is granted only to @digdir.no accounts, not to aas-* admin accounts.
+      placeholder: first.last@digdir.no
+    validations:
+      required: true
+
+  - type: input
     id: team
     attributes:
       label: Team
@@ -91,7 +100,7 @@ body:
       description: Do not edit. Checklist for admins processing this request.
       value: |
         - [ ] Approver has confirmed this issue
-        - [ ] User added to Entra ID group: headscale-vpn-access (required before user can register their node)
-        - [ ] User added to correct ACL group(s) (required before VPN access is functional)
+        - [ ] PR in dis-way/adminservices adds the user's object ID to the ACL group(s) in `headscale_groups` (tf/adminservices-prod/headscale-access/terraform.tfvars) and references this issue. This grants VPN login (headscale-vpn-access) and the ACL groups.
+        - [ ] PR merged and applied (live within about 15 minutes)
         - [ ] status/triage label updated as appropriate
-        - [ ] Comment confirming completion
+        - [ ] Comment confirming completion, with a link to the PR
