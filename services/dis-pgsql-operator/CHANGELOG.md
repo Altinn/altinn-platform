@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.13.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.13.0...dis-pgsql-v0.13.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* **deps:** build Go images with golang 1.26.10 ([#4263](https://github.com/Altinn/altinn-platform/issues/4263)) ([de514a3](https://github.com/Altinn/altinn-platform/commit/de514a3cbf7593e42f20eafd4c221b3cc17e0087))
+* **deps:** bump grpc, otel and x/net to clear Go security advisories ([#4259](https://github.com/Altinn/altinn-platform/issues/4259)) ([b68ed8b](https://github.com/Altinn/altinn-platform/commit/b68ed8b590bd721fd6f94cf8fbec3ae6c9f82717))
+* **dis-pgsql-operator:** confirm child deletion with the API server during teardown ([#4104](https://github.com/Altinn/altinn-platform/issues/4104)) ([45faedc](https://github.com/Altinn/altinn-platform/commit/45faedcb54bb44647bb9e36dedd534a0c499ae82))
+
 ## [0.13.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.12.2...dis-pgsql-v0.13.0) (2026-09-17)
 
 
