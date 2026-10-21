@@ -87,8 +87,11 @@ func BuildNamespacesQueue(queue *messagingv1alpha1.Queue, namespaceResourceID st
 }
 
 // isoDuration formats d as an ISO 8601 duration, for example PT1M or
-// PT336H. Azure takes this form. Fractions of a second stay in the seconds
-// part, for example PT0.5S.
+// PT336H. Fractions of a second stay in the seconds part, for example
+// PT0.5S. Neither the standard library nor the Azure modules export a
+// formatter. Hours are the largest unit here. Azure also accepts days
+// (P14D), and it stores durations in its own form, so the spec string
+// never has to match what Azure reports.
 func isoDuration(d time.Duration) string {
 	if d < 0 {
 		return "-" + isoDuration(-d)
