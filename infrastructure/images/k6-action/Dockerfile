@@ -1,4 +1,4 @@
-FROM golang:1.26-alpine@sha256:28d89ee9cc0ff9fec75c82ca201e6bf7fdf9a679d4b7b24dfa04f2bb766bb468  AS builder
+FROM golang:1.26-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca  AS builder
 # renovate: datasource=github-tags depName=kubectl packageName=kubernetes/kubectl versioning=semver extractVersion=^kubernetes-(?<version>.*)$
 ARG KUBECTL_VERSION=1.37.1
 # renovate: datasource=github-releases depName=kubeseal packageName=bitnami/sealed-secrets versioning=semver extractVersion=^sealed-secrets-(?<version>.*)$
@@ -8,6 +8,8 @@ ARG JSONNET_VERSION=0.22.0
 # renovate: datasource=github-releases depName=jsonnet-bundler packageName=jsonnet-bundler/jsonnet-bundler versioning=semver extractVersion=^v(?<version>.*)$
 ARG JB_VERSION=0.6.0
 ARG K8S_LIBSONNET_VERSION=1.33
+# Last k8s-libsonnet commit that still has 1.33; it was removed from main in f66023fc.
+ARG K8S_LIBSONNET_REF=18e7a26f0699cb8b006494f40b93ddd06d33b299
 
 RUN apk --update-cache upgrade && \
     apk add --no-cache \
@@ -45,7 +47,7 @@ WORKDIR /jsonnet/vendor
 
 # Download k8s libsonnet library
 RUN jb init && \
-    jb install github.com/jsonnet-libs/k8s-libsonnet/${K8S_LIBSONNET_VERSION}@main
+    jb install github.com/jsonnet-libs/k8s-libsonnet/${K8S_LIBSONNET_VERSION}@${K8S_LIBSONNET_REF}
 
 # Build Generator code
 WORKDIR /actions/generate-k6-manifests
@@ -69,7 +71,7 @@ COPY infrastructure/images/k6-action/infra /actions/generate-k6-manifests/infra/
 COPY infrastructure/images/k6-action/jsonnet /actions/generate-k6-manifests/jsonnet/
 
 # err:Error loading shared library libstdc++.so.6: No such file or directory (needed by /usr/local/bin/jsonnet)
-RUN apk add --no-cache libstdc++ git
+RUN apk upgrade --no-cache && apk add --no-cache libstdc++ git
 WORKDIR /workspace
 
 CMD ["generate-k6-manifests"]

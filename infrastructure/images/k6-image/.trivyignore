@@ -6,3 +6,8 @@ CVE-2026-33186
 
 # https://avd.aquasec.com/nvd/cve-2026-45447
 CVE-2026-45447
+
+# golang.org/x/net in the k6 binary built by xk6 from upstream k6, which pins x/net v0.58.0.
+# Fixed in x/net 0.60.0; remove once k6 bumps it.
+# https://avd.aquasec.com/nvd/cve-2026-78669
+CVE-2026-78669
