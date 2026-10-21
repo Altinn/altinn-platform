@@ -151,3 +151,29 @@ CVE-2026-56860
 
 # https://avd.aquasec.com/nvd/cve-2026-56862
 CVE-2026-56862
+# Upstream binaries we download or copy in, not built here: k6 (from k6-image v2.2.0, Go 1.26.7),
+# kubectl 1.37.1 (Go 1.26.8), kubeseal 0.39.1 (Go 1.26.7), jb 0.6.0 (Go 1.23.0).
+# Go stdlib CVEs fixed in 1.26.10/1.27.3; remove once those tools ship rebuilt releases.
+# https://avd.aquasec.com/nvd/cve-2026-111943
+CVE-2026-111943
+# https://avd.aquasec.com/nvd/cve-2026-78667
+CVE-2026-78667
+# https://avd.aquasec.com/nvd/cve-2026-97031
+CVE-2026-97031
+# Go stdlib and golang.org/x/net (k6, kubectl, kubeseal)
+# https://avd.aquasec.com/nvd/cve-2026-78669
+CVE-2026-78669
+# golang.org/x/text (k6, kubectl)
+# https://avd.aquasec.com/nvd/cve-2026-56851
+CVE-2026-56851
+# golang.org/x/crypto/ssh (k6)
+# https://avd.aquasec.com/nvd/cve-2026-56854
+CVE-2026-56854
+# github.com/klauspost/compress (k6)
+# https://avd.aquasec.com/nvd/cve-2026-63209
+CVE-2026-63209
+# google.golang.org/grpc (k6)
+# https://avd.aquasec.com/nvd/cve-2026-84304
+CVE-2026-84304
+# https://avd.aquasec.com/nvd/cve-2026-84445
+CVE-2026-84445
