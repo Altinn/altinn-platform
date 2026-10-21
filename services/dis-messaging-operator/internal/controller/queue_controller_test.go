@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -87,6 +88,16 @@ var _ = Describe("Queue CRD schema", func() {
 				},
 			}}
 		}))
+	})
+
+	It("admits a name at the length limit of a label value", func() {
+		createQueue(newQueue(strings.Repeat("q", messagingv1alpha1.MaxQueueNameLength), nil))
+	})
+
+	It("rejects a name longer than a label value", func() {
+		err := k8sClient.Create(ctx, newQueue(strings.Repeat("q", messagingv1alpha1.MaxQueueNameLength+1), nil))
+		Expect(apierrors.IsInvalid(err)).To(BeTrue(), "expected an Invalid error, got %v", err)
+		Expect(err.Error()).To(ContainSubstring("metadata.name must be at most 63 characters"))
 	})
 
 	It("admits a lockDuration of exactly 5m", func() {
