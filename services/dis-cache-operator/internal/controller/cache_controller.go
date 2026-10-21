@@ -126,6 +126,10 @@ func (r *CacheReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 	logger.V(1).Info("reconciled", "valkeyCluster", desired.Name, "specMismatch", specMismatch)
 
+	if requeueAfter == 0 {
+		requeueAfter = r.untilScheduledRotation(&cache)
+	}
+
 	return ctrl.Result{RequeueAfter: requeueAfter}, nil
 }
 
