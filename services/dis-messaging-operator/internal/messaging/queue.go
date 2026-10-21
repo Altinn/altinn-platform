@@ -31,6 +31,16 @@ func NamespacesQueueName(queue *messagingv1alpha1.Queue) string {
 	return queue.Name
 }
 
+// AzureName returns the ARM resource name of the Azure queue. A queue name
+// can contain "/" as a path separator, but ARM does not allow "/" in a
+// resource name, so ARM writes "~" instead. ASO puts the name in the ARM
+// path as it is. See
+// https://learn.microsoft.com/azure/service-bus-messaging/service-bus-resource-manager-overview
+// The Queue CRD does not allow "~" in a name, so the mapping is unambiguous.
+func AzureName(queueName string) string {
+	return strings.ReplaceAll(queueName, "/", "~")
+}
+
 // BuildNamespacesQueue returns the ASO NamespacesQueue for a Queue.
 // namespaceResourceID is the ARM ID of the Service Bus namespace that owns
 // the queue. Fields the Queue leaves out keep the Azure defaults.
@@ -53,7 +63,7 @@ func BuildNamespacesQueue(queue *messagingv1alpha1.Queue, namespaceResourceID st
 			},
 		},
 		Spec: servicebusv1.NamespacesQueue_Spec{
-			AzureName:                  spec.Name,
+			AzureName:                  AzureName(spec.Name),
 			Owner:                      &genruntime.KnownResourceReference{ARMID: namespaceResourceID},
 			RequiresSession:            ptr.To(spec.RequiresSession),
 			RequiresDuplicateDetection: ptr.To(spec.RequiresDuplicateDetection),

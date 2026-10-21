@@ -105,6 +105,21 @@ func TestBuildNamespacesQueue(t *testing.T) {
 	}
 }
 
+func TestBuildNamespacesQueueHierarchicalName(t *testing.T) {
+	t.Parallel()
+
+	queue := testQueue(messagingv1alpha1.QueueSpec{})
+	queue.Spec.Name = "team-a.orders/us/west"
+
+	got, err := BuildNamespacesQueue(queue, testNamespaceResourceID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "team-a.orders~us~west"; got.Spec.AzureName != want {
+		t.Fatalf("AzureName = %q, want %q", got.Spec.AzureName, want)
+	}
+}
+
 func TestBuildNamespacesQueueErrors(t *testing.T) {
 	t.Parallel()
 
