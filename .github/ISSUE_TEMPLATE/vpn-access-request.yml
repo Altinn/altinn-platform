@@ -14,10 +14,19 @@ body:
 
         See the [VPN Altinn Cloud User Guide](https://digdir.atlassian.net/wiki/x/aoDN7w) for setup instructions.
 
+        > [!IMPORTANT]
+        > VPN access gives **network access only**: a network path to the services. It does not give access to the services, resources or data themselves. You still need your own access to each service (for example a database user, a Key Vault role or a Kubernetes role), which you request from the team that owns the service.
+
+        Access normally follows your team: you are added to your team's VPN group for the requested environments.
+        First check [VPN-Exposed Services](https://digdir.atlassian.net/wiki/spaces/DIS/pages/4034527234/VPN-Exposed+Services+Altinn+Cloud). If the services you need are listed there, your team's group covers them, and you do not need to list them below.
+        We are most interested in services that are **not yet** reachable over the VPN.
+
         Access requires documented approval from:
         - Product Owner
         - Team Lead
         - Team Architect
+
+        **It is your responsibility to get the approver to confirm the approval in a comment on this issue.** Admins do not contact the approver, and the request waits until the approval is in the issue.
 
         Do not grant access before the approver has confirmed in a comment on this issue.
 
@@ -31,6 +40,7 @@ body:
     id: full_name
     attributes:
       label: Full name
+      description: First and last name as in your Digdir account. Admins use it to find you in Entra ID.
       placeholder: John Doe
     validations:
       required: true
@@ -46,15 +56,16 @@ body:
   - type: textarea
     id: requested_access
     attributes:
-      label: Requested access
+      label: Services not yet reachable over the VPN
       description: |
-        List each resource you need access to. For each entry, include the product/area and the service type so admins can locate it in the infrastructure.
+        Only services that are not on [VPN-Exposed Services](https://digdir.atlassian.net/wiki/spaces/DIS/pages/4034527234/VPN-Exposed+Services+Altinn+Cloud). Leave empty if your team's access covers what you need.
+        For each entry, include the product/area and the service type so admins can locate it in the infrastructure.
         Service types: keyvault, storage, database, vm, kubernetes
       placeholder: |
         - Product A – database (server: foo-db)
         - Product B – keyvault (vault: bar-kv)
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: environments
@@ -67,19 +78,11 @@ body:
     validations:
       required: true
 
-  - type: textarea
-    id: justification
-    attributes:
-      label: Business justification
-      placeholder: Explain why this access is required
-    validations:
-      required: true
-
   - type: input
     id: approver
     attributes:
       label: Approver (Product Owner / Team Lead / Architect)
-      description: Name and role of the approving person.
+      description: Name and role of the approving person. Ask them to confirm the approval in a comment on this issue.
       placeholder: Jane Smith, Product Owner
     validations:
       required: true
@@ -91,7 +94,7 @@ body:
       description: Do not edit. Checklist for admins processing this request.
       value: |
         - [ ] Approver has confirmed this issue
-        - [ ] User added to Entra ID group: headscale-vpn-access (required before user can register their node)
-        - [ ] User added to correct ACL group(s) (required before VPN access is functional)
+        - [ ] PR granting VPN login and access
+        - [ ] PR merged and applied (live within about 15 minutes)
         - [ ] status/triage label updated as appropriate
-        - [ ] Comment confirming completion
+        - [ ] Comment confirming completion, with a link to the PR
