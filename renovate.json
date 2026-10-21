@@ -19,6 +19,16 @@
   },
   "packageRules": [
     {
+      "description": "Clusters pull dis-console through the ACR pull-through cache. Treat it as the ghcr.io image so the rules below match and tags are looked up on ghcr.io.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "altinncr.azurecr.io/ghcr.io/altinn/altinn-platform/dis-console"
+      ],
+      "overridePackageName": "ghcr.io/altinn/altinn-platform/dis-console"
+    },
+    {
       "matchDatasources": [
         "docker"
       ],
@@ -102,6 +112,19 @@
       ],
       "matchPackageNames": [
         "github.com/pashagolub/pgxmock/v5"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "linkerd2 has no semver Go tags; the pseudo-version pins the policy API types and is bumped by hand with linkerd.",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchFileNames": [
+        "services/dis-cache-operator/go.mod"
+      ],
+      "matchPackageNames": [
+        "github.com/linkerd/linkerd2"
       ],
       "enabled": false
     },
