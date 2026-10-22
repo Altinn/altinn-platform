@@ -42,9 +42,10 @@ runs:
         # Mask token
         echo "::add-mask::$token"
 
-        # Export to environment safely
+        # Export to environment safely, with a random delimiter that the token cannot contain
+        delimiter="EOF_$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
         {
-          echo "TF_VAR_app_access_token<<EOF"
+          echo "TF_VAR_app_access_token<<$delimiter"
           echo "$token"
-          echo "EOF"
+          echo "$delimiter"
         } >> "$GITHUB_ENV"
