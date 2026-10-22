@@ -46,6 +46,13 @@ runs:
           echo "::error::The url must use https, got '${base_url}'. The request carries a bearer token."
           exit 1
         fi
+        # The action adds /hook/<digest> to the url. After a query or a
+        # fragment, that would not be part of the path.
+        if [[ "${base_url}" == *[[:space:]?#]* ]]; then
+          quoted_url=$(jq -rn --arg v "${WEBHOOK_URL}" '$v | @json')
+          echo "::error::The url must not contain whitespace, a query or a fragment, got ${quoted_url}. The action adds /hook/<digest> to its path."
+          exit 1
+        fi
         if [[ "${base_url}" != */flux-webhook ]]; then
           echo "::warning::The url '${base_url}' does not end in /flux-webhook. The webhook endpoint of an environment is https://<platform host>/flux-webhook, for example https://platform.at23.altinn.cloud/flux-webhook."
         fi
