@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.5.0](https://github.com/Altinn/altinn-platform/compare/dis-cache-v0.4.0...dis-cache-v0.5.0) (2026-10-22)
+
+
+### Features
+
+* **dis-cache-operator:** rotate the Cache password on a schedule, every 90 days by default ([#4229](https://github.com/Altinn/altinn-platform/issues/4229)) ([ebc06aa](https://github.com/Altinn/altinn-platform/commit/ebc06aa944e01e6466d2f65774695096cd423541))
+
+
+### Bug Fixes
+
+* **deps:** build Go images with golang 1.26.10 ([#4263](https://github.com/Altinn/altinn-platform/issues/4263)) ([de514a3](https://github.com/Altinn/altinn-platform/commit/de514a3cbf7593e42f20eafd4c221b3cc17e0087))
+* **deps:** bump grpc, otel and x/net to clear Go security advisories ([#4259](https://github.com/Altinn/altinn-platform/issues/4259)) ([b68ed8b](https://github.com/Altinn/altinn-platform/commit/b68ed8b590bd721fd6f94cf8fbec3ae6c9f82717))
+
+
+### Dependency Updates
+
+* update module github.com/google/cel-go to v0.29.0 [security] ([#4191](https://github.com/Altinn/altinn-platform/issues/4191)) ([17d13cd](https://github.com/Altinn/altinn-platform/commit/17d13cde807ecd06595055943c669750a4d36f24))
+
 ## [0.4.0](https://github.com/Altinn/altinn-platform/compare/dis-cache-v0.3.0...dis-cache-v0.4.0) (2026-10-15)
 
 
