@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.9.0](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.8.0...dis-console-v1.9.0) (2026-10-22)
+
+
+### Features
+
+* **dis-console:** read the cache password from the mounted Secret file on every connection ([#4231](https://github.com/Altinn/altinn-platform/issues/4231)) ([65c807c](https://github.com/Altinn/altinn-platform/commit/65c807c1c9da2e28aeb106f3570e0af140aa2680))
+
+
+### Bug Fixes
+
+* **deps:** build Go images with golang 1.26.10 ([#4263](https://github.com/Altinn/altinn-platform/issues/4263)) ([de514a3](https://github.com/Altinn/altinn-platform/commit/de514a3cbf7593e42f20eafd4c221b3cc17e0087))
+* **deps:** bump grpc, otel and x/net to clear Go security advisories ([#4259](https://github.com/Altinn/altinn-platform/issues/4259)) ([b68ed8b](https://github.com/Altinn/altinn-platform/commit/b68ed8b590bd721fd6f94cf8fbec3ae6c9f82717))
+
 ## [1.8.0](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.7.3...dis-console-v1.8.0) (2026-09-17)
 
 

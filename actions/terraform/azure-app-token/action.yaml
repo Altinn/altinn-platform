@@ -32,8 +32,8 @@ runs:
           exit 1
         fi
 
-        # Get access token
-        token=$(az account get-access-token --resource "$APP_RESOURCE_ID" --query accessToken -o tsv)
+        # Get access token, stripping newlines so it can only ever set one variable in GITHUB_ENV
+        token=$(az account get-access-token --resource "$APP_RESOURCE_ID" --query accessToken -o tsv | tr -d '\n')
         if [ -z "$token" ]; then
           echo "Failed to retrieve Enterprise app access token" >&2
           exit 1
@@ -42,9 +42,4 @@ runs:
         # Mask token
         echo "::add-mask::$token"
 
-        # Export to environment safely
-        {
-          echo "TF_VAR_app_access_token<<EOF"
-          echo "$token"
-          echo "EOF"
-        } >> "$GITHUB_ENV"
+        echo "TF_VAR_app_access_token=$token" >> "$GITHUB_ENV"
