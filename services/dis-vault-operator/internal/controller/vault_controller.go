@@ -26,7 +26,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-const identityRequeueDelay = 5 * time.Second
+const (
+	identityRequeueDelay                  = 5 * time.Second
+	roleAssignmentReplacementRequeueDelay = 5 * time.Second
+)
 
 // VaultReconciler reconciles a Vault object.
 type VaultReconciler struct {
@@ -98,7 +101,7 @@ func (r *VaultReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			return ctrl.Result{}, err
 		}
 		if ownerReplacementPending || groupReplacementPending {
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{RequeueAfter: roleAssignmentReplacementRequeueDelay}, nil
 		}
 	}
 
