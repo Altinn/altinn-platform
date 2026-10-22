@@ -156,8 +156,7 @@ func (c *APIMClient) GetLoggerByName(ctx context.Context, loggerName string) (*s
 }
 
 func IsNotFoundError(err error) bool {
-	var responseError *azcore.ResponseError
-	if errors.As(err, &responseError) {
+	if responseError, ok := errors.AsType[*azcore.ResponseError](err); ok {
 		return responseError.StatusCode == http.StatusNotFound
 	}
 	return false
