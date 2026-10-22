@@ -91,7 +91,7 @@ runs:
         echo "TF_LOG=$SAFE_TERRAFORM_LOG_LEVEL" >> "$GITHUB_ENV"
 
     - name: Terraform Set State File Path
-      id: state_file_path_tmp
+      id: state_file_path
       shell: bash
       env:
         OIDC_TYPE: ${{ inputs.oidc_type }}
@@ -103,15 +103,9 @@ runs:
         else
           TYPE="branches"
         fi
-        echo "TF_STATE_FILE_TMP=github.com/${GITHUB_REPOSITORY}/${TYPE}/${OIDC_VALUE}/$TERRAFORM_STATE_NAME" >> $GITHUB_ENV
-
-    - name: Terraform Set State File Path Lower
-      id: state_file_path
-      shell: bash
-      env:
-        TMP_TERRAFORM_STATE_FILE: ${{ env.TF_STATE_FILE_TMP }}
-      run: |
-        echo "TF_STATE_FILE=$(echo $TMP_TERRAFORM_STATE_FILE | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+        # Strip newlines so the inputs cannot inject extra variables into GITHUB_ENV
+        SAFE_TF_STATE_FILE=$(echo "github.com/${GITHUB_REPOSITORY}/${TYPE}/${OIDC_VALUE}/${TERRAFORM_STATE_NAME}" | tr -d '\n' | tr '[:upper:]' '[:lower:]')
+        echo "TF_STATE_FILE=$SAFE_TF_STATE_FILE" >> "$GITHUB_ENV"
 
     - name: Terraform Format
       id: fmt
