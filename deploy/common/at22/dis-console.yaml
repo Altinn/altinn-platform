@@ -48,12 +48,6 @@ spec:
                   name: dis-console-cache-cache-auth
                   key: username
                   optional: true
-            - name: CACHE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: dis-console-cache-cache-auth
-                  key: password
-                  optional: true
             - name: CACHE_PASSWORD_FILE
               value: /var/run/secrets/cache/password
           livenessProbe:
