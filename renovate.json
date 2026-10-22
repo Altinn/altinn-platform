@@ -129,6 +129,20 @@
       "enabled": false
     },
     {
+      "description": "The github-actions manager picks up the `# renovate:` comment on setup-terraform's terraform_version input. It's a plain version, not a ref, so don't pin a digest, and drop the `v` from hashicorp's release tags to keep the value's format.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDatasources": [
+        "github-releases"
+      ],
+      "matchPackageNames": [
+        "hashicorp/terraform"
+      ],
+      "pinDigests": false,
+      "extractVersion": "^v(?<version>.*)$"
+    },
+    {
       "matchManagers": [
         "custom.regex"
       ],
