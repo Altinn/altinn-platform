@@ -203,11 +203,17 @@ const (
 	ConditionAccessReady ConditionType = "AccessReady"
 )
 
+// MaxQueueNameLength is the longest Queue name the CRD admits. The operator
+// puts the name in a label value, and a label value has at most 63
+// characters.
+const MaxQueueNameLength = 63
+
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Queue",type="string",JSONPath=".spec.name"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].reason"
+// +kubebuilder:validation:XValidation:rule="size(self.metadata.name) <= 63",message="metadata.name must be at most 63 characters: the operator puts the name in a label value, and a label value has at most 63 characters"
 
 // Queue is the Schema for the queues API.
 type Queue struct {

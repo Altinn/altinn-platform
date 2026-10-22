@@ -5,3 +5,5 @@ metadata:
   namespace: product-dis
 spec:
   size: small
+  passwordRotation:
+    intervalDays: 90
