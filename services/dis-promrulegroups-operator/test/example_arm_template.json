@@ -1,0 +1,267 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "ResourceGroupLocation"
+    },
+    "clusterName": {
+      "type": "string",
+      "metadata": {
+        "description": "Cluster name"
+      },
+      "defaultValue": "ClusterName"
+    },
+    "actionGroupId": {
+      "type": "string",
+      "metadata": {
+        "description": "Action Group ResourceId"
+      }
+    },
+    "azureMonitorWorkspace": {
+      "type": "string",
+      "metadata": {
+        "description": "ResourceId of Azure monitor workspace to associate to"
+      },
+      "defaultValue": "AzureMonitorWorkspace"
+    }
+  },
+  "variables": {},
+  "resources": [
+    {
+      "name": "http-increase",
+      "type": "Microsoft.AlertsManagement/prometheusRuleGroups",
+      "apiVersion": "2023-03-01",
+      "location": "[parameters('location')]",
+      "properties": {
+        "interval": "PT2M30S",
+        "scopes": [
+          "[parameters('azureMonitorWorkspace')]"
+        ],
+        "clusterName": "[parameters('clusterName')]",
+        "rules": [
+          {
+            "record": "http_requests:increase4w",
+            "labels": {
+              "job": "app",
+              "slo": "http",
+              "team": "foo"
+            },
+            "expression": "sum by (status) (increase(http_requests_total{job=\"app\"}[4w]))"
+          },
+          {
+            "severity": 3,
+            "resolveConfiguration": {
+              "autoResolved": true,
+              "timeToResolve": "PT10M"
+            },
+            "actions": [
+              {
+                "actionGroupId": "[parameters('actionGroupId')]"
+              }
+            ],
+            "alert": "SLOMetricAbsent",
+            "for": "PT2M",
+            "labels": {
+              "job": "app",
+              "severity": "critical",
+              "slo": "http",
+              "team": "foo"
+            },
+            "annotations": {
+              "description": "foo"
+            },
+            "expression": "absent(http_requests_total{job=\"app\"}) == 1"
+          }
+        ]
+      }
+    },
+    {
+      "name": "http",
+      "type": "Microsoft.AlertsManagement/prometheusRuleGroups",
+      "apiVersion": "2023-03-01",
+      "location": "[parameters('location')]",
+      "properties": {
+        "interval": "PT1M",
+        "scopes": [
+          "[parameters('azureMonitorWorkspace')]"
+        ],
+        "clusterName": "[parameters('clusterName')]",
+        "rules": [
+          {
+            "record": "http_requests:burnrate5m",
+            "labels": {
+              "job": "app",
+              "slo": "http",
+              "team": "foo"
+            },
+            "expression": "sum(rate(http_requests_total{job=\"app\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"app\"}[5m]))"
+          },
+          {
+            "record": "http_requests:burnrate30m",
+            "labels": {
+              "job": "app",
+              "slo": "http",
+              "team": "foo"
+            },
+            "expression": "sum(rate(http_requests_total{job=\"app\",status=~\"5..\"}[30m])) / sum(rate(http_requests_total{job=\"app\"}[30m]))"
+          },
+          {
+            "record": "http_requests:burnrate1h",
+            "labels": {
+              "job": "app",
+              "slo": "http",
+              "team": "foo"
+            },
+            "expression": "sum(rate(http_requests_total{job=\"app\",status=~\"5..\"}[1h])) / sum(rate(http_requests_total{job=\"app\"}[1h]))"
+          },
+          {
+            "record": "http_requests:burnrate2h",
+            "labels": {
+              "job": "app",
+              "slo": "http",
+              "team": "foo"
+            },
+            "expression": "sum(rate(http_requests_total{job=\"app\",status=~\"5..\"}[2h])) / sum(rate(http_requests_total{job=\"app\"}[2h]))"
+          },
+          {
+            "record": "http_requests:burnrate6h",
+            "labels": {
+              "job": "app",
+              "slo": "http",
+              "team": "foo"
+            },
+            "expression": "sum(rate(http_requests_total{job=\"app\",status=~\"5..\"}[6h])) / sum(rate(http_requests_total{job=\"app\"}[6h]))"
+          },
+          {
+            "record": "http_requests:burnrate1d",
+            "labels": {
+              "job": "app",
+              "slo": "http",
+              "team": "foo"
+            },
+            "expression": "sum(rate(http_requests_total{job=\"app\",status=~\"5..\"}[1d])) / sum(rate(http_requests_total{job=\"app\"}[1d]))"
+          },
+          {
+            "record": "http_requests:burnrate4d",
+            "labels": {
+              "job": "app",
+              "slo": "http",
+              "team": "foo"
+            },
+            "expression": "sum(rate(http_requests_total{job=\"app\",status=~\"5..\"}[4d])) / sum(rate(http_requests_total{job=\"app\"}[4d]))"
+          },
+          {
+            "severity": 3,
+            "resolveConfiguration": {
+              "autoResolved": true,
+              "timeToResolve": "PT10M"
+            },
+            "actions": [
+              {
+                "actionGroupId": "[parameters('actionGroupId')]"
+              }
+            ],
+            "alert": "ErrorBudgetBurn",
+            "for": "PT2M",
+            "labels": {
+              "exhaustion": "2d",
+              "job": "app",
+              "long": "1h",
+              "severity": "critical",
+              "short": "5m",
+              "slo": "http",
+              "team": "foo"
+            },
+            "annotations": {
+              "description": "foo"
+            },
+            "expression": "http_requests:burnrate5m{job=\"app\",slo=\"http\"} > (14 * (1-0.995)) and http_requests:burnrate1h{job=\"app\",slo=\"http\"} > (14 * (1-0.995))"
+          },
+          {
+            "severity": 3,
+            "resolveConfiguration": {
+              "autoResolved": true,
+              "timeToResolve": "PT10M"
+            },
+            "actions": [
+              {
+                "actionGroupId": "[parameters('actionGroupId')]"
+              }
+            ],
+            "alert": "ErrorBudgetBurn",
+            "for": "PT15M",
+            "labels": {
+              "exhaustion": "4d",
+              "job": "app",
+              "long": "6h",
+              "severity": "critical",
+              "short": "30m",
+              "slo": "http",
+              "team": "foo"
+            },
+            "annotations": {
+              "description": "foo"
+            },
+            "expression": "http_requests:burnrate30m{job=\"app\",slo=\"http\"} > (7 * (1-0.995)) and http_requests:burnrate6h{job=\"app\",slo=\"http\"} > (7 * (1-0.995))"
+          },
+          {
+            "severity": 3,
+            "resolveConfiguration": {
+              "autoResolved": true,
+              "timeToResolve": "PT10M"
+            },
+            "actions": [
+              {
+                "actionGroupId": "[parameters('actionGroupId')]"
+              }
+            ],
+            "alert": "ErrorBudgetBurn",
+            "for": "PT1H",
+            "labels": {
+              "exhaustion": "2w",
+              "job": "app",
+              "long": "1d",
+              "severity": "warning",
+              "short": "2h",
+              "slo": "http",
+              "team": "foo"
+            },
+            "annotations": {
+              "description": "foo"
+            },
+            "expression": "http_requests:burnrate2h{job=\"app\",slo=\"http\"} > (2 * (1-0.995)) and http_requests:burnrate1d{job=\"app\",slo=\"http\"} > (2 * (1-0.995))"
+          },
+          {
+            "severity": 3,
+            "resolveConfiguration": {
+              "autoResolved": true,
+              "timeToResolve": "PT10M"
+            },
+            "actions": [
+              {
+                "actionGroupId": "[parameters('actionGroupId')]"
+              }
+            ],
+            "alert": "ErrorBudgetBurn",
+            "for": "PT3H",
+            "labels": {
+              "exhaustion": "4w",
+              "job": "app",
+              "long": "4d",
+              "severity": "warning",
+              "short": "6h",
+              "slo": "http",
+              "team": "foo"
+            },
+            "annotations": {
+              "description": "foo"
+            },
+            "expression": "http_requests:burnrate6h{job=\"app\",slo=\"http\"} > (1 * (1-0.995)) and http_requests:burnrate4d{job=\"app\",slo=\"http\"} > (1 * (1-0.995))"
+          }
+        ]
+      }
+    }
+  ]
+}

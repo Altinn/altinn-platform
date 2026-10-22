@@ -1,0 +1,170 @@
+{
+    "groups": [
+        {
+            "name": "http-increase",
+            "interval": "2m30s",
+            "rules": [
+                {
+                    "record": "http_requests:increase4w",
+                    "expr": "sum by (status) (increase(http_requests_total{job=\"app\"}[4w]))",
+                    "labels": {
+                        "job": "app",
+                        "slo": "http",
+                        "team": "foo"
+                    }
+                },
+                {
+                    "alert": "SLOMetricAbsent",
+                    "expr": "absent(http_requests_total{job=\"app\"}) == 1",
+                    "for": "2m",
+                    "labels": {
+                        "job": "app",
+                        "severity": "critical",
+                        "slo": "http",
+                        "team": "foo"
+                    },
+                    "annotations": {
+                        "description": "foo"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "http",
+            "interval": "30s",
+            "rules": [
+                {
+                    "record": "http_requests:burnrate5m",
+                    "expr": "sum(rate(http_requests_total{job=\"app\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"app\"}[5m]))",
+                    "labels": {
+                        "job": "app",
+                        "slo": "http",
+                        "team": "foo"
+                    }
+                },
+                {
+                    "record": "http_requests:burnrate30m",
+                    "expr": "sum(rate(http_requests_total{job=\"app\",status=~\"5..\"}[30m])) / sum(rate(http_requests_total{job=\"app\"}[30m]))",
+                    "labels": {
+                        "job": "app",
+                        "slo": "http",
+                        "team": "foo"
+                    }
+                },
+                {
+                    "record": "http_requests:burnrate1h",
+                    "expr": "sum(rate(http_requests_total{job=\"app\",status=~\"5..\"}[1h])) / sum(rate(http_requests_total{job=\"app\"}[1h]))",
+                    "labels": {
+                        "job": "app",
+                        "slo": "http",
+                        "team": "foo"
+                    }
+                },
+                {
+                    "record": "http_requests:burnrate2h",
+                    "expr": "sum(rate(http_requests_total{job=\"app\",status=~\"5..\"}[2h])) / sum(rate(http_requests_total{job=\"app\"}[2h]))",
+                    "labels": {
+                        "job": "app",
+                        "slo": "http",
+                        "team": "foo"
+                    }
+                },
+                {
+                    "record": "http_requests:burnrate6h",
+                    "expr": "sum(rate(http_requests_total{job=\"app\",status=~\"5..\"}[6h])) / sum(rate(http_requests_total{job=\"app\"}[6h]))",
+                    "labels": {
+                        "job": "app",
+                        "slo": "http",
+                        "team": "foo"
+                    }
+                },
+                {
+                    "record": "http_requests:burnrate1d",
+                    "expr": "sum(rate(http_requests_total{job=\"app\",status=~\"5..\"}[1d])) / sum(rate(http_requests_total{job=\"app\"}[1d]))",
+                    "labels": {
+                        "job": "app",
+                        "slo": "http",
+                        "team": "foo"
+                    }
+                },
+                {
+                    "record": "http_requests:burnrate4d",
+                    "expr": "sum(rate(http_requests_total{job=\"app\",status=~\"5..\"}[4d])) / sum(rate(http_requests_total{job=\"app\"}[4d]))",
+                    "labels": {
+                        "job": "app",
+                        "slo": "http",
+                        "team": "foo"
+                    }
+                },
+                {
+                    "alert": "ErrorBudgetBurn",
+                    "expr": "http_requests:burnrate5m{job=\"app\",slo=\"http\"} > (14 * (1-0.995)) and http_requests:burnrate1h{job=\"app\",slo=\"http\"} > (14 * (1-0.995))",
+                    "for": "2m0s",
+                    "labels": {
+                        "exhaustion": "2d",
+                        "job": "app",
+                        "long": "1h",
+                        "severity": "critical",
+                        "short": "5m",
+                        "slo": "http",
+                        "team": "foo"
+                    },
+                    "annotations": {
+                        "description": "foo"
+                    }
+                },
+                {
+                    "alert": "ErrorBudgetBurn",
+                    "expr": "http_requests:burnrate30m{job=\"app\",slo=\"http\"} > (7 * (1-0.995)) and http_requests:burnrate6h{job=\"app\",slo=\"http\"} > (7 * (1-0.995))",
+                    "for": "15m0s",
+                    "labels": {
+                        "exhaustion": "4d",
+                        "job": "app",
+                        "long": "6h",
+                        "severity": "critical",
+                        "short": "30m",
+                        "slo": "http",
+                        "team": "foo"
+                    },
+                    "annotations": {
+                        "description": "foo"
+                    }
+                },
+                {
+                    "alert": "ErrorBudgetBurn",
+                    "expr": "http_requests:burnrate2h{job=\"app\",slo=\"http\"} > (2 * (1-0.995)) and http_requests:burnrate1d{job=\"app\",slo=\"http\"} > (2 * (1-0.995))",
+                    "for": "1h0m0s",
+                    "labels": {
+                        "exhaustion": "2w",
+                        "job": "app",
+                        "long": "1d",
+                        "severity": "warning",
+                        "short": "2h",
+                        "slo": "http",
+                        "team": "foo"
+                    },
+                    "annotations": {
+                        "description": "foo"
+                    }
+                },
+                {
+                    "alert": "ErrorBudgetBurn",
+                    "expr": "http_requests:burnrate6h{job=\"app\",slo=\"http\"} > (1 * (1-0.995)) and http_requests:burnrate4d{job=\"app\",slo=\"http\"} > (1 * (1-0.995))",
+                    "for": "3h0m0s",
+                    "labels": {
+                        "exhaustion": "4w",
+                        "job": "app",
+                        "long": "4d",
+                        "severity": "warning",
+                        "short": "6h",
+                        "slo": "http",
+                        "team": "foo"
+                    },
+                    "annotations": {
+                        "description": "foo"
+                    }
+                }
+            ]
+        }
+    ]
+}
