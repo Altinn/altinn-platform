@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.2](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.10.1...ghrunner-0.10.2) (2026-10-23)
+
+
+### Bug Fixes
+
+* **gh-runner:** ignore upstream CVEs failing the image scan ([#4290](https://github.com/Altinn/altinn-platform/issues/4290)) ([4d8bb19](https://github.com/Altinn/altinn-platform/commit/4d8bb196278cb8476439ef03260e4b3a45a9e88f))
+
 ## [0.10.1](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.10.0...ghrunner-0.10.1) (2026-10-13)
 
 
