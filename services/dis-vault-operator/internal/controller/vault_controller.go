@@ -26,7 +26,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-const identityRequeueDelay = 5 * time.Second
+const (
+	identityRequeueDelay = 5 * time.Second
+	// roleReplacementRequeueDelay is a fallback for RoleAssignment delete-and-recreate;
+	// the RoleAssignment watch normally triggers the follow-up reconcile first.
+	roleReplacementRequeueDelay = 5 * time.Second
+)
 
 // VaultReconciler reconciles a Vault object.
 type VaultReconciler struct {
@@ -98,7 +103,7 @@ func (r *VaultReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			return ctrl.Result{}, err
 		}
 		if ownerReplacementPending || groupReplacementPending {
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{RequeueAfter: roleReplacementRequeueDelay}, nil
 		}
 	}
 
