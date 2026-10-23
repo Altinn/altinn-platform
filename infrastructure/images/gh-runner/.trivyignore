@@ -348,3 +348,19 @@ CVE-2026-84304
 CVE-2026-84445
 # moby/go-archive: arbitrary file write (docker-buildx)
 CVE-2026-17106
+# stdlib crypto/x509: MITM via untrusted intermediate certificates (Go >= 1.26.10)
+CVE-2026-111943
+# klauspost/compress: DoS (>= 1.18.7)
+CVE-2026-63209
+# x/text: DoS via out-of-bounds slice in Nickname profile (>= 0.41.0)
+CVE-2026-56851
+
+# .NET System.Security.Cryptography.Pkcs 10.0.12 bundled in the Actions runner
+# (/home/runner/bin) - resolved when actions/runner ships >= 10.0.13
+# dotnet: DoS
+CVE-2026-84008
+
+# certifi bundling emSign root CAs with compromised intermediate keys (CRITICAL).
+# Found in the azure-cli virtualenv (/opt/az, certifi 2024.7.4) and the system
+# Python - resolved when azure-cli/Ubuntu ship certifi >= 2026.10.19
+GHSA-6q48-6c7w-9gw2
