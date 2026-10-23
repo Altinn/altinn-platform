@@ -34,7 +34,7 @@ var backendlog = logf.Log.WithName("backend-resource")
 // SetupBackendWebhookWithManager registers the webhook for Backend in the manager.
 func SetupBackendWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr, &apimv1alpha1.Backend{}).
-		WithDefaulter(&BackendCustomDefaulter{}).
+		WithDefaulter(&BackendDefaulter{}).
 		Complete()
 }
 
@@ -42,17 +42,17 @@ func SetupBackendWebhookWithManager(mgr ctrl.Manager) error {
 
 // +kubebuilder:webhook:path=/mutate-apim-dis-altinn-cloud-v1alpha1-backend,mutating=true,failurePolicy=fail,sideEffects=None,groups=apim.dis.altinn.cloud,resources=backends,verbs=create;update,versions=v1alpha1,name=mbackend-v1alpha1.kb.io,admissionReviewVersions=v1
 
-// BackendCustomDefaulter struct is responsible for setting default values on the custom resource of the
+// BackendDefaulter struct is responsible for setting default values on the custom resource of the
 // Kind Backend when those are created or updated.
 //
 // NOTE: The +kubebuilder:object:generate=false marker prevents controller-gen from generating DeepCopy methods,
 // as it is used only for temporary operations and does not need to be deeply copied.
-type BackendCustomDefaulter struct {
+type BackendDefaulter struct {
 	// TODO(user): Add more fields as needed for defaulting
 }
 
-// Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind Backend.
-func (d *BackendCustomDefaulter) Default(_ context.Context, backend *apimv1alpha1.Backend) error {
+// Default implements admission.Defaulter so a webhook will be registered for the Kind Backend.
+func (d *BackendDefaulter) Default(_ context.Context, backend *apimv1alpha1.Backend) error {
 	backendlog.Info("Defaulting for Backend", "name", backend.GetName())
 	if backend.Spec.AzureResourcePrefix == nil {
 		randomString, err := generateRandomString(8)
