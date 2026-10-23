@@ -2,7 +2,7 @@ package database
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
@@ -57,13 +57,13 @@ func ResolveExtensionSettings(
 	for extension := range enabledExtensions {
 		enabled = append(enabled, extension)
 	}
-	sort.Strings(enabled)
+	slices.Sort(enabled)
 
 	preload := make([]string, 0, len(preloadLibraries))
 	for library := range preloadLibraries {
 		preload = append(preload, library)
 	}
-	sort.Strings(preload)
+	slices.Sort(preload)
 
 	return strings.Join(enabled, ","), strings.Join(preload, ","), nil
 }

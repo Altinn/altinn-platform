@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	k8sutil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/k8s"
@@ -19,10 +19,10 @@ import (
 
 func (r *DatabaseServerReconciler) ensureFlexibleServerAdministrator(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 	adminIdentity resolvedAdminIdentity,
 ) error {
+	logger := log.FromContext(ctx)
 	ns := db.Namespace
 
 	adminName := fmt.Sprintf("%s-admin", db.Name)

@@ -6,10 +6,10 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -261,10 +261,10 @@ func (r *DatabaseServerReconciler) flexibleServerAzureName(
 // for the given database server.
 func (r *DatabaseServerReconciler) ensurePostgresServer(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 	networkConfig postgresNetworkConfig,
 ) error {
+	logger := log.FromContext(ctx)
 	ns := db.Namespace
 
 	// The FlexibleServer's Kubernetes object name stays equal to the DatabaseServer
