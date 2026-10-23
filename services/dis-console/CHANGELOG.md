@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.9.1](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.9.0...dis-console-v1.9.1) (2026-10-23)
+
+
+### Bug Fixes
+
+* **deps:** update golang builder images to 1.27.3 ([#4291](https://github.com/Altinn/altinn-platform/issues/4291)) ([63918a5](https://github.com/Altinn/altinn-platform/commit/63918a5ef1b5c7f16e41a80180758319d2c768be))
+
+
+### Dependency Updates
+
+* update dockerfile non-major dependencies ([#3929](https://github.com/Altinn/altinn-platform/issues/3929)) ([e1a185a](https://github.com/Altinn/altinn-platform/commit/e1a185a220861c8903395b93f048e48a3a5e212c))
+
 ## [1.9.0](https://github.com/Altinn/altinn-platform/compare/dis-console-v1.8.0...dis-console-v1.9.0) (2026-10-22)
 
 
