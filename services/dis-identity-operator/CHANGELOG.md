@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.4.0...dis-identity-v0.4.1) (2026-10-22)
+
+
+### Dependency Updates
+
+* update actions/checkout digest to d23441a ([#3833](https://github.com/Altinn/altinn-platform/issues/3833)) ([3f65ca1](https://github.com/Altinn/altinn-platform/commit/3f65ca194367d67ec5c315f81a1d37493a60ab77))
+* update actions/setup-go digest to 924ae3a ([#3834](https://github.com/Altinn/altinn-platform/issues/3834)) ([c7fcff2](https://github.com/Altinn/altinn-platform/commit/c7fcff2abfc9c1eaa50109d05bf05b1359fc7812))
+
 ## [0.4.0](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.3.0...dis-identity-v0.4.0) (2026-10-21)
 
 
