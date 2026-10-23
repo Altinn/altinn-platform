@@ -2,7 +2,7 @@
   "services/dis-pgsql-operator": "0.13.1",
   "services/dis-identity-operator": "0.4.3",
   "services/dis-apim-operator": "1.0.5",
-  "services/dis-vault-operator": "1.5.0",
+  "services/dis-vault-operator": "1.5.1",
   "services/dis-cache-operator": "0.5.0",
   "services/lakmus": "1.1.8",
   "services/dis-console": "1.9.1",
