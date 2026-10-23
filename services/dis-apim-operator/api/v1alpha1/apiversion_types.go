@@ -22,6 +22,7 @@ import (
 
 	apim "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 )
 
@@ -251,7 +252,10 @@ type ApiVersionList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&ApiVersion{}, &ApiVersionList{})
+	SchemeBuilder.Register(func(s *runtime.Scheme) error {
+		s.AddKnownTypes(SchemeGroupVersion, &ApiVersion{}, &ApiVersionList{})
+		return nil
+	})
 }
 
 func (avss *ApiVersionSubSpec) GetApiVersionSpecifier() string {
