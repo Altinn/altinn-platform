@@ -9,7 +9,6 @@ import (
 
 	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	asoconditions "github.com/Azure/azure-service-operator/v2/pkg/genruntime/conditions"
-	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -102,7 +101,7 @@ type DatabaseServerReconciler struct {
 // the user.
 //
 // For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.23.1/pkg/reconcile
+// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.25.0/pkg/reconcile
 // ASO: PostgreSQL Flexible Server
 // +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleservers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=dbforpostgresql.azure.com,resources=flexibleservers/status,verbs=get;update;patch
@@ -128,6 +127,7 @@ type DatabaseServerReconciler struct {
 
 func (r *DatabaseServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("databaseServer", req.NamespacedName)
+	ctx = log.IntoContext(ctx, logger)
 
 	var db storagev1alpha1.DatabaseServer
 	if err := r.Get(ctx, req.NamespacedName, &db); err != nil {
@@ -139,7 +139,7 @@ func (r *DatabaseServerReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	if !db.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, logger, &db)
+		return r.reconcileDelete(ctx, &db)
 	}
 
 	// Register the teardown finalizer before any owned resources are created, so deletion
@@ -153,9 +153,9 @@ func (r *DatabaseServerReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	if databaseServerMode(&db) == storagev1alpha1.DatabaseServerModeShared {
-		return r.reconcileSharedDatabaseServer(ctx, logger, &db)
+		return r.reconcileSharedDatabaseServer(ctx, &db)
 	}
-	return r.reconcileDedicatedDatabaseServer(ctx, logger, &db)
+	return r.reconcileDedicatedDatabaseServer(ctx, &db)
 }
 
 // reconcileDelete tears down the owned resources in an order Azure accepts, then removes
@@ -166,7 +166,6 @@ func (r *DatabaseServerReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 // is removed.
 func (r *DatabaseServerReconciler) reconcileDelete(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 ) (ctrl.Result, error) {
 	if !controllerutil.ContainsFinalizer(db, databaseServerFinalizer) {
@@ -176,7 +175,7 @@ func (r *DatabaseServerReconciler) reconcileDelete(
 	// Only dedicated servers own a private DNS zone and its links; shared servers reference
 	// pre-existing external network resources that the operator must not delete.
 	if databaseServerMode(db) == storagev1alpha1.DatabaseServerModeDedicated {
-		pending, err := r.deleteDedicatedNetworkChildren(ctx, logger, db)
+		pending, err := r.deleteDedicatedNetworkChildren(ctx, db)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -197,7 +196,6 @@ func (r *DatabaseServerReconciler) reconcileDelete(
 // It returns pending=true while any of them still exist so the caller can requeue.
 func (r *DatabaseServerReconciler) deleteDedicatedNetworkChildren(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 ) (pending bool, err error) {
 	// First wave: the resources that block the private DNS zone deletion in Azure.
@@ -210,7 +208,7 @@ func (r *DatabaseServerReconciler) deleteDedicatedNetworkChildren(
 		{dbVNetLinkNameForDatabaseServer(db), &networkv1.PrivateDnsZonesVirtualNetworkLink{}},
 		{aksVNetLinkNameForDatabaseServer(db), &networkv1.PrivateDnsZonesVirtualNetworkLink{}},
 	} {
-		gone, err := r.ensureChildDeleted(ctx, logger, db.Namespace, child.name, child.obj)
+		gone, err := r.ensureChildDeleted(ctx, db.Namespace, child.name, child.obj)
 		if err != nil {
 			return false, err
 		}
@@ -230,7 +228,7 @@ func (r *DatabaseServerReconciler) deleteDedicatedNetworkChildren(
 		zoneCRNameForDatabaseServer(db),
 		zoneAzureNameForDatabaseServer(db),
 	} {
-		gone, err := r.ensureChildDeleted(ctx, logger, db.Namespace, zoneName, &networkv1.PrivateDnsZone{})
+		gone, err := r.ensureChildDeleted(ctx, db.Namespace, zoneName, &networkv1.PrivateDnsZone{})
 		if err != nil {
 			return false, err
 		}
@@ -245,10 +243,10 @@ func (r *DatabaseServerReconciler) deleteDedicatedNetworkChildren(
 // and not already being deleted, and reports whether it is fully gone.
 func (r *DatabaseServerReconciler) ensureChildDeleted(
 	ctx context.Context,
-	logger logr.Logger,
 	namespace, name string,
 	obj client.Object,
 ) (gone bool, err error) {
+	logger := log.FromContext(ctx)
 	key := types.NamespacedName{Name: name, Namespace: namespace}
 	cached := true
 	if err := r.Get(ctx, key, obj); err != nil {
@@ -307,9 +305,9 @@ func databaseServerMode(db *storagev1alpha1.DatabaseServer) storagev1alpha1.Data
 
 func (r *DatabaseServerReconciler) reconcileDedicatedDatabaseServer(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 ) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
 	if r.SubnetCatalog == nil {
 		return ctrl.Result{}, fmt.Errorf("SubnetCatalog is not configured on DatabaseServerReconciler")
 	}
@@ -317,7 +315,7 @@ func (r *DatabaseServerReconciler) reconcileDedicatedDatabaseServer(
 	// Only allocate if the server doesn't already have one.
 	if db.Status.SubnetCIDR == "" {
 		logger.Info("allocating subnet for database server")
-		if err := r.allocateSubnetForDatabaseServer(ctx, logger, db); err != nil {
+		if err := r.allocateSubnetForDatabaseServer(ctx, db); err != nil {
 			if errors.Is(err, network.ErrNoFreeSubnets) {
 				logger.Info("no free subnets available, will retry later", "error", err.Error())
 
@@ -351,7 +349,7 @@ func (r *DatabaseServerReconciler) reconcileDedicatedDatabaseServer(
 		logger.Error(err, "failed to resolve private DNS zone CR name")
 		return ctrl.Result{}, err
 	}
-	if err := r.ensurePrivateDNSZone(ctx, logger, db, zoneCRName); err != nil {
+	if err := r.ensurePrivateDNSZone(ctx, db, zoneCRName); err != nil {
 		logger.Error(err, "failed to ensure private DNS zone")
 		return ctrl.Result{}, err
 	}
@@ -373,7 +371,7 @@ func (r *DatabaseServerReconciler) reconcileDedicatedDatabaseServer(
 
 	// DB VNet link
 	if err := r.ensurePrivateDNSVNetLink(
-		ctx, logger, db,
+		ctx, db,
 		zoneCRName,
 		dbVNetLinkNameForDatabaseServer(db),
 		r.Config.DBVNetName,
@@ -385,7 +383,7 @@ func (r *DatabaseServerReconciler) reconcileDedicatedDatabaseServer(
 
 	// AKS VNet link
 	if err := r.ensurePrivateDNSVNetLink(
-		ctx, logger, db,
+		ctx, db,
 		zoneCRName,
 		aksVNetLinkNameForDatabaseServer(db),
 		r.Config.AKSVNetName,
@@ -401,38 +399,38 @@ func (r *DatabaseServerReconciler) reconcileDedicatedDatabaseServer(
 		return ctrl.Result{}, err
 	}
 
-	if err := r.ensurePostgresServer(ctx, logger, db, networkConfig); err != nil {
+	if err := r.ensurePostgresServer(ctx, db, networkConfig); err != nil {
 		logger.Error(err, "failed to ensure PostgreSQLFlexibleServer for database server")
 		return ctrl.Result{}, err
 	}
 
-	return r.reconcileCommonDatabaseServerResources(ctx, logger, db)
+	return r.reconcileCommonDatabaseServerResources(ctx, db)
 }
 
 func (r *DatabaseServerReconciler) reconcileSharedDatabaseServer(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 ) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
 	networkConfig, err := r.sharedPostgresNetworkConfig(db)
 	if err != nil {
 		logger.Error(err, "failed to build shared PostgreSQL network config")
 		return ctrl.Result{}, err
 	}
 
-	if err := r.ensurePostgresServer(ctx, logger, db, networkConfig); err != nil {
+	if err := r.ensurePostgresServer(ctx, db, networkConfig); err != nil {
 		logger.Error(err, "failed to ensure PostgreSQLFlexibleServer for shared database server")
 		return ctrl.Result{}, err
 	}
 
-	return r.reconcileCommonDatabaseServerResources(ctx, logger, db)
+	return r.reconcileCommonDatabaseServerResources(ctx, db)
 }
 
 func (r *DatabaseServerReconciler) reconcileCommonDatabaseServerResources(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 ) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
 	// Surface a blocked/failed FlexibleServer (e.g. a globally-taken server name) on the
 	// DatabaseServer before reconciling the server's child resources. The owned
 	// FlexibleServersConfiguration/administrator children only report a misleading
@@ -440,23 +438,23 @@ func (r *DatabaseServerReconciler) reconcileCommonDatabaseServerResources(
 	// so checking the server first keeps the real cause visible. Skipped under az fakes,
 	// mirroring the asoResourcesReady check below.
 	if !r.Config.UseAzFakes {
-		blocked, result, err := r.surfaceBlockedFlexibleServer(ctx, logger, db)
+		blocked, result, err := r.surfaceBlockedFlexibleServer(ctx, db)
 		if err != nil || blocked {
 			return result, err
 		}
 	}
 
-	if err := r.ensurePostgresExtensionSettings(ctx, logger, db); err != nil {
+	if err := r.ensurePostgresExtensionSettings(ctx, db); err != nil {
 		logger.Error(err, "failed to ensure PostgreSQL extension settings for database server")
 		return ctrl.Result{}, err
 	}
 
-	if err := r.ensurePostgresServerParameters(ctx, logger, db); err != nil {
+	if err := r.ensurePostgresServerParameters(ctx, db); err != nil {
 		logger.Error(err, "failed to ensure PostgreSQL server parameters for database server")
 		return ctrl.Result{}, err
 	}
 
-	adminIdentity, requeue, err := r.resolveAdminIdentity(ctx, logger, db)
+	adminIdentity, requeue, err := r.resolveAdminIdentity(ctx, db)
 	if err != nil {
 		logger.Error(err, "failed to resolve admin identity")
 		return ctrl.Result{}, err
@@ -471,13 +469,13 @@ func (r *DatabaseServerReconciler) reconcileCommonDatabaseServerResources(
 	}
 
 	// Flexible Server admin
-	if err := r.ensureFlexibleServerAdministrator(ctx, logger, db, adminIdentity); err != nil {
+	if err := r.ensureFlexibleServerAdministrator(ctx, db, adminIdentity); err != nil {
 		logger.Error(err, "failed to ensure FlexibleServerAdministrator for database server")
 		return ctrl.Result{}, err
 	}
 
 	// Debug access: Azure Reader on the Flexible Server.
-	if err := r.ensureDebugAccessRoleAssignments(ctx, logger, db); err != nil {
+	if err := r.ensureDebugAccessRoleAssignments(ctx, db); err != nil {
 		logger.Error(err, "failed to ensure debug access role assignments for database server")
 		return ctrl.Result{}, err
 	}
@@ -485,14 +483,14 @@ func (r *DatabaseServerReconciler) reconcileCommonDatabaseServerResources(
 	// Debug access (data plane): read-only PostgreSQL access for the same
 	// principals. Dedicated-only, mirroring the role-assignment path above.
 	if databaseServerMode(db) != storagev1alpha1.DatabaseServerModeShared {
-		if err := r.ensureDebugAccessProvisioning(ctx, logger, db, adminIdentity); err != nil {
+		if err := r.ensureDebugAccessProvisioning(ctx, db, adminIdentity); err != nil {
 			logger.Error(err, "failed to ensure debug access provisioning for database server")
 			return ctrl.Result{}, err
 		}
 	}
 
 	if !r.Config.UseAzFakes {
-		ready, err := r.asoResourcesReady(ctx, logger, db)
+		ready, err := r.asoResourcesReady(ctx, db)
 		if err != nil {
 			logger.Error(err, "failed to check ASO readiness for database server")
 			return ctrl.Result{}, err
@@ -540,9 +538,9 @@ func (r *DatabaseServerReconciler) setDatabaseServerReadyCondition(
 
 func (r *DatabaseServerReconciler) allocateSubnetForDatabaseServer(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 ) error {
+	logger := log.FromContext(ctx)
 	// Collect used subnets from all DatabaseServer resources that currently represent servers.
 	var dbList storagev1alpha1.DatabaseServerList
 	if err := r.List(ctx, &dbList); err != nil {
@@ -576,9 +574,9 @@ func (r *DatabaseServerReconciler) allocateSubnetForDatabaseServer(
 
 func (r *DatabaseServerReconciler) asoResourcesReady(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 ) (bool, error) {
+	logger := log.FromContext(ctx)
 	ns := db.Namespace
 
 	serverName := db.Name
@@ -681,9 +679,9 @@ func findReadyCondition(conds []asoconditions.Condition) (asoconditions.Conditio
 // blocked=false for the healthy/in-progress cases so reconciliation proceeds as usual.
 func (r *DatabaseServerReconciler) surfaceBlockedFlexibleServer(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 ) (bool, ctrl.Result, error) {
+	logger := log.FromContext(ctx)
 	var server dbforpostgresqlv1.FlexibleServer
 	if err := r.Get(ctx, types.NamespacedName{Name: db.Name, Namespace: db.Namespace}, &server); err != nil {
 		if apierrors.IsNotFound(err) {

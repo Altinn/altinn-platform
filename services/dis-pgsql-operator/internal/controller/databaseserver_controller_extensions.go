@@ -4,10 +4,9 @@ import (
 	"context"
 	"fmt"
 	"maps"
-	"sort"
+	"slices"
 	"strings"
 
-	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -15,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
@@ -54,11 +54,10 @@ func serverParameterConfigResourceName(dbName, parameterName string) string {
 
 func (r *DatabaseServerReconciler) ensurePostgresExtensionSettings(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 ) error {
 	if db.Spec.EnableExtensions == nil {
-		return r.clearOwnedManagedExtensionConfigurations(ctx, logger, db)
+		return r.clearOwnedManagedExtensionConfigurations(ctx, db)
 	}
 
 	extensionsValue, preloadValue, err := dbUtil.ResolveExtensionSettings(db.Spec.EnableExtensions)
@@ -69,7 +68,6 @@ func (r *DatabaseServerReconciler) ensurePostgresExtensionSettings(
 	// Enable curated extensions on the server (maps to the azure.extensions parameter).
 	if err := r.ensureFlexibleServerConfiguration(
 		ctx,
-		logger,
 		db,
 		extensionsConfigResourceName(db.Name),
 		azureExtensionsConfigName,
@@ -81,7 +79,6 @@ func (r *DatabaseServerReconciler) ensurePostgresExtensionSettings(
 	// Ensure required shared libraries are preloaded for extensions that need it.
 	if err := r.ensureFlexibleServerConfiguration(
 		ctx,
-		logger,
 		db,
 		sharedPreloadLibrariesConfigResourceName(db.Name),
 		sharedPreloadLibrariesConfigName,
@@ -95,7 +92,6 @@ func (r *DatabaseServerReconciler) ensurePostgresExtensionSettings(
 
 func (r *DatabaseServerReconciler) ensurePostgresServerParameters(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 ) error {
 	serverParameters, err := dbUtil.ResolveServerParameters(db.Spec.ServerType, db.Spec.ServerParams)
@@ -115,7 +111,6 @@ func (r *DatabaseServerReconciler) ensurePostgresServerParameters(
 
 		if err := r.ensureFlexibleServerConfigurationWithLabels(
 			ctx,
-			logger,
 			db,
 			resourceName,
 			parameter.Name,
@@ -126,7 +121,7 @@ func (r *DatabaseServerReconciler) ensurePostgresServerParameters(
 		}
 	}
 
-	if err := r.clearOwnedManagedServerParameterConfigurations(ctx, logger, db, desiredResources); err != nil {
+	if err := r.clearOwnedManagedServerParameterConfigurations(ctx, db, desiredResources); err != nil {
 		return err
 	}
 
@@ -135,10 +130,10 @@ func (r *DatabaseServerReconciler) ensurePostgresServerParameters(
 
 func (r *DatabaseServerReconciler) clearOwnedManagedServerParameterConfigurations(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 	desiredResources map[string]string,
 ) error {
+	logger := log.FromContext(ctx)
 	var configurations dbforpostgresqlv1.FlexibleServersConfigurationList
 	if err := r.List(
 		ctx,
@@ -217,8 +212,8 @@ func (r *DatabaseServerReconciler) updateServerParameterStatusFromASO(
 	}
 
 	// Keep status output deterministic across reconciles to avoid noisy updates from map iteration order.
-	sort.Slice(serverParameterErrors, func(i, j int) bool {
-		return serverParameterErrors[i].Name < serverParameterErrors[j].Name
+	slices.SortFunc(serverParameterErrors, func(a, b storagev1alpha1.DatabaseServerParameterError) int {
+		return strings.Compare(a.Name, b.Name)
 	})
 
 	db.Status.ServerParameterErrors = serverParameterErrors
@@ -289,9 +284,9 @@ func summarizeServerParameterErrors(errors []storagev1alpha1.DatabaseServerParam
 
 func (r *DatabaseServerReconciler) clearOwnedManagedExtensionConfigurations(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 ) error {
+	logger := log.FromContext(ctx)
 	// Reconcile only the two extension configs this controller owns, identified by
 	// deterministic names derived from the database server name. We intentionally do not
 	// iterate all FlexibleServersConfiguration objects in the namespace.
@@ -330,7 +325,6 @@ func (r *DatabaseServerReconciler) clearOwnedManagedExtensionConfigurations(
 
 		if err := r.updateFlexibleServerConfiguration(
 			ctx,
-			logger,
 			db,
 			&configuration,
 			candidate.parameterName,
@@ -350,7 +344,6 @@ func (r *DatabaseServerReconciler) clearOwnedManagedExtensionConfigurations(
 
 func (r *DatabaseServerReconciler) ensureFlexibleServerConfiguration(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 	resourceName string,
 	parameterName string,
@@ -358,7 +351,6 @@ func (r *DatabaseServerReconciler) ensureFlexibleServerConfiguration(
 ) error {
 	return r.ensureFlexibleServerConfigurationWithLabels(
 		ctx,
-		logger,
 		db,
 		resourceName,
 		parameterName,
@@ -372,13 +364,13 @@ func (r *DatabaseServerReconciler) ensureFlexibleServerConfiguration(
 // that do not need additional labels.
 func (r *DatabaseServerReconciler) ensureFlexibleServerConfigurationWithLabels(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 	resourceName string,
 	parameterName string,
 	value string,
 	extraLabels map[string]string,
 ) error {
+	logger := log.FromContext(ctx)
 	key := types.NamespacedName{Name: resourceName, Namespace: db.Namespace}
 
 	var existing dbforpostgresqlv1.FlexibleServersConfiguration
@@ -423,7 +415,7 @@ func (r *DatabaseServerReconciler) ensureFlexibleServerConfigurationWithLabels(
 		return nil
 	}
 
-	return r.updateFlexibleServerConfigurationWithLabels(ctx, logger, db, &existing, parameterName, value, extraLabels)
+	return r.updateFlexibleServerConfigurationWithLabels(ctx, db, &existing, parameterName, value, extraLabels)
 }
 
 func desiredFlexibleServerConfiguration(
@@ -451,7 +443,6 @@ func desiredFlexibleServerConfiguration(
 
 func (r *DatabaseServerReconciler) updateFlexibleServerConfiguration(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 	configuration *dbforpostgresqlv1.FlexibleServersConfiguration,
 	parameterName string,
@@ -459,7 +450,6 @@ func (r *DatabaseServerReconciler) updateFlexibleServerConfiguration(
 ) error {
 	return r.updateFlexibleServerConfigurationWithLabels(
 		ctx,
-		logger,
 		db,
 		configuration,
 		parameterName,
@@ -470,13 +460,13 @@ func (r *DatabaseServerReconciler) updateFlexibleServerConfiguration(
 
 func (r *DatabaseServerReconciler) updateFlexibleServerConfigurationWithLabels(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 	configuration *dbforpostgresqlv1.FlexibleServersConfiguration,
 	parameterName string,
 	value string,
 	extraLabels map[string]string,
 ) error {
+	logger := log.FromContext(ctx)
 	desiredSpec, desiredLabels := desiredFlexibleServerConfiguration(db, parameterName, value, extraLabels)
 
 	var updated bool

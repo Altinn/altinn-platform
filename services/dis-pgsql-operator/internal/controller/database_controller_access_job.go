@@ -10,15 +10,14 @@ import (
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/connection"
 	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/naming"
-	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 func (r *DatabaseReconciler) ensureDatabaseAccess(
 	ctx context.Context,
-	logger logr.Logger,
 	database *storagev1alpha1.Database,
 ) (bool, string, string, error) {
 	serverName := strings.TrimSpace(database.Spec.Server.Name)
@@ -33,7 +32,7 @@ func (r *DatabaseReconciler) ensureDatabaseAccess(
 		return false, "", "", fmt.Errorf("get DatabaseServer %s/%s: %w", database.Namespace, serverName, err)
 	}
 
-	adminIdentity, requeue, err := r.resolveAdminIdentity(ctx, logger, &db)
+	adminIdentity, requeue, err := r.resolveAdminIdentity(ctx, &db)
 	if err != nil {
 		return false, "", "", err
 	}
@@ -41,7 +40,7 @@ func (r *DatabaseReconciler) ensureDatabaseAccess(
 		return false, databaseReasonProvisioning, "Waiting for DatabaseServer admin identity", nil
 	}
 
-	accessPrincipals, serviceConnections, requeue, message, err := r.resolveDatabaseAccessPrincipals(ctx, logger, database)
+	accessPrincipals, serviceConnections, requeue, message, err := r.resolveDatabaseAccessPrincipals(ctx, database)
 	if err != nil {
 		return false, "", "", err
 	}
@@ -50,7 +49,7 @@ func (r *DatabaseReconciler) ensureDatabaseAccess(
 	}
 
 	jobName := databaseAccessProvisionJobName(database, serverName, adminIdentity, accessPrincipals)
-	if err := r.ensureUserProvisionJobForTarget(ctx, logger, userProvisionJobSpec{
+	if err := r.ensureUserProvisionJobForTarget(ctx, userProvisionJobSpec{
 		Owner:               database,
 		JobName:             jobName,
 		Labels:              databaseAccessJobLabels(serverName, database.Name),
@@ -101,9 +100,9 @@ type resolvedServiceConnection struct {
 
 func (r *DatabaseReconciler) resolveDatabaseAccessPrincipals(
 	ctx context.Context,
-	logger logr.Logger,
 	database *storagev1alpha1.Database,
 ) ([]dbUtil.AccessPrincipal, []resolvedServiceConnection, bool, string, error) {
+	logger := log.FromContext(ctx)
 	accessPrincipals := make([]dbUtil.AccessPrincipal, 0, len(database.Spec.Access.Principals))
 	serviceConnections := make([]resolvedServiceConnection, 0, len(database.Spec.Access.Principals))
 	seen := map[string]struct{}{}

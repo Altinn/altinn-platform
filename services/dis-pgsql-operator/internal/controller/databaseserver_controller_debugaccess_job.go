@@ -2,15 +2,15 @@ package controller
 
 import (
 	"context"
-	"sort"
+	"slices"
 	"strings"
 
-	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
@@ -58,10 +58,10 @@ const debugAccessProvisionMaintenanceDatabase = "postgres"
 // members.
 func (r *DatabaseServerReconciler) ensureDebugAccessProvisioning(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 	adminIdentity resolvedAdminIdentity,
 ) error {
+	logger := log.FromContext(ctx)
 	// The provisioner connects to the real Flexible Server FQDN, published on the
 	// status once ASO reports it. Under az fakes (Kind) the status host is never
 	// populated and the provisioner falls back to the in-cluster Postgres, so the
@@ -77,10 +77,10 @@ func (r *DatabaseServerReconciler) ensureDebugAccessProvisioning(
 			// Never provisioned: nothing to revoke.
 			return nil
 		}
-		return r.ensureDebugAccessRevocation(ctx, logger, db, adminIdentity)
+		return r.ensureDebugAccessRevocation(ctx, db, adminIdentity)
 	}
 
-	accessPrincipals, err := r.resolveDebugAccessDataPlanePrincipals(ctx, logger, db)
+	accessPrincipals, err := r.resolveDebugAccessDataPlanePrincipals(ctx, db)
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func (r *DatabaseServerReconciler) ensureDebugAccessProvisioning(
 	builtinRoles := dbUtil.NormalizeBuiltinRoles(strings.Join(debugAccessBuiltinRoles, ","))
 	jobName := debugAccessProvisionJobName(db, adminIdentity, accessPrincipals, builtinRoles, databaseNames)
 
-	if err := ensureUserProvisionJobForReconciler(ctx, logger, r, userProvisionJobSpec{
+	if err := ensureUserProvisionJobForReconciler(ctx, r, userProvisionJobSpec{
 		Owner:              db,
 		JobName:            jobName,
 		Labels:             debugAccessProvisionJobLabels(db.Name),
@@ -125,10 +125,10 @@ func (r *DatabaseServerReconciler) ensureDebugAccessProvisioning(
 // The Owns(batchv1.Job) watch re-triggers the reconcile on Job completion.
 func (r *DatabaseServerReconciler) ensureDebugAccessRevocation(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 	adminIdentity resolvedAdminIdentity,
 ) error {
+	logger := log.FromContext(ctx)
 	builtinRoles := dbUtil.NormalizeBuiltinRoles(strings.Join(debugAccessBuiltinRoles, ","))
 	jobName := debugAccessProvisionJobName(db, adminIdentity, nil, builtinRoles, nil)
 
@@ -142,7 +142,7 @@ func (r *DatabaseServerReconciler) ensureDebugAccessRevocation(
 		return err
 	}
 
-	return ensureUserProvisionJobForReconciler(ctx, logger, r, userProvisionJobSpec{
+	return ensureUserProvisionJobForReconciler(ctx, r, userProvisionJobSpec{
 		Owner:              db,
 		JobName:            jobName,
 		Labels:             debugAccessProvisionJobLabels(db.Name),
@@ -195,7 +195,7 @@ func (r *DatabaseServerReconciler) serverDatabaseNames(
 		}
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	return names, nil
 }
 
@@ -223,14 +223,14 @@ func (r *DatabaseServerReconciler) userProvisionJobUseAzFakes() bool {
 // (by principal id) are collapsed.
 func (r *DatabaseServerReconciler) resolveDebugAccessDataPlanePrincipals(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 ) ([]dbUtil.AccessPrincipal, error) {
+	logger := log.FromContext(ctx)
 	accessPrincipals := make([]dbUtil.AccessPrincipal, 0, len(db.Spec.DebugAccess.Principals))
 	seen := map[string]struct{}{}
 
 	for _, principal := range db.Spec.DebugAccess.Principals {
-		resolved, ok, err := r.resolveDebugAccessPrincipal(ctx, logger, db, principal)
+		resolved, ok, err := r.resolveDebugAccessPrincipal(ctx, db, principal)
 		if err != nil {
 			return nil, err
 		}

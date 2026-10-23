@@ -6,11 +6,11 @@ import (
 	"strings"
 
 	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
-	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 )
@@ -31,27 +31,24 @@ type identitySourceResolver interface {
 
 func (r *DatabaseServerReconciler) resolveAdminIdentity(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 ) (resolvedAdminIdentity, bool, error) {
-	return resolveAdminIdentity(ctx, logger, r, db)
+	return resolveAdminIdentity(ctx, r, db)
 }
 
 func (r *DatabaseReconciler) resolveAdminIdentity(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 ) (resolvedAdminIdentity, bool, error) {
-	return resolveAdminIdentity(ctx, logger, r, db)
+	return resolveAdminIdentity(ctx, r, db)
 }
 
 func resolveAdminIdentity(
 	ctx context.Context,
-	logger logr.Logger,
 	r identitySourceResolver,
 	db *storagev1alpha1.DatabaseServer,
 ) (resolvedAdminIdentity, bool, error) {
-	identity, requeue, err := resolveIdentitySource(ctx, logger, r, db, "admin", db.Spec.Auth.Admin.Identity)
+	identity, requeue, err := resolveIdentitySource(ctx, r, db, "admin", db.Spec.Auth.Admin.Identity)
 	if err != nil || requeue {
 		return resolvedAdminIdentity{}, requeue, err
 	}
@@ -72,12 +69,12 @@ func resolveAdminIdentity(
 
 func resolveIdentitySource(
 	ctx context.Context,
-	logger logr.Logger,
 	r identitySourceResolver,
 	db *storagev1alpha1.DatabaseServer,
 	role string,
 	source storagev1alpha1.IdentitySource,
 ) (resolvedIdentity, bool, error) {
+	logger := log.FromContext(ctx)
 	if source.IdentityRef != nil {
 		if strings.TrimSpace(source.Name) != "" || strings.TrimSpace(source.PrincipalId) != "" {
 			return resolvedIdentity{}, false, fmt.Errorf("spec.auth.%s.identity cannot set both identityRef and name/principalId", role)

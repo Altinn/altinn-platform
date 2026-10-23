@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"maps"
 
-	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
 	k8sutil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/k8s"
@@ -73,10 +73,10 @@ func aksVNetLinkNameForDatabaseServer(db *storagev1alpha1.DatabaseServer) string
 // ensurePrivateDNSZone ensures that a Private DNS Zone exists for the given database server.
 func (r *DatabaseServerReconciler) ensurePrivateDNSZone(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 	zoneCRName string,
 ) error {
+	logger := log.FromContext(ctx)
 	if r.Config.ResourceGroup == "" {
 		return fmt.Errorf("ResourceGroup is not configured on DatabaseServerReconciler")
 	}
@@ -168,13 +168,13 @@ func (r *DatabaseServerReconciler) ensurePrivateDNSZone(
 // for the given database server.
 func (r *DatabaseServerReconciler) ensurePrivateDNSVNetLink(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 	zoneCRName string,
 	linkName string,
 	targetVNetName string,
 	vnetID string,
 ) error {
+	logger := log.FromContext(ctx)
 	ns := db.Namespace
 	loc := privateDNSZoneLocation
 	regFalse := false

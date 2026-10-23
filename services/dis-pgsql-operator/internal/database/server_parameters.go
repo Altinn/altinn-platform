@@ -2,7 +2,7 @@ package database
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -94,8 +94,8 @@ func ResolveServerParameters(
 		})
 	}
 
-	sort.Slice(ordered, func(i, j int) bool {
-		return ordered[i].Name < ordered[j].Name
+	slices.SortFunc(ordered, func(a, b ServerParameter) int {
+		return strings.Compare(a.Name, b.Name)
 	})
 
 	return ordered, nil

@@ -12,12 +12,12 @@ import (
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	"github.com/Azure/azure-service-operator/v2/pkg/common/annotations"
 	"github.com/Azure/azure-service-operator/v2/pkg/genruntime"
-	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
@@ -32,7 +32,9 @@ const (
 
 	databasePort         = int32(5432)
 	databaseRequeueDelay = 15 * time.Second
-	databaseNameLabelKey = "dis.altinn.cloud/database-name"
+	// databaseConflictRequeueDelay is the short retry after a status update conflict.
+	databaseConflictRequeueDelay = time.Second
+	databaseNameLabelKey         = "dis.altinn.cloud/database-name"
 
 	// String literals used as configuration values or fallback identifiers.
 	searchPathScopeDatabase         = "database"
@@ -132,9 +134,9 @@ func (r *DatabaseReconciler) ensureFlexibleServersDatabase(
 
 func (r *DatabaseReconciler) databaseReady(
 	ctx context.Context,
-	logger logr.Logger,
 	database *storagev1alpha1.Database,
 ) (bool, string, error) {
+	logger := log.FromContext(ctx)
 	ns := database.Namespace
 	serverName := strings.TrimSpace(database.Spec.Server.Name)
 	resourceName := databaseASOResourceName(serverName, database.Status.DatabaseName)
