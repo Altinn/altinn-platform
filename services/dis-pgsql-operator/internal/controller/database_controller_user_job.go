@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
-	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -20,10 +20,9 @@ import (
 
 func (r *DatabaseReconciler) ensureUserProvisionJobForTarget(
 	ctx context.Context,
-	logger logr.Logger,
 	spec userProvisionJobSpec,
 ) error {
-	return ensureUserProvisionJobForReconciler(ctx, logger, r, spec)
+	return ensureUserProvisionJobForReconciler(ctx, r, spec)
 }
 
 type userProvisionJobSpec struct {
@@ -81,10 +80,10 @@ func (r *DatabaseReconciler) userProvisionJobUseAzFakes() bool {
 
 func ensureUserProvisionJobForReconciler(
 	ctx context.Context,
-	logger logr.Logger,
 	r userProvisionJobReconciler,
 	spec userProvisionJobSpec,
 ) error {
+	logger := log.FromContext(ctx)
 	ns := spec.Owner.GetNamespace()
 	jobName := spec.JobName
 	useAzFakes := r.userProvisionJobUseAzFakes()

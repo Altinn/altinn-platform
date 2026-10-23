@@ -67,6 +67,7 @@ type DatabaseReconciler struct {
 
 func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("database", req.NamespacedName)
+	ctx = log.IntoContext(ctx, logger)
 
 	var database storagev1alpha1.Database
 	if err := r.Get(ctx, req.NamespacedName, &database); err != nil {
@@ -120,7 +121,7 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		} else {
 			database.Status.DatabaseName = databaseName
 
-			ready, host, err := r.databaseReady(ctx, logger, &database)
+			ready, host, err := r.databaseReady(ctx, &database)
 			if err != nil {
 				logger.Error(err, "failed to check Database readiness")
 				return ctrl.Result{}, err
@@ -136,7 +137,7 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 					"Database is ready",
 				)
 
-				accessReady, accessReason, accessMessage, err := r.ensureDatabaseAccess(ctx, logger, &database)
+				accessReady, accessReason, accessMessage, err := r.ensureDatabaseAccess(ctx, &database)
 				if err != nil {
 					logger.Error(err, "failed to ensure Database access")
 					return ctrl.Result{}, err
@@ -207,7 +208,7 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err := r.Status().Update(ctx, &database); err != nil {
 		if apierrors.IsConflict(err) {
 			logger.Info("Database status update conflict; requeueing")
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{RequeueAfter: databaseConflictRequeueDelay}, nil
 		}
 		logger.Error(err, "failed to update Database status")
 		return ctrl.Result{}, err

@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -313,5 +314,8 @@ type DatabaseServerList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&DatabaseServer{}, &DatabaseServerList{})
+	SchemeBuilder.Register(func(s *runtime.Scheme) error {
+		s.AddKnownTypes(SchemeGroupVersion, &DatabaseServer{}, &DatabaseServerList{})
+		return nil
+	})
 }

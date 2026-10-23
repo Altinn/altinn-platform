@@ -6,12 +6,12 @@ import (
 	"maps"
 	"strings"
 
-	"github.com/go-logr/logr"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	storagev1alpha1 "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/api/v1alpha1"
@@ -56,7 +56,6 @@ type resolvedDebugAccessPrincipal struct {
 // removes any previously-created ones.
 func (r *DatabaseServerReconciler) ensureDebugAccessRoleAssignments(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 ) error {
 	// Debug-access role assignments are scoped to a dedicated server's Flexible
@@ -67,7 +66,7 @@ func (r *DatabaseServerReconciler) ensureDebugAccessRoleAssignments(
 	debugAccessConfigured := databaseServerMode(db) != storagev1alpha1.DatabaseServerModeShared && db.Spec.DebugAccess != nil
 	if debugAccessConfigured {
 		for _, principal := range db.Spec.DebugAccess.Principals {
-			resolved, ok, err := r.resolveDebugAccessPrincipal(ctx, logger, db, principal)
+			resolved, ok, err := r.resolveDebugAccessPrincipal(ctx, db, principal)
 			if err != nil {
 				return err
 			}
@@ -90,12 +89,12 @@ func (r *DatabaseServerReconciler) ensureDebugAccessRoleAssignments(
 	}
 
 	for name := range desired {
-		if err := r.upsertDebugAccessRoleAssignment(ctx, logger, db, desired[name]); err != nil {
+		if err := r.upsertDebugAccessRoleAssignment(ctx, db, desired[name]); err != nil {
 			return err
 		}
 	}
 
-	if err := r.pruneDebugAccessRoleAssignments(ctx, logger, db, desired); err != nil {
+	if err := r.pruneDebugAccessRoleAssignments(ctx, db, desired); err != nil {
 		return err
 	}
 
@@ -148,10 +147,10 @@ func (r *DatabaseServerReconciler) setDebugAccessReadyCondition(
 // not yet ready, so the caller can skip it for now.
 func (r *DatabaseServerReconciler) resolveDebugAccessPrincipal(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 	principal storagev1alpha1.DebugAccessPrincipalSpec,
 ) (resolvedDebugAccessPrincipal, bool, error) {
+	logger := log.FromContext(ctx)
 	switch {
 	case principal.Group != nil:
 		principalID := strings.TrimSpace(principal.Group.PrincipalId)
@@ -235,10 +234,10 @@ func (r *DatabaseServerReconciler) resolveDebugAccessPrincipal(
 // collected with the server.
 func (r *DatabaseServerReconciler) upsertDebugAccessRoleAssignment(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 	desired *authorizationv1.RoleAssignment,
 ) error {
+	logger := log.FromContext(ctx)
 	current := &authorizationv1.RoleAssignment{}
 	current.SetName(desired.GetName())
 	current.SetNamespace(desired.GetNamespace())
@@ -265,10 +264,10 @@ func (r *DatabaseServerReconciler) upsertDebugAccessRoleAssignment(
 // this DatabaseServer whose principal is no longer desired.
 func (r *DatabaseServerReconciler) pruneDebugAccessRoleAssignments(
 	ctx context.Context,
-	logger logr.Logger,
 	db *storagev1alpha1.DatabaseServer,
 	desired map[string]*authorizationv1.RoleAssignment,
 ) error {
+	logger := log.FromContext(ctx)
 	var list authorizationv1.RoleAssignmentList
 	if err := r.List(
 		ctx,
