@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.5.1](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.5.0...dis-vault-v1.5.1) (2026-10-23)
+
+
+### Bug Fixes
+
+* **deps:** update golang builder images to 1.27.3 ([#4291](https://github.com/Altinn/altinn-platform/issues/4291)) ([63918a5](https://github.com/Altinn/altinn-platform/commit/63918a5ef1b5c7f16e41a80180758319d2c768be))
+
+
+### Dependency Updates
+
+* **dis-vault:** update services/dis vault operator to kubebuilder 4.16.0 ([#4297](https://github.com/Altinn/altinn-platform/issues/4297)) ([57278b0](https://github.com/Altinn/altinn-platform/commit/57278b00a40706e2ca297590abd53c77f9fbbe86))
+* update dockerfile non-major dependencies ([#3929](https://github.com/Altinn/altinn-platform/issues/3929)) ([e1a185a](https://github.com/Altinn/altinn-platform/commit/e1a185a220861c8903395b93f048e48a3a5e212c))
+
 ## [1.5.0](https://github.com/Altinn/altinn-platform/compare/dis-vault-v1.4.9...dis-vault-v1.5.0) (2026-10-21)
 
 
