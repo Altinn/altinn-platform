@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.3](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.4.2...dis-identity-v0.4.3) (2026-10-23)
+
+
+### Dependency Updates
+
+* update services/dis identity operator to kubebuilder 4.16.0 ([#4295](https://github.com/Altinn/altinn-platform/issues/4295)) ([4138d57](https://github.com/Altinn/altinn-platform/commit/4138d57f5d4a6b0adcc4c5e76be5a89b19bc3729))
+
 ## [0.4.2](https://github.com/Altinn/altinn-platform/compare/dis-identity-v0.4.1...dis-identity-v0.4.2) (2026-10-23)
 
 

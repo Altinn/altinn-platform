@@ -33,26 +33,22 @@ import (
 )
 
 var (
-	// Optional Environment Variables:
-	// - CERT_MANAGER_INSTALL_SKIP=true: Skips CertManager installation during test setup.
-	// These variables are useful if CertManager is already installed, avoiding
-	// re-installation and conflicts.
-	skipCertManagerInstall = os.Getenv("CERT_MANAGER_INSTALL_SKIP") == "true"
-	// isCertManagerAlreadyInstalled will be set true when CertManager CRDs be found on the cluster
-	isCertManagerAlreadyInstalled = false
-
 	// projectImage is the name of the image which will be build and loaded
 	// with the code source changes to be tested.
 	projectImage = "localhost/dis-vault-operator:v0.0.1"
+	// shouldCleanupCertManager tracks whether CertManager was installed by this suite.
+	shouldCleanupCertManager = false
 )
 
-// TestE2E runs the end-to-end (e2e) test suite for the project. These tests execute in an isolated,
-// temporary environment to validate project changes with the purpose of being used in CI jobs.
-// The default setup requires Kind, builds/loads the Manager Docker image locally, and installs
-// CertManager.
+// TestE2E runs the e2e test suite to validate the solution in an isolated environment.
+// The default setup requires Kind and CertManager.
+//
+// To enable kubectl kuberc (use custom kubectl configurations), set: KUBECTL_KUBERC=true
+// By default, kuberc is disabled to ensure consistent test behavior across different environments.
+// To skip CertManager installation, set: CERT_MANAGER_INSTALL_SKIP=true
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
-	_, _ = fmt.Fprintf(GinkgoWriter, "Starting dis-vault-operator integration test suite\n")
+	_, _ = fmt.Fprintf(GinkgoWriter, "Starting dis-vault-operator e2e test suite\n")
 	RunSpecs(t, "e2e suite")
 }
 
@@ -66,6 +62,8 @@ var _ = BeforeSuite(func() {
 	cmd = exec.Command("make", "kind-load", fmt.Sprintf("IMG=%s", projectImage))
 	_, err = utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the manager(Operator) image into Kind")
+
+	configureKubectlKubeRC()
 
 	By("installing ASO CRDs")
 	cmd = exec.Command("make", "install-aso-crds-kind")
@@ -113,20 +111,7 @@ var _ = BeforeSuite(func() {
 	_, err = utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to seed ApplicationIdentity for sample tests")
 
-	// The tests-e2e are intended to run on a temporary cluster that is created and destroyed for testing.
-	// To prevent errors when tests run in environments with CertManager already installed,
-	// we check for its presence before execution.
-	// Setup CertManager before the suite if not skipped and if not already installed
-	if !skipCertManagerInstall {
-		By("checking if cert manager is installed already")
-		isCertManagerAlreadyInstalled = utils.IsCertManagerCRDsInstalled()
-		if !isCertManagerAlreadyInstalled {
-			_, _ = fmt.Fprintf(GinkgoWriter, "Installing CertManager...\n")
-			Expect(utils.InstallCertManager()).To(Succeed(), "Failed to install CertManager")
-		} else {
-			_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: CertManager is already installed. Skipping installation...\n")
-		}
-	}
+	setupCertManager()
 })
 
 var _ = AfterSuite(func() {
@@ -146,9 +131,53 @@ var _ = AfterSuite(func() {
 	cmd = utils.Kubectl("delete", "ns", namespace, "--ignore-not-found")
 	_, _ = utils.Run(cmd)
 
-	// Teardown CertManager after the suite if not skipped and if it was not already installed
-	if !skipCertManagerInstall && !isCertManagerAlreadyInstalled {
-		_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling CertManager...\n")
-		utils.UninstallCertManager()
-	}
+	teardownCertManager()
 })
+
+// Disable kubectl kuberc by default for test isolation.
+// This prevents local kubectl configurations from affecting test behavior.
+// To enable kuberc, set: KUBECTL_KUBERC=true
+func configureKubectlKubeRC() {
+	if os.Getenv("KUBECTL_KUBERC") != "true" {
+		By("disabling kubectl kuberc for test isolation")
+		err := os.Setenv("KUBECTL_KUBERC", "false")
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to disable kubectl kuberc")
+		_, _ = fmt.Fprintf(GinkgoWriter,
+			"kubectl kuberc disabled for consistent test behavior (override with KUBECTL_KUBERC=true)\n")
+	} else {
+		_, _ = fmt.Fprintf(GinkgoWriter, "kubectl kuberc enabled (KUBECTL_KUBERC=true)\n")
+	}
+}
+
+// setupCertManager installs CertManager if needed for webhook tests.
+// Skips installation if CERT_MANAGER_INSTALL_SKIP=true or if already present.
+func setupCertManager() {
+	if os.Getenv("CERT_MANAGER_INSTALL_SKIP") == "true" {
+		_, _ = fmt.Fprintf(GinkgoWriter, "Skipping CertManager installation (CERT_MANAGER_INSTALL_SKIP=true)\n")
+		return
+	}
+
+	By("checking if CertManager is already installed")
+	if utils.IsCertManagerCRDsInstalled() {
+		_, _ = fmt.Fprintf(GinkgoWriter, "CertManager is already installed. Skipping installation.\n")
+		return
+	}
+
+	// Mark for cleanup before installation to handle interruptions and partial installs.
+	shouldCleanupCertManager = true
+
+	By("installing CertManager")
+	Expect(utils.InstallCertManager()).To(Succeed(), "Failed to install CertManager")
+}
+
+// teardownCertManager uninstalls CertManager if it was installed by setupCertManager.
+// This ensures we only remove what we installed.
+func teardownCertManager() {
+	if !shouldCleanupCertManager {
+		_, _ = fmt.Fprintf(GinkgoWriter, "Skipping CertManager cleanup (not installed by this suite)\n")
+		return
+	}
+
+	By("uninstalling CertManager")
+	utils.UninstallCertManager()
+}
