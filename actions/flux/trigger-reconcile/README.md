@@ -20,7 +20,7 @@ The reconcile request is an optimization. Polling continues, and the next poll f
 
 | Input | Required | Description |
 |-------|----------|-------------|
-| `url` | Yes | Webhook endpoint of the environment, `https://<platform host>/flux-webhook`. See [Webhook endpoints](#webhook-endpoints). The action also uses it, without trailing slashes, as the audience of the OIDC token. Must use `https`, with no query or fragment. The action writes a warning if it does not end in `/flux-webhook`. |
+| `url` | Yes | Webhook endpoint of the environment, `https://<platform host>/flux-webhook`. See [Webhook endpoints](#webhook-endpoints). The action also uses it, without trailing slashes, as the audience of the OIDC token. Must use `https`, with no whitespace, query or fragment. The action writes a warning if it does not end in `/flux-webhook`. |
 | `receiver_name` | Yes | Name of the `Receiver`. |
 | `receiver_namespace` | Yes | Namespace of the `Receiver`. |
 
@@ -97,7 +97,7 @@ spec:
 
 ## Failures
 
-The action fails for every response except `200`. Its error names the source of the response, and it prints the response body. On `400`, `401` and `403` it also prints the non-secret claims of the token.
+The action fails for every response except `200`. Its error names the source of the response, and it prints the first 2,000 bytes of the response body. On `400`, `401` and `403` it also prints the non-secret claims of the token.
 
 | Response | Source | Meaning | Correction |
 |----------|--------|---------|------------|
