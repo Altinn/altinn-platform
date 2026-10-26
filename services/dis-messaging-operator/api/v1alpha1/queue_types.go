@@ -170,7 +170,9 @@ type QueueSpec struct {
 
 // QueueStatus defines the observed state of Queue.
 type QueueStatus struct {
-	// name is the Azure queue name the operator manages.
+	// name is the queue name as Azure reports it, in the ARM form with "~"
+	// for "/". It is empty until Azure has created the queue. Apps use
+	// spec.name, the data-plane form.
 	// +optional
 	Name string `json:"name,omitempty"`
 

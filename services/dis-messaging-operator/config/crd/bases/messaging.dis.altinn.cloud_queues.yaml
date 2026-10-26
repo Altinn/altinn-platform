@@ -280,7 +280,10 @@ spec:
                 - type
                 x-kubernetes-list-type: map
               name:
-                description: name is the Azure queue name the operator manages.
+                description: |-
+                  name is the queue name as Azure reports it, in the ARM form with "~"
+                  for "/". It is empty until Azure has created the queue. Apps use
+                  spec.name, the data-plane form.
                 type: string
               observedGeneration:
                 description: observedGeneration is the latest generation reconciled

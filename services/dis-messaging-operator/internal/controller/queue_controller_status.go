@@ -61,9 +61,11 @@ func (r *QueueReconciler) writeStatus(
 	meta.SetStatusCondition(&queue.Status.Conditions, queueReady)
 	meta.SetStatusCondition(&queue.Status.Conditions, readyCondition(queue.Generation, queueReady))
 	if nsQueue != nil {
-		// The data-plane name, as apps use it. The resource ID has the ARM
-		// form, with "~" for "/".
-		queue.Status.Name = queue.Spec.Name
+		// Both come from the ASO status, so they report what Azure has and
+		// stay empty until Azure has created the queue. A copy of spec.name
+		// would say nothing new. Apps take the data-plane name from
+		// spec.name.
+		queue.Status.Name = ptr.Deref(nsQueue.Status.Name, "")
 		queue.Status.ResourceId = ptr.Deref(nsQueue.Status.Id, "")
 	}
 	queue.Status.ObservedGeneration = queue.Generation

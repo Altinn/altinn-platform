@@ -260,6 +260,8 @@ var _ = Describe("Queue reconciler", func() {
 		stored := reconcileQueue(queue)
 		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionUnknown, "Reconciling")
 		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionUnknown, "Reconciling")
+		Expect(stored.Status.Name).To(BeEmpty())
+		Expect(stored.Status.ResourceId).To(BeEmpty())
 
 		var nsQueue servicebusv1.NamespacesQueue
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), &nsQueue)).To(Succeed())
@@ -276,6 +278,7 @@ var _ = Describe("Queue reconciler", func() {
 		var nsQueue servicebusv1.NamespacesQueue
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), &nsQueue)).To(Succeed())
 		resourceID := testNamespaceResourceID + "/queues/team-a.invoices"
+		nsQueue.Status.Name = ptr.To("team-a.invoices")
 		nsQueue.Status.Id = &resourceID
 		nsQueue.Status.Conditions = []conditions.Condition{{
 			Type:               conditions.ConditionTypeReady,
