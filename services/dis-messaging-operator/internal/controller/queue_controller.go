@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	servicebusv1 "github.com/Azure/azure-service-operator/v2/api/servicebus/v1api20240101"
+	"github.com/Azure/azure-service-operator/v2/pkg/common/annotations"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -178,9 +179,12 @@ func (r *QueueReconciler) namespaceToQueues(ctx context.Context, obj client.Obje
 
 // prefixAnnotationChanged lets a Namespace event through when the prefix
 // annotation was set, changed or removed. Every other change of a namespace
-// leaves the queue names as they are, and a deleted namespace has no Queues.
+// leaves the queue names as they are. A new namespace has no Queues yet, and
+// at start-up the Queue watch enqueues every Queue, so a Create event brings
+// nothing. A deleted namespace has no Queues either.
 func prefixAnnotationChanged() predicate.Funcs {
 	return predicate.Funcs{
+		CreateFunc: func(event.CreateEvent) bool { return false },
 		DeleteFunc: func(event.DeleteEvent) bool { return false },
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			oldPrefix, oldSet := e.ObjectOld.GetAnnotations()[messaging.PrefixAnnotation]
@@ -192,9 +196,11 @@ func prefixAnnotationChanged() predicate.Funcs {
 }
 
 // namespacesQueueChanged lets a NamespacesQueue update through when its
-// generation or its status changed. ASO writes a poller annotation on every
-// poll of a running Azure operation, and each of those writes would cost a
-// reconcile and an apply round trip.
+// generation, its reconcile policy or its status changed. ASO writes a poller
+// annotation on every poll of a running Azure operation, and each of those
+// writes would cost a reconcile and an apply round trip. The reconcile policy
+// is what keeps the Azure queue of a Retain Queue, so a policy removed by
+// hand must bring the apply that restores it.
 func namespacesQueueChanged() predicate.Funcs {
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
@@ -208,6 +214,7 @@ func namespacesQueueChanged() predicate.Funcs {
 			}
 
 			return oldQueue.Generation != newQueue.Generation ||
+				oldQueue.Annotations[annotations.ReconcilePolicy] != newQueue.Annotations[annotations.ReconcilePolicy] ||
 				!equality.Semantic.DeepEqual(oldQueue.Status, newQueue.Status)
 		},
 	}

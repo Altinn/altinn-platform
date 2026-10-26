@@ -240,18 +240,24 @@ func createProductNamespace() {
 	Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, namespace))).To(Succeed())
 }
 
-// movePrefix gives the product namespace the prefix of another team for the
-// rest of the spec, so that every team-a queue name in it is invalid.
-func movePrefix() {
-	annotate := func(values map[string]string) {
+// setPrefix sets the prefix annotation of a namespace for the rest of the
+// spec. Namespaces outlive the spec, because envtest cannot delete them, so
+// the cleanup removes only that annotation.
+func setPrefix(name, prefix string) {
+	patch := func(change func(map[string]string)) {
 		var namespace corev1.Namespace
-		Expect(k8sClient.Get(ctx, client.ObjectKey{Name: productNamespace}, &namespace)).To(Succeed())
+		Expect(k8sClient.Get(ctx, client.ObjectKey{Name: name}, &namespace)).To(Succeed())
 		orig := namespace.DeepCopy()
-		namespace.Annotations = values
+		if namespace.Annotations == nil {
+			namespace.Annotations = map[string]string{}
+		}
+		change(namespace.Annotations)
 		Expect(k8sClient.Patch(ctx, &namespace, client.MergeFrom(orig))).To(Succeed())
 	}
-	annotate(map[string]string{messaging.PrefixAnnotation: "team-b."})
-	DeferCleanup(func() { annotate(nil) })
+	patch(func(a map[string]string) { a[messaging.PrefixAnnotation] = prefix })
+	DeferCleanup(func() {
+		patch(func(a map[string]string) { delete(a, messaging.PrefixAnnotation) })
+	})
 }
 
 // reportReady writes, as ASO would, Ready=True for the current generation of
@@ -411,11 +417,26 @@ var _ = Describe("Queue reconciler", func() {
 		Expect(stored.Status.Name).To(Equal("team-a.renamed"))
 		Expect(stored.Status.ResourceId).NotTo(BeEmpty())
 
-		movePrefix()
+		setPrefix(productNamespace, "team-b.")
 		stored = reconcileQueue(queue)
 		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionFalse, messaging.ReasonInvalidName)
 		Expect(stored.Status.Name).To(BeEmpty())
 		Expect(stored.Status.ResourceId).To(BeEmpty())
+	})
+
+	It("creates the NamespacesQueue of an invalid Queue once the namespace gets the prefix annotation", func() {
+		queue := newQueue("annotated", nil)
+		createQueue(queue)
+		stored := reconcileQueue(queue)
+		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionFalse, messaging.ReasonInvalidName)
+
+		setPrefix(testNamespace, "team-a.")
+		stored = reconcileQueue(queue)
+		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionUnknown, conditions.ReasonReconciling.Name)
+		Expect(stored.Status.Name).To(Equal("team-a.annotated"))
+		var nsQueue servicebusv1.NamespacesQueue
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), &nsQueue)).To(Succeed())
+		Expect(nsQueue.Spec.AzureName).To(Equal("team-a.annotated"))
 	})
 
 	It("waits for ASO again when the NamespacesQueue generation passes the Ready condition", func() {
@@ -434,6 +455,7 @@ var _ = Describe("Queue reconciler", func() {
 		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionUnknown, conditions.ReasonReconciling.Name)
 		var nsQueue servicebusv1.NamespacesQueue
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), &nsQueue)).To(Succeed())
+		Expect(nsQueue.Status.Conditions).To(HaveLen(1))
 		Expect(nsQueue.Generation).To(BeNumerically(">", nsQueue.Status.Conditions[0].ObservedGeneration))
 	})
 
@@ -487,9 +509,9 @@ var _ = Describe("Queue watches", func() {
 		))
 	})
 
-	It("passes a new Namespace and drops a deleted one", func() {
+	It("drops a new and a deleted Namespace", func() {
 		namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: productNamespace}}
-		Expect(prefixAnnotationChanged().Create(event.CreateEvent{Object: namespace})).To(BeTrue())
+		Expect(prefixAnnotationChanged().Create(event.CreateEvent{Object: namespace})).To(BeFalse())
 		Expect(prefixAnnotationChanged().Delete(event.DeleteEvent{Object: namespace})).To(BeFalse())
 	})
 
@@ -508,17 +530,24 @@ var _ = Describe("Queue watches", func() {
 		Entry("no prefix before or after", nil, map[string]string{"touched": "yes"}, false),
 	)
 
-	DescribeTable("passes a NamespacesQueue update only when the generation or the status changed",
+	DescribeTable("passes a NamespacesQueue update only when the generation, the reconcile policy or the status changed",
 		func(mutate func(*servicebusv1.NamespacesQueue), want bool) {
-			old := &servicebusv1.NamespacesQueue{ObjectMeta: metav1.ObjectMeta{Name: "orders", Generation: 1}}
+			old := &servicebusv1.NamespacesQueue{ObjectMeta: metav1.ObjectMeta{
+				Name:        "orders",
+				Generation:  1,
+				Annotations: map[string]string{annotations.ReconcilePolicy: string(annotations.ReconcilePolicyDetachOnDelete)},
+			}}
 			updated := old.DeepCopy()
 			mutate(updated)
 			Expect(namespacesQueueChanged().Update(event.UpdateEvent{ObjectOld: old, ObjectNew: updated})).To(Equal(want))
 		},
 		Entry("generation", func(q *servicebusv1.NamespacesQueue) { q.Generation = 2 }, true),
 		Entry("status", func(q *servicebusv1.NamespacesQueue) { q.Status.Id = ptr.To("id") }, true),
+		Entry("reconcile policy removed", func(q *servicebusv1.NamespacesQueue) {
+			delete(q.Annotations, annotations.ReconcilePolicy)
+		}, true),
 		Entry("poller annotation only", func(q *servicebusv1.NamespacesQueue) {
-			q.Annotations = map[string]string{pollerAnnotation: "token"}
+			q.Annotations[pollerAnnotation] = "token"
 		}, false),
 		Entry("same object", func(*servicebusv1.NamespacesQueue) {}, false),
 	)
