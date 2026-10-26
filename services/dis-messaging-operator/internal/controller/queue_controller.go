@@ -196,11 +196,13 @@ func prefixAnnotationChanged() predicate.Funcs {
 }
 
 // namespacesQueueChanged lets a NamespacesQueue update through when its
-// generation, its reconcile policy or its status changed. ASO writes a poller
-// annotation on every poll of a running Azure operation, and each of those
-// writes would cost a reconcile and an apply round trip. The reconcile policy
-// is what keeps the Azure queue of a Retain Queue, so a policy removed by
-// hand must bring the apply that restores it.
+// generation, its controller, its reconcile policy or its status changed. ASO
+// writes a poller annotation on every poll of a running Azure operation, and
+// each of those writes would cost a reconcile and an apply round trip. The
+// reconcile policy is what keeps the Azure queue of a Retain Queue, so a
+// policy removed by hand must bring the apply that restores it. A controller
+// reference removed by hand makes the object foreign, and the Queue must
+// report that instead of staying Ready.
 func namespacesQueueChanged() predicate.Funcs {
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
@@ -215,6 +217,7 @@ func namespacesQueueChanged() predicate.Funcs {
 
 			return oldQueue.Generation != newQueue.Generation ||
 				oldQueue.Annotations[annotations.ReconcilePolicy] != newQueue.Annotations[annotations.ReconcilePolicy] ||
+				!equality.Semantic.DeepEqual(metav1.GetControllerOf(oldQueue), metav1.GetControllerOf(newQueue)) ||
 				!equality.Semantic.DeepEqual(oldQueue.Status, newQueue.Status)
 		},
 	}

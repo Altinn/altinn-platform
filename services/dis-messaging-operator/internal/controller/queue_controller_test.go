@@ -530,12 +530,19 @@ var _ = Describe("Queue watches", func() {
 		Entry("no prefix before or after", nil, map[string]string{"touched": "yes"}, false),
 	)
 
-	DescribeTable("passes a NamespacesQueue update only when the generation, the reconcile policy or the status changed",
+	DescribeTable("passes a NamespacesQueue update only when the generation, the controller, the reconcile policy or the status changed",
 		func(mutate func(*servicebusv1.NamespacesQueue), want bool) {
 			old := &servicebusv1.NamespacesQueue{ObjectMeta: metav1.ObjectMeta{
 				Name:        "orders",
 				Generation:  1,
 				Annotations: map[string]string{annotations.ReconcilePolicy: string(annotations.ReconcilePolicyDetachOnDelete)},
+				OwnerReferences: []metav1.OwnerReference{{
+					APIVersion: messagingv1alpha1.GroupVersion.String(),
+					Kind:       "Queue",
+					Name:       "orders",
+					UID:        "queue-uid",
+					Controller: ptr.To(true),
+				}},
 			}}
 			updated := old.DeepCopy()
 			mutate(updated)
@@ -546,6 +553,7 @@ var _ = Describe("Queue watches", func() {
 		Entry("reconcile policy removed", func(q *servicebusv1.NamespacesQueue) {
 			delete(q.Annotations, annotations.ReconcilePolicy)
 		}, true),
+		Entry("controller reference removed", func(q *servicebusv1.NamespacesQueue) { q.OwnerReferences = nil }, true),
 		Entry("poller annotation only", func(q *servicebusv1.NamespacesQueue) {
 			q.Annotations[pollerAnnotation] = "token"
 		}, false),
