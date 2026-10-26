@@ -170,7 +170,11 @@ type QueueSpec struct {
 
 // QueueStatus defines the observed state of Queue.
 type QueueStatus struct {
-	// name is the Azure queue name the operator manages.
+	// name is the Azure queue name the operator manages, as apps use it on
+	// the data plane. A queue name can contain "/" as a path separator, but
+	// ARM does not allow "/" in a resource name, so ARM writes "~" instead:
+	// the name "team-a.sync/orders" has a resourceId that ends with
+	// "team-a.sync~orders".
 	// +optional
 	Name string `json:"name,omitempty"`
 

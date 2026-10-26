@@ -5,6 +5,14 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - messaging.dis.altinn.cloud
   resources:
   - queues
@@ -30,3 +38,13 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - servicebus.azure.com
+  resources:
+  - namespacesqueues
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - watch

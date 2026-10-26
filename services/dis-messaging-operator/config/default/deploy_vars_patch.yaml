@@ -1,0 +1,11 @@
+- op: add
+  path: /spec/template/spec/containers/0/env
+  value:
+    - name: DISMSG_AZURE_SUBSCRIPTION_ID
+      value: "${DISMSG_AZURE_SUBSCRIPTION_ID}"
+    - name: DISMSG_AZURE_TENANT_ID
+      value: "${DISMSG_AZURE_TENANT_ID}"
+    - name: DISMSG_NAMESPACE_RESOURCE_ID
+      value: "${DISMSG_NAMESPACE_RESOURCE_ID}"
+    - name: DISMSG_ENV
+      value: "${DISMSG_ENV}"

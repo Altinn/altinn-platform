@@ -12,6 +12,35 @@ include ../../Makefile.common
 
 ##@ Messaging-specific
 
+ASO_MODULE ?= github.com/Azure/azure-service-operator/v2
+ASO_CRD_DIR ?= $(LOCALBIN)/aso-crds
+ASO_CRDS ?= namespacesqueues.servicebus.azure.com
+
+# The envtest controller suite needs the ASO CRDs on disk. This rule has no
+# recipe. It adds aso-crds as a prerequisite of the shared setup-envtest
+# target and keeps its recipe.
+setup-envtest: aso-crds
+
+# ASO publishes its CRDs only as one release bundle. envtest would install
+# every CRD in it, so this copies out the ones the operator writes.
+.PHONY: aso-crds
+aso-crds: ## Copy the ASO CRDs of the go.mod version from the ASO release bundle for envtest.
+	@set -e; mkdir -p "$(ASO_CRD_DIR)"; \
+	version="$$(GOWORK=off go list -m -f '{{.Version}}' $(ASO_MODULE))"; \
+	bundle="$(LOCALBIN)/aso-crds-$$version.yaml"; \
+	if [ ! -f "$$bundle" ]; then \
+		curl -fsSL -o "$$bundle.tmp" "https://github.com/Azure/azure-service-operator/releases/download/$$version/azureserviceoperator_customresourcedefinitions_$$version.yaml"; \
+		mv "$$bundle.tmp" "$$bundle"; \
+	fi; \
+	for crd in $(ASO_CRDS); do \
+		out="$(ASO_CRD_DIR)/$$crd.yaml"; \
+		grep -qx "    app.kubernetes.io/version: $$version" "$$out" 2>/dev/null && continue; \
+		awk -v name="$$crd" '/^---$$/ { if (found) for (i = 1; i <= n; i++) print lines[i]; n = 0; found = 0; next } \
+			{ lines[++n] = $$0 } $$0 == "  name: " name { found = 1 } \
+			END { if (found) for (i = 1; i <= n; i++) print lines[i] }' "$$bundle" > "$$out"; \
+		[ -s "$$out" ] || { rm -f "$$out"; echo "CRD $$crd not found in $$bundle" >&2; exit 1; }; \
+	done
+
 WORKSPACE_ROOT ?= $(abspath $(CURDIR)/../..)
 
 # Local dev also initialises the go.work workspace so builds resolve this
