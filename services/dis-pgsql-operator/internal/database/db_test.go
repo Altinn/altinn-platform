@@ -15,9 +15,9 @@ var knownSkus = map[string]struct {
 	tier     dbforpostgresqlv1.SkuTier
 	memoryGB int
 }{
-	"Standard_B1ms":    {tier: dbforpostgresqlv1.SkuTier_Burstable, memoryGB: 2},
-	legacyProdSku:      {tier: dbforpostgresqlv1.SkuTier_GeneralPurpose, memoryGB: 16},
-	"Standard_D4ds_v5": {tier: dbforpostgresqlv1.SkuTier_GeneralPurpose, memoryGB: 16},
+	"Standard_B1ms":     {tier: dbforpostgresqlv1.SkuTier_Burstable, memoryGB: 2},
+	legacyProdSku:       {tier: dbforpostgresqlv1.SkuTier_GeneralPurpose, memoryGB: 16},
+	"Standard_D4ads_v5": {tier: dbforpostgresqlv1.SkuTier_GeneralPurpose, memoryGB: 16},
 }
 
 func TestProfilesListMatchingSkus(t *testing.T) {
@@ -55,8 +55,8 @@ func TestProfilesListMatchingSkus(t *testing.T) {
 }
 
 func TestProfileSkuHelpers(t *testing.T) {
-	if got := prodProfile.DefaultSkuName(); got != "Standard_D4ds_v5" {
-		t.Fatalf("prodProfile.DefaultSkuName() = %q, want %q", got, "Standard_D4ds_v5")
+	if got := prodProfile.DefaultSkuName(); got != "Standard_D4ads_v5" {
+		t.Fatalf("prodProfile.DefaultSkuName() = %q, want %q", got, "Standard_D4ads_v5")
 	}
 	if !prodProfile.AcceptsSku(legacyProdSku) {
 		t.Fatalf("prodProfile.AcceptsSku(%q) = false, want true", legacyProdSku)

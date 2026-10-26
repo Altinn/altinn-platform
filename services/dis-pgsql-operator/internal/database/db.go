@@ -34,13 +34,13 @@ var devProfile = Profile{
 	MemoryGB: 2,
 }
 
-// New prod servers get Standard_D4ds_v5.
+// New prod servers get Standard_D4ads_v5 (AMD).
 // Prod servers from earlier operator versions use Standard_D4s_v3.
 // Standard_D4s_v3 stays in the list so that the operator does not resize those servers.
 // A SKU change restarts a running server.
 // Remove Standard_D4s_v3 from the list only to move those servers on purpose.
 var prodProfile = Profile{
-	SkuNames: []string{"Standard_D4ds_v5", "Standard_D4s_v3"},
+	SkuNames: []string{"Standard_D4ads_v5", "Standard_D4s_v3"},
 	SkuTier:  dbforpostgresqlv1.SkuTier_GeneralPurpose,
 	MemoryGB: 16,
 }

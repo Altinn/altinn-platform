@@ -18,7 +18,7 @@ func TestResolveMaxConnections(t *testing.T) {
 		}
 	})
 
-	t.Run("maps Standard_D4ds_v5 to 1718", func(t *testing.T) {
+	t.Run("maps Standard_D4ads_v5 to 1718", func(t *testing.T) {
 		got, err := ResolveMaxConnections(prodProfile)
 		if err != nil {
 			t.Fatalf("ResolveMaxConnections(prodProfile) returned error: %v", err)
