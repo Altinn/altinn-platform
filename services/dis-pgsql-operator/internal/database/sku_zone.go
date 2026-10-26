@@ -10,8 +10,8 @@ import (
 // A provisioned server keeps its SKU and zones when the defaults change.
 // On a running server, a SKU change causes a restart.
 // A zone change causes an interruption or an error.
-// The operator applies new defaults only to servers that Azure has not provisioned.
-// A server that failed to provision gets the new defaults on its next attempt.
+// A server that Azure never provisioned uses the current defaults of the profile.
+// The operator does not change the SKU or the zones after a failure.
 
 // ResolveSku returns the compute SKU for a FlexibleServer.
 // A provisioned server keeps its current SKU if the profile accepts that SKU.
