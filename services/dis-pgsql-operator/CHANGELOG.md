@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.13.2...dis-pgsql-v0.14.0) (2026-10-26)
+
+
+### Features
+
+* **dis-pgsql:** use Standard_D4ads_v5 for new prod servers ([#4305](https://github.com/Altinn/altinn-platform/issues/4305)) ([dd63629](https://github.com/Altinn/altinn-platform/commit/dd636299e4642558cbaa7d9890c754103cc233a1))
+
 ## [0.13.2](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.13.1...dis-pgsql-v0.13.2) (2026-10-23)
 
 
