@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.0.6](https://github.com/Altinn/altinn-platform/compare/dis-apim-v1.0.5...dis-apim-v1.0.6) (2026-10-26)
+
+
+### Bug Fixes
+
+* **deps:** build Go images with golang 1.26.10 ([#4263](https://github.com/Altinn/altinn-platform/issues/4263)) ([de514a3](https://github.com/Altinn/altinn-platform/commit/de514a3cbf7593e42f20eafd4c221b3cc17e0087))
+* **deps:** bump grpc, otel and x/net to clear Go security advisories ([#4259](https://github.com/Altinn/altinn-platform/issues/4259)) ([b68ed8b](https://github.com/Altinn/altinn-platform/commit/b68ed8b590bd721fd6f94cf8fbec3ae6c9f82717))
+* **deps:** update golang builder images to 1.27.3 ([#4291](https://github.com/Altinn/altinn-platform/issues/4291)) ([63918a5](https://github.com/Altinn/altinn-platform/commit/63918a5ef1b5c7f16e41a80180758319d2c768be))
+
+
+### Dependency Updates
+
+* **dis-apim:** update services/dis apim operator to kubebuilder 4.16.0 ([#4298](https://github.com/Altinn/altinn-platform/issues/4298)) ([523ab9a](https://github.com/Altinn/altinn-platform/commit/523ab9af6b088cc3f9cc4b5140039c62e0954ef1))
+* update actions/checkout digest to d23441a ([#3833](https://github.com/Altinn/altinn-platform/issues/3833)) ([3f65ca1](https://github.com/Altinn/altinn-platform/commit/3f65ca194367d67ec5c315f81a1d37493a60ab77))
+* update actions/setup-go digest to 924ae3a ([#3834](https://github.com/Altinn/altinn-platform/issues/3834)) ([c7fcff2](https://github.com/Altinn/altinn-platform/commit/c7fcff2abfc9c1eaa50109d05bf05b1359fc7812))
+* update dockerfile non-major dependencies ([#3929](https://github.com/Altinn/altinn-platform/issues/3929)) ([e1a185a](https://github.com/Altinn/altinn-platform/commit/e1a185a220861c8903395b93f048e48a3a5e212c))
+* update github-actions non-major dependencies ([#3718](https://github.com/Altinn/altinn-platform/issues/3718)) ([90baeab](https://github.com/Altinn/altinn-platform/commit/90baeab00c1c07fa11d7708a8c0cd0863865f648))
+* update golangci/golangci-lint-action digest to ba0d7d2 ([#4272](https://github.com/Altinn/altinn-platform/issues/4272)) ([cff6856](https://github.com/Altinn/altinn-platform/commit/cff685687fb9e0708a1abad105265b0e6bc7be51))
+* update module github.com/google/cel-go to v0.29.0 [security] ([#4191](https://github.com/Altinn/altinn-platform/issues/4191)) ([17d13cd](https://github.com/Altinn/altinn-platform/commit/17d13cde807ecd06595055943c669750a4d36f24))
+
 ## [1.0.5](https://github.com/Altinn/altinn-platform/compare/dis-apim-v1.0.4...dis-apim-v1.0.5) (2026-05-26)
 
 
