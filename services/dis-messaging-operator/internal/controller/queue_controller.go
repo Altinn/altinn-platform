@@ -78,7 +78,7 @@ func (r *QueueReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 	nsQueue, err := r.applyNamespacesQueue(ctx, &queue)
 	if err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, r.failed(ctx, &queue, err)
 	}
 
 	// The NamespacesQueue watch brings the next reconcile when ASO reports.

@@ -292,4 +292,45 @@ var _ = Describe("Queue reconciler", func() {
 		Expect(stored.Status.ResourceId).To(Equal(resourceID))
 		Expect(stored.Status.ObservedGeneration).To(Equal(stored.Generation))
 	})
+
+	It("mirrors an ASO failure and replaces a reason the API server rejects", func() {
+		queue := productQueue("rejected", "team-a.rejected")
+		createQueue(queue)
+		reconcileQueue(queue)
+
+		var nsQueue servicebusv1.NamespacesQueue
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), &nsQueue)).To(Succeed())
+		nsQueue.Status.Conditions = []conditions.Condition{{
+			Type:               conditions.ConditionTypeReady,
+			Status:             metav1.ConditionFalse,
+			Severity:           conditions.ConditionSeverityError,
+			LastTransitionTime: metav1.Now(),
+			ObservedGeneration: nsQueue.Generation,
+			Reason:             "Bad-Code",
+			Message:            strings.Repeat("m", 2*maxMessageLength),
+		}}
+		Expect(k8sClient.Status().Update(ctx, &nsQueue)).To(Succeed())
+
+		stored := reconcileQueue(queue)
+		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionFalse, ReasonQueueNotReady)
+		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, ReasonQueueNotReady)
+		message := meta.FindStatusCondition(stored.Status.Conditions, string(messagingv1alpha1.ConditionQueueReady)).Message
+		Expect(message).To(HavePrefix("Bad-Code: mmm"))
+		Expect(message).To(HaveLen(maxMessageLength))
+	})
+
+	It("records an apply error in the conditions", func() {
+		queue := productQueue("broken", "team-a.broken")
+		createQueue(queue)
+
+		reconciler := newReconciler()
+		reconciler.Config.NamespaceResourceID = ""
+		_, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(queue)})
+		Expect(err).To(HaveOccurred())
+
+		stored := &messagingv1alpha1.Queue{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), stored)).To(Succeed())
+		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionFalse, ReasonApplyFailed)
+		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, ReasonApplyFailed)
+	})
 })
