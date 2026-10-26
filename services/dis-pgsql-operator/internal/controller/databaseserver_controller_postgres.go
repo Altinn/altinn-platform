@@ -91,14 +91,24 @@ func desiredBackup(db *storagev1alpha1.DatabaseServer) *dbforpostgresqlv1.Backup
 	}
 }
 
-func desiredHighAvailability(db *storagev1alpha1.DatabaseServer) *dbforpostgresqlv1.HighAvailability {
+func desiredHighAvailability(
+	db *storagev1alpha1.DatabaseServer,
+	current *dbforpostgresqlv1.FlexibleServer_Spec,
+	provisioned bool,
+) *dbforpostgresqlv1.HighAvailability {
 	mode := dbUtil.ResolveHighAvailabilityMode(db.Spec.ServerType, db.Spec.HighAvailabilityEnabled)
 	highAvailability := &dbforpostgresqlv1.HighAvailability{
 		Mode: &mode,
 	}
 
 	if mode != dbforpostgresqlv1.HighAvailability_Mode_Disabled {
-		highAvailability.StandbyAvailabilityZone = to.Ptr(defaultHAStandbyZone)
+		var currentStandbyZone *string
+		if current != nil && current.HighAvailability != nil {
+			currentStandbyZone = current.HighAvailability.StandbyAvailabilityZone
+		}
+		highAvailability.StandbyAvailabilityZone = to.Ptr(
+			dbUtil.ResolveZone(defaultHAStandbyZone, currentStandbyZone, provisioned),
+		)
 	}
 
 	return highAvailability
@@ -299,10 +309,24 @@ func (r *DatabaseServerReconciler) ensurePostgresServer(
 	// define if dev/prod profile
 	profile := dbUtil.GetProfile(db.Spec.ServerType)
 
+	// The operator sets status.host only after Azure has provisioned the server.
+	// It never clears the value. A server that failed to provision has no host.
+	provisioned := strings.TrimSpace(db.Status.Host) != ""
+	var currentSpec *dbforpostgresqlv1.FlexibleServer_Spec
+	var currentSku *dbforpostgresqlv1.Sku
+	var currentZone *string
+	if existingPtr != nil {
+		currentSpec = &existingPtr.Spec
+		currentSku = existingPtr.Spec.Sku
+		currentZone = existingPtr.Spec.AvailabilityZone
+	}
+	sku := dbUtil.ResolveSku(profile, currentSku, provisioned)
+	availabilityZone := dbUtil.ResolveZone(defaultAvailabilityZone, currentZone, provisioned)
+
 	// define storage size and tier
 	storage := desiredStorage(db)
 	backup := desiredBackup(db)
-	highAvailability := desiredHighAvailability(db)
+	highAvailability := desiredHighAvailability(db, currentSpec, provisioned)
 	maintenanceWindow := desiredMaintenanceWindow()
 
 	versionStr := fmt.Sprintf("%d", db.Spec.Version)
@@ -336,12 +360,9 @@ func (r *DatabaseServerReconciler) ensurePostgresServer(
 		Storage:           storage,
 		Backup:            backup,
 		HighAvailability:  highAvailability,
-		AvailabilityZone:  to.Ptr(defaultAvailabilityZone),
+		AvailabilityZone:  to.Ptr(availabilityZone),
 		MaintenanceWindow: maintenanceWindow,
-		Sku: &dbforpostgresqlv1.Sku{
-			Name: to.Ptr(profile.SkuName),
-			Tier: to.Ptr(profile.SkuTier),
-		},
+		Sku:               sku,
 
 		Tags: r.resourceTags(db),
 
@@ -375,7 +396,7 @@ func (r *DatabaseServerReconciler) ensurePostgresServer(
 			"version", versionStr,
 			"subnetID", resourceReferenceLogValue(networkConfig.Network.DelegatedSubnetResourceReference),
 			"zoneID", resourceReferenceLogValue(networkConfig.Network.PrivateDnsZoneArmResourceReference),
-			"skuName", profile.SkuName,
+			"skuName", *sku.Name,
 			"storageGB", storage.StorageSizeGB,
 		)
 

@@ -18,7 +18,7 @@ func TestResolveMaxConnections(t *testing.T) {
 		}
 	})
 
-	t.Run("maps Standard_D4s_v3 to 1718", func(t *testing.T) {
+	t.Run("maps Standard_D4ads_v5 to 1718", func(t *testing.T) {
 		got, err := ResolveMaxConnections(prodProfile)
 		if err != nil {
 			t.Fatalf("ResolveMaxConnections(prodProfile) returned error: %v", err)
@@ -29,7 +29,7 @@ func TestResolveMaxConnections(t *testing.T) {
 	})
 
 	t.Run("caps high memory at Azure maximum", func(t *testing.T) {
-		profile := Profile{SkuName: "fake-high-memory", MemoryGB: 64}
+		profile := Profile{SkuNames: []string{"fake-high-memory"}, MemoryGB: 64}
 		got, err := ResolveMaxConnections(profile)
 		if err != nil {
 			t.Fatalf("ResolveMaxConnections(profile) returned error: %v", err)
@@ -40,7 +40,7 @@ func TestResolveMaxConnections(t *testing.T) {
 	})
 
 	t.Run("fails for invalid memory", func(t *testing.T) {
-		_, err := ResolveMaxConnections(Profile{SkuName: "bad", MemoryGB: 0})
+		_, err := ResolveMaxConnections(Profile{SkuNames: []string{"bad"}, MemoryGB: 0})
 		if err == nil {
 			t.Fatalf("expected error for invalid memory, got nil")
 		}
