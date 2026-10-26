@@ -48,24 +48,21 @@ func (r *QueueReconciler) failed(ctx context.Context, queue *messagingv1alpha1.Q
 	return err
 }
 
-// writeStatus sets QueueReady and the aggregated Ready condition. With a
-// NamespacesQueue it also sets the queue name and the Azure resource ID.
+// writeStatus sets QueueReady and the aggregated Ready condition, lets fields
+// change the rest of the status, and patches the Queue when something
+// changed. A nil fields keeps the queue name and the resource ID as they are.
 func (r *QueueReconciler) writeStatus(
 	ctx context.Context,
 	queue *messagingv1alpha1.Queue,
-	nsQueue *servicebusv1.NamespacesQueue,
+	fields func(*messagingv1alpha1.QueueStatus),
 	queueReady metav1.Condition,
 ) error {
 	orig := queue.DeepCopy()
 
 	meta.SetStatusCondition(&queue.Status.Conditions, queueReady)
 	meta.SetStatusCondition(&queue.Status.Conditions, readyCondition(queue.Generation, queueReady))
-	if nsQueue != nil {
-		// The data-plane name, as apps use it, with "/". Azure stores the
-		// queue under the ARM name that messaging.AzureName builds, with
-		// "~" for "/", and that form is in the resource ID.
-		queue.Status.Name = queue.Spec.Name
-		queue.Status.ResourceId = ptr.Deref(nsQueue.Status.Id, "")
+	if fields != nil {
+		fields(&queue.Status)
 	}
 	queue.Status.ObservedGeneration = queue.Generation
 
@@ -76,6 +73,23 @@ func (r *QueueReconciler) writeStatus(
 	// A merge patch carries no resourceVersion, so a concurrent edit of the
 	// Queue does not turn into a conflict and a retry.
 	return r.Status().Patch(ctx, queue, client.MergeFrom(orig))
+}
+
+// azureQueue records the queue name and the Azure resource ID of the applied
+// NamespacesQueue. The name is the data-plane name, as apps use it, with
+// "/". Azure stores the queue under the ARM name that messaging.AzureName
+// builds, with "~" for "/", and that form is in the resource ID.
+func azureQueue(name string, nsQueue *servicebusv1.NamespacesQueue) func(*messagingv1alpha1.QueueStatus) {
+	return func(status *messagingv1alpha1.QueueStatus) {
+		status.Name = name
+		status.ResourceId = ptr.Deref(nsQueue.Status.Id, "")
+	}
+}
+
+// noQueue clears the queue name and the Azure resource ID. A new namespace
+// prefix can make a ready Queue invalid, and then both would be stale.
+func noQueue(status *messagingv1alpha1.QueueStatus) {
+	status.Name, status.ResourceId = "", ""
 }
 
 // queueReadyCondition mirrors the ASO Ready condition of the NamespacesQueue.
