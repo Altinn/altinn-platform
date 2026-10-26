@@ -22,6 +22,7 @@ import (
 
 	servicebusv1 "github.com/Azure/azure-service-operator/v2/api/servicebus/v1api20240101"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -31,6 +32,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	messagingv1alpha1 "github.com/Altinn/altinn-platform/services/dis-messaging-operator/api/v1alpha1"
@@ -71,10 +75,10 @@ func (r *QueueReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	if err := r.Get(ctx, client.ObjectKey{Name: queue.Namespace}, &namespace); err != nil {
 		return ctrl.Result{}, err
 	}
-	// Only a change of the Queue or the namespace fixes the name, so an
-	// invalid name is not requeued.
+	// Only a change of the Queue or of the namespace prefix fixes the name,
+	// and both bring their own event, so an invalid name is not requeued.
 	if err := messaging.ValidateName(namespace.Name, namespace.Annotations, queue.Spec.Name); err != nil {
-		return ctrl.Result{}, r.writeStatus(ctx, &queue, nil, newCondition(messagingv1alpha1.ConditionQueueReady,
+		return ctrl.Result{}, r.writeStatus(ctx, &queue, noQueue, newCondition(messagingv1alpha1.ConditionQueueReady,
 			queue.Generation, metav1.ConditionFalse, messaging.ReasonInvalidName, err.Error()))
 	}
 
@@ -84,7 +88,8 @@ func (r *QueueReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	// The NamespacesQueue watch brings the next reconcile when ASO reports.
-	return ctrl.Result{}, r.writeStatus(ctx, &queue, nsQueue, queueReadyCondition(queue.Generation, nsQueue))
+	return ctrl.Result{}, r.writeStatus(ctx, &queue, azureQueue(queue.Spec.Name, nsQueue),
+		queueReadyCondition(queue.Generation, nsQueue))
 }
 
 // applyNamespacesQueue writes the NamespacesQueue with server-side apply and
@@ -140,12 +145,70 @@ func (r *QueueReconciler) applyNamespacesQueue(
 
 // SetupWithManager sets up the controller with the Manager. A Queue is
 // reconciled again when its spec changes, not when the operator writes its
-// status. A NamespacesQueue event, such as ASO writing its status, reconciles
-// the owning Queue.
+// status. A NamespacesQueue reconciles the owning Queue when its spec or its
+// status changed, such as ASO reporting Ready. A change of the prefix
+// annotation of a namespace reconciles every Queue in it.
 func (r *QueueReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&messagingv1alpha1.Queue{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Owns(&servicebusv1.NamespacesQueue{}).
+		Owns(&servicebusv1.NamespacesQueue{}, builder.WithPredicates(namespacesQueueChanged())).
+		Watches(&corev1.Namespace{}, handler.EnqueueRequestsFromMapFunc(r.namespaceToQueues),
+			builder.WithPredicates(prefixAnnotationChanged())).
 		Named("queue").
 		Complete(r)
+}
+
+// namespaceToQueues maps a Namespace to every Queue in it. A new prefix makes
+// queue names valid or invalid, and no other event brings such a Queue back:
+// spec.name is immutable, and an invalid Queue has no NamespacesQueue.
+func (r *QueueReconciler) namespaceToQueues(ctx context.Context, obj client.Object) []ctrl.Request {
+	var queues messagingv1alpha1.QueueList
+	if err := r.List(ctx, &queues, client.InNamespace(obj.GetName())); err != nil {
+		logf.FromContext(ctx).Error(err, "cannot list the Queues of a namespace", "namespace", obj.GetName())
+		return nil
+	}
+
+	requests := make([]ctrl.Request, 0, len(queues.Items))
+	for i := range queues.Items {
+		requests = append(requests, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(&queues.Items[i])})
+	}
+
+	return requests
+}
+
+// prefixAnnotationChanged lets a Namespace event through when the prefix
+// annotation was set, changed or removed. Every other change of a namespace
+// leaves the queue names as they are, and a deleted namespace has no Queues.
+func prefixAnnotationChanged() predicate.Funcs {
+	return predicate.Funcs{
+		DeleteFunc: func(event.DeleteEvent) bool { return false },
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			oldPrefix, oldSet := e.ObjectOld.GetAnnotations()[messaging.PrefixAnnotation]
+			newPrefix, newSet := e.ObjectNew.GetAnnotations()[messaging.PrefixAnnotation]
+
+			return oldSet != newSet || oldPrefix != newPrefix
+		},
+	}
+}
+
+// namespacesQueueChanged lets a NamespacesQueue update through when its
+// generation or its status changed. ASO writes a poller annotation on every
+// poll of a running Azure operation, and each of those writes would cost a
+// reconcile and an apply round trip.
+func namespacesQueueChanged() predicate.Funcs {
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			oldQueue, ok := e.ObjectOld.(*servicebusv1.NamespacesQueue)
+			if !ok {
+				return true
+			}
+			newQueue, ok := e.ObjectNew.(*servicebusv1.NamespacesQueue)
+			if !ok {
+				return true
+			}
+
+			return oldQueue.Generation != newQueue.Generation ||
+				!equality.Semantic.DeepEqual(oldQueue.Status, newQueue.Status)
+		},
+	}
 }

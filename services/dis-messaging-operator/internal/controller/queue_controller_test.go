@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	servicebusv1 "github.com/Azure/azure-service-operator/v2/api/servicebus/v1api20240101"
+	"github.com/Azure/azure-service-operator/v2/pkg/common/annotations"
 	"github.com/Azure/azure-service-operator/v2/pkg/genruntime"
 	"github.com/Azure/azure-service-operator/v2/pkg/genruntime/conditions"
 	corev1 "k8s.io/api/core/v1"
@@ -19,9 +20,11 @@ import (
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 
 	messagingv1alpha1 "github.com/Altinn/altinn-platform/services/dis-messaging-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-messaging-operator/internal/config"
+	"github.com/Altinn/altinn-platform/services/dis-messaging-operator/internal/messaging"
 )
 
 const (
@@ -29,6 +32,9 @@ const (
 	productNamespace        = "product-team-a"
 	testNamespaceResourceID = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-messaging" +
 		"/providers/Microsoft.ServiceBus/namespaces/sb-messaging"
+	// pollerAnnotation is what ASO writes on every poll of a running Azure
+	// operation. ASO keeps the constant internal.
+	pollerAnnotation = "serviceoperator.azure.com/poller-resume-token"
 )
 
 func newQueue(name string, mutate func(*messagingv1alpha1.Queue)) *messagingv1alpha1.Queue {
@@ -227,11 +233,45 @@ func expectCondition(queue *messagingv1alpha1.Queue, conditionType messagingv1al
 	Expect(condition.ObservedGeneration).To(Equal(queue.Generation), "condition %s", conditionType)
 }
 
+// createProductNamespace creates the product namespace once. envtest cannot
+// delete a namespace, so every spec shares it.
+func createProductNamespace() {
+	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: productNamespace}}
+	Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, namespace))).To(Succeed())
+}
+
+// movePrefix gives the product namespace the prefix of another team for the
+// rest of the spec, so that every team-a queue name in it is invalid.
+func movePrefix() {
+	annotate := func(values map[string]string) {
+		var namespace corev1.Namespace
+		Expect(k8sClient.Get(ctx, client.ObjectKey{Name: productNamespace}, &namespace)).To(Succeed())
+		orig := namespace.DeepCopy()
+		namespace.Annotations = values
+		Expect(k8sClient.Patch(ctx, &namespace, client.MergeFrom(orig))).To(Succeed())
+	}
+	annotate(map[string]string{messaging.PrefixAnnotation: "team-b."})
+	DeferCleanup(func() { annotate(nil) })
+}
+
+// reportReady writes, as ASO would, Ready=True for the current generation of
+// the NamespacesQueue of queue, and resourceID as its Azure ID.
+func reportReady(queue *messagingv1alpha1.Queue, resourceID string) {
+	var nsQueue servicebusv1.NamespacesQueue
+	Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), &nsQueue)).To(Succeed())
+	nsQueue.Status.Id = &resourceID
+	nsQueue.Status.Conditions = []conditions.Condition{{
+		Type:               conditions.ConditionTypeReady,
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.Now(),
+		ObservedGeneration: nsQueue.Generation,
+		Reason:             conditions.ReasonSucceeded,
+	}}
+	Expect(k8sClient.Status().Update(ctx, &nsQueue)).To(Succeed())
+}
+
 var _ = Describe("Queue reconciler", func() {
-	BeforeEach(func() {
-		namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: productNamespace}}
-		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, namespace))).To(Succeed())
-	})
+	BeforeEach(createProductNamespace)
 
 	It("returns cleanly for a Queue that no longer exists", func() {
 		_, err := newReconciler().Reconcile(ctx, ctrl.Request{
@@ -245,8 +285,8 @@ var _ = Describe("Queue reconciler", func() {
 		createQueue(queue)
 
 		stored := reconcileQueue(queue)
-		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionFalse, "InvalidName")
-		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, "InvalidName")
+		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionFalse, messaging.ReasonInvalidName)
+		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, messaging.ReasonInvalidName)
 		Expect(stored.Status.ObservedGeneration).To(Equal(stored.Generation))
 
 		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), &servicebusv1.NamespacesQueue{})
@@ -274,19 +314,8 @@ var _ = Describe("Queue reconciler", func() {
 		queue := productQueue("invoices", "team-a.invoices")
 		createQueue(queue)
 		reconcileQueue(queue)
-
-		var nsQueue servicebusv1.NamespacesQueue
-		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), &nsQueue)).To(Succeed())
 		resourceID := testNamespaceResourceID + "/queues/team-a.invoices"
-		nsQueue.Status.Id = &resourceID
-		nsQueue.Status.Conditions = []conditions.Condition{{
-			Type:               conditions.ConditionTypeReady,
-			Status:             metav1.ConditionTrue,
-			LastTransitionTime: metav1.Now(),
-			ObservedGeneration: nsQueue.Generation,
-			Reason:             conditions.ReasonSucceeded,
-		}}
-		Expect(k8sClient.Status().Update(ctx, &nsQueue)).To(Succeed())
+		reportReady(queue, resourceID)
 
 		stored := reconcileQueue(queue)
 		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionTrue, conditions.ReasonSucceeded)
@@ -360,5 +389,142 @@ var _ = Describe("Queue reconciler", func() {
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), stored)).To(Succeed())
 		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionFalse, ReasonApplyFailed)
 		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, ReasonApplyFailed)
+	})
+
+	It("reports InvalidName in a namespace without a product prefix and without the annotation", func() {
+		queue := newQueue("unprefixed", nil)
+		createQueue(queue)
+
+		stored := reconcileQueue(queue)
+		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionFalse, messaging.ReasonInvalidName)
+		message := meta.FindStatusCondition(stored.Status.Conditions, string(messagingv1alpha1.ConditionQueueReady)).Message
+		Expect(message).To(ContainSubstring("has no queue name prefix"))
+	})
+
+	It("clears the name and the resource ID when a new namespace prefix makes a ready Queue invalid", func() {
+		queue := productQueue("renamed", "team-a.renamed")
+		createQueue(queue)
+		reconcileQueue(queue)
+		reportReady(queue, testNamespaceResourceID+"/queues/team-a.renamed")
+
+		stored := reconcileQueue(queue)
+		Expect(stored.Status.Name).To(Equal("team-a.renamed"))
+		Expect(stored.Status.ResourceId).NotTo(BeEmpty())
+
+		movePrefix()
+		stored = reconcileQueue(queue)
+		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionFalse, messaging.ReasonInvalidName)
+		Expect(stored.Status.Name).To(BeEmpty())
+		Expect(stored.Status.ResourceId).To(BeEmpty())
+	})
+
+	It("waits for ASO again when the NamespacesQueue generation passes the Ready condition", func() {
+		queue := productQueue("edited", "team-a.edited")
+		createQueue(queue)
+		reconcileQueue(queue)
+		reportReady(queue, testNamespaceResourceID+"/queues/team-a.edited")
+		stored := reconcileQueue(queue)
+		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionTrue, conditions.ReasonSucceeded)
+
+		stored.Spec.LockDuration = &metav1.Duration{Duration: time.Minute}
+		Expect(k8sClient.Update(ctx, stored)).To(Succeed())
+
+		stored = reconcileQueue(queue)
+		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionUnknown, conditions.ReasonReconciling.Name)
+		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionUnknown, conditions.ReasonReconciling.Name)
+		var nsQueue servicebusv1.NamespacesQueue
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), &nsQueue)).To(Succeed())
+		Expect(nsQueue.Generation).To(BeNumerically(">", nsQueue.Status.Conditions[0].ObservedGeneration))
+	})
+
+	It("creates a NamespacesQueue without a reconcile policy for deletionPolicy Delete", func() {
+		queue := productQueue("deleted", "team-a.deleted")
+		queue.Spec.DeletionPolicy = messagingv1alpha1.QueueDeletionPolicyDelete
+		createQueue(queue)
+		reconcileQueue(queue)
+
+		var nsQueue servicebusv1.NamespacesQueue
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), &nsQueue)).To(Succeed())
+		Expect(nsQueue.Annotations).NotTo(HaveKey(annotations.ReconcilePolicy))
+	})
+
+	It("removes the reconcile policy when the deletion policy changes from Retain to Delete", func() {
+		queue := productQueue("retained", "team-a.retained")
+		createQueue(queue)
+		stored := reconcileQueue(queue)
+
+		var nsQueue servicebusv1.NamespacesQueue
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), &nsQueue)).To(Succeed())
+		Expect(nsQueue.Annotations).To(HaveKeyWithValue(annotations.ReconcilePolicy,
+			string(annotations.ReconcilePolicyDetachOnDelete)))
+		// ASO writes its own annotations on the object. The apply keeps them.
+		nsQueue.Annotations[pollerAnnotation] = "token"
+		Expect(k8sClient.Update(ctx, &nsQueue)).To(Succeed())
+
+		stored.Spec.DeletionPolicy = messagingv1alpha1.QueueDeletionPolicyDelete
+		Expect(k8sClient.Update(ctx, stored)).To(Succeed())
+		reconcileQueue(queue)
+
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), &nsQueue)).To(Succeed())
+		Expect(nsQueue.Annotations).NotTo(HaveKey(annotations.ReconcilePolicy))
+		Expect(nsQueue.Annotations).To(HaveKeyWithValue(pollerAnnotation, "token"))
+	})
+})
+
+var _ = Describe("Queue watches", func() {
+	BeforeEach(createProductNamespace)
+
+	It("maps a namespace to the Queues in it", func() {
+		first, second := productQueue("first", "team-a.first"), productQueue("second", "team-a.second")
+		createQueue(first)
+		createQueue(second)
+		createQueue(newQueue("elsewhere", nil))
+
+		namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: productNamespace}}
+		Expect(newReconciler().namespaceToQueues(ctx, namespace)).To(ConsistOf(
+			ctrl.Request{NamespacedName: client.ObjectKeyFromObject(first)},
+			ctrl.Request{NamespacedName: client.ObjectKeyFromObject(second)},
+		))
+	})
+
+	It("passes a new Namespace and drops a deleted one", func() {
+		namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: productNamespace}}
+		Expect(prefixAnnotationChanged().Create(event.CreateEvent{Object: namespace})).To(BeTrue())
+		Expect(prefixAnnotationChanged().Delete(event.DeleteEvent{Object: namespace})).To(BeFalse())
+	})
+
+	DescribeTable("passes a Namespace update only when the prefix annotation changed",
+		func(before, after map[string]string, want bool) {
+			old := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: productNamespace, Annotations: before}}
+			updated := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: productNamespace, Annotations: after}}
+			Expect(prefixAnnotationChanged().Update(event.UpdateEvent{ObjectOld: old, ObjectNew: updated})).To(Equal(want))
+		},
+		Entry("prefix set", nil, map[string]string{messaging.PrefixAnnotation: "team-a."}, true),
+		Entry("prefix changed", map[string]string{messaging.PrefixAnnotation: "team-a."},
+			map[string]string{messaging.PrefixAnnotation: "team-b."}, true),
+		Entry("prefix removed", map[string]string{messaging.PrefixAnnotation: "team-a."}, nil, true),
+		Entry("another annotation changed", map[string]string{messaging.PrefixAnnotation: "team-a."},
+			map[string]string{messaging.PrefixAnnotation: "team-a.", "touched": "yes"}, false),
+		Entry("no prefix before or after", nil, map[string]string{"touched": "yes"}, false),
+	)
+
+	DescribeTable("passes a NamespacesQueue update only when the generation or the status changed",
+		func(mutate func(*servicebusv1.NamespacesQueue), want bool) {
+			old := &servicebusv1.NamespacesQueue{ObjectMeta: metav1.ObjectMeta{Name: "orders", Generation: 1}}
+			updated := old.DeepCopy()
+			mutate(updated)
+			Expect(namespacesQueueChanged().Update(event.UpdateEvent{ObjectOld: old, ObjectNew: updated})).To(Equal(want))
+		},
+		Entry("generation", func(q *servicebusv1.NamespacesQueue) { q.Generation = 2 }, true),
+		Entry("status", func(q *servicebusv1.NamespacesQueue) { q.Status.Id = ptr.To("id") }, true),
+		Entry("poller annotation only", func(q *servicebusv1.NamespacesQueue) {
+			q.Annotations = map[string]string{pollerAnnotation: "token"}
+		}, false),
+		Entry("same object", func(*servicebusv1.NamespacesQueue) {}, false),
+	)
+
+	It("passes an update of another kind through the NamespacesQueue predicate", func() {
+		secret := &corev1.Secret{}
+		Expect(namespacesQueueChanged().Update(event.UpdateEvent{ObjectOld: secret, ObjectNew: secret})).To(BeTrue())
 	})
 })
