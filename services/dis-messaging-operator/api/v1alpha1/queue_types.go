@@ -170,9 +170,11 @@ type QueueSpec struct {
 
 // QueueStatus defines the observed state of Queue.
 type QueueStatus struct {
-	// name is the queue name as Azure reports it, in the ARM form with "~"
-	// for "/". It is empty until Azure has created the queue. Apps use
-	// spec.name, the data-plane form.
+	// name is the ARM resource name of the queue, as Azure reports it. A
+	// queue name can contain "/" as a path separator, but ARM does not
+	// allow "/" in a resource name, so ARM writes "~" instead: spec.name
+	// "team-a.sync/orders" gives the name "team-a.sync~orders". The name is
+	// empty until Azure has created the queue. Apps keep using spec.name.
 	// +optional
 	Name string `json:"name,omitempty"`
 

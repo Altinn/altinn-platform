@@ -63,8 +63,9 @@ func (r *QueueReconciler) writeStatus(
 	if nsQueue != nil {
 		// Both come from the ASO status, so they report what Azure has and
 		// stay empty until Azure has created the queue. A copy of spec.name
-		// would say nothing new. Apps take the data-plane name from
-		// spec.name.
+		// would say nothing new. The name is the ARM resource name that
+		// messaging.AzureName builds, with "~" for "/"; apps keep using
+		// spec.name on the data plane.
 		queue.Status.Name = ptr.Deref(nsQueue.Status.Name, "")
 		queue.Status.ResourceId = ptr.Deref(nsQueue.Status.Id, "")
 	}
