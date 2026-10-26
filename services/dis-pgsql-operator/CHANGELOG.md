@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.13.2](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.13.1...dis-pgsql-v0.13.2) (2026-10-23)
+
+
+### Bug Fixes
+
+* **deps:** update golang builder images to 1.27.3 ([#4291](https://github.com/Altinn/altinn-platform/issues/4291)) ([63918a5](https://github.com/Altinn/altinn-platform/commit/63918a5ef1b5c7f16e41a80180758319d2c768be))
+
+
+### Dependency Updates
+
+* **dis-pgsql:** kubebuilder update services/dis pgsql operator to 4.16.0 ([#4294](https://github.com/Altinn/altinn-platform/issues/4294)) ([7169ef3](https://github.com/Altinn/altinn-platform/commit/7169ef39ae72214c24477ce0c4a2d693660a7fc2))
+* update dockerfile non-major dependencies ([#3929](https://github.com/Altinn/altinn-platform/issues/3929)) ([e1a185a](https://github.com/Altinn/altinn-platform/commit/e1a185a220861c8903395b93f048e48a3a5e212c))
+* update github-actions non-major dependencies ([#3718](https://github.com/Altinn/altinn-platform/issues/3718)) ([90baeab](https://github.com/Altinn/altinn-platform/commit/90baeab00c1c07fa11d7708a8c0cd0863865f648))
+
 ## [0.13.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.13.0...dis-pgsql-v0.13.1) (2026-10-21)
 
 

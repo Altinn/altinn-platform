@@ -12,6 +12,13 @@ E2E_ENV := CERT_MANAGER_INSTALL_SKIP=$(CERT_MANAGER_INSTALL_SKIP)
 RUN_CHECKS := fmt generate manifests test-ci lint
 SETUP_TOOLS := golangci-lint kustomize controller-gen setup-envtest
 
+# Tool versions for the kubebuilder 4.16 scaffold, overriding the Makefile.common
+# defaults. Keep GOLANGCI_LINT_VERSION in sync with .custom-gcl.yml and the
+# golangci-lint version in .github/workflows/dis-vault-lint-test.yml.
+KUSTOMIZE_VERSION ?= v5.8.1
+CONTROLLER_TOOLS_VERSION ?= v0.22.0
+GOLANGCI_LINT_VERSION ?= v2.15.0
+
 include ../../Makefile.common
 
 ##@ Vault-specific

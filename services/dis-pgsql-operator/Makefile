@@ -15,7 +15,23 @@ E2E_GOTEST_FLAGS := -timeout=$(E2E_TEST_TIMEOUT)
 RUN_CHECKS := fmt generate manifests test-ci lint
 SETUP_TOOLS := golangci-lint kustomize controller-gen setup-envtest
 
+# Tool versions for the kubebuilder 4.16 scaffold, overriding the Makefile.common
+# defaults. Keep GOLANGCI_LINT_VERSION in sync with .custom-gcl.yml and the
+# golangci-lint version in .github/workflows/dis-pgsql-lint-test.yml.
+KUSTOMIZE_VERSION ?= v5.8.1
+CONTROLLER_TOOLS_VERSION ?= v0.22.0
+GOLANGCI_LINT_VERSION ?= v2.15.0
+
 include ../../Makefile.common
+
+# Lint with a golangci-lint built from .custom-gcl.yml so the module plugins
+# (logcheck) are available. `private` keeps the override out of the base
+# golangci-lint install, which still uses Makefile.common's GOLANGCI_LINT.
+GOLANGCI_LINT_CUSTOM ?= $(LOCALBIN)/golangci-lint-custom-$(GOLANGCI_LINT_VERSION)
+lint lint-fix lint-config: private GOLANGCI_LINT = $(GOLANGCI_LINT_CUSTOM)
+golangci-lint: $(GOLANGCI_LINT_CUSTOM)
+$(GOLANGCI_LINT_CUSTOM): .custom-gcl.yml | $(GOLANGCI_LINT)
+	"$(GOLANGCI_LINT)" custom --destination "$(LOCALBIN)" --name "$(notdir $@)"
 
 ##@ Pgsql-specific
 

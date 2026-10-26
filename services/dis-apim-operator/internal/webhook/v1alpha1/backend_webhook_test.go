@@ -29,13 +29,13 @@ var _ = Describe("Backend Webhook", func() {
 	var (
 		obj       *apimv1alpha1.Backend
 		oldObj    *apimv1alpha1.Backend
-		defaulter BackendCustomDefaulter
+		defaulter BackendDefaulter
 	)
 
 	BeforeEach(func() {
 		obj = &apimv1alpha1.Backend{}
 		oldObj = &apimv1alpha1.Backend{}
-		defaulter = BackendCustomDefaulter{}
+		defaulter = BackendDefaulter{}
 		Expect(defaulter).NotTo(BeNil(), "Expected defaulter to be initialized")
 		Expect(oldObj).NotTo(BeNil(), "Expected oldObj to be initialized")
 		Expect(obj).NotTo(BeNil(), "Expected obj to be initialized")
