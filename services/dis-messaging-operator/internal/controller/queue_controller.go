@@ -18,9 +18,11 @@ package controller
 
 import (
 	"context"
+	"fmt"
 
 	servicebusv1 "github.com/Azure/azure-service-operator/v2/api/servicebus/v1api20240101"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -97,6 +99,17 @@ func (r *QueueReconciler) applyNamespacesQueue(
 	desired, err := messaging.BuildNamespacesQueue(queue, r.Config.NamespaceResourceID)
 	if err != nil {
 		return nil, err
+	}
+	// The operator does not take over an ASO resource it does not own. With
+	// ForceOwnership the apply would adopt a NamespacesQueue that a team
+	// created by hand, so a foreign object of the same name stops the apply.
+	existing := &servicebusv1.NamespacesQueue{}
+	switch err := r.Get(ctx, client.ObjectKeyFromObject(desired), existing); {
+	case apierrors.IsNotFound(err):
+	case err != nil:
+		return nil, err
+	case !metav1.IsControlledBy(existing, queue):
+		return nil, fmt.Errorf("NamespacesQueue %s exists and is not controlled by this Queue", desired.Name)
 	}
 	if err := controllerutil.SetControllerReference(queue, desired, r.Scheme); err != nil {
 		return nil, err

@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	servicebusv1 "github.com/Azure/azure-service-operator/v2/api/servicebus/v1api20240101"
+	"github.com/Azure/azure-service-operator/v2/pkg/genruntime"
 	"github.com/Azure/azure-service-operator/v2/pkg/genruntime/conditions"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -317,6 +318,31 @@ var _ = Describe("Queue reconciler", func() {
 		message := meta.FindStatusCondition(stored.Status.Conditions, string(messagingv1alpha1.ConditionQueueReady)).Message
 		Expect(message).To(HavePrefix("Bad-Code: mmm"))
 		Expect(message).To(HaveLen(maxMessageLength))
+	})
+
+	It("does not take over a NamespacesQueue the Queue does not control", func() {
+		foreign := &servicebusv1.NamespacesQueue{
+			ObjectMeta: metav1.ObjectMeta{Name: "foreign", Namespace: productNamespace},
+			Spec: servicebusv1.NamespacesQueue_Spec{
+				AzureName: "team-a.by-hand",
+				Owner:     &genruntime.KnownResourceReference{ARMID: testNamespaceResourceID},
+			},
+		}
+		Expect(k8sClient.Create(ctx, foreign)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, foreign)).To(Succeed()) })
+
+		queue := productQueue("foreign", "team-a.foreign")
+		createQueue(queue)
+		_, err := newReconciler().Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(queue)})
+		Expect(err).To(MatchError(ContainSubstring("not controlled by this Queue")))
+
+		stored := &messagingv1alpha1.Queue{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), stored)).To(Succeed())
+		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, ReasonApplyFailed)
+
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(foreign), foreign)).To(Succeed())
+		Expect(foreign.OwnerReferences).To(BeEmpty())
+		Expect(foreign.Spec.AzureName).To(Equal("team-a.by-hand"))
 	})
 
 	It("records an apply error in the conditions", func() {
