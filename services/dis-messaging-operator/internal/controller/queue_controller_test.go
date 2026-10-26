@@ -7,17 +7,28 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	servicebusv1 "github.com/Azure/azure-service-operator/v2/api/servicebus/v1api20240101"
+	"github.com/Azure/azure-service-operator/v2/pkg/genruntime/conditions"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	messagingv1alpha1 "github.com/Altinn/altinn-platform/services/dis-messaging-operator/api/v1alpha1"
+	"github.com/Altinn/altinn-platform/services/dis-messaging-operator/internal/config"
 )
 
-const testNamespace = "default"
+const (
+	testNamespace           = "default"
+	productNamespace        = "product-team-a"
+	testNamespaceResourceID = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-messaging" +
+		"/providers/Microsoft.ServiceBus/namespaces/sb-messaging"
+)
 
 func newQueue(name string, mutate func(*messagingv1alpha1.Queue)) *messagingv1alpha1.Queue {
 	queue := &messagingv1alpha1.Queue{
@@ -182,22 +193,103 @@ var _ = Describe("Queue CRD schema", func() {
 	)
 })
 
-var _ = Describe("Queue reconciler", func() {
-	It("reconciles an existing Queue without error", func() {
-		createQueue(newQueue("reconcile", nil))
+func newReconciler() *QueueReconciler {
+	return &QueueReconciler{
+		Client: k8sClient,
+		Scheme: k8sClient.Scheme(),
+		Config: config.OperatorConfig{NamespaceResourceID: testNamespaceResourceID},
+	}
+}
 
-		reconciler := &QueueReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
-		_, err := reconciler.Reconcile(ctx, ctrl.Request{
-			NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: "reconcile"},
+func reconcileQueue(queue *messagingv1alpha1.Queue) *messagingv1alpha1.Queue {
+	_, err := newReconciler().Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(queue)})
+	Expect(err).NotTo(HaveOccurred())
+
+	stored := &messagingv1alpha1.Queue{}
+	Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), stored)).To(Succeed())
+	return stored
+}
+
+func productQueue(name, queueName string) *messagingv1alpha1.Queue {
+	return newQueue(name, func(q *messagingv1alpha1.Queue) {
+		q.Namespace = productNamespace
+		q.Spec.Name = queueName
+	})
+}
+
+func expectCondition(queue *messagingv1alpha1.Queue, conditionType messagingv1alpha1.ConditionType,
+	status metav1.ConditionStatus, reason string) {
+	condition := meta.FindStatusCondition(queue.Status.Conditions, string(conditionType))
+	Expect(condition).NotTo(BeNil(), "condition %s", conditionType)
+	Expect(condition.Status).To(Equal(status), "condition %s", conditionType)
+	Expect(condition.Reason).To(Equal(reason), "condition %s", conditionType)
+	Expect(condition.ObservedGeneration).To(Equal(queue.Generation), "condition %s", conditionType)
+}
+
+var _ = Describe("Queue reconciler", func() {
+	BeforeEach(func() {
+		namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: productNamespace}}
+		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, namespace))).To(Succeed())
+	})
+
+	It("returns cleanly for a Queue that no longer exists", func() {
+		_, err := newReconciler().Reconcile(ctx, ctrl.Request{
+			NamespacedName: types.NamespacedName{Namespace: productNamespace, Name: "missing"},
 		})
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("returns cleanly for a Queue that no longer exists", func() {
-		reconciler := &QueueReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
-		_, err := reconciler.Reconcile(ctx, ctrl.Request{
-			NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: "missing"},
-		})
-		Expect(err).NotTo(HaveOccurred())
+	It("reports a name without the namespace prefix and creates no NamespacesQueue", func() {
+		queue := productQueue("foreign", "team-b.orders")
+		createQueue(queue)
+
+		stored := reconcileQueue(queue)
+		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionFalse, "InvalidName")
+		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, "InvalidName")
+		Expect(stored.Status.ObservedGeneration).To(Equal(stored.Generation))
+
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), &servicebusv1.NamespacesQueue{})
+		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "expected NotFound, got %v", err)
+	})
+
+	It("applies a NamespacesQueue that the Queue controls and waits for ASO", func() {
+		queue := productQueue("orders", "team-a.sync/orders")
+		createQueue(queue)
+
+		stored := reconcileQueue(queue)
+		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionUnknown, "Reconciling")
+		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionUnknown, "Reconciling")
+
+		var nsQueue servicebusv1.NamespacesQueue
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), &nsQueue)).To(Succeed())
+		Expect(nsQueue.Spec.AzureName).To(Equal("team-a.sync~orders"))
+		Expect(nsQueue.Spec.Owner.ARMID).To(Equal(testNamespaceResourceID))
+		Expect(metav1.IsControlledBy(&nsQueue, queue)).To(BeTrue())
+	})
+
+	It("mirrors the ASO Ready condition and the resource ID of the queue", func() {
+		queue := productQueue("invoices", "team-a.invoices")
+		createQueue(queue)
+		reconcileQueue(queue)
+
+		var nsQueue servicebusv1.NamespacesQueue
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), &nsQueue)).To(Succeed())
+		resourceID := testNamespaceResourceID + "/queues/team-a.invoices"
+		nsQueue.Status.Id = &resourceID
+		nsQueue.Status.Conditions = []conditions.Condition{{
+			Type:               conditions.ConditionTypeReady,
+			Status:             metav1.ConditionTrue,
+			LastTransitionTime: metav1.Now(),
+			ObservedGeneration: nsQueue.Generation,
+			Reason:             conditions.ReasonSucceeded,
+		}}
+		Expect(k8sClient.Status().Update(ctx, &nsQueue)).To(Succeed())
+
+		stored := reconcileQueue(queue)
+		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionTrue, conditions.ReasonSucceeded)
+		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionTrue, ReasonReady)
+		Expect(stored.Status.Name).To(Equal("team-a.invoices"))
+		Expect(stored.Status.ResourceId).To(Equal(resourceID))
+		Expect(stored.Status.ObservedGeneration).To(Equal(stored.Generation))
 	})
 })

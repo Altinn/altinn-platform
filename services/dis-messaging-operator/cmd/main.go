@@ -22,12 +22,14 @@ import (
 	"os"
 
 	messagingv1alpha1 "github.com/Altinn/altinn-platform/services/dis-messaging-operator/api/v1alpha1"
+	"github.com/Altinn/altinn-platform/services/dis-messaging-operator/internal/config"
 	"github.com/Altinn/altinn-platform/services/dis-messaging-operator/internal/controller"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	servicebusv1 "github.com/Azure/azure-service-operator/v2/api/servicebus/v1api20240101"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -48,6 +50,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(messagingv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(servicebusv1.AddToScheme(scheme))
 
 	// +kubebuilder:scaffold:scheme
 }
@@ -85,6 +88,12 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	operatorConfig, err := config.Load(os.Getenv)
+	if err != nil {
+		setupLog.Error(err, "invalid operator configuration")
+		os.Exit(1)
+	}
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -164,6 +173,7 @@ func main() {
 	if err = (&controller.QueueReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Config: *operatorConfig,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Queue")
 		os.Exit(1)
