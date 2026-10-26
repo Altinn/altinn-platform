@@ -8,6 +8,9 @@ resources:
 - metrics_service.yaml
 
 patches:
+- path: deploy_vars_patch.yaml
+  target:
+    kind: Deployment
 - path: manager_metrics_patch.yaml
   target:
     kind: Deployment
