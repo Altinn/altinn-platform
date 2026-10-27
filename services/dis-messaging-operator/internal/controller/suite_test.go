@@ -97,8 +97,8 @@ var _ = BeforeSuite(func() {
 })
 
 // listByQueueName answers a Queue list on queueNameIndex as the manager
-// cache does. The API server does not know the index, so the list holds
-// every Queue, and the Queues with another key are dropped.
+// cache does. The API server does not know the index, so the list runs
+// with the other options only, and the Queues with another key are dropped.
 func listByQueueName(ctx context.Context, c client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
 	options := (&client.ListOptions{}).ApplyOptions(opts)
 	queues, ok := list.(*messagingv1alpha1.QueueList)
@@ -109,7 +109,8 @@ func listByQueueName(ctx context.Context, c client.WithWatch, list client.Object
 	if !found {
 		return c.List(ctx, list, opts...)
 	}
-	if err := c.List(ctx, queues); err != nil {
+	options.FieldSelector = nil
+	if err := c.List(ctx, queues, options); err != nil {
 		return err
 	}
 	queues.Items = slices.DeleteFunc(queues.Items, func(queue messagingv1alpha1.Queue) bool {

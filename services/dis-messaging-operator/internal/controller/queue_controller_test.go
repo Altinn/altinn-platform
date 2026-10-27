@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
 	messagingv1alpha1 "github.com/Altinn/altinn-platform/services/dis-messaging-operator/api/v1alpha1"
@@ -208,15 +210,23 @@ var _ = Describe("Queue CRD schema", func() {
 })
 
 func newReconciler() *QueueReconciler {
+	return reconcilerWith(k8sClient)
+}
+
+func reconcilerWith(c client.Client) *QueueReconciler {
 	return &QueueReconciler{
-		Client: k8sClient,
+		Client: c,
 		Scheme: k8sClient.Scheme(),
 		Config: config.OperatorConfig{SubscriptionID: testSubscriptionID, NamespaceResourceID: testNamespaceResourceID},
 	}
 }
 
 func reconcileQueue(queue *messagingv1alpha1.Queue) *messagingv1alpha1.Queue {
-	_, err := newReconciler().Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(queue)})
+	return reconcileQueueWith(newReconciler(), queue)
+}
+
+func reconcileQueueWith(r *QueueReconciler, queue *messagingv1alpha1.Queue) *messagingv1alpha1.Queue {
+	_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(queue)})
 	Expect(err).NotTo(HaveOccurred())
 
 	stored := &messagingv1alpha1.Queue{}
@@ -416,8 +426,8 @@ var _ = Describe("Queue reconciler", func() {
 		Expect(message).To(ContainSubstring("has no queue name prefix"))
 	})
 
-	It("clears the name and the resource ID when a new namespace prefix makes a ready Queue invalid", func() {
-		queue := productQueue("renamed", "team-a.renamed")
+	It("withdraws the NamespacesQueue and the grants when a new namespace prefix makes a ready Queue invalid", func() {
+		queue := accessQueue("renamed", groupPrincipal(messagingv1alpha1.QueueAccessRoleSender, "group-renamed"))
 		createQueue(queue)
 		reconcileQueue(queue)
 		reportReady(queue, testNamespaceResourceID+"/queues/team-a.renamed")
@@ -426,11 +436,16 @@ var _ = Describe("Queue reconciler", func() {
 		Expect(stored.Status.Name).To(Equal("team-a.renamed"))
 		Expect(stored.Status.ResourceId).NotTo(BeEmpty())
 
+		Expect(grantsOf(queue)).To(HaveLen(1))
+
 		setPrefix(productNamespace, "team-b.")
 		stored = reconcileQueue(queue)
 		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionFalse, messaging.ReasonInvalidName)
 		Expect(stored.Status.Name).To(BeEmpty())
 		Expect(stored.Status.ResourceId).To(BeEmpty())
+		Expect(grantsOf(queue)).To(BeEmpty())
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), &servicebusv1.NamespacesQueue{})
+		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "expected NotFound, got %v", err)
 	})
 
 	It("creates the NamespacesQueue of an invalid Queue once the namespace gets the prefix annotation", func() {
@@ -790,8 +805,28 @@ func startOfSecond() {
 	time.Sleep(time.Until(time.Now().Truncate(time.Second).Add(time.Second)))
 }
 
-func expectConflict(queue *messagingv1alpha1.Queue, holder string) {
-	stored := reconcileQueue(queue)
+// detachChecked returns a client whose Delete of a NamespacesQueue fails
+// when the stored object does not have detach-on-delete yet. ASO would
+// delete the Azure queue of the holder.
+func detachChecked() client.Client {
+	direct, err := client.NewWithWatch(cfg, client.Options{Scheme: k8sClient.Scheme()})
+	Expect(err).NotTo(HaveOccurred())
+	return interceptor.NewClient(direct, interceptor.Funcs{
+		List: listByQueueName,
+		Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+			if _, ok := obj.(*servicebusv1.NamespacesQueue); ok {
+				var stored servicebusv1.NamespacesQueue
+				Expect(c.Get(ctx, client.ObjectKeyFromObject(obj), &stored)).To(Succeed())
+				Expect(stored.Annotations).To(HaveKeyWithValue(annotations.ReconcilePolicy,
+					string(annotations.ReconcilePolicyDetachOnDelete)), "detach-on-delete must be stored before the delete")
+			}
+			return c.Delete(ctx, obj, opts...)
+		},
+	})
+}
+
+func expectConflict(r *QueueReconciler, queue *messagingv1alpha1.Queue, holder string) {
+	stored := reconcileQueueWith(r, queue)
 	expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionFalse, messaging.ReasonConflict)
 	expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionUnknown, ReasonWaitingForQueue)
 	expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, messaging.ReasonConflict)
@@ -810,7 +845,7 @@ var _ = Describe("Queue name conflicts", func() {
 		newer := productQueue("conflict-a-newer", "team-a.conflict")
 		createQueue(newer)
 
-		expectConflict(newer, productNamespace+"/conflict-z-older")
+		expectConflict(newReconciler(), newer, productNamespace+"/conflict-z-older")
 		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(newer), &servicebusv1.NamespacesQueue{})
 		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "expected NotFound, got %v", err)
 		expectCondition(reconcileQueue(older), messagingv1alpha1.ConditionQueueReady, metav1.ConditionUnknown, "Reconciling")
@@ -822,10 +857,11 @@ var _ = Describe("Queue name conflicts", func() {
 		holder := productQueue("case-holder", "team-a.Case")
 		Expect(k8sClient.Create(ctx, holder)).To(Succeed())
 		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, holder))).To(Succeed()) })
+		startOfSecond()
 		loser := queueIn(other, "case-loser", "team-a.CASE")
 		createQueue(loser)
 
-		expectConflict(loser, productNamespace+"/case-holder")
+		expectConflict(newReconciler(), loser, productNamespace+"/case-holder")
 		Expect(k8sClient.Delete(ctx, holder)).To(Succeed())
 		expectCondition(reconcileQueue(loser), messagingv1alpha1.ConditionQueueReady, metav1.ConditionUnknown, "Reconciling")
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loser), &servicebusv1.NamespacesQueue{})).To(Succeed())
@@ -854,12 +890,30 @@ var _ = Describe("Queue name conflicts", func() {
 		createQueue(holder)
 		Expect(holder.CreationTimestamp).To(Equal(loser.CreationTimestamp), "both Queues must share a second")
 
-		expectConflict(loser, productNamespace+"/tie-a")
+		expectConflict(reconcilerWith(detachChecked()), loser, productNamespace+"/tie-a")
 		Expect(grantsOf(loser)).To(BeEmpty())
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loser), &nsQueue)).To(Succeed())
 		Expect(nsQueue.DeletionTimestamp).NotTo(BeNil())
 		Expect(nsQueue.Annotations).To(HaveKeyWithValue(annotations.ReconcilePolicy,
 			string(annotations.ReconcilePolicyDetachOnDelete)))
+	})
+
+	It("lets a valid Queue take the name of an older invalid Queue, until a prefix makes that Queue valid", func() {
+		invalid := newQueue("held-invalid", nil)
+		createQueue(invalid)
+		startOfSecond()
+		valid := productQueue("held-valid", "team-a.held-invalid")
+		createQueue(valid)
+
+		expectCondition(reconcileQueue(invalid), messagingv1alpha1.ConditionQueueReady, metav1.ConditionFalse,
+			messaging.ReasonInvalidName)
+		expectCondition(reconcileQueue(valid), messagingv1alpha1.ConditionQueueReady, metav1.ConditionUnknown, "Reconciling")
+
+		setPrefix(testNamespace, "team-a.")
+		expectCondition(reconcileQueue(invalid), messagingv1alpha1.ConditionQueueReady, metav1.ConditionUnknown, "Reconciling")
+		expectConflict(newReconciler(), valid, testNamespace+"/held-invalid")
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(valid), &servicebusv1.NamespacesQueue{})
+		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "expected NotFound, got %v", err)
 	})
 })
 
@@ -882,16 +936,19 @@ var _ = Describe("Queue watches", func() {
 		))
 	})
 
-	It("maps a namespace to the Queues in it", func() {
+	It("maps a namespace to the Queues in it and to the Queues with the same names elsewhere", func() {
 		first, second := productQueue("first", "team-a.first"), productQueue("second", "team-a.second")
+		rival := newQueue("first-rival", func(q *messagingv1alpha1.Queue) { q.Spec.Name = "team-a.first" })
 		createQueue(first)
 		createQueue(second)
+		createQueue(rival)
 		createQueue(newQueue("elsewhere", nil))
 
 		namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: productNamespace}}
 		Expect(newReconciler().namespaceToQueues(ctx, namespace)).To(ConsistOf(
 			ctrl.Request{NamespacedName: client.ObjectKeyFromObject(first)},
 			ctrl.Request{NamespacedName: client.ObjectKeyFromObject(second)},
+			ctrl.Request{NamespacedName: client.ObjectKeyFromObject(rival)},
 		))
 	})
 

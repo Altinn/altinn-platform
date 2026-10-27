@@ -77,7 +77,7 @@ type QueueReconciler struct {
 // +kubebuilder:rbac:groups=application.dis.altinn.cloud,resources=applicationidentities,verbs=get;list;watch
 
 // Reconcile checks the queue name against the prefix of the namespace and
-// against the other Queues with the same name (messaging.NameHolder),
+// against the other valid Queues with the same name (messaging.NameHolder),
 // applies the ASO NamespacesQueue and a RoleAssignment for each role of each
 // principal, and mirrors their Ready conditions into the Queue status. There
 // is no finalizer: the owner references delete the ASO resources, and the
@@ -96,11 +96,15 @@ func (r *QueueReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 	// Only a change of the Queue or of the namespace prefix fixes the name,
-	// and both bring their own event, so an invalid name is not requeued.
+	// and both bring their own event, so an invalid name is not requeued. An
+	// invalid Queue holds no name, so it keeps nothing in Azure either.
 	if err := messaging.ValidateName(namespace.Name, namespace.Annotations, queue.Spec.Name); err != nil {
-		return ctrl.Result{}, r.writeStatus(ctx, &queue, noQueue, newCondition(messagingv1alpha1.ConditionQueueReady,
+		if err := r.writeStatus(ctx, &queue, noQueue, newCondition(messagingv1alpha1.ConditionQueueReady,
 			queue.Generation, metav1.ConditionFalse, messaging.ReasonInvalidName, err.Error()),
-			waitingForQueue(queue.Generation))
+			waitingForQueue(queue.Generation)); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, r.withdraw(ctx, &queue)
 	}
 
 	sameName, err := queuesNamed(ctx, r.Client, queue.Spec.Name)
@@ -160,6 +164,13 @@ func (r *QueueReconciler) yield(ctx context.Context, queue, holder *messagingv1a
 		waitingForQueue(queue.Generation)); err != nil {
 		return err
 	}
+
+	return r.withdraw(ctx, queue)
+}
+
+// withdraw deletes the RoleAssignments and the NamespacesQueue of a Queue
+// that does not hold its queue name.
+func (r *QueueReconciler) withdraw(ctx context.Context, queue *messagingv1alpha1.Queue) error {
 	if err := r.deleteStaleGrants(ctx, queue, nil); err != nil {
 		return err
 	}
@@ -168,8 +179,9 @@ func (r *QueueReconciler) yield(ctx context.Context, queue, holder *messagingv1a
 }
 
 // release deletes the NamespacesQueue of queue and keeps the Azure queue,
-// which the holder of the name uses. ASO reads the reconcile policy when it
-// deletes, so detach-on-delete is set before the delete.
+// which the holder of the name uses or a valid name takes back. ASO reads
+// the reconcile policy when it deletes, so detach-on-delete is set before
+// the delete.
 func (r *QueueReconciler) release(ctx context.Context, queue *messagingv1alpha1.Queue) error {
 	var nsQueue servicebusv1.NamespacesQueue
 	key := client.ObjectKey{Namespace: queue.Namespace, Name: messaging.NamespacesQueueName(queue)}
@@ -241,7 +253,8 @@ func (r *QueueReconciler) apply(ctx context.Context, queue *messagingv1alpha1.Qu
 // reconciled again when its spec changes, not when the operator writes its
 // status. A NamespacesQueue or a RoleAssignment reconciles the owning Queue
 // when its spec or its status changed, such as ASO reporting Ready. A change
-// of the prefix annotation of a namespace reconciles every Queue in it. An
+// of the prefix annotation of a namespace reconciles every Queue in it and
+// the Queues with the same queue names in other namespaces. An
 // ApplicationIdentity reconciles every Queue that can grant it a role, in any
 // namespace. A new or deleted Queue reconciles the Queues with the same
 // queue name. IndexQueues must run first.
@@ -261,11 +274,30 @@ func (r *QueueReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// namespaceToQueues maps a Namespace to every Queue in it. A new prefix makes
-// queue names valid or invalid, and no other event brings such a Queue back:
-// spec.name is immutable, and an invalid Queue has no NamespacesQueue.
+// namespaceToQueues maps a Namespace to every Queue in it and to the Queues
+// with the same queue names in other namespaces. A new prefix makes queue
+// names valid or invalid, and no other event brings such a Queue back:
+// spec.name is immutable, and an invalid Queue has no NamespacesQueue. A
+// Queue that becomes valid or invalid also takes or frees its name.
 func (r *QueueReconciler) namespaceToQueues(ctx context.Context, obj client.Object) []ctrl.Request {
-	return r.queueRequests(ctx, obj, client.InNamespace(obj.GetName()))
+	var queues messagingv1alpha1.QueueList
+	if err := r.List(ctx, &queues, client.InNamespace(obj.GetName())); err != nil {
+		logf.FromContext(ctx).Error(err, "cannot list the Queues of a namespace", "namespace", obj.GetName())
+		return nil
+	}
+
+	seen := map[ctrl.Request]bool{}
+	var requests []ctrl.Request
+	for i := range queues.Items {
+		for _, request := range r.sameNameQueues(ctx, &queues.Items[i]) {
+			if !seen[request] {
+				seen[request] = true
+				requests = append(requests, request)
+			}
+		}
+	}
+
+	return requests
 }
 
 // identityToQueues maps an ApplicationIdentity to the Queues that can grant
@@ -298,12 +330,33 @@ func IndexQueues(ctx context.Context, indexer client.FieldIndexer) error {
 }
 
 // queuesNamed returns the Queues in the cluster with the NameKey of
-// queueName.
+// queueName whose name is valid in their namespace. A Queue with an invalid
+// name holds no name: otherwise a team could take the names of another
+// product with Queues that never get a queue.
 func queuesNamed(ctx context.Context, c client.Reader, queueName string) ([]messagingv1alpha1.Queue, error) {
 	var queues messagingv1alpha1.QueueList
-	err := c.List(ctx, &queues, client.MatchingFields{queueNameIndex: messaging.NameKey(queueName)})
+	if err := c.List(ctx, &queues, client.MatchingFields{queueNameIndex: messaging.NameKey(queueName)}); err != nil {
+		return nil, err
+	}
 
-	return queues.Items, err
+	namespaces := map[string]*corev1.Namespace{}
+	valid := make([]messagingv1alpha1.Queue, 0, len(queues.Items))
+	for i := range queues.Items {
+		queue := &queues.Items[i]
+		namespace, ok := namespaces[queue.Namespace]
+		if !ok {
+			namespace = &corev1.Namespace{}
+			if err := c.Get(ctx, client.ObjectKey{Name: queue.Namespace}, namespace); err != nil {
+				return nil, err
+			}
+			namespaces[queue.Namespace] = namespace
+		}
+		if messaging.ValidateName(namespace.Name, namespace.Annotations, queue.Spec.Name) == nil {
+			valid = append(valid, *queue)
+		}
+	}
+
+	return valid, nil
 }
 
 // queueNameKeys returns the index key of a Queue for queueNameIndex.
