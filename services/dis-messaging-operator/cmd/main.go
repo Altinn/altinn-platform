@@ -174,9 +174,10 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "dis-messaging-operator.dis.altinn.cloud",
-		// The operator reads only its own quotas, so it does not cache every
-		// quota in the cluster.
+		// The operator reads only its own ConfigMaps and quotas, so it does
+		// not cache every ConfigMap in the cluster.
 		Cache: cache.Options{ByObject: map[client.Object]cache.ByObject{
+			&corev1.ConfigMap{}:     {Label: managedBy},
 			&corev1.ResourceQuota{}: {Label: managedBy},
 		}},
 	})
@@ -194,9 +195,10 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controller.NamespaceReconciler{
-		Client:   mgr.GetClient(),
-		Config:   *operatorConfig,
-		Recorder: mgr.GetEventRecorder("dis-messaging-operator"),
+		Client:    mgr.GetClient(),
+		APIReader: mgr.GetAPIReader(),
+		Config:    *operatorConfig,
+		Recorder:  mgr.GetEventRecorder("dis-messaging-operator"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Namespace")
 		os.Exit(1)
