@@ -694,12 +694,12 @@ var _ = Describe("Queue access", func() {
 		stored := &messagingv1alpha1.Queue{}
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), stored)).To(Succeed())
 		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionFalse, identityref.ReasonIdentityNotReady)
-		Expect(accessMessage(stored)).To(Equal(`spec.access.principals[0]: ApplicationIdentity "app-pending" not found`))
+		Expect(accessMessage(stored)).To(Equal(`spec.access.principals[0]: ApplicationIdentity "` + productNamespace + `/app-pending" not found`))
 		Expect(grantsOf(queue)).To(BeEmpty())
 
 		identity := createIdentity(productNamespace, "app-pending")
 		stored = reconcileQueue(queue)
-		Expect(accessMessage(stored)).To(Equal(`spec.access.principals[0]: ApplicationIdentity "app-pending" is not ready`))
+		Expect(accessMessage(stored)).To(Equal(`spec.access.principals[0]: ApplicationIdentity "` + productNamespace + `/app-pending" is not ready`))
 
 		reportIdentity(identity, "pending-id")
 		result, err = newReconciler().Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(queue)})
