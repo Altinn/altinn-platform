@@ -41,15 +41,20 @@ func QueueKey(queue *messagingv1alpha1.Queue) string {
 
 // ConnectedQueues returns the Queues of a namespace that get a key in its
 // connection ConfigMap: the Queues with a valid name that are not being
-// deleted. A Queue with a finalizer stays after its deletion starts, and
-// its key must go. The Conflict slice adds the next rule here: of two
-// Queues with the same spec.name, only the oldest keeps its key. The order
-// of queues is kept.
-func ConnectedQueues(namespace string, annotations map[string]string, queues []messagingv1alpha1.Queue) []messagingv1alpha1.Queue {
+// deleted and that hold their queue name. A Queue with a finalizer stays
+// after its deletion starts, and its key must go. sameName holds the Queues
+// in the cluster with the NameKey of a Queue in queues, for NameHolder. The
+// order of queues is kept.
+func ConnectedQueues(
+	namespace string,
+	annotations map[string]string,
+	queues, sameName []messagingv1alpha1.Queue,
+) []messagingv1alpha1.Queue {
 	connected := make([]messagingv1alpha1.Queue, 0, len(queues))
 	for i := range queues {
 		queue := &queues[i]
-		if queue.DeletionTimestamp.IsZero() && ValidateName(namespace, annotations, queue.Spec.Name) == nil {
+		if queue.DeletionTimestamp.IsZero() && ValidateName(namespace, annotations, queue.Spec.Name) == nil &&
+			NameHolder(queue, sameName) == queue {
 			connected = append(connected, *queue)
 		}
 	}

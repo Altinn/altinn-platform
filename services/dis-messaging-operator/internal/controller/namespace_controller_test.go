@@ -79,11 +79,13 @@ func queueLimit(quota *corev1.ResourceQuota) int64 {
 // hidingClient returns a client whose Get does not see a ConfigMap or a
 // ResourceQuota for which hidden is true, as the manager cache would not.
 // A hidden object leaves obj empty, as a cache miss does, so that the
-// Create that follows carries no resourceVersion.
+// Create that follows carries no resourceVersion. Its List knows the Queue
+// name index, as k8sClient does.
 func hidingClient(hidden func(client.Object) bool) client.Client {
 	direct, err := client.NewWithWatch(cfg, client.Options{Scheme: k8sClient.Scheme()})
 	Expect(err).NotTo(HaveOccurred())
 	return interceptor.NewClient(direct, interceptor.Funcs{
+		List: listByQueueName,
 		Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object,
 			opts ...client.GetOption) error {
 			stored, ok := obj.DeepCopyObject().(client.Object)
@@ -246,6 +248,30 @@ var _ = Describe("Namespace reconciler", func() {
 		}))
 	})
 
+	It("leaves out the key of a Queue whose queue name another Queue holds, until the holder is gone", func() {
+		namespace := createNamespace("product-team-")
+		prefix := productPrefix(namespace)
+		holder := queueIn(namespace, "holder", prefix+"orders")
+		holder.Finalizers = []string{"test.dis.altinn.cloud/hold"}
+		Expect(k8sClient.Create(ctx, holder)).To(Succeed())
+		createQueue(queueIn(namespace, "loser", prefix+"ORDERS"))
+		data := func() map[string]string {
+			reconcile(namespace)
+			var configMap corev1.ConfigMap
+			Expect(k8sClient.Get(ctx, configMapKey(namespace), &configMap)).To(Succeed())
+			return configMap.Data
+		}
+
+		Expect(data()).To(Equal(map[string]string{messaging.EndpointKey: testEndpoint, "queue.holder": prefix + "orders"}))
+		// The finalizer keeps the deleted holder, and it holds the name until it is gone.
+		Expect(k8sClient.Delete(ctx, holder)).To(Succeed())
+		Expect(data()).To(Equal(map[string]string{messaging.EndpointKey: testEndpoint}))
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(holder), holder)).To(Succeed())
+		holder.Finalizers = nil
+		Expect(k8sClient.Update(ctx, holder)).To(Succeed())
+		Expect(data()).To(Equal(map[string]string{messaging.EndpointKey: testEndpoint, "queue.loser": prefix + "ORDERS"}))
+	})
+
 	It("replaces the data of the ConfigMap, clears binaryData and keeps the labels of others", func() {
 		namespace := createNamespace("product-team-")
 		createQueue(queueIn(namespace, "orders", productPrefix(namespace)+"orders"))
@@ -339,6 +365,21 @@ var _ = Describe("Namespace watches", func() {
 	It("maps a quota to its namespace", func() {
 		quota := &corev1.ResourceQuota{ObjectMeta: metav1.ObjectMeta{Name: "quota", Namespace: productNamespace}}
 		Expect(namespaceOf(ctx, quota)).To(ConsistOf(ctrl.Request{NamespacedName: client.ObjectKey{Name: productNamespace}}))
+	})
+
+	It("maps a Queue to its namespace and to the namespaces of the Queues with the same queue name", func() {
+		first, second := createNamespace("product-team-"), createNamespace("team-")
+		setPrefix(second, productPrefix(first))
+		createQueue(queueIn(second, "orders", productPrefix(first)+"orders"))
+		// A deleted Queue is no longer in the cache.
+		deleted := queueIn(first, "orders", productPrefix(first)+"Orders")
+
+		r := &NamespaceReconciler{Client: cachedClient}
+		Eventually(func() []ctrl.Request { return r.queueNamespaces(ctx, deleted) }).
+			WithTimeout(10 * time.Second).Should(ConsistOf(
+			ctrl.Request{NamespacedName: client.ObjectKey{Name: first}},
+			ctrl.Request{NamespacedName: client.ObjectKey{Name: second}},
+		))
 	})
 
 	It("passes a new namespace and a prefix change and drops a deleted namespace", func() {

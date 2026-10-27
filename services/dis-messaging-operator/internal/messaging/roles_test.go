@@ -33,9 +33,9 @@ var (
 // The Azure names are fixed on purpose. A new seed gives every role
 // assignment in Azure a new name.
 var (
-	wantIdentitySender   = wantRoleAssignment("74fd9b3c-d2e5-595d-be5f-6ffbf8a1d6cf", testIdentityID, servicePrincipalType, serviceBusDataSenderRoleID)
-	wantIdentityReceiver = wantRoleAssignment("bb11dad8-1d33-5192-a05f-e8e4ea750167", testIdentityID, servicePrincipalType, serviceBusDataReceiverRoleID)
-	wantGroupReceiver    = wantRoleAssignment("49c60cf2-3a5a-5021-8a3b-4b7dbda05365", testGroupID, groupType, serviceBusDataReceiverRoleID)
+	wantIdentitySender   = wantRoleAssignment("82cb5c01-3c69-5019-be68-594bf572fe34", testIdentityID, servicePrincipalType, serviceBusDataSenderRoleID)
+	wantIdentityReceiver = wantRoleAssignment("062d3ffd-ba07-555d-a687-0b9b1bedcb17", testIdentityID, servicePrincipalType, serviceBusDataReceiverRoleID)
+	wantGroupReceiver    = wantRoleAssignment("3a8f5997-cf31-536b-a3a7-fc74b2d7c213", testGroupID, groupType, serviceBusDataReceiverRoleID)
 )
 
 func wantRoleAssignment(azureName, principalID string, principalType authorizationv1.RoleAssignmentProperties_PrincipalType, roleID string) *authorizationv1.RoleAssignment {
@@ -120,6 +120,26 @@ func TestBuildRoleAssignmentsUniqueAcrossClusters(t *testing.T) {
 	}
 	if got[0].Spec.AzureName == wantGroupReceiver.Spec.AzureName {
 		t.Fatalf("AzureName %q is the same for two Service Bus namespaces", got[0].Spec.AzureName)
+	}
+}
+
+// Two Queues with the same queue name must not share a role assignment, or
+// the Queue that loses the name deletes the grants of the one that holds it.
+func TestBuildRoleAssignmentsUniquePerQueue(t *testing.T) {
+	t.Parallel()
+
+	other := testQueue(messagingv1alpha1.QueueSpec{})
+	other.Name = "app-two"
+
+	got, err := BuildRoleAssignments(other, testNamespacesQueue(t, other, testNamespaceResourceID), []Principal{groupReceiver}, testSubscriptionID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got[0].Spec.AzureName == wantGroupReceiver.Spec.AzureName {
+		t.Fatalf("AzureName %q is the same for two Queues with the same queue name", got[0].Spec.AzureName)
+	}
+	if got[0].Name == wantGroupReceiver.Name {
+		t.Fatalf("RoleAssignment name %q is the same for two Queues with the same queue name", got[0].Name)
 	}
 }
 
