@@ -76,17 +76,20 @@ func queueLimit(quota *corev1.ResourceQuota) int64 {
 	return limit.Value()
 }
 
-// labelSelectedCache returns a client that, like the label-selected cache
-// of the manager, does not see a ConfigMap or a ResourceQuota without the
-// managed-by label.
-func labelSelectedCache() client.Client {
+// hidingClient returns a client whose Get does not see a ConfigMap or a
+// ResourceQuota for which hidden is true, as the manager cache would not.
+// A hidden object leaves obj empty, as a cache miss does, so that the
+// Create that follows carries no resourceVersion.
+func hidingClient(hidden func(client.Object) bool) client.Client {
 	direct, err := client.NewWithWatch(cfg, client.Options{Scheme: k8sClient.Scheme()})
 	Expect(err).NotTo(HaveOccurred())
 	return interceptor.NewClient(direct, interceptor.Funcs{
 		Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object,
 			opts ...client.GetOption) error {
-			if err := c.Get(ctx, key, obj, opts...); err != nil || managed(obj) {
-				return err
+			stored, ok := obj.DeepCopyObject().(client.Object)
+			Expect(ok).To(BeTrue())
+			if err := c.Get(ctx, key, stored, opts...); err != nil || !hidden(stored) {
+				return c.Get(ctx, key, obj, opts...)
 			}
 			switch obj.(type) {
 			case *corev1.ConfigMap:
@@ -94,9 +97,19 @@ func labelSelectedCache() client.Client {
 			case *corev1.ResourceQuota:
 				return apierrors.NewNotFound(corev1.Resource("resourcequotas"), key.Name)
 			}
-			return nil
+			return c.Get(ctx, key, obj, opts...)
 		},
 	})
+}
+
+// labelSelectedCache is the manager cache: it holds only managed objects.
+func labelSelectedCache() client.Client {
+	return hidingClient(func(obj client.Object) bool { return !managed(obj) })
+}
+
+// staleCache is the manager cache before it has seen a Create.
+func staleCache() client.Client {
+	return hidingClient(func(client.Object) bool { return true })
 }
 
 var _ = Describe("Namespace reconciler", func() {
@@ -112,9 +125,10 @@ var _ = Describe("Namespace reconciler", func() {
 	BeforeEach(func() {
 		recorder = events.NewFakeRecorder(10)
 		r = &NamespaceReconciler{
-			Client:   k8sClient,
-			Config:   config.OperatorConfig{Endpoint: testEndpoint, MaxQueuesPerNamespace: 50},
-			Recorder: recorder,
+			Client:    k8sClient,
+			APIReader: k8sClient,
+			Config:    config.OperatorConfig{Endpoint: testEndpoint, MaxQueuesPerNamespace: 50},
+			Recorder:  recorder,
 		}
 	})
 
@@ -191,6 +205,19 @@ var _ = Describe("Namespace reconciler", func() {
 		Entry("hidden by the label-selected cache", true),
 	)
 
+	It("retries when the cache lags behind its own Create and reports nothing", func() {
+		namespace := createNamespace("product-team-")
+		reconcile(namespace)
+
+		r.Client = staleCache()
+		_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKey{Name: namespace}})
+		Expect(apierrors.IsAlreadyExists(err)).To(BeTrue(), "expected AlreadyExists, got %v", err)
+		Expect(recorder.Events).NotTo(Receive())
+		var quota corev1.ResourceQuota
+		Expect(k8sClient.Get(ctx, quotaKey(namespace), &quota)).To(Succeed())
+		Expect(quota.Labels).To(HaveKeyWithValue(messaging.ManagedByLabel, messaging.ManagedByValue))
+	})
+
 	It("writes a key for each Queue with a valid name that is not being deleted", func() {
 		namespace := createNamespace("product-team-")
 		prefix := productPrefix(namespace)
@@ -219,7 +246,41 @@ var _ = Describe("Namespace reconciler", func() {
 		}))
 	})
 
-	It("deletes the ConfigMap when the last Queue goes and keeps the quota", func() {
+	It("replaces the data of the ConfigMap, clears binaryData and keeps the labels of others", func() {
+		namespace := createNamespace("product-team-")
+		createQueue(queueIn(namespace, "orders", productPrefix(namespace)+"orders"))
+		reconcile(namespace)
+		var configMap corev1.ConfigMap
+		Expect(k8sClient.Get(ctx, configMapKey(namespace), &configMap)).To(Succeed())
+		configMap.Labels["owner"] = "team-a"
+		configMap.Data["stray"] = "yes"
+		configMap.BinaryData = map[string][]byte{"blob": []byte("x")}
+		Expect(k8sClient.Update(ctx, &configMap)).To(Succeed())
+
+		reconcile(namespace)
+		Expect(k8sClient.Get(ctx, configMapKey(namespace), &configMap)).To(Succeed())
+		Expect(configMap.Labels).To(HaveKeyWithValue("owner", "team-a"))
+		Expect(configMap.BinaryData).To(BeEmpty())
+		Expect(configMap.Data).To(Equal(map[string]string{
+			messaging.EndpointKey: testEndpoint,
+			"queue.orders":        productPrefix(namespace) + "orders",
+		}))
+	})
+
+	It("keeps the ConfigMap with only the endpoint while every Queue has an invalid name", func() {
+		namespace := createNamespace("team-")
+		setPrefix(namespace, "team-x.")
+		createQueue(queueIn(namespace, "orders", "team-x.orders"))
+		reconcile(namespace)
+
+		setPrefix(namespace, "team-y.")
+		reconcile(namespace)
+		var configMap corev1.ConfigMap
+		Expect(k8sClient.Get(ctx, configMapKey(namespace), &configMap)).To(Succeed())
+		Expect(configMap.Data).To(Equal(map[string]string{messaging.EndpointKey: testEndpoint}))
+	})
+
+	It("deletes the ConfigMap when the last Queue is gone and keeps the quota", func() {
 		namespace := createNamespace("product-team-")
 		queue := queueIn(namespace, "orders", productPrefix(namespace)+"orders")
 		Expect(k8sClient.Create(ctx, queue)).To(Succeed())
@@ -288,6 +349,12 @@ var _ = Describe("Namespace watches", func() {
 		Expect(namespaceChanged().Delete(event.DeleteEvent{Object: namespace})).To(BeFalse())
 		Expect(namespaceChanged().Update(event.UpdateEvent{ObjectOld: namespace, ObjectNew: prefixed})).To(BeTrue())
 		Expect(namespaceChanged().Update(event.UpdateEvent{ObjectOld: namespace, ObjectNew: namespace})).To(BeFalse())
+	})
+
+	It("passes a new and a deleted Queue", func() {
+		queue := newQueue("orders", nil)
+		Expect(queueChanged().Create(event.CreateEvent{Object: queue})).To(BeTrue())
+		Expect(queueChanged().Delete(event.DeleteEvent{Object: queue})).To(BeTrue())
 	})
 
 	DescribeTable("passes a Queue update only when the spec changed or the deletion started",

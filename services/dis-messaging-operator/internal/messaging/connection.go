@@ -39,14 +39,32 @@ func QueueKey(queue *messagingv1alpha1.Queue) string {
 	return queueKeyPrefix + queue.Name
 }
 
+// ConnectedQueues returns the Queues of a namespace that get a key in its
+// connection ConfigMap: the Queues with a valid name that are not being
+// deleted. A Queue with a finalizer stays after its deletion starts, and
+// its key must go. The Conflict slice adds the next rule here: of two
+// Queues with the same spec.name, only the oldest keeps its key. The order
+// of queues is kept.
+func ConnectedQueues(namespace string, annotations map[string]string, queues []messagingv1alpha1.Queue) []messagingv1alpha1.Queue {
+	connected := make([]messagingv1alpha1.Queue, 0, len(queues))
+	for i := range queues {
+		queue := &queues[i]
+		if queue.DeletionTimestamp.IsZero() && ValidateName(namespace, annotations, queue.Spec.Name) == nil {
+			connected = append(connected, *queue)
+		}
+	}
+
+	return connected
+}
+
 // BuildConnectionConfigMap returns the connection ConfigMap of a namespace.
-// endpoint is the host name of the Service Bus namespace. The ConfigMap has
-// one key per Queue, with the queue name that apps use on the data plane:
-// spec.name with its "/", not the ARM form of AzureName. Every Queue must be
-// in the namespace, and every Queue gets a key. The caller selects the
-// Queues. The ConfigMap belongs to the namespace, so it has no owner
-// reference. Data is a map, so the order of queues does not change the
-// result.
+// endpoint is the host name of the Azure Service Bus namespace. The
+// ConfigMap has one key per Queue, with the queue name that apps use on the
+// data plane: spec.name with its "/", not the ARM form of AzureName. Every
+// Queue must be in the namespace, and every Queue gets a key.
+// ConnectedQueues selects the Queues. The ConfigMap belongs to the
+// namespace, so it has no owner reference. Data is a map, so the order of
+// queues does not change the result.
 func BuildConnectionConfigMap(namespace, endpoint string, queues []messagingv1alpha1.Queue) (*corev1.ConfigMap, error) {
 	if namespace == "" {
 		return nil, fmt.Errorf("namespace must not be empty")

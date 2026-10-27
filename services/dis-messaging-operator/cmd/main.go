@@ -195,9 +195,10 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controller.NamespaceReconciler{
-		Client:   mgr.GetClient(),
-		Config:   *operatorConfig,
-		Recorder: mgr.GetEventRecorder("dis-messaging-operator"),
+		Client:    mgr.GetClient(),
+		APIReader: mgr.GetAPIReader(),
+		Config:    *operatorConfig,
+		Recorder:  mgr.GetEventRecorder("dis-messaging-operator"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Namespace")
 		os.Exit(1)

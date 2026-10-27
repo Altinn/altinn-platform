@@ -36,8 +36,10 @@ var errNotManaged = errors.New("object exists without the managed-by label")
 // reconcile key.
 type NamespaceReconciler struct {
 	client.Client
-	Config   config.OperatorConfig
-	Recorder events.EventRecorder
+	// APIReader reads from the API server, not from the cache.
+	APIReader client.Reader
+	Config    config.OperatorConfig
+	Recorder  events.EventRecorder
 }
 
 // +kubebuilder:rbac:groups="",resources=configmaps;resourcequotas,verbs=get;list;watch;create;update;patch;delete
@@ -45,10 +47,11 @@ type NamespaceReconciler struct {
 
 // Reconcile keeps the quota in every product namespace, so the API server
 // limits the Queues from the first one. The ConfigMap exists while the
-// namespace has a Queue with a valid name. It does not wait for QueueReady:
-// apps know the key when they write the Queue, and a short Azure failure
-// must not remove a key that a restarting app needs. A namespace that is no
-// longer a product namespace loses both objects.
+// namespace has a Queue, with a key for each Queue that has a valid name and
+// is not being deleted. A key does not wait for QueueReady: apps know the
+// key when they write the Queue, and a short Azure failure must not remove a
+// key that a restarting app needs. A namespace that is no longer a product
+// namespace loses both objects.
 func (r *NamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var namespace corev1.Namespace
 	if err := r.Get(ctx, client.ObjectKey{Name: req.Name}, &namespace); err != nil {
@@ -79,14 +82,15 @@ func (r *NamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	queues, err := r.connectedQueues(ctx, &namespace)
-	if err != nil {
+	var queues messagingv1alpha1.QueueList
+	if err := r.List(ctx, &queues, client.InNamespace(namespace.Name)); err != nil {
 		return ctrl.Result{}, err
 	}
-	if len(queues) == 0 {
+	if len(queues.Items) == 0 {
 		return ctrl.Result{}, r.deleteManaged(ctx, configMap)
 	}
-	wantConfigMap, err := messaging.BuildConnectionConfigMap(namespace.Name, r.Config.Endpoint, queues)
+	wantConfigMap, err := messaging.BuildConnectionConfigMap(namespace.Name, r.Config.Endpoint,
+		messaging.ConnectedQueues(namespace.Name, namespace.Annotations, queues.Items))
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -96,39 +100,15 @@ func (r *NamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	})
 }
 
-// connectedQueues returns the Queues that get a key in the ConfigMap: the
-// Queues of the namespace with a valid name that are not being deleted. A
-// Queue with a finalizer stays after its deletion starts, and its key must
-// go. The Conflict slice adds the next filter here: of two Queues with the
-// same spec.name, only the oldest keeps its key.
-func (r *NamespaceReconciler) connectedQueues(
-	ctx context.Context,
-	namespace *corev1.Namespace,
-) ([]messagingv1alpha1.Queue, error) {
-	var queues messagingv1alpha1.QueueList
-	if err := r.List(ctx, &queues, client.InNamespace(namespace.Name)); err != nil {
-		return nil, err
-	}
-
-	connected := make([]messagingv1alpha1.Queue, 0, len(queues.Items))
-	for i := range queues.Items {
-		queue := &queues.Items[i]
-		if queue.DeletionTimestamp.IsZero() &&
-			messaging.ValidateName(namespace.Name, namespace.Annotations, queue.Spec.Name) == nil {
-			connected = append(connected, *queue)
-		}
-	}
-
-	return connected, nil
-}
-
 // upsert creates or updates obj, adds labels to its labels and lets mutate
 // set its content. An object of the same name without the managed-by label
 // belongs to someone else: upsert leaves it as it is and emits a Warning
-// event on the namespace. Only its owner can fix that, so upsert returns no
-// error and the reconcile does not retry. The cache holds only managed
-// objects, so for a foreign object Get reports NotFound and Create reports
-// AlreadyExists.
+// event on it, in its namespace, where its owner can see it. Only the owner
+// can fix that, so upsert returns no error and the reconcile does not retry.
+// The cache holds only managed objects, so a foreign object makes Get report
+// NotFound and Create report AlreadyExists. The cache can also lag behind a
+// Create of the last reconcile, so on AlreadyExists the object is read from
+// the API server before it counts as foreign.
 func (r *NamespaceReconciler) upsert(
 	ctx context.Context,
 	namespace *corev1.Namespace,
@@ -149,7 +129,19 @@ func (r *NamespaceReconciler) upsert(
 		mutate()
 		return nil
 	})
-	if !errors.Is(err, errNotManaged) && !apierrors.IsAlreadyExists(err) {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, errNotManaged):
+	case apierrors.IsAlreadyExists(err):
+		if readErr := r.APIReader.Get(ctx, client.ObjectKeyFromObject(obj), obj); readErr != nil {
+			return readErr
+		}
+		if managed(obj) {
+			// The operator's own object: the retry sees it in the cache.
+			return err
+		}
+	default:
 		return err
 	}
 
@@ -157,7 +149,7 @@ func (r *NamespaceReconciler) upsert(
 	if err != nil {
 		return err
 	}
-	r.Recorder.Eventf(namespace, nil, corev1.EventTypeWarning, ReasonNotManaged, "Reconcile",
+	r.Recorder.Eventf(obj, namespace, corev1.EventTypeWarning, ReasonNotManaged, "Reconcile",
 		"%s %s exists without the label %s=%s, so the operator does not change it",
 		gvk.Kind, obj.GetName(), messaging.ManagedByLabel, messaging.ManagedByValue)
 	logf.FromContext(ctx).Info("skipped an object without the managed-by label",
