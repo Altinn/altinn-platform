@@ -19,7 +19,10 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"github.com/Altinn/altinn-platform/services/dis-common/identityref"
+	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	servicebusv1 "github.com/Azure/azure-service-operator/v2/api/servicebus/v1api20240101"
 	"github.com/Azure/azure-service-operator/v2/pkg/common/annotations"
@@ -45,8 +48,16 @@ import (
 	"github.com/Altinn/altinn-platform/services/dis-messaging-operator/internal/messaging"
 )
 
-// fieldOwner is the server-side apply field manager of this operator.
-const fieldOwner = "dis-messaging-operator"
+const (
+	// fieldOwner is the server-side apply field manager of this operator.
+	fieldOwner = "dis-messaging-operator"
+	// identityRefIndex indexes a Queue by the namespace/name of each
+	// ApplicationIdentity that it can grant a role.
+	identityRefIndex = "spec.access.principals.identityRef"
+	// identityRequeueDelay is the requeue of a Queue with an identity that is
+	// not ready. The ApplicationIdentity watch normally comes first.
+	identityRequeueDelay = time.Minute
+)
 
 // QueueReconciler reconciles a Queue object.
 type QueueReconciler struct {
@@ -61,6 +72,7 @@ type QueueReconciler struct {
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
 // +kubebuilder:rbac:groups=servicebus.azure.com,resources=namespacesqueues,verbs=get;list;watch;create;patch
 // +kubebuilder:rbac:groups=authorization.azure.com,resources=roleassignments,verbs=get;list;watch;create;patch;delete
+// +kubebuilder:rbac:groups=application.dis.altinn.cloud,resources=applicationidentities,verbs=get;list;watch
 
 // Reconcile checks the queue name against the prefix of the namespace,
 // applies the ASO NamespacesQueue and a RoleAssignment for each role of each
@@ -101,9 +113,13 @@ func (r *QueueReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			applyFailed(messagingv1alpha1.ConditionAccessReady, queue.Generation, err), err)
 	}
 
-	// The NamespacesQueue and RoleAssignment watches bring the next
-	// reconcile when ASO reports.
-	return ctrl.Result{}, r.writeStatus(ctx, &queue, fields, queueReady, accessReady)
+	// The NamespacesQueue, RoleAssignment and ApplicationIdentity watches
+	// bring the next reconcile when ASO or the identity operator reports.
+	var result ctrl.Result
+	if accessReady.Reason == identityref.ReasonIdentityNotReady {
+		result.RequeueAfter = identityRequeueDelay
+	}
+	return result, r.writeStatus(ctx, &queue, fields, queueReady, accessReady)
 }
 
 // applyNamespacesQueue writes the NamespacesQueue and returns the stored
@@ -173,14 +189,22 @@ func (r *QueueReconciler) apply(ctx context.Context, queue *messagingv1alpha1.Qu
 // reconciled again when its spec changes, not when the operator writes its
 // status. A NamespacesQueue or a RoleAssignment reconciles the owning Queue
 // when its spec or its status changed, such as ASO reporting Ready. A change
-// of the prefix annotation of a namespace reconciles every Queue in it.
+// of the prefix annotation of a namespace reconciles every Queue in it. An
+// ApplicationIdentity reconciles every Queue that can grant it a role, in any
+// namespace.
 func (r *QueueReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &messagingv1alpha1.Queue{},
+		identityRefIndex, identityRefKeys); err != nil {
+		return err
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&messagingv1alpha1.Queue{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Owns(&servicebusv1.NamespacesQueue{}, builder.WithPredicates(asoResourceChanged())).
 		Owns(&authorizationv1.RoleAssignment{}, builder.WithPredicates(asoResourceChanged())).
 		Watches(&corev1.Namespace{}, handler.EnqueueRequestsFromMapFunc(r.namespaceToQueues),
 			builder.WithPredicates(prefixAnnotationChanged())).
+		Watches(&identityv1alpha1.ApplicationIdentity{}, handler.EnqueueRequestsFromMapFunc(r.identityToQueues)).
 		Named("queue").
 		Complete(r)
 }
@@ -189,9 +213,37 @@ func (r *QueueReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // queue names valid or invalid, and no other event brings such a Queue back:
 // spec.name is immutable, and an invalid Queue has no NamespacesQueue.
 func (r *QueueReconciler) namespaceToQueues(ctx context.Context, obj client.Object) []ctrl.Request {
+	return r.queueRequests(ctx, obj, client.InNamespace(obj.GetName()))
+}
+
+// identityToQueues maps an ApplicationIdentity to the Queues that can grant
+// it a role. A new principal ID gives the grant a new name.
+func (r *QueueReconciler) identityToQueues(ctx context.Context, obj client.Object) []ctrl.Request {
+	return r.queueRequests(ctx, obj, client.MatchingFields{identityRefIndex: client.ObjectKeyFromObject(obj).String()})
+}
+
+// identityRefKeys returns the index keys of a Queue for identityRefIndex.
+func identityRefKeys(obj client.Object) []string {
+	queue, ok := obj.(*messagingv1alpha1.Queue)
+	if !ok {
+		return nil
+	}
+
+	identities := messaging.SplitPrincipals(queue).Identities
+	keys := make([]string, 0, len(identities))
+	for _, identity := range identities {
+		keys = append(keys, client.ObjectKey{Namespace: identity.Ref.Namespace, Name: identity.Ref.Name}.String())
+	}
+
+	return keys
+}
+
+// queueRequests returns a request for each Queue that opts select. obj is
+// the object of the event.
+func (r *QueueReconciler) queueRequests(ctx context.Context, obj client.Object, opts ...client.ListOption) []ctrl.Request {
 	var queues messagingv1alpha1.QueueList
-	if err := r.List(ctx, &queues, client.InNamespace(obj.GetName())); err != nil {
-		logf.FromContext(ctx).Error(err, "cannot list the Queues of a namespace", "namespace", obj.GetName())
+	if err := r.List(ctx, &queues, opts...); err != nil {
+		logf.FromContext(ctx).Error(err, "cannot list the Queues of an event", "object", client.ObjectKeyFromObject(obj))
 		return nil
 	}
 

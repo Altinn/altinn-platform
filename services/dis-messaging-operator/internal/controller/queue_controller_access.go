@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/Altinn/altinn-platform/services/dis-common/identityref"
 	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	servicebusv1 "github.com/Azure/azure-service-operator/v2/api/servicebus/v1api20240101"
 	"github.com/Azure/azure-service-operator/v2/pkg/genruntime/conditions"
@@ -24,7 +25,10 @@ func (r *QueueReconciler) reconcileAccess(
 	queue *messagingv1alpha1.Queue,
 	nsQueue *servicebusv1.NamespacesQueue,
 ) (metav1.Condition, error) {
-	principals, notGranted := grantablePrincipals(queue)
+	principals, notGranted, err := r.grantablePrincipals(ctx, queue)
+	if err != nil {
+		return metav1.Condition{}, err
+	}
 	grants, err := messaging.BuildRoleAssignments(queue, nsQueue, principals, r.Config.SubscriptionID)
 	if err != nil {
 		return metav1.Condition{}, err
@@ -40,7 +44,7 @@ func (r *QueueReconciler) reconcileAccess(
 	// The grant of an identity without a principal ID has an unknown name.
 	// An identity that is not ready for a moment must keep its access, so no
 	// grant goes until every identity is resolved.
-	if notGranted == nil || notGranted.Reason != ReasonIdentityNotReady {
+	if notGranted == nil || notGranted.Reason != identityref.ReasonIdentityNotReady {
 		if err := r.deleteStaleGrants(ctx, queue, desired); err != nil {
 			return metav1.Condition{}, err
 		}
@@ -53,28 +57,44 @@ func (r *QueueReconciler) reconcileAccess(
 }
 
 // grantablePrincipals returns the principals of the Queue that the operator
-// can grant now, and a False AccessReady condition for the others, or nil.
+// can grant now, and a False AccessReady condition for the others, or nil. An
+// identityRef principal can be granted when its ApplicationIdentity is ready.
 // IdentityNotReady wins over RoleNotAllowed, because only IdentityNotReady
 // keeps the grants of the Queue.
-func grantablePrincipals(queue *messagingv1alpha1.Queue) ([]messaging.Principal, *metav1.Condition) {
+func (r *QueueReconciler) grantablePrincipals(
+	ctx context.Context,
+	queue *messagingv1alpha1.Queue,
+) ([]messaging.Principal, *metav1.Condition, error) {
 	split := messaging.SplitPrincipals(queue)
 
-	notReady := make([]string, 0, len(split.Identities))
+	principals := split.Grantable
+	var notReady []string
 	for _, identity := range split.Identities {
-		notReady = append(notReady, identity.Field+": the operator does not resolve identityRef yet")
+		resolved, _, err := identityref.ResolveOwnerIdentity(ctx, r.Client, identityref.Source{
+			Namespace:       identity.Ref.Namespace,
+			IdentityRefName: &identity.Ref.Name,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		if resolved.IsPending() {
+			notReady = append(notReady, identity.Field+": "+resolved.PendingMessage)
+			continue
+		}
+		principals = append(principals, identity.Resolved(resolved.PrincipalID))
 	}
 	if len(notReady)+len(split.NotAllowed) == 0 {
-		return split.Grantable, nil
+		return principals, nil, nil
 	}
 
 	reason := messaging.ReasonRoleNotAllowed
 	if len(notReady) > 0 {
-		reason = ReasonIdentityNotReady
+		reason = identityref.ReasonIdentityNotReady
 	}
 	condition := newCondition(messagingv1alpha1.ConditionAccessReady, queue.Generation, metav1.ConditionFalse, reason,
 		shortened(strings.Join(slices.Concat(notReady, split.NotAllowed), "; ")))
 
-	return split.Grantable, &condition
+	return principals, &condition, nil
 }
 
 // deleteStaleGrants deletes the RoleAssignments of the Queue that are not in

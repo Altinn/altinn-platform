@@ -248,3 +248,16 @@ func TestSplitPrincipals(t *testing.T) {
 		t.Errorf("SplitPrincipals() without access mismatch (-want +got):\n%s", diff)
 	}
 }
+
+func TestIdentityPrincipalResolved(t *testing.T) {
+	t.Parallel()
+
+	identity := IdentityPrincipal{
+		Field: "spec.access.principals[0]",
+		Ref:   messagingv1alpha1.ApplicationIdentityRef{Name: "app-one", Namespace: "product-team-a"},
+		Role:  messagingv1alpha1.QueueAccessRoleSender,
+	}
+	if diff := cmp.Diff(identitySender, identity.Resolved(testIdentityID)); diff != "" {
+		t.Errorf("Resolved() mismatch (-want +got):\n%s", diff)
+	}
+}
