@@ -48,6 +48,11 @@
         {"filename": "dis-cache-release.yml"}
       ]
     },
+    "services/dis-messaging-operator": {
+      "dispatch-pipelines": [
+        {"filename": "dis-messaging-release.yml"}
+      ]
+    },
     "services/lakmus": {
       "dispatch-pipelines": [
         {"filename": "lakmus-release.yml"}

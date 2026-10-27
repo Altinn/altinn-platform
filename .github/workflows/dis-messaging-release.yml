@@ -1,0 +1,87 @@
+name: Scan/Release Dis Messaging Operator Image and Build Kustomize OCI Artifact
+
+env:
+  FLUX_ARTIFACT_NAME: dis/kustomize/dis-messaging-operator
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/dis-messaging-release.yml
+      - services/dis-messaging-operator/**
+      - .github/workflows/reusable-image-scan-and-release-ghcr.yml
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/dis-messaging-release.yml
+      - services/dis-messaging-operator/**
+      - .github/workflows/reusable-image-scan-and-release-ghcr.yml
+    tags:
+      - "dis-messaging-v*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  build-and-release-image:
+    name: Build, scan and release
+    uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yml
+    with:
+      release_latest: true
+      image_name: dis-messaging-operator
+      tag_prefix: dis-messaging-v
+      platforms: "linux/amd64"
+      workdir: ./services/dis-messaging-operator
+  build-release-flux-oci-latest:
+    name: Build latest from main
+    if: github.ref == 'refs/heads/main'
+    defaults:
+      run:
+        working-directory: ./services/dis-messaging-operator/config
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Push latest flux oci image from main
+        uses: ./actions/flux/build-push-image
+        with:
+          workdir: ./services/dis-messaging-operator/config
+          image_name: ${{ env.FLUX_ARTIFACT_NAME }}
+          tag: latest
+          azure_subscription_id: ${{ secrets.AZURE_ALTINNACR_SUBSCRIPTION_ID }}
+          azure_app_id: ${{ secrets.AZURE_ALTINNACR_APP_ID }}
+          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+  build-release-flux-oci-release:
+    name: Build release from tag
+    if: startsWith(github.ref, 'refs/tags/dis-messaging-v')
+    environment: flux-release
+    defaults:
+      run:
+        working-directory: ./services/dis-messaging-operator/config
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Setup vars
+        id: vars
+        run: |
+          tag="${GITHUB_REF/refs\/tags\/dis-messaging-/}"
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+      - name: Push flux oci image from release tag
+        uses: ./actions/flux/build-push-image
+        with:
+          workdir: ./services/dis-messaging-operator/config
+          image_name: ${{ env.FLUX_ARTIFACT_NAME }}
+          tag: ${{ steps.vars.outputs.tag }}
+          azure_subscription_id: ${{ secrets.AZURE_ALTINNACR_SUBSCRIPTION_ID }}
+          azure_app_id: ${{ secrets.AZURE_ALTINNACR_APP_ID }}
+          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}

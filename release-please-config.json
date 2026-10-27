@@ -21,6 +21,11 @@
       "component": "dis-cache",
       "initial-version": "0.1.0"
     },
+    "services/dis-messaging-operator": {
+      "release-type": "simple",
+      "component": "dis-messaging",
+      "initial-version": "0.1.0"
+    },
     "services/lakmus": {
       "release-type": "simple",
       "component": "lakmus"
