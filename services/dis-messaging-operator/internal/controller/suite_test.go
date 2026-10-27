@@ -24,10 +24,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	servicebusv1 "github.com/Azure/azure-service-operator/v2/api/servicebus/v1api20240101"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -42,6 +44,8 @@ var (
 	testEnv   *envtest.Environment
 	cfg       *rest.Config
 	k8sClient client.Client
+	// cachedClient reads from a cache with the Queue index of the manager.
+	cachedClient client.Client
 )
 
 func TestControllers(t *testing.T) {
@@ -59,6 +63,7 @@ var _ = BeforeSuite(func() {
 		CRDDirectoryPaths: []string{
 			filepath.Join("..", "..", "config", "crd", "bases"),
 			filepath.Join("..", "..", "bin", "aso-crds"),
+			filepath.Join("..", "..", "bin", "dis-identity-crds"),
 		},
 		ErrorIfCRDPathMissing: true,
 	}
@@ -71,10 +76,21 @@ var _ = BeforeSuite(func() {
 	Expect(messagingv1alpha1.AddToScheme(scheme.Scheme)).To(Succeed())
 	Expect(servicebusv1.AddToScheme(scheme.Scheme)).To(Succeed())
 	Expect(authorizationv1.AddToScheme(scheme.Scheme)).To(Succeed())
+	Expect(identityv1alpha1.AddToScheme(scheme.Scheme)).To(Succeed())
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
+
+	queueCache, err := cache.New(cfg, cache.Options{Scheme: scheme.Scheme})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(queueCache.IndexField(ctx, &messagingv1alpha1.Queue{}, identityRefIndex, identityRefKeys)).To(Succeed())
+	go func() {
+		defer GinkgoRecover()
+		Expect(queueCache.Start(ctx)).To(Succeed())
+	}()
+	cachedClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme, Cache: &client.CacheOptions{Reader: queueCache}})
+	Expect(err).NotTo(HaveOccurred())
 })
 
 var _ = AfterSuite(func() {

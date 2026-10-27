@@ -13,6 +13,14 @@ rules:
   - list
   - watch
 - apiGroups:
+  - application.dis.altinn.cloud
+  resources:
+  - applicationidentities
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - authorization.azure.com
   resources:
   - roleassignments

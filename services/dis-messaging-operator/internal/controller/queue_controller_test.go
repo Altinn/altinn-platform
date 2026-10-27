@@ -7,6 +7,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/Altinn/altinn-platform/services/dis-common/identityref"
+	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	servicebusv1 "github.com/Azure/azure-service-operator/v2/api/servicebus/v1api20240101"
 	"github.com/Azure/azure-service-operator/v2/pkg/common/annotations"
@@ -559,6 +561,32 @@ func reportGrants(queue *messagingv1alpha1.Queue, condition conditions.Condition
 	}
 }
 
+// createIdentity creates an ApplicationIdentity that is not ready yet.
+func createIdentity(namespace, name string) *identityv1alpha1.ApplicationIdentity {
+	identity := &identityv1alpha1.ApplicationIdentity{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
+	Expect(k8sClient.Create(ctx, identity)).To(Succeed())
+	DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, identity))).To(Succeed()) })
+	return identity
+}
+
+// reportIdentity writes, as the identity operator would, Ready=True and
+// principalID in the status of identity.
+func reportIdentity(identity *identityv1alpha1.ApplicationIdentity, principalID string) {
+	identity.Status.ManagedIdentityName = ptr.To(identity.Name)
+	identity.Status.PrincipalID = ptr.To(principalID)
+	identity.Status.Conditions = []metav1.Condition{{
+		Type:               string(identityv1alpha1.ConditionReady),
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "Ready",
+	}}
+	Expect(k8sClient.Status().Update(ctx, identity)).To(Succeed())
+}
+
+func accessMessage(queue *messagingv1alpha1.Queue) string {
+	return meta.FindStatusCondition(queue.Status.Conditions, string(messagingv1alpha1.ConditionAccessReady)).Message
+}
+
 var _ = Describe("Queue access", func() {
 	BeforeEach(createProductNamespace)
 
@@ -605,8 +633,7 @@ var _ = Describe("Queue access", func() {
 		Expect(grantedRoles(queue)).To(ConsistOf("ServicePrincipal/sp-id/" + senderRoleID))
 		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionFalse, messaging.ReasonRoleNotAllowed)
 		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, messaging.ReasonRoleNotAllowed)
-		message := meta.FindStatusCondition(stored.Status.Conditions, string(messagingv1alpha1.ConditionAccessReady)).Message
-		Expect(message).To(HavePrefix(`spec.access.principals[0]: role "owner"`))
+		Expect(accessMessage(stored)).To(HavePrefix(`spec.access.principals[0]: role "owner"`))
 	})
 
 	It("deletes the grant of a removed principal and leaves a RoleAssignment the operator did not create", func() {
@@ -653,8 +680,70 @@ var _ = Describe("Queue access", func() {
 			identityPrincipal(messagingv1alpha1.QueueAccessRoleReceiver, "app-two"))
 		stored = reconcileQueue(queue)
 		Expect(grantedRoles(queue)).To(ConsistOf("Group/kept-id/"+senderRoleID, "Group/removed-id/"+senderRoleID))
-		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionFalse, ReasonIdentityNotReady)
-		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, ReasonIdentityNotReady)
+		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionFalse, identityref.ReasonIdentityNotReady)
+		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, identityref.ReasonIdentityNotReady)
+	})
+
+	It("requeues while the ApplicationIdentity is missing or not ready and grants it once it is ready", func() {
+		queue := accessQueue("pending-identity", identityPrincipal(messagingv1alpha1.QueueAccessRoleSender, "app-pending"))
+		createQueue(queue)
+		result, err := newReconciler().Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(queue)})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(identityRequeueDelay))
+
+		stored := &messagingv1alpha1.Queue{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), stored)).To(Succeed())
+		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionFalse, identityref.ReasonIdentityNotReady)
+		Expect(accessMessage(stored)).To(Equal(`spec.access.principals[0]: ApplicationIdentity "app-pending" not found`))
+		Expect(grantsOf(queue)).To(BeEmpty())
+
+		identity := createIdentity(productNamespace, "app-pending")
+		stored = reconcileQueue(queue)
+		Expect(accessMessage(stored)).To(Equal(`spec.access.principals[0]: ApplicationIdentity "app-pending" is not ready`))
+
+		reportIdentity(identity, "pending-id")
+		result, err = newReconciler().Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(queue)})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(BeZero())
+		Expect(grantedRoles(queue)).To(ConsistOf("ServicePrincipal/pending-id/" + senderRoleID))
+	})
+
+	It("grants an ApplicationIdentity in another namespace", func() {
+		reportIdentity(createIdentity(testNamespace, "app-remote"), "remote-id")
+		queue := accessQueue("remote-identity", messagingv1alpha1.QueueAccessPrincipalSpec{
+			Role:        messagingv1alpha1.QueueAccessRoleReceiver,
+			IdentityRef: &messagingv1alpha1.ApplicationIdentityRef{Name: "app-remote", Namespace: testNamespace},
+		})
+		createQueue(queue)
+
+		reconcileQueue(queue)
+		Expect(grantedRoles(queue)).To(ConsistOf("ServicePrincipal/remote-id/" + receiverRoleID))
+	})
+
+	It("moves the grant to the new principal ID of an ApplicationIdentity", func() {
+		identity := createIdentity(productNamespace, "app-moved")
+		reportIdentity(identity, "old-id")
+		queue := accessQueue("moved-identity", identityPrincipal(messagingv1alpha1.QueueAccessRoleSender, "app-moved"))
+		createQueue(queue)
+		reconcileQueue(queue)
+		Expect(grantedRoles(queue)).To(ConsistOf("ServicePrincipal/old-id/" + senderRoleID))
+
+		reportIdentity(identity, "new-id")
+		reconcileQueue(queue)
+		Expect(grantedRoles(queue)).To(ConsistOf("ServicePrincipal/new-id/" + senderRoleID))
+	})
+
+	It("keeps the grant and reports IdentityNotReady when the ApplicationIdentity is deleted", func() {
+		identity := createIdentity(productNamespace, "app-deleted")
+		reportIdentity(identity, "deleted-id")
+		queue := accessQueue("deleted-identity", identityPrincipal(messagingv1alpha1.QueueAccessRoleSender, "app-deleted"))
+		createQueue(queue)
+		reconcileQueue(queue)
+
+		Expect(k8sClient.Delete(ctx, identity)).To(Succeed())
+		stored := reconcileQueue(queue)
+		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionFalse, identityref.ReasonIdentityNotReady)
+		Expect(grantedRoles(queue)).To(ConsistOf("ServicePrincipal/deleted-id/" + senderRoleID))
 	})
 
 	It("mirrors an ASO failure of a grant into AccessReady and Ready", func() {
@@ -674,8 +763,7 @@ var _ = Describe("Queue access", func() {
 		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionTrue, conditions.ReasonSucceeded)
 		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionFalse, ReasonAccessNotReady)
 		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, ReasonAccessNotReady)
-		message := meta.FindStatusCondition(stored.Status.Conditions, string(messagingv1alpha1.ConditionAccessReady)).Message
-		Expect(message).To(Equal("RoleAssignment " + grantsOf(queue)[0].Name + ": Bad-Code: principal not found"))
+		Expect(accessMessage(stored)).To(Equal("RoleAssignment " + grantsOf(queue)[0].Name + ": Bad-Code: principal not found"))
 	})
 
 	It("records a RoleAssignment apply error in AccessReady", func() {
@@ -709,6 +797,35 @@ var _ = Describe("Queue watches", func() {
 		Expect(newReconciler().namespaceToQueues(ctx, namespace)).To(ConsistOf(
 			ctrl.Request{NamespacedName: client.ObjectKeyFromObject(first)},
 			ctrl.Request{NamespacedName: client.ObjectKeyFromObject(second)},
+		))
+	})
+
+	It("maps an ApplicationIdentity to the Queues that can grant it a role, in any namespace", func() {
+		local := accessQueue("mapped-local", identityPrincipal(messagingv1alpha1.QueueAccessRoleSender, "app-mapped"))
+		remote := newQueue("mapped-remote", func(q *messagingv1alpha1.Queue) {
+			q.Spec.Access = &messagingv1alpha1.QueueAccessSpec{Principals: []messagingv1alpha1.QueueAccessPrincipalSpec{{
+				Role:        messagingv1alpha1.QueueAccessRoleReceiver,
+				IdentityRef: &messagingv1alpha1.ApplicationIdentityRef{Name: "app-mapped", Namespace: productNamespace},
+			}}}
+		})
+		other := newQueue("mapped-other", func(q *messagingv1alpha1.Queue) {
+			q.Spec.Access = &messagingv1alpha1.QueueAccessSpec{Principals: []messagingv1alpha1.QueueAccessPrincipalSpec{
+				identityPrincipal(messagingv1alpha1.QueueAccessRoleSender, "app-mapped"),
+			}}
+		})
+		createQueue(local)
+		createQueue(remote)
+		createQueue(other)
+
+		reconciler := &QueueReconciler{Client: cachedClient}
+		identity := &identityv1alpha1.ApplicationIdentity{
+			ObjectMeta: metav1.ObjectMeta{Name: "app-mapped", Namespace: productNamespace},
+		}
+		// The cache learns about the Queues through its watch.
+		Eventually(func() []ctrl.Request { return reconciler.identityToQueues(ctx, identity) }).
+			WithTimeout(10 * time.Second).Should(ConsistOf(
+			ctrl.Request{NamespacedName: client.ObjectKeyFromObject(local)},
+			ctrl.Request{NamespacedName: client.ObjectKeyFromObject(remote)},
 		))
 	})
 

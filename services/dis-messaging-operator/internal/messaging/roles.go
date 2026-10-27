@@ -66,6 +66,17 @@ type IdentityPrincipal struct {
 	Role messagingv1alpha1.QueueAccessRole
 }
 
+// Resolved returns the principal that the identity gives with principalID,
+// the principal ID of its ApplicationIdentity. A managed identity is a
+// service principal.
+func (p IdentityPrincipal) Resolved(principalID string) Principal {
+	return Principal{
+		ID:   principalID,
+		Type: authorizationv1.RoleAssignmentProperties_PrincipalType_ServicePrincipal,
+		Role: p.Role,
+	}
+}
+
 // SplitPrincipals sorts the principals of a Queue. A principal with a role
 // the operator does not grant goes to NotAllowed, whatever its source. The
 // CRD admits exactly one source per principal.
