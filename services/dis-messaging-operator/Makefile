@@ -14,7 +14,7 @@ include ../../Makefile.common
 
 ASO_MODULE ?= github.com/Azure/azure-service-operator/v2
 ASO_CRD_DIR ?= $(LOCALBIN)/aso-crds
-ASO_CRDS ?= namespacesqueues.servicebus.azure.com
+ASO_CRDS ?= namespacesqueues.servicebus.azure.com roleassignments.authorization.azure.com
 
 # The envtest controller suite needs the ASO CRDs on disk. This rule has no
 # recipe. It adds aso-crds as a prerequisite of the shared setup-envtest

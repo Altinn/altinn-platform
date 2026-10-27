@@ -20,8 +20,10 @@ import (
 	"context"
 	"fmt"
 
+	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	servicebusv1 "github.com/Azure/azure-service-operator/v2/api/servicebus/v1api20240101"
 	"github.com/Azure/azure-service-operator/v2/pkg/common/annotations"
+	"github.com/Azure/azure-service-operator/v2/pkg/genruntime"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -58,11 +60,13 @@ type QueueReconciler struct {
 // +kubebuilder:rbac:groups=messaging.dis.altinn.cloud,resources=queues/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
 // +kubebuilder:rbac:groups=servicebus.azure.com,resources=namespacesqueues,verbs=get;list;watch;create;patch
+// +kubebuilder:rbac:groups=authorization.azure.com,resources=roleassignments,verbs=get;list;watch;create;patch;delete
 
 // Reconcile checks the queue name against the prefix of the namespace,
-// applies the ASO NamespacesQueue, and mirrors its Ready condition into the
-// Queue status. There is no finalizer: the owner reference deletes the
-// NamespacesQueue, and its reconcile policy decides if Azure keeps the queue.
+// applies the ASO NamespacesQueue and a RoleAssignment for each role of each
+// principal, and mirrors their Ready conditions into the Queue status. There
+// is no finalizer: the owner references delete the ASO resources, and the
+// reconcile policy of the NamespacesQueue decides if Azure keeps the queue.
 func (r *QueueReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var queue messagingv1alpha1.Queue
 	if err := r.Get(ctx, req.NamespacedName, &queue); err != nil {
@@ -80,79 +84,101 @@ func (r *QueueReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	// and both bring their own event, so an invalid name is not requeued.
 	if err := messaging.ValidateName(namespace.Name, namespace.Annotations, queue.Spec.Name); err != nil {
 		return ctrl.Result{}, r.writeStatus(ctx, &queue, noQueue, newCondition(messagingv1alpha1.ConditionQueueReady,
-			queue.Generation, metav1.ConditionFalse, messaging.ReasonInvalidName, err.Error()))
+			queue.Generation, metav1.ConditionFalse, messaging.ReasonInvalidName, err.Error()),
+			waitingForQueue(queue.Generation))
 	}
 
 	nsQueue, err := r.applyNamespacesQueue(ctx, &queue)
 	if err != nil {
-		return ctrl.Result{}, r.failed(ctx, &queue, err)
+		return ctrl.Result{}, r.failed(ctx, &queue, nil,
+			applyFailed(messagingv1alpha1.ConditionQueueReady, queue.Generation, err), waitingForQueue(queue.Generation), err)
+	}
+	fields, queueReady := azureQueue(queue.Spec.Name, nsQueue), queueReadyCondition(queue.Generation, nsQueue)
+
+	accessReady, err := r.reconcileAccess(ctx, &queue, nsQueue)
+	if err != nil {
+		return ctrl.Result{}, r.failed(ctx, &queue, fields, queueReady,
+			applyFailed(messagingv1alpha1.ConditionAccessReady, queue.Generation, err), err)
 	}
 
-	// The NamespacesQueue watch brings the next reconcile when ASO reports.
-	return ctrl.Result{}, r.writeStatus(ctx, &queue, azureQueue(queue.Spec.Name, nsQueue),
-		queueReadyCondition(queue.Generation, nsQueue))
+	// The NamespacesQueue and RoleAssignment watches bring the next
+	// reconcile when ASO reports.
+	return ctrl.Result{}, r.writeStatus(ctx, &queue, fields, queueReady, accessReady)
 }
 
-// applyNamespacesQueue writes the NamespacesQueue with server-side apply and
-// the Queue as its controller, and returns the stored object with its status.
-// Server-side apply also removes the reconcile-policy annotation when the
-// deletion policy changes from Retain to Delete, and it keeps the annotations
-// that ASO writes.
+// applyNamespacesQueue writes the NamespacesQueue and returns the stored
+// object with its status. Server-side apply also removes the reconcile-policy
+// annotation when the deletion policy changes from Retain to Delete, and it
+// keeps the annotations that ASO writes.
 func (r *QueueReconciler) applyNamespacesQueue(
 	ctx context.Context,
 	queue *messagingv1alpha1.Queue,
 ) (*servicebusv1.NamespacesQueue, error) {
-	desired, err := messaging.BuildNamespacesQueue(queue, r.Config.NamespaceResourceID)
+	nsQueue, err := messaging.BuildNamespacesQueue(queue, r.Config.NamespaceResourceID)
 	if err != nil {
 		return nil, err
+	}
+
+	return nsQueue, r.apply(ctx, queue, nsQueue)
+}
+
+// apply writes obj with server-side apply and the Queue as its controller,
+// and reads the stored object, status included, back into obj.
+func (r *QueueReconciler) apply(ctx context.Context, queue *messagingv1alpha1.Queue, obj client.Object) error {
+	gvk, err := apiutil.GVKForObject(obj, r.Scheme)
+	if err != nil {
+		return err
 	}
 	// The operator does not take over an ASO resource it does not own. With
-	// ForceOwnership the apply would adopt a NamespacesQueue that a team
-	// created by hand, so a foreign object of the same name stops the apply.
-	existing := &servicebusv1.NamespacesQueue{}
-	switch err := r.Get(ctx, client.ObjectKeyFromObject(desired), existing); {
+	// ForceOwnership the apply would adopt an object that a team created by
+	// hand, so a foreign object of the same name stops the apply.
+	existing, err := r.Scheme.New(gvk)
+	if err != nil {
+		return err
+	}
+	existingObj, ok := existing.(client.Object)
+	if !ok {
+		return fmt.Errorf("%s is not a Kubernetes object", gvk.Kind)
+	}
+	switch err := r.Get(ctx, client.ObjectKeyFromObject(obj), existingObj); {
 	case apierrors.IsNotFound(err):
 	case err != nil:
-		return nil, err
-	case !metav1.IsControlledBy(existing, queue):
-		return nil, fmt.Errorf("NamespacesQueue %s exists and is not controlled by this Queue", desired.Name)
+		return err
+	case !metav1.IsControlledBy(existingObj, queue):
+		return fmt.Errorf("%s %s exists and is not controlled by this Queue", gvk.Kind, obj.GetName())
 	}
-	if err := controllerutil.SetControllerReference(queue, desired, r.Scheme); err != nil {
-		return nil, err
+	if err := controllerutil.SetControllerReference(queue, obj, r.Scheme); err != nil {
+		return err
 	}
-	gvk, err := apiutil.GVKForObject(desired, r.Scheme)
-	if err != nil {
-		return nil, err
-	}
-	desired.SetGroupVersionKind(gvk)
+	obj.GetObjectKind().SetGroupVersionKind(gvk)
 
-	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(desired)
+	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	applied := &unstructured.Unstructured{Object: content}
 	unstructured.RemoveNestedField(applied.Object, "status")
 	unstructured.RemoveNestedField(applied.Object, "metadata", "creationTimestamp")
 	if err := r.Apply(ctx, client.ApplyConfigurationFromUnstructured(applied),
 		client.FieldOwner(fieldOwner), client.ForceOwnership); err != nil {
-		return nil, err
+		return err
 	}
 
 	// The apply response is the stored object. The informer cache can still
 	// hold the version before the apply.
-	current := &servicebusv1.NamespacesQueue{}
-	return current, runtime.DefaultUnstructuredConverter.FromUnstructured(applied.Object, current)
+	return runtime.DefaultUnstructuredConverter.FromUnstructured(applied.Object, obj)
 }
 
 // SetupWithManager sets up the controller with the Manager. A Queue is
 // reconciled again when its spec changes, not when the operator writes its
-// status. A NamespacesQueue reconciles the owning Queue when its spec or its
-// status changed, such as ASO reporting Ready. A change of the prefix
-// annotation of a namespace reconciles every Queue in it.
+// status. A NamespacesQueue or a RoleAssignment reconciles the owning Queue
+// when its spec or its status changed, such as ASO reporting Ready. A change
+// of the prefix annotation of a namespace reconciles every Queue in it.
 func (r *QueueReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&messagingv1alpha1.Queue{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Owns(&servicebusv1.NamespacesQueue{}, builder.WithPredicates(namespacesQueueChanged())).
+		Owns(&servicebusv1.NamespacesQueue{}, builder.WithPredicates(asoResourceChanged())).
+		Owns(&authorizationv1.RoleAssignment{}, builder.WithPredicates(asoResourceChanged())).
 		Watches(&corev1.Namespace{}, handler.EnqueueRequestsFromMapFunc(r.namespaceToQueues),
 			builder.WithPredicates(prefixAnnotationChanged())).
 		Named("queue").
@@ -195,7 +221,7 @@ func prefixAnnotationChanged() predicate.Funcs {
 	}
 }
 
-// namespacesQueueChanged lets a NamespacesQueue update through when its
+// asoResourceChanged lets an update of an ASO resource through when its
 // generation, its controller, its reconcile policy or its status changed. ASO
 // writes a poller annotation on every poll of a running Azure operation, and
 // each of those writes would cost a reconcile and an apply round trip. The
@@ -203,22 +229,22 @@ func prefixAnnotationChanged() predicate.Funcs {
 // policy removed by hand must bring the apply that restores it. A controller
 // reference removed by hand makes the object foreign, and the Queue must
 // report that instead of staying Ready.
-func namespacesQueueChanged() predicate.Funcs {
+func asoResourceChanged() predicate.Funcs {
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			oldQueue, ok := e.ObjectOld.(*servicebusv1.NamespacesQueue)
+			oldObj, ok := e.ObjectOld.(genruntime.ARMMetaObject)
 			if !ok {
 				return true
 			}
-			newQueue, ok := e.ObjectNew.(*servicebusv1.NamespacesQueue)
+			newObj, ok := e.ObjectNew.(genruntime.ARMMetaObject)
 			if !ok {
 				return true
 			}
 
-			return oldQueue.Generation != newQueue.Generation ||
-				oldQueue.Annotations[annotations.ReconcilePolicy] != newQueue.Annotations[annotations.ReconcilePolicy] ||
-				!equality.Semantic.DeepEqual(metav1.GetControllerOf(oldQueue), metav1.GetControllerOf(newQueue)) ||
-				!equality.Semantic.DeepEqual(oldQueue.Status, newQueue.Status)
+			return oldObj.GetGeneration() != newObj.GetGeneration() ||
+				oldObj.GetAnnotations()[annotations.ReconcilePolicy] != newObj.GetAnnotations()[annotations.ReconcilePolicy] ||
+				!equality.Semantic.DeepEqual(metav1.GetControllerOf(oldObj), metav1.GetControllerOf(newObj)) ||
+				!equality.Semantic.DeepEqual(oldObj.GetStatus(), newObj.GetStatus())
 		},
 	}
 }

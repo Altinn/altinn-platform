@@ -191,3 +191,60 @@ func TestPrincipalType(t *testing.T) {
 		})
 	}
 }
+
+func TestSplitPrincipals(t *testing.T) {
+	t.Parallel()
+
+	queue := &messagingv1alpha1.Queue{
+		ObjectMeta: metav1.ObjectMeta{Name: "app-one", Namespace: "product-team-a"},
+		Spec: messagingv1alpha1.QueueSpec{
+			Name: "team-a.app-one",
+			Access: &messagingv1alpha1.QueueAccessSpec{Principals: []messagingv1alpha1.QueueAccessPrincipalSpec{
+				{
+					Role:  messagingv1alpha1.QueueAccessRoleReceiver,
+					Group: &messagingv1alpha1.QueueGroupPrincipalSpec{Name: "group-one", PrincipalId: testGroupID},
+				},
+				{
+					Role:        messagingv1alpha1.QueueAccessRoleOwner,
+					IdentityRef: &messagingv1alpha1.ApplicationIdentityRef{Name: "app-two"},
+				},
+				{
+					Role:             messagingv1alpha1.QueueAccessRoleSender,
+					ServicePrincipal: &messagingv1alpha1.QueueServicePrincipalSpec{Name: "sp-one", PrincipalId: testIdentityID},
+				},
+				{
+					Role:        messagingv1alpha1.QueueAccessRoleConsumer,
+					IdentityRef: &messagingv1alpha1.ApplicationIdentityRef{Name: "app-three"},
+				},
+				{
+					Role:        messagingv1alpha1.QueueAccessRoleSender,
+					IdentityRef: &messagingv1alpha1.ApplicationIdentityRef{Name: "app-four", Namespace: "product-team-b"},
+				},
+			}},
+		},
+	}
+
+	want := Principals{
+		Grantable: []Principal{groupReceiver, identitySender},
+		Identities: []IdentityPrincipal{
+			{
+				Field: "spec.access.principals[3]",
+				Ref:   messagingv1alpha1.ApplicationIdentityRef{Name: "app-three", Namespace: "product-team-a"},
+				Role:  messagingv1alpha1.QueueAccessRoleConsumer,
+			},
+			{
+				Field: "spec.access.principals[4]",
+				Ref:   messagingv1alpha1.ApplicationIdentityRef{Name: "app-four", Namespace: "product-team-b"},
+				Role:  messagingv1alpha1.QueueAccessRoleSender,
+			},
+		},
+		NotAllowed: []string{`spec.access.principals[1]: role "owner": the operator does not grant this role on a queue`},
+	}
+	if diff := cmp.Diff(want, SplitPrincipals(queue)); diff != "" {
+		t.Errorf("SplitPrincipals() mismatch (-want +got):\n%s", diff)
+	}
+
+	if diff := cmp.Diff(Principals{}, SplitPrincipals(&messagingv1alpha1.Queue{})); diff != "" {
+		t.Errorf("SplitPrincipals() without access mismatch (-want +got):\n%s", diff)
+	}
+}

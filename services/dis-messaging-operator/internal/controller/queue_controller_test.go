@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	servicebusv1 "github.com/Azure/azure-service-operator/v2/api/servicebus/v1api20240101"
 	"github.com/Azure/azure-service-operator/v2/pkg/common/annotations"
 	"github.com/Azure/azure-service-operator/v2/pkg/genruntime"
@@ -30,8 +31,12 @@ import (
 const (
 	testNamespace           = "default"
 	productNamespace        = "product-team-a"
-	testNamespaceResourceID = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-messaging" +
+	testSubscriptionID      = "00000000-0000-0000-0000-000000000000"
+	testNamespaceResourceID = "/subscriptions/" + testSubscriptionID + "/resourceGroups/rg-messaging" +
 		"/providers/Microsoft.ServiceBus/namespaces/sb-messaging"
+	// Role definition IDs of Azure Service Bus Data Sender and Data Receiver.
+	senderRoleID   = "69a216fc-b8fb-44d8-bc22-1f3c2cd27a39"
+	receiverRoleID = "4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0"
 	// pollerAnnotation is what ASO writes on every poll of a running Azure
 	// operation. ASO keeps the constant internal.
 	pollerAnnotation = "serviceoperator.azure.com/poller-resume-token"
@@ -204,7 +209,7 @@ func newReconciler() *QueueReconciler {
 	return &QueueReconciler{
 		Client: k8sClient,
 		Scheme: k8sClient.Scheme(),
-		Config: config.OperatorConfig{NamespaceResourceID: testNamespaceResourceID},
+		Config: config.OperatorConfig{SubscriptionID: testSubscriptionID, NamespaceResourceID: testNamespaceResourceID},
 	}
 }
 
@@ -292,6 +297,7 @@ var _ = Describe("Queue reconciler", func() {
 
 		stored := reconcileQueue(queue)
 		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionFalse, messaging.ReasonInvalidName)
+		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionUnknown, ReasonWaitingForQueue)
 		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, messaging.ReasonInvalidName)
 		Expect(stored.Status.ObservedGeneration).To(Equal(stored.Generation))
 
@@ -325,6 +331,7 @@ var _ = Describe("Queue reconciler", func() {
 
 		stored := reconcileQueue(queue)
 		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionTrue, conditions.ReasonSucceeded)
+		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionTrue, conditions.ReasonSucceeded)
 		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionTrue, ReasonReady)
 		Expect(stored.Status.Name).To(Equal("team-a.invoices"))
 		Expect(stored.Status.ResourceId).To(Equal(resourceID))
@@ -493,6 +500,202 @@ var _ = Describe("Queue reconciler", func() {
 	})
 })
 
+func groupPrincipal(role messagingv1alpha1.QueueAccessRole, id string) messagingv1alpha1.QueueAccessPrincipalSpec {
+	return messagingv1alpha1.QueueAccessPrincipalSpec{
+		Role:  role,
+		Group: &messagingv1alpha1.QueueGroupPrincipalSpec{Name: "group-" + id, PrincipalId: id},
+	}
+}
+
+func servicePrincipal(role messagingv1alpha1.QueueAccessRole, id string) messagingv1alpha1.QueueAccessPrincipalSpec {
+	return messagingv1alpha1.QueueAccessPrincipalSpec{
+		Role:             role,
+		ServicePrincipal: &messagingv1alpha1.QueueServicePrincipalSpec{Name: "sp-" + id, PrincipalId: id},
+	}
+}
+
+func accessQueue(name string, principals ...messagingv1alpha1.QueueAccessPrincipalSpec) *messagingv1alpha1.Queue {
+	queue := productQueue(name, "team-a."+name)
+	queue.Spec.Access = &messagingv1alpha1.QueueAccessSpec{Principals: principals}
+	return queue
+}
+
+// setPrincipals replaces the principals of a stored Queue.
+func setPrincipals(queue *messagingv1alpha1.Queue, principals ...messagingv1alpha1.QueueAccessPrincipalSpec) {
+	queue.Spec.Access.Principals = principals
+	Expect(k8sClient.Update(ctx, queue)).To(Succeed())
+}
+
+// grantsOf lists the RoleAssignments with the labels of queue.
+func grantsOf(queue *messagingv1alpha1.Queue) []authorizationv1.RoleAssignment {
+	var grants authorizationv1.RoleAssignmentList
+	Expect(k8sClient.List(ctx, &grants, client.InNamespace(queue.Namespace),
+		client.MatchingLabels{messaging.QueueNameLabel: queue.Name})).To(Succeed())
+	return grants.Items
+}
+
+// grantedRoles returns "<principal type>/<principal ID>/<role definition ID>"
+// for each RoleAssignment of queue, and checks that the Queue controls it.
+func grantedRoles(queue *messagingv1alpha1.Queue) []string {
+	grants := grantsOf(queue)
+	roles := make([]string, 0, len(grants))
+	for _, grant := range grants {
+		Expect(metav1.IsControlledBy(&grant, queue)).To(BeTrue(), "RoleAssignment %s", grant.Name)
+		roleID := grant.Spec.RoleDefinitionReference.ARMID
+		roles = append(roles, string(*grant.Spec.PrincipalType)+"/"+*grant.Spec.PrincipalId+"/"+
+			roleID[strings.LastIndex(roleID, "/")+1:])
+	}
+	return roles
+}
+
+// reportGrants writes, as ASO would, condition as the Ready condition of the
+// current generation of every RoleAssignment of queue.
+func reportGrants(queue *messagingv1alpha1.Queue, condition conditions.Condition) {
+	for _, grant := range grantsOf(queue) {
+		condition.LastTransitionTime = metav1.Now()
+		condition.ObservedGeneration = grant.Generation
+		grant.Status.Conditions = []conditions.Condition{condition}
+		Expect(k8sClient.Status().Update(ctx, &grant)).To(Succeed())
+	}
+}
+
+var _ = Describe("Queue access", func() {
+	BeforeEach(createProductNamespace)
+
+	ready := conditions.Condition{
+		Type:   conditions.ConditionTypeReady,
+		Status: metav1.ConditionTrue,
+		Reason: conditions.ReasonSucceeded,
+	}
+
+	It("grants a group and a service principal their roles and mirrors ASO into AccessReady", func() {
+		queue := accessQueue("granted",
+			groupPrincipal(messagingv1alpha1.QueueAccessRoleReceiver, "group-id"),
+			servicePrincipal(messagingv1alpha1.QueueAccessRoleSender, "sp-id"))
+		createQueue(queue)
+
+		stored := reconcileQueue(queue)
+		Expect(grantedRoles(queue)).To(ConsistOf("Group/group-id/"+receiverRoleID, "ServicePrincipal/sp-id/"+senderRoleID))
+		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionUnknown,
+			conditions.ReasonReconciling.Name)
+
+		reportReady(queue, testNamespaceResourceID+"/queues/team-a.granted")
+		reportGrants(queue, ready)
+		stored = reconcileQueue(queue)
+		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionTrue, conditions.ReasonSucceeded)
+		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionTrue, ReasonReady)
+	})
+
+	It("gives a consumer the sender and the receiver role", func() {
+		queue := accessQueue("consumed", servicePrincipal(messagingv1alpha1.QueueAccessRoleConsumer, "sp-id"))
+		createQueue(queue)
+
+		reconcileQueue(queue)
+		Expect(grantedRoles(queue)).To(ConsistOf("ServicePrincipal/sp-id/"+senderRoleID,
+			"ServicePrincipal/sp-id/"+receiverRoleID))
+	})
+
+	It("reports RoleNotAllowed for the owner role and grants the other principals", func() {
+		queue := accessQueue("owned",
+			groupPrincipal(messagingv1alpha1.QueueAccessRoleOwner, "group-id"),
+			servicePrincipal(messagingv1alpha1.QueueAccessRoleSender, "sp-id"))
+		createQueue(queue)
+
+		stored := reconcileQueue(queue)
+		Expect(grantedRoles(queue)).To(ConsistOf("ServicePrincipal/sp-id/" + senderRoleID))
+		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionFalse, messaging.ReasonRoleNotAllowed)
+		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, messaging.ReasonRoleNotAllowed)
+		message := meta.FindStatusCondition(stored.Status.Conditions, string(messagingv1alpha1.ConditionAccessReady)).Message
+		Expect(message).To(HavePrefix(`spec.access.principals[0]: role "owner"`))
+	})
+
+	It("deletes the grant of a removed principal and leaves a RoleAssignment the operator did not create", func() {
+		queue := accessQueue("removed",
+			groupPrincipal(messagingv1alpha1.QueueAccessRoleSender, "kept-id"),
+			groupPrincipal(messagingv1alpha1.QueueAccessRoleSender, "removed-id"))
+		createQueue(queue)
+		foreign := &authorizationv1.RoleAssignment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "removed-by-hand",
+				Namespace: productNamespace,
+				Labels:    map[string]string{messaging.QueueNameLabel: queue.Name},
+			},
+			Spec: authorizationv1.RoleAssignment_Spec{
+				Owner:       &genruntime.ArbitraryOwnerReference{ARMID: testNamespaceResourceID},
+				PrincipalId: ptr.To("hand-id"),
+				RoleDefinitionReference: &genruntime.WellKnownResourceReference{
+					ResourceReference: genruntime.ResourceReference{ARMID: "/subscriptions/" + testSubscriptionID +
+						"/providers/Microsoft.Authorization/roleDefinitions/" + senderRoleID},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, foreign)).To(Succeed())
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, foreign)).To(Succeed()) })
+
+		stored := reconcileQueue(queue)
+		Expect(grantsOf(queue)).To(HaveLen(3))
+
+		setPrincipals(stored, groupPrincipal(messagingv1alpha1.QueueAccessRoleSender, "kept-id"))
+		reconcileQueue(queue)
+		Expect(grantsOf(queue)).To(HaveLen(2))
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(foreign), foreign)).To(Succeed())
+		Expect(grantsOf(queue)).To(ContainElement(HaveField("Spec.PrincipalId", HaveValue(Equal("kept-id")))))
+	})
+
+	It("reports IdentityNotReady for an identityRef and deletes no grant while it is not resolved", func() {
+		queue := accessQueue("identity",
+			groupPrincipal(messagingv1alpha1.QueueAccessRoleSender, "kept-id"),
+			groupPrincipal(messagingv1alpha1.QueueAccessRoleSender, "removed-id"))
+		createQueue(queue)
+		stored := reconcileQueue(queue)
+
+		setPrincipals(stored, groupPrincipal(messagingv1alpha1.QueueAccessRoleSender, "kept-id"),
+			identityPrincipal(messagingv1alpha1.QueueAccessRoleReceiver, "app-two"))
+		stored = reconcileQueue(queue)
+		Expect(grantedRoles(queue)).To(ConsistOf("Group/kept-id/"+senderRoleID, "Group/removed-id/"+senderRoleID))
+		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionFalse, ReasonIdentityNotReady)
+		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, ReasonIdentityNotReady)
+	})
+
+	It("mirrors an ASO failure of a grant into AccessReady and Ready", func() {
+		queue := accessQueue("refused", groupPrincipal(messagingv1alpha1.QueueAccessRoleSender, "group-id"))
+		createQueue(queue)
+		reconcileQueue(queue)
+		reportReady(queue, testNamespaceResourceID+"/queues/team-a.refused")
+		reportGrants(queue, conditions.Condition{
+			Type:     conditions.ConditionTypeReady,
+			Status:   metav1.ConditionFalse,
+			Severity: conditions.ConditionSeverityError,
+			Reason:   "Bad-Code",
+			Message:  "principal not found",
+		})
+
+		stored := reconcileQueue(queue)
+		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionTrue, conditions.ReasonSucceeded)
+		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionFalse, ReasonAccessNotReady)
+		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, ReasonAccessNotReady)
+		message := meta.FindStatusCondition(stored.Status.Conditions, string(messagingv1alpha1.ConditionAccessReady)).Message
+		Expect(message).To(Equal("RoleAssignment " + grantsOf(queue)[0].Name + ": Bad-Code: principal not found"))
+	})
+
+	It("records a RoleAssignment apply error in AccessReady", func() {
+		queue := accessQueue("unapplied", groupPrincipal(messagingv1alpha1.QueueAccessRoleSender, "group-id"))
+		createQueue(queue)
+
+		reconciler := newReconciler()
+		reconciler.Config.SubscriptionID = ""
+		_, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(queue)})
+		Expect(err).To(HaveOccurred())
+
+		stored := &messagingv1alpha1.Queue{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), stored)).To(Succeed())
+		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionUnknown,
+			conditions.ReasonReconciling.Name)
+		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionFalse, ReasonApplyFailed)
+		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, ReasonApplyFailed)
+	})
+})
+
 var _ = Describe("Queue watches", func() {
 	BeforeEach(createProductNamespace)
 
@@ -530,7 +733,7 @@ var _ = Describe("Queue watches", func() {
 		Entry("no prefix before or after", nil, map[string]string{"touched": "yes"}, false),
 	)
 
-	DescribeTable("passes a NamespacesQueue update only when the generation, the controller, the reconcile policy or the status changed",
+	DescribeTable("passes an ASO resource update only when the generation, the controller, the reconcile policy or the status changed",
 		func(mutate func(*servicebusv1.NamespacesQueue), want bool) {
 			old := &servicebusv1.NamespacesQueue{ObjectMeta: metav1.ObjectMeta{
 				Name:        "orders",
@@ -546,7 +749,7 @@ var _ = Describe("Queue watches", func() {
 			}}
 			updated := old.DeepCopy()
 			mutate(updated)
-			Expect(namespacesQueueChanged().Update(event.UpdateEvent{ObjectOld: old, ObjectNew: updated})).To(Equal(want))
+			Expect(asoResourceChanged().Update(event.UpdateEvent{ObjectOld: old, ObjectNew: updated})).To(Equal(want))
 		},
 		Entry("generation", func(q *servicebusv1.NamespacesQueue) { q.Generation = 2 }, true),
 		Entry("status", func(q *servicebusv1.NamespacesQueue) { q.Status.Id = ptr.To("id") }, true),
@@ -560,8 +763,17 @@ var _ = Describe("Queue watches", func() {
 		Entry("same object", func(*servicebusv1.NamespacesQueue) {}, false),
 	)
 
-	It("passes an update of another kind through the NamespacesQueue predicate", func() {
+	It("drops a RoleAssignment update that only adds the poller annotation", func() {
+		old := &authorizationv1.RoleAssignment{ObjectMeta: metav1.ObjectMeta{Name: "grant", Generation: 1}}
+		updated := old.DeepCopy()
+		updated.Annotations = map[string]string{pollerAnnotation: "token"}
+		Expect(asoResourceChanged().Update(event.UpdateEvent{ObjectOld: old, ObjectNew: updated})).To(BeFalse())
+		updated.Status.Scope = ptr.To("scope")
+		Expect(asoResourceChanged().Update(event.UpdateEvent{ObjectOld: old, ObjectNew: updated})).To(BeTrue())
+	})
+
+	It("passes an update of another kind through the ASO resource predicate", func() {
 		secret := &corev1.Secret{}
-		Expect(namespacesQueueChanged().Update(event.UpdateEvent{ObjectOld: secret, ObjectNew: secret})).To(BeTrue())
+		Expect(asoResourceChanged().Update(event.UpdateEvent{ObjectOld: secret, ObjectNew: secret})).To(BeTrue())
 	})
 })
