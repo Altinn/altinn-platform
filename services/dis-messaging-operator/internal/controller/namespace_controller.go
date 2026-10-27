@@ -33,7 +33,8 @@ var errNotManaged = errors.New("object exists without the managed-by label")
 // per product namespace: the ResourceQuota that limits the Queues, and the
 // ConfigMap with the connection details of every Queue. The ConfigMap is
 // built from all the Queues of the namespace, so the namespace is the
-// reconcile key.
+// reconcile key. The Queues with the same queue names in other namespaces
+// decide which of them get a key.
 type NamespaceReconciler struct {
 	client.Client
 	// APIReader reads from the API server, not from the cache.
@@ -47,11 +48,11 @@ type NamespaceReconciler struct {
 
 // Reconcile keeps the quota in every product namespace, so the API server
 // limits the Queues from the first one. The ConfigMap exists while the
-// namespace has a Queue, with a key for each Queue that has a valid name and
-// is not being deleted. A key does not wait for QueueReady: apps know the
-// key when they write the Queue, and a short Azure failure must not remove a
-// key that a restarting app needs. A namespace that is no longer a product
-// namespace loses both objects.
+// namespace has a Queue, with a key for each Queue that has a valid name, is
+// not being deleted and holds its queue name. A key does not wait for
+// QueueReady: apps know the key when they write the Queue, and a short Azure
+// failure must not remove a key that a restarting app needs. A namespace
+// that is no longer a product namespace loses both objects.
 func (r *NamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var namespace corev1.Namespace
 	if err := r.Get(ctx, client.ObjectKey{Name: req.Name}, &namespace); err != nil {
@@ -89,8 +90,16 @@ func (r *NamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if len(queues.Items) == 0 {
 		return ctrl.Result{}, r.deleteManaged(ctx, configMap)
 	}
+	var sameName []messagingv1alpha1.Queue
+	for i := range queues.Items {
+		named, err := queuesNamed(ctx, r.Client, queues.Items[i].Spec.Name)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		sameName = append(sameName, named...)
+	}
 	wantConfigMap, err := messaging.BuildConnectionConfigMap(namespace.Name, r.Config.Endpoint,
-		messaging.ConnectedQueues(namespace.Name, namespace.Annotations, queues.Items))
+		messaging.ConnectedQueues(namespace.Name, namespace.Annotations, queues.Items, sameName))
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -176,16 +185,19 @@ func managed(obj client.Object) bool {
 
 // SetupWithManager sets up the controller with the Manager. A namespace is
 // reconciled when it is created, when its prefix annotation changes, when a
-// Queue in it is created, changed or deleted, and when its managed ConfigMap
-// or quota changes. At start-up every namespace comes as a create event, so
-// a new quota limit or endpoint reaches every namespace.
+// Queue in it or a Queue with the same queue name as one of its Queues is
+// created, changed or deleted, and when its managed ConfigMap or quota
+// changes. At start-up every namespace comes as a create event, so a new
+// quota limit or endpoint reaches every namespace. IndexQueues must run
+// first.
 func (r *NamespaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	toNamespace := handler.EnqueueRequestsFromMapFunc(namespaceOf)
 	managedOnly := builder.WithPredicates(predicate.NewPredicateFuncs(managed))
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Namespace{}, builder.WithPredicates(namespaceChanged())).
-		Watches(&messagingv1alpha1.Queue{}, toNamespace, builder.WithPredicates(queueChanged())).
+		Watches(&messagingv1alpha1.Queue{}, handler.EnqueueRequestsFromMapFunc(r.queueNamespaces),
+			builder.WithPredicates(queueChanged())).
 		Watches(&corev1.ConfigMap{}, toNamespace, managedOnly).
 		Watches(&corev1.ResourceQuota{}, toNamespace, managedOnly).
 		Named("namespace").
@@ -195,6 +207,28 @@ func (r *NamespaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // namespaceOf maps an object to its namespace.
 func namespaceOf(_ context.Context, obj client.Object) []ctrl.Request {
 	return []ctrl.Request{{NamespacedName: client.ObjectKey{Name: obj.GetNamespace()}}}
+}
+
+// queueNamespaces maps a Queue to its namespace and to the namespaces of the
+// Queues with the same queue name. The key of a name moves to another
+// namespace when the Queue that holds the name goes.
+func (r *NamespaceReconciler) queueNamespaces(ctx context.Context, obj client.Object) []ctrl.Request {
+	requests := namespaceOf(ctx, obj)
+	queue, ok := obj.(*messagingv1alpha1.Queue)
+	if !ok {
+		return requests
+	}
+	sameName, err := queuesNamed(ctx, r.Client, queue.Spec.Name)
+	if err != nil {
+		logf.FromContext(ctx).Error(err, "cannot list the Queues with the same queue name",
+			"queue", client.ObjectKeyFromObject(obj))
+		return requests
+	}
+
+	for i := range sameName {
+		requests = append(requests, ctrl.Request{NamespacedName: client.ObjectKey{Name: sameName[i].Namespace}})
+	}
+	return requests
 }
 
 // namespaceChanged lets a new namespace through, and an update that sets,
