@@ -101,5 +101,22 @@ if [ -n "$AZP_PLACEHOLDER" ]; then
 else
   # To be aware of TERM and INT signals call run.sh
   # Running it with the --once flag at the end will shut down the agent after the build is executed
-  ./run.sh --once & wait $!
+  ./run.sh --once &
+  RUN_PID=$!
+
+  # If $AZP_IDLE_TIMEOUT is set, stop the agent when no job has started within that many seconds.
+  # The scaler can start more replicas than there are jobs it can get. Without this, such a replica
+  # stays idle and can get a job just before the replica timeout, which kills it during the job.
+  # Agent.Worker runs only while a job runs. /proc is read directly because procps is not installed.
+  if [ -n "$AZP_IDLE_TIMEOUT" ]; then
+    (
+      sleep "$AZP_IDLE_TIMEOUT"
+      if ! grep -qa Agent.Worker /proc/[0-9]*/cmdline 2>/dev/null; then
+        print_header "No job started within ${AZP_IDLE_TIMEOUT} seconds. Stopping idle agent..."
+        kill -TERM "$RUN_PID" 2>/dev/null || true
+      fi
+    ) &
+  fi
+
+  wait $RUN_PID
 fi
