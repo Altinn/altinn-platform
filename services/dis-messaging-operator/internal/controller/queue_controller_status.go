@@ -19,8 +19,8 @@ import (
 )
 
 // Reasons of the Queue conditions. messaging.ReasonInvalidName,
-// messaging.ReasonRoleNotAllowed and identityref.ReasonIdentityNotReady are
-// the others.
+// messaging.ReasonConflict, messaging.ReasonRoleNotAllowed and
+// identityref.ReasonIdentityNotReady are the others.
 const (
 	// ReasonApplyFailed means the operator could not write the
 	// NamespacesQueue or a RoleAssignment.

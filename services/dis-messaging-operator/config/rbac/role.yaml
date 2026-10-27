@@ -83,6 +83,7 @@ rules:
   - namespacesqueues
   verbs:
   - create
+  - delete
   - get
   - list
   - patch
