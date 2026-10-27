@@ -13,6 +13,18 @@ rules:
   - list
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - resourcequotas
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - application.dis.altinn.cloud
   resources:
   - applicationidentities
@@ -31,6 +43,13 @@ rules:
   - list
   - patch
   - watch
+- apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
 - apiGroups:
   - messaging.dis.altinn.cloud
   resources:

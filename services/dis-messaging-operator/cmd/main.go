@@ -24,6 +24,7 @@ import (
 	messagingv1alpha1 "github.com/Altinn/altinn-platform/services/dis-messaging-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-messaging-operator/internal/config"
 	"github.com/Altinn/altinn-platform/services/dis-messaging-operator/internal/controller"
+	"github.com/Altinn/altinn-platform/services/dis-messaging-operator/internal/messaging"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -32,10 +33,14 @@ import (
 	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	servicebusv1 "github.com/Azure/azure-service-operator/v2/api/servicebus/v1api20240101"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -161,6 +166,7 @@ func main() {
 		metricsServerOptions.KeyName = metricsCertKey
 	}
 
+	managedBy := labels.SelectorFromSet(labels.Set{messaging.ManagedByLabel: messaging.ManagedByValue})
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
@@ -168,6 +174,11 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "dis-messaging-operator.dis.altinn.cloud",
+		// The operator reads only its own quotas, so it does not cache every
+		// quota in the cluster.
+		Cache: cache.Options{ByObject: map[client.Object]cache.ByObject{
+			&corev1.ResourceQuota{}: {Label: managedBy},
+		}},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -180,6 +191,14 @@ func main() {
 		Config: *operatorConfig,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Queue")
+		os.Exit(1)
+	}
+	if err = (&controller.NamespaceReconciler{
+		Client:   mgr.GetClient(),
+		Config:   *operatorConfig,
+		Recorder: mgr.GetEventRecorder("dis-messaging-operator"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Namespace")
 		os.Exit(1)
 	}
 
