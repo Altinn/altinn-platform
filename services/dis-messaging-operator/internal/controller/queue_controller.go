@@ -54,6 +54,8 @@ const (
 	// identityRefIndex indexes a Queue by the namespace/name of each
 	// ApplicationIdentity that it can grant a role.
 	identityRefIndex = "spec.access.principals.identityRef"
+	// queueNameIndex indexes a Queue by messaging.NameKey of spec.name.
+	queueNameIndex = "spec.name"
 	// identityRequeueDelay is the requeue of a Queue with an identity that is
 	// not ready. The ApplicationIdentity watch normally comes first.
 	identityRequeueDelay = time.Minute
@@ -70,11 +72,12 @@ type QueueReconciler struct {
 // +kubebuilder:rbac:groups=messaging.dis.altinn.cloud,resources=queues/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=messaging.dis.altinn.cloud,resources=queues/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
-// +kubebuilder:rbac:groups=servicebus.azure.com,resources=namespacesqueues,verbs=get;list;watch;create;patch
+// +kubebuilder:rbac:groups=servicebus.azure.com,resources=namespacesqueues,verbs=get;list;watch;create;patch;delete
 // +kubebuilder:rbac:groups=authorization.azure.com,resources=roleassignments,verbs=get;list;watch;create;patch;delete
 // +kubebuilder:rbac:groups=application.dis.altinn.cloud,resources=applicationidentities,verbs=get;list;watch
 
-// Reconcile checks the queue name against the prefix of the namespace,
+// Reconcile checks the queue name against the prefix of the namespace and
+// against the other Queues with the same name (messaging.NameHolder),
 // applies the ASO NamespacesQueue and a RoleAssignment for each role of each
 // principal, and mirrors their Ready conditions into the Queue status. There
 // is no finalizer: the owner references delete the ASO resources, and the
@@ -98,6 +101,14 @@ func (r *QueueReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, r.writeStatus(ctx, &queue, noQueue, newCondition(messagingv1alpha1.ConditionQueueReady,
 			queue.Generation, metav1.ConditionFalse, messaging.ReasonInvalidName, err.Error()),
 			waitingForQueue(queue.Generation))
+	}
+
+	sameName, err := queuesNamed(ctx, r.Client, queue.Spec.Name)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if holder := messaging.NameHolder(&queue, sameName); holder != &queue {
+		return ctrl.Result{}, r.yield(ctx, &queue, holder)
 	}
 
 	nsQueue, err := r.applyNamespacesQueue(ctx, &queue)
@@ -136,6 +147,47 @@ func (r *QueueReconciler) applyNamespacesQueue(
 	}
 
 	return nsQueue, r.apply(ctx, queue, nsQueue)
+}
+
+// yield reports that holder holds the queue name of queue, and removes what
+// queue applied. Two Queues created in the same second can both apply
+// before either one sees the other.
+func (r *QueueReconciler) yield(ctx context.Context, queue, holder *messagingv1alpha1.Queue) error {
+	if err := r.writeStatus(ctx, queue, noQueue, newCondition(messagingv1alpha1.ConditionQueueReady,
+		queue.Generation, metav1.ConditionFalse, messaging.ReasonConflict,
+		fmt.Sprintf("Queue %s/%s holds the queue name %q: the oldest Queue holds a name, and Azure ignores case in names",
+			holder.Namespace, holder.Name, holder.Spec.Name)),
+		waitingForQueue(queue.Generation)); err != nil {
+		return err
+	}
+	if err := r.deleteStaleGrants(ctx, queue, nil); err != nil {
+		return err
+	}
+
+	return r.release(ctx, queue)
+}
+
+// release deletes the NamespacesQueue of queue and keeps the Azure queue,
+// which the holder of the name uses. ASO reads the reconcile policy when it
+// deletes, so detach-on-delete is set before the delete.
+func (r *QueueReconciler) release(ctx context.Context, queue *messagingv1alpha1.Queue) error {
+	var nsQueue servicebusv1.NamespacesQueue
+	key := client.ObjectKey{Namespace: queue.Namespace, Name: messaging.NamespacesQueueName(queue)}
+	if err := r.Get(ctx, key, &nsQueue); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	if !metav1.IsControlledBy(&nsQueue, queue) || !nsQueue.DeletionTimestamp.IsZero() {
+		return nil
+	}
+
+	patch := client.MergeFrom(nsQueue.DeepCopy())
+	metav1.SetMetaDataAnnotation(&nsQueue.ObjectMeta, annotations.ReconcilePolicy,
+		string(annotations.ReconcilePolicyDetachOnDelete))
+	if err := r.Patch(ctx, &nsQueue, patch); err != nil {
+		return err
+	}
+
+	return client.IgnoreNotFound(r.Delete(ctx, &nsQueue))
 }
 
 // apply writes obj with server-side apply and the Queue as its controller,
@@ -191,15 +243,15 @@ func (r *QueueReconciler) apply(ctx context.Context, queue *messagingv1alpha1.Qu
 // when its spec or its status changed, such as ASO reporting Ready. A change
 // of the prefix annotation of a namespace reconciles every Queue in it. An
 // ApplicationIdentity reconciles every Queue that can grant it a role, in any
-// namespace.
+// namespace. A new or deleted Queue reconciles the Queues with the same
+// queue name. IndexQueues must run first.
 func (r *QueueReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &messagingv1alpha1.Queue{},
-		identityRefIndex, identityRefKeys); err != nil {
-		return err
-	}
-
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&messagingv1alpha1.Queue{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		// spec.name is immutable, so only a new or a deleted Queue changes
+		// which Queue holds a name.
+		Watches(&messagingv1alpha1.Queue{}, handler.EnqueueRequestsFromMapFunc(r.sameNameQueues),
+			builder.WithPredicates(predicate.Funcs{UpdateFunc: func(event.UpdateEvent) bool { return false }})).
 		Owns(&servicebusv1.NamespacesQueue{}, builder.WithPredicates(asoResourceChanged())).
 		Owns(&authorizationv1.RoleAssignment{}, builder.WithPredicates(asoResourceChanged())).
 		Watches(&corev1.Namespace{}, handler.EnqueueRequestsFromMapFunc(r.namespaceToQueues),
@@ -220,6 +272,48 @@ func (r *QueueReconciler) namespaceToQueues(ctx context.Context, obj client.Obje
 // it a role. A new principal ID gives the grant a new name.
 func (r *QueueReconciler) identityToQueues(ctx context.Context, obj client.Object) []ctrl.Request {
 	return r.queueRequests(ctx, obj, client.MatchingFields{identityRefIndex: client.ObjectKeyFromObject(obj).String()})
+}
+
+// sameNameQueues maps a Queue to the Queues with the same queue name, in any
+// namespace. A Queue created in the same second can take the name from a
+// Queue that applied first, and a deleted Queue passes the name on.
+func (r *QueueReconciler) sameNameQueues(ctx context.Context, obj client.Object) []ctrl.Request {
+	queue, ok := obj.(*messagingv1alpha1.Queue)
+	if !ok {
+		return nil
+	}
+
+	return r.queueRequests(ctx, obj, client.MatchingFields{queueNameIndex: messaging.NameKey(queue.Spec.Name)})
+}
+
+// IndexQueues registers the Queue indexes that the reconcilers read. A field
+// can be indexed only once, so the manager calls it once, before it sets up
+// the reconcilers.
+func IndexQueues(ctx context.Context, indexer client.FieldIndexer) error {
+	if err := indexer.IndexField(ctx, &messagingv1alpha1.Queue{}, identityRefIndex, identityRefKeys); err != nil {
+		return err
+	}
+
+	return indexer.IndexField(ctx, &messagingv1alpha1.Queue{}, queueNameIndex, queueNameKeys)
+}
+
+// queuesNamed returns the Queues in the cluster with the NameKey of
+// queueName.
+func queuesNamed(ctx context.Context, c client.Reader, queueName string) ([]messagingv1alpha1.Queue, error) {
+	var queues messagingv1alpha1.QueueList
+	err := c.List(ctx, &queues, client.MatchingFields{queueNameIndex: messaging.NameKey(queueName)})
+
+	return queues.Items, err
+}
+
+// queueNameKeys returns the index key of a Queue for queueNameIndex.
+func queueNameKeys(obj client.Object) []string {
+	queue, ok := obj.(*messagingv1alpha1.Queue)
+	if !ok {
+		return nil
+	}
+
+	return []string{messaging.NameKey(queue.Spec.Name)}
 }
 
 // identityRefKeys returns the index keys of a Queue for identityRefIndex.

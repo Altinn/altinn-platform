@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"os"
@@ -186,6 +187,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err = controller.IndexQueues(context.Background(), mgr.GetFieldIndexer()); err != nil {
+		setupLog.Error(err, "unable to index the Queues")
+		os.Exit(1)
+	}
 	if err = (&controller.QueueReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),

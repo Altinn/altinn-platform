@@ -784,8 +784,103 @@ var _ = Describe("Queue access", func() {
 	})
 })
 
+// startOfSecond waits for the next second. A creationTimestamp has whole
+// seconds, so the Queues that a spec creates right after share it.
+func startOfSecond() {
+	time.Sleep(time.Until(time.Now().Truncate(time.Second).Add(time.Second)))
+}
+
+func expectConflict(queue *messagingv1alpha1.Queue, holder string) {
+	stored := reconcileQueue(queue)
+	expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionFalse, messaging.ReasonConflict)
+	expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionUnknown, ReasonWaitingForQueue)
+	expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, messaging.ReasonConflict)
+	Expect(meta.FindStatusCondition(stored.Status.Conditions, string(messagingv1alpha1.ConditionQueueReady)).Message).
+		To(ContainSubstring("Queue " + holder + " holds the queue name"))
+	Expect(stored.Status.Name).To(BeEmpty())
+}
+
+var _ = Describe("Queue name conflicts", func() {
+	BeforeEach(createProductNamespace)
+
+	It("reports Conflict on the newer Queue, names the oldest one and applies nothing", func() {
+		older := productQueue("conflict-z-older", "team-a.conflict")
+		createQueue(older)
+		startOfSecond()
+		newer := productQueue("conflict-a-newer", "team-a.conflict")
+		createQueue(newer)
+
+		expectConflict(newer, productNamespace+"/conflict-z-older")
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(newer), &servicebusv1.NamespacesQueue{})
+		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "expected NotFound, got %v", err)
+		expectCondition(reconcileQueue(older), messagingv1alpha1.ConditionQueueReady, metav1.ConditionUnknown, "Reconciling")
+	})
+
+	It("compares names without case in every namespace and passes the name on when the holder is deleted", func() {
+		other := createNamespace("team-")
+		setPrefix(other, "team-a.")
+		holder := productQueue("case-holder", "team-a.Case")
+		Expect(k8sClient.Create(ctx, holder)).To(Succeed())
+		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, holder))).To(Succeed()) })
+		loser := queueIn(other, "case-loser", "team-a.CASE")
+		createQueue(loser)
+
+		expectConflict(loser, productNamespace+"/case-holder")
+		Expect(k8sClient.Delete(ctx, holder)).To(Succeed())
+		expectCondition(reconcileQueue(loser), messagingv1alpha1.ConditionQueueReady, metav1.ConditionUnknown, "Reconciling")
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loser), &servicebusv1.NamespacesQueue{})).To(Succeed())
+	})
+
+	It("gives a tie to the first name and releases what the loser applied before it saw the holder", func() {
+		startOfSecond()
+		loser := accessQueue("tie-z", groupPrincipal(messagingv1alpha1.QueueAccessRoleSender, "group-tie"))
+		loser.Spec.DeletionPolicy = messagingv1alpha1.QueueDeletionPolicyDelete
+		createQueue(loser)
+		reconcileQueue(loser)
+		Expect(grantsOf(loser)).NotTo(BeEmpty())
+		// ASO keeps a finalizer on the NamespacesQueue until it has deleted
+		// or detached the Azure queue.
+		var nsQueue servicebusv1.NamespacesQueue
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loser), &nsQueue)).To(Succeed())
+		Expect(nsQueue.Annotations).NotTo(HaveKey(annotations.ReconcilePolicy))
+		nsQueue.Finalizers = []string{"test.dis.altinn.cloud/hold"}
+		Expect(k8sClient.Update(ctx, &nsQueue)).To(Succeed())
+		DeferCleanup(func() {
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loser), &nsQueue)).To(Succeed())
+			nsQueue.Finalizers = nil
+			Expect(k8sClient.Update(ctx, &nsQueue)).To(Succeed())
+		})
+		holder := productQueue("tie-a", "team-a.tie-z")
+		createQueue(holder)
+		Expect(holder.CreationTimestamp).To(Equal(loser.CreationTimestamp), "both Queues must share a second")
+
+		expectConflict(loser, productNamespace+"/tie-a")
+		Expect(grantsOf(loser)).To(BeEmpty())
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loser), &nsQueue)).To(Succeed())
+		Expect(nsQueue.DeletionTimestamp).NotTo(BeNil())
+		Expect(nsQueue.Annotations).To(HaveKeyWithValue(annotations.ReconcilePolicy,
+			string(annotations.ReconcilePolicyDetachOnDelete)))
+	})
+})
+
 var _ = Describe("Queue watches", func() {
 	BeforeEach(createProductNamespace)
+
+	It("maps a Queue to the Queues with the same queue name, in any namespace", func() {
+		other := createNamespace("team-")
+		setPrefix(other, "team-a.")
+		local, remote := productQueue("mapped-name-local", "team-a.mapped"), queueIn(other, "mapped-name-remote", "team-a.MAPPED")
+		createQueue(local)
+		createQueue(remote)
+		createQueue(productQueue("mapped-name-other", "team-a.unmapped"))
+
+		reconciler := &QueueReconciler{Client: cachedClient}
+		Eventually(func() []ctrl.Request { return reconciler.sameNameQueues(ctx, local) }).
+			WithTimeout(10 * time.Second).Should(ConsistOf(
+			ctrl.Request{NamespacedName: client.ObjectKeyFromObject(local)},
+			ctrl.Request{NamespacedName: client.ObjectKeyFromObject(remote)},
+		))
+	})
 
 	It("maps a namespace to the Queues in it", func() {
 		first, second := productQueue("first", "team-a.first"), productQueue("second", "team-a.second")
