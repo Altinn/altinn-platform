@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/Altinn/altinn-platform/services/dis-common v0.0.0-20260730112802-a76c47449171
-	github.com/Altinn/altinn-platform/services/dis-identity-operator v0.0.0-20260522135147-5189c1dd13ab
+	github.com/Altinn/altinn-platform/services/dis-identity-operator v0.0.0-20261022135429-4d8bb196278c
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.21.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.1
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7 v7.2.0
