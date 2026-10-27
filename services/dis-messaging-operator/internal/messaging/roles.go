@@ -42,6 +42,65 @@ type Principal struct {
 	Role messagingv1alpha1.QueueAccessRole
 }
 
+// Principals splits the principals of a Queue by what the operator needs
+// before it can grant them.
+type Principals struct {
+	// Grantable have a principal ID and a role the operator grants.
+	Grantable []Principal
+	// Identities reference an ApplicationIdentity. The caller resolves the
+	// principal ID of each one before it grants.
+	Identities []IdentityPrincipal
+	// NotAllowed describes each principal with a role the operator does not
+	// grant, with its field path.
+	NotAllowed []string
+}
+
+// IdentityPrincipal is an identityRef principal of a Queue.
+type IdentityPrincipal struct {
+	// Field is the path of the principal in the Queue spec.
+	Field string
+	// Ref is the ApplicationIdentity. The namespace is the namespace of the
+	// Queue when the ref gives none.
+	Ref messagingv1alpha1.ApplicationIdentityRef
+	// Role is the role of the principal on the queue.
+	Role messagingv1alpha1.QueueAccessRole
+}
+
+// SplitPrincipals sorts the principals of a Queue. A principal with a role
+// the operator does not grant goes to NotAllowed, whatever its source. The
+// CRD admits exactly one source per principal.
+func SplitPrincipals(queue *messagingv1alpha1.Queue) Principals {
+	var split Principals
+	if queue.Spec.Access == nil {
+		return split
+	}
+
+	for i, spec := range queue.Spec.Access.Principals {
+		field := fmt.Sprintf("spec.access.principals[%d]", i)
+		if _, err := AzureRoleIDs(spec.Role); err != nil {
+			split.NotAllowed = append(split.NotAllowed, field+": "+err.Error())
+			continue
+		}
+
+		switch {
+		case spec.Group != nil:
+			split.Grantable = append(split.Grantable,
+				Principal{ID: spec.Group.PrincipalId, Type: PrincipalType(spec), Role: spec.Role})
+		case spec.ServicePrincipal != nil:
+			split.Grantable = append(split.Grantable,
+				Principal{ID: spec.ServicePrincipal.PrincipalId, Type: PrincipalType(spec), Role: spec.Role})
+		case spec.IdentityRef != nil:
+			ref := *spec.IdentityRef
+			if ref.Namespace == "" {
+				ref.Namespace = queue.Namespace
+			}
+			split.Identities = append(split.Identities, IdentityPrincipal{Field: field, Ref: ref, Role: spec.Role})
+		}
+	}
+
+	return split
+}
+
 // PrincipalType returns the Azure principal type of a Queue principal: Group
 // for a group, ServicePrincipal for an identity or a service principal.
 func PrincipalType(p messagingv1alpha1.QueueAccessPrincipalSpec) authorizationv1.RoleAssignmentProperties_PrincipalType {

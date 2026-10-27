@@ -2,8 +2,6 @@ package controller
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"slices"
 	"strings"
 
@@ -59,43 +57,24 @@ func (r *QueueReconciler) reconcileAccess(
 // IdentityNotReady wins over RoleNotAllowed, because only IdentityNotReady
 // keeps the grants of the Queue.
 func grantablePrincipals(queue *messagingv1alpha1.Queue) ([]messaging.Principal, *metav1.Condition) {
-	if queue.Spec.Access == nil {
-		return nil, nil
+	split := messaging.SplitPrincipals(queue)
+
+	notReady := make([]string, 0, len(split.Identities))
+	for _, identity := range split.Identities {
+		notReady = append(notReady, identity.Field+": the operator does not resolve identityRef yet")
+	}
+	if len(notReady)+len(split.NotAllowed) == 0 {
+		return split.Grantable, nil
 	}
 
-	var principals []messaging.Principal
-	var notReady, notAllowed []string
-	for i, spec := range queue.Spec.Access.Principals {
-		field := fmt.Sprintf("spec.access.principals[%d]", i)
-		if _, err := messaging.AzureRoleIDs(spec.Role); errors.Is(err, messaging.ErrRoleNotAllowed) {
-			notAllowed = append(notAllowed, field+": "+err.Error())
-			continue
-		}
-
-		var id string
-		switch {
-		case spec.Group != nil:
-			id = spec.Group.PrincipalId
-		case spec.ServicePrincipal != nil:
-			id = spec.ServicePrincipal.PrincipalId
-		default:
-			notReady = append(notReady, field+": the operator does not resolve identityRef yet")
-			continue
-		}
-		principals = append(principals, messaging.Principal{ID: id, Type: messaging.PrincipalType(spec), Role: spec.Role})
-	}
-
-	if len(notReady)+len(notAllowed) == 0 {
-		return principals, nil
-	}
 	reason := messaging.ReasonRoleNotAllowed
 	if len(notReady) > 0 {
 		reason = ReasonIdentityNotReady
 	}
 	condition := newCondition(messagingv1alpha1.ConditionAccessReady, queue.Generation, metav1.ConditionFalse, reason,
-		shortened(strings.Join(slices.Concat(notReady, notAllowed), "; ")))
+		shortened(strings.Join(slices.Concat(notReady, split.NotAllowed), "; ")))
 
-	return principals, &condition
+	return split.Grantable, &condition
 }
 
 // deleteStaleGrants deletes the RoleAssignments of the Queue that are not in
