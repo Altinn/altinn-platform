@@ -821,7 +821,9 @@ var _ = Describe("Queue watches", func() {
 		identity := &identityv1alpha1.ApplicationIdentity{
 			ObjectMeta: metav1.ObjectMeta{Name: "app-mapped", Namespace: productNamespace},
 		}
-		Eventually(func() []ctrl.Request { return reconciler.identityToQueues(ctx, identity) }).Should(ConsistOf(
+		// The cache learns about the Queues through its watch.
+		Eventually(func() []ctrl.Request { return reconciler.identityToQueues(ctx, identity) }).
+			WithTimeout(10 * time.Second).Should(ConsistOf(
 			ctrl.Request{NamespacedName: client.ObjectKeyFromObject(local)},
 			ctrl.Request{NamespacedName: client.ObjectKeyFromObject(remote)},
 		))
