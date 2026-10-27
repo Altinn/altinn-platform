@@ -18,6 +18,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
+	messagingv1alpha1 "github.com/Altinn/altinn-platform/services/dis-messaging-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-messaging-operator/internal/config"
 	"github.com/Altinn/altinn-platform/services/dis-messaging-operator/internal/messaging"
 )
@@ -29,25 +30,31 @@ const ReasonNotManaged = "NotManaged"
 var errNotManaged = errors.New("object exists without the managed-by label")
 
 // NamespaceReconciler reconciles the objects that the operator keeps once
-// per product namespace, such as the ResourceQuota that limits the Queues.
+// per product namespace: the ResourceQuota that limits the Queues, and the
+// ConfigMap with the connection details of every Queue. The ConfigMap is
+// built from all the Queues of the namespace, so the namespace is the
+// reconcile key.
 type NamespaceReconciler struct {
 	client.Client
 	Config   config.OperatorConfig
 	Recorder events.EventRecorder
 }
 
-// +kubebuilder:rbac:groups="",resources=resourcequotas,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=configmaps;resourcequotas,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
 
 // Reconcile keeps the quota in every product namespace, so the API server
-// limits the Queues from the first one. A namespace that is no longer a
-// product namespace loses the quota.
+// limits the Queues from the first one. The ConfigMap exists while the
+// namespace has a Queue with a valid name. It does not wait for QueueReady:
+// apps know the key when they write the Queue, and a short Azure failure
+// must not remove a key that a restarting app needs. A namespace that is no
+// longer a product namespace loses both objects.
 func (r *NamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var namespace corev1.Namespace
 	if err := r.Get(ctx, client.ObjectKey{Name: req.Name}, &namespace); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	// The deletion of the namespace deletes the quota.
+	// The deletion of the namespace deletes both objects.
 	if !namespace.DeletionTimestamp.IsZero() {
 		return ctrl.Result{}, nil
 	}
@@ -55,17 +62,64 @@ func (r *NamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	quota := &corev1.ResourceQuota{ObjectMeta: metav1.ObjectMeta{
 		Name: messaging.ResourceQuotaName, Namespace: namespace.Name,
 	}}
+	configMap := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+		Name: messaging.ConnectionConfigMapName, Namespace: namespace.Name,
+	}}
 	if _, err := messaging.Prefix(namespace.Name, namespace.Annotations); err != nil {
-		return ctrl.Result{}, r.deleteManaged(ctx, quota)
+		return ctrl.Result{}, errors.Join(r.deleteManaged(ctx, quota), r.deleteManaged(ctx, configMap))
 	}
 
-	want, err := messaging.BuildResourceQuota(namespace.Name, r.Config.MaxQueuesPerNamespace)
+	wantQuota, err := messaging.BuildResourceQuota(namespace.Name, r.Config.MaxQueuesPerNamespace)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	return ctrl.Result{}, r.upsert(ctx, &namespace, quota, want.Labels, func() {
-		quota.Spec.Hard = want.Spec.Hard
+	if err := r.upsert(ctx, &namespace, quota, wantQuota.Labels, func() {
+		quota.Spec.Hard = wantQuota.Spec.Hard
+	}); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	queues, err := r.connectedQueues(ctx, &namespace)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if len(queues) == 0 {
+		return ctrl.Result{}, r.deleteManaged(ctx, configMap)
+	}
+	wantConfigMap, err := messaging.BuildConnectionConfigMap(namespace.Name, r.Config.Endpoint, queues)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{}, r.upsert(ctx, &namespace, configMap, wantConfigMap.Labels, func() {
+		configMap.Data = wantConfigMap.Data
+		configMap.BinaryData = nil
 	})
+}
+
+// connectedQueues returns the Queues that get a key in the ConfigMap: the
+// Queues of the namespace with a valid name that are not being deleted. A
+// Queue with a finalizer stays after its deletion starts, and its key must
+// go. The Conflict slice adds the next filter here: of two Queues with the
+// same spec.name, only the oldest keeps its key.
+func (r *NamespaceReconciler) connectedQueues(
+	ctx context.Context,
+	namespace *corev1.Namespace,
+) ([]messagingv1alpha1.Queue, error) {
+	var queues messagingv1alpha1.QueueList
+	if err := r.List(ctx, &queues, client.InNamespace(namespace.Name)); err != nil {
+		return nil, err
+	}
+
+	connected := make([]messagingv1alpha1.Queue, 0, len(queues.Items))
+	for i := range queues.Items {
+		queue := &queues.Items[i]
+		if queue.DeletionTimestamp.IsZero() &&
+			messaging.ValidateName(namespace.Name, namespace.Annotations, queue.Spec.Name) == nil {
+			connected = append(connected, *queue)
+		}
+	}
+
+	return connected, nil
 }
 
 // upsert creates or updates obj, adds labels to its labels and lets mutate
@@ -129,14 +183,19 @@ func managed(obj client.Object) bool {
 }
 
 // SetupWithManager sets up the controller with the Manager. A namespace is
-// reconciled when it is created, when its prefix annotation changes, and
-// when its managed quota changes. At start-up every namespace comes as a
-// create event, so a new quota limit reaches every namespace.
+// reconciled when it is created, when its prefix annotation changes, when a
+// Queue in it is created, changed or deleted, and when its managed ConfigMap
+// or quota changes. At start-up every namespace comes as a create event, so
+// a new quota limit or endpoint reaches every namespace.
 func (r *NamespaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	toNamespace := handler.EnqueueRequestsFromMapFunc(namespaceOf)
+	managedOnly := builder.WithPredicates(predicate.NewPredicateFuncs(managed))
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Namespace{}, builder.WithPredicates(namespaceChanged())).
-		Watches(&corev1.ResourceQuota{}, handler.EnqueueRequestsFromMapFunc(namespaceOf),
-			builder.WithPredicates(predicate.NewPredicateFuncs(managed))).
+		Watches(&messagingv1alpha1.Queue{}, toNamespace, builder.WithPredicates(queueChanged())).
+		Watches(&corev1.ConfigMap{}, toNamespace, managedOnly).
+		Watches(&corev1.ResourceQuota{}, toNamespace, managedOnly).
 		Named("namespace").
 		Complete(r)
 }
@@ -153,5 +212,17 @@ func namespaceChanged() predicate.Funcs {
 	return predicate.Funcs{
 		DeleteFunc: func(event.DeleteEvent) bool { return false },
 		UpdateFunc: prefixAnnotationChanged().UpdateFunc,
+	}
+}
+
+// queueChanged lets a Queue update through when its spec changed or its
+// deletion started. A deletion does not change the generation of a Queue
+// with a finalizer, and a status write changes nothing in the ConfigMap.
+func queueChanged() predicate.Funcs {
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration() ||
+				e.ObjectOld.GetDeletionTimestamp().IsZero() != e.ObjectNew.GetDeletionTimestamp().IsZero()
+		},
 	}
 }

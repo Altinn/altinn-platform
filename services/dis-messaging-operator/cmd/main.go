@@ -174,9 +174,10 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "dis-messaging-operator.dis.altinn.cloud",
-		// The operator reads only its own quotas, so it does not cache every
-		// quota in the cluster.
+		// The operator reads only its own ConfigMaps and quotas, so it does
+		// not cache every ConfigMap in the cluster.
 		Cache: cache.Options{ByObject: map[client.Object]cache.ByObject{
+			&corev1.ConfigMap{}:     {Label: managedBy},
 			&corev1.ResourceQuota{}: {Label: managedBy},
 		}},
 	})

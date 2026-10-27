@@ -2,6 +2,8 @@ package controller
 
 import (
 	"context"
+	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -16,9 +18,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
+	messagingv1alpha1 "github.com/Altinn/altinn-platform/services/dis-messaging-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-messaging-operator/internal/config"
 	"github.com/Altinn/altinn-platform/services/dis-messaging-operator/internal/messaging"
 )
+
+const testEndpoint = "sb-messaging.servicebus.windows.net"
 
 // createNamespace creates a namespace for one spec. envtest cannot delete a
 // namespace, so the API server adds a random suffix to generateName.
@@ -26,6 +31,18 @@ func createNamespace(generateName string) string {
 	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{GenerateName: generateName}}
 	Expect(k8sClient.Create(ctx, namespace)).To(Succeed())
 	return namespace.Name
+}
+
+// productPrefix returns the default queue name prefix of a product namespace.
+func productPrefix(namespace string) string {
+	return strings.TrimPrefix(namespace, "product-") + "."
+}
+
+func queueIn(namespace, name, queueName string) *messagingv1alpha1.Queue {
+	return newQueue(name, func(q *messagingv1alpha1.Queue) {
+		q.Namespace = namespace
+		q.Spec.Name = queueName
+	})
 }
 
 func removePrefix(name string) {
@@ -40,8 +57,17 @@ func quotaKey(namespace string) client.ObjectKey {
 	return client.ObjectKey{Namespace: namespace, Name: messaging.ResourceQuotaName}
 }
 
+func configMapKey(namespace string) client.ObjectKey {
+	return client.ObjectKey{Namespace: namespace, Name: messaging.ConnectionConfigMapName}
+}
+
 func expectNoQuota(namespace string) {
 	err := k8sClient.Get(ctx, quotaKey(namespace), &corev1.ResourceQuota{})
+	Expect(apierrors.IsNotFound(err)).To(BeTrue(), "expected NotFound, got %v", err)
+}
+
+func expectNoConfigMap(namespace string) {
+	err := k8sClient.Get(ctx, configMapKey(namespace), &corev1.ConfigMap{})
 	Expect(apierrors.IsNotFound(err)).To(BeTrue(), "expected NotFound, got %v", err)
 }
 
@@ -50,19 +76,25 @@ func queueLimit(quota *corev1.ResourceQuota) int64 {
 	return limit.Value()
 }
 
-// cachedQuotas returns a client that, like the label-selected cache of the
-// manager, does not see a ResourceQuota without the managed-by label.
-func cachedQuotas() client.Client {
+// labelSelectedCache returns a client that, like the label-selected cache
+// of the manager, does not see a ConfigMap or a ResourceQuota without the
+// managed-by label.
+func labelSelectedCache() client.Client {
 	direct, err := client.NewWithWatch(cfg, client.Options{Scheme: k8sClient.Scheme()})
 	Expect(err).NotTo(HaveOccurred())
 	return interceptor.NewClient(direct, interceptor.Funcs{
 		Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object,
 			opts ...client.GetOption) error {
-			_, isQuota := obj.(*corev1.ResourceQuota)
-			if err := c.Get(ctx, key, obj, opts...); err != nil || !isQuota || managed(obj) {
+			if err := c.Get(ctx, key, obj, opts...); err != nil || managed(obj) {
 				return err
 			}
-			return apierrors.NewNotFound(corev1.Resource("resourcequotas"), key.Name)
+			switch obj.(type) {
+			case *corev1.ConfigMap:
+				return apierrors.NewNotFound(corev1.Resource("configmaps"), key.Name)
+			case *corev1.ResourceQuota:
+				return apierrors.NewNotFound(corev1.Resource("resourcequotas"), key.Name)
+			}
+			return nil
 		},
 	})
 }
@@ -81,7 +113,7 @@ var _ = Describe("Namespace reconciler", func() {
 		recorder = events.NewFakeRecorder(10)
 		r = &NamespaceReconciler{
 			Client:   k8sClient,
-			Config:   config.OperatorConfig{MaxQueuesPerNamespace: 50},
+			Config:   config.OperatorConfig{Endpoint: testEndpoint, MaxQueuesPerNamespace: 50},
 			Recorder: recorder,
 		}
 	})
@@ -100,6 +132,7 @@ var _ = Describe("Namespace reconciler", func() {
 		Expect(quota.Labels).To(HaveKeyWithValue(messaging.ManagedByLabel, messaging.ManagedByValue))
 		Expect(quota.OwnerReferences).To(BeEmpty())
 		Expect(queueLimit(&quota)).To(BeEquivalentTo(50))
+		expectNoConfigMap(product)
 		expectNoQuota(other)
 	})
 
@@ -141,7 +174,7 @@ var _ = Describe("Namespace reconciler", func() {
 			}
 			Expect(k8sClient.Create(ctx, foreign)).To(Succeed())
 			if cached {
-				r.Client = cachedQuotas()
+				r.Client = labelSelectedCache()
 			}
 
 			reconcile(namespace)
@@ -153,6 +186,88 @@ var _ = Describe("Namespace reconciler", func() {
 			Expect(k8sClient.Get(ctx, quotaKey(namespace), &stored)).To(Succeed())
 			Expect(stored.Labels).To(BeEmpty())
 			Expect(queueLimit(&stored)).To(BeEquivalentTo(5))
+		},
+		Entry("read from the API server", false),
+		Entry("hidden by the label-selected cache", true),
+	)
+
+	It("writes a key for each Queue with a valid name that is not being deleted", func() {
+		namespace := createNamespace("product-team-")
+		prefix := productPrefix(namespace)
+		createQueue(queueIn(namespace, "orders", prefix+"orders"))
+		createQueue(queueIn(namespace, "invoices", prefix+"sync/invoices"))
+		createQueue(queueIn(namespace, "foreign", "team-b.foreign"))
+		deleting := queueIn(namespace, "deleting", prefix+"deleting")
+		deleting.Finalizers = []string{"test.dis.altinn.cloud/hold"}
+		Expect(k8sClient.Create(ctx, deleting)).To(Succeed())
+		Expect(k8sClient.Delete(ctx, deleting)).To(Succeed())
+		DeferCleanup(func() {
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(deleting), deleting)).To(Succeed())
+			deleting.Finalizers = nil
+			Expect(k8sClient.Update(ctx, deleting)).To(Succeed())
+		})
+
+		reconcile(namespace)
+		var configMap corev1.ConfigMap
+		Expect(k8sClient.Get(ctx, configMapKey(namespace), &configMap)).To(Succeed())
+		Expect(configMap.Labels).To(HaveKeyWithValue(messaging.ComponentLabel, messaging.ComponentConnection))
+		Expect(configMap.OwnerReferences).To(BeEmpty())
+		Expect(configMap.Data).To(Equal(map[string]string{
+			messaging.EndpointKey: testEndpoint,
+			"queue.orders":        prefix + "orders",
+			"queue.invoices":      prefix + "sync/invoices",
+		}))
+	})
+
+	It("deletes the ConfigMap when the last Queue goes and keeps the quota", func() {
+		namespace := createNamespace("product-team-")
+		queue := queueIn(namespace, "orders", productPrefix(namespace)+"orders")
+		Expect(k8sClient.Create(ctx, queue)).To(Succeed())
+		reconcile(namespace)
+		Expect(k8sClient.Get(ctx, configMapKey(namespace), &corev1.ConfigMap{})).To(Succeed())
+
+		Expect(k8sClient.Delete(ctx, queue)).To(Succeed())
+		reconcile(namespace)
+		expectNoConfigMap(namespace)
+		Expect(k8sClient.Get(ctx, quotaKey(namespace), &corev1.ResourceQuota{})).To(Succeed())
+	})
+
+	It("deletes the ConfigMap with the quota when the prefix annotation goes away", func() {
+		namespace := createNamespace("team-")
+		setPrefix(namespace, "team-x.")
+		createQueue(queueIn(namespace, "orders", "team-x.orders"))
+		reconcile(namespace)
+		Expect(k8sClient.Get(ctx, configMapKey(namespace), &corev1.ConfigMap{})).To(Succeed())
+
+		removePrefix(namespace)
+		reconcile(namespace)
+		expectNoConfigMap(namespace)
+		expectNoQuota(namespace)
+	})
+
+	DescribeTable("neither changes nor deletes a ConfigMap without the managed-by label",
+		func(cached bool) {
+			namespace := createNamespace("product-team-")
+			foreign := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: messaging.ConnectionConfigMapName, Namespace: namespace},
+				Data:       map[string]string{"owner": "team-a"},
+			}
+			Expect(k8sClient.Create(ctx, foreign)).To(Succeed())
+			queue := queueIn(namespace, "orders", productPrefix(namespace)+"orders")
+			Expect(k8sClient.Create(ctx, queue)).To(Succeed())
+			if cached {
+				r.Client = labelSelectedCache()
+			}
+
+			reconcile(namespace)
+			Expect(recorder.Events).To(Receive(HavePrefix("Warning NotManaged ConfigMap dis-messaging exists")))
+			Expect(k8sClient.Delete(ctx, queue)).To(Succeed())
+			reconcile(namespace)
+
+			var stored corev1.ConfigMap
+			Expect(k8sClient.Get(ctx, configMapKey(namespace), &stored)).To(Succeed())
+			Expect(stored.Labels).To(BeEmpty())
+			Expect(stored.Data).To(Equal(foreign.Data))
 		},
 		Entry("read from the API server", false),
 		Entry("hidden by the label-selected cache", true),
@@ -174,4 +289,16 @@ var _ = Describe("Namespace watches", func() {
 		Expect(namespaceChanged().Update(event.UpdateEvent{ObjectOld: namespace, ObjectNew: prefixed})).To(BeTrue())
 		Expect(namespaceChanged().Update(event.UpdateEvent{ObjectOld: namespace, ObjectNew: namespace})).To(BeFalse())
 	})
+
+	DescribeTable("passes a Queue update only when the spec changed or the deletion started",
+		func(mutate func(*messagingv1alpha1.Queue), want bool) {
+			old := newQueue("orders", func(q *messagingv1alpha1.Queue) { q.Generation = 1 })
+			updated := old.DeepCopy()
+			mutate(updated)
+			Expect(queueChanged().Update(event.UpdateEvent{ObjectOld: old, ObjectNew: updated})).To(Equal(want))
+		},
+		Entry("spec", func(q *messagingv1alpha1.Queue) { q.Generation = 2 }, true),
+		Entry("deletion started", func(q *messagingv1alpha1.Queue) { q.DeletionTimestamp = &metav1.Time{Time: time.Now()} }, true),
+		Entry("status only", func(q *messagingv1alpha1.Queue) { q.Status.Name = "team-a.orders" }, false),
+	)
 })
