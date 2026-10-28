@@ -143,6 +143,16 @@
       "extractVersion": "^v(?<version>.*)$"
     },
     {
+      "description": "PowerShell in the terraform-azure-devops-agent image: only LTS releases (even minor versions).",
+      "matchDatasources": [
+        "github-releases"
+      ],
+      "matchPackageNames": [
+        "PowerShell/PowerShell"
+      ],
+      "allowedVersions": "/^v?\\d+\\.\\d*[02468]\\.\\d+$/"
+    },
+    {
       "matchManagers": [
         "custom.regex"
       ],
