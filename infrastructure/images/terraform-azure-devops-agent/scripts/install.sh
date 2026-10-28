@@ -6,6 +6,8 @@ set -e
 KUBECTL_VERSION="v1.37.1" #Get the latest version with: curl -L -s https://dl.k8s.io/release/stable.txt
 # renovate: datasource=github-releases depName=helm packageName=helm/helm versioning=semver
 HELM_VERSION="v4.3.0" #Find the latest version at https://github.com/helm/helm/releases
+# renovate: datasource=github-releases depName=powershell packageName=PowerShell/PowerShell versioning=semver
+POWERSHELL_VERSION="v7.6.9" #Find the latest version at https://github.com/PowerShell/PowerShell/releases
 
 ###################################
 ### Install kubectl
@@ -26,24 +28,17 @@ rm kubectl kubectl.sha256
 # Install dependencies
 apt-get update
 apt-get install -y wget openssl
-# Get the version of Ubuntu
-source /etc/os-release
 
-# Download the Microsoft repository keys
-wget -q https://packages.microsoft.com/config/ubuntu/$VERSION_ID/packages-microsoft-prod.deb
+# Install PowerShell from the GitHub release instead of packages.microsoft.com,
+# which does not publish the stable package for every Ubuntu release
+POWERSHELL_DEB="powershell_${POWERSHELL_VERSION#v}-1.deb_amd64.deb"
+curl -LO "https://github.com/PowerShell/PowerShell/releases/download/${POWERSHELL_VERSION}/${POWERSHELL_DEB}"
+curl -LO "https://github.com/PowerShell/PowerShell/releases/download/${POWERSHELL_VERSION}/hashes.sha256"
+# Verify the checksum (hashes.sha256 is UTF-16LE with CRLF line endings)
+iconv -f UTF-16LE -t UTF-8 hashes.sha256 | tr -d '\r' | grep " \*${POWERSHELL_DEB}$" | sha256sum --check
+apt-get install -y "./${POWERSHELL_DEB}"
+rm "${POWERSHELL_DEB}" hashes.sha256
 
-# Register the Microsoft repository keys
-dpkg -i packages-microsoft-prod.deb
-
-# Delete the Microsoft repository keys file
-rm packages-microsoft-prod.deb
-
-# Update the list of packages after we added packages.microsoft.com
-apt-get update
-
-###################################
-# Install PowerShell
-apt-get install -y powershell
 # Install the Azure PowerShell module
 pwsh -Command "Install-Module -Name Az -Repository PSGallery -Force"
 # remove apt cache
