@@ -9,7 +9,7 @@
 # Summary
 [summary]: #summary
 
-Flux sends reconciliation events directly to product repositories through its notification-controller and the `githubdispatch` provider. After a deployment succeeds or a reconciliation attempt fails, product-owned GitHub workflows run the required follow-up jobs. Examples include Slack notifications, end-to-end tests and Bruno tests. Each event identifies the product, environment, cluster, resource and available release information. This completes the reverse direction of [RFC 0017](https://github.com/Altinn/altinn-platform/pull/4180). The design requires a verified Flux fix before rollout, because the inspected notification-controller filters out the final success event. Delivery is best effort, and workflows must tolerate missing, repeated and late events.
+Flux sends reconciliation events directly to product repositories through its notification-controller and the `githubdispatch` provider. After a deployment succeeds or a reconciliation attempt fails, product-owned GitHub workflows run the required follow-up jobs. Examples include Slack notifications, end-to-end tests and Bruno tests. Each event identifies the product, environment, cluster, resource and available release information. This completes the reverse direction of the accepted [RFC 0017](https://github.com/Altinn/altinn-platform/blob/main/rfcs/0017-on-demand-flux-reconcile.md). The design requires a verified Flux fix before rollout, because the inspected notification-controller filters out the final success event. Delivery is best effort, and workflows must tolerate missing, repeated and late events.
 
 # Motivation
 [motivation]: #motivation
@@ -62,7 +62,9 @@ For example, Authentication version `1.0.0` finishes reconciliation in staging a
 
 The platform sends one event to the repository. The product owns the workflow selection, job logic, test tools and notification destinations inside that repository. The platform does not select a workflow filename or a Git branch.
 
-The event starts a new workflow run. It does not resume the workflow that requested reconciliation. Correlation uses the artifact revision, because the RFC 0017 request contains no deployment data.
+The event starts a new workflow run. It does not resume the workflow that requested reconciliation. Correlation uses the artifact revision, because the RFC 0017 request contains no deployment data. There is no one-to-one mapping between reconcile requests and result events.
+
+The RFC 0017 route, Receiver and workflow step are optional for this feature. Polling also produces reconciliation results. The [RFC 0017 implementation tracker](https://github.com/Altinn/altinn-platform/issues/4237) covers the inbound path separately. An inbound request failure does not prove a deployment failure, because polling can still deploy the artifact.
 
 ## Configure a product
 
@@ -257,7 +259,12 @@ Pass payload values through action inputs or environment variables. Do not inser
 
 ## Flux compatibility prerequisite
 
-The source baseline is notification-controller `v1.9.4` and kustomize-controller `v1.9.6`. This RFC does not verify the versions in running DIS clusters.
+The source review covers these upstream versions on 2026-10-28. This RFC does not verify the versions in running DIS clusters.
+
+| Notification-controller | Kustomize-controller | Result |
+|---|---|---|
+| [v1.9.4](https://github.com/fluxcd/notification-controller/blob/v1.9.4/internal/server/event_handlers.go) | [v1.9.6](https://github.com/fluxcd/kustomize-controller/blob/v1.9.6/internal/controller/kustomization_controller.go) | The final success event is filtered before `githubdispatch`. |
+| [v1.10.0](https://github.com/fluxcd/notification-controller/blob/v1.10.0/internal/server/event_handlers.go) | [v1.10.1](https://github.com/fluxcd/kustomize-controller/blob/v1.10.1/internal/controller/kustomization_controller.go) | The same limitation remains. |
 
 The inspected code has a compatibility problem:
 
@@ -269,9 +276,13 @@ The `DisableCommitStatusEvent` feature gate removes that success event. It does 
 
 The implementation must obtain an upstream fix that forwards final success events to `githubdispatch`. It must consume that fix through the supported Flux distribution. Do not change the shared controllers manually or disable tenant isolation to work around this requirement.
 
+[Microsoft's release notes](https://learn.microsoft.com/en-us/azure/azure-arc/kubernetes/flux-gitops-release-notes) list extension `1.26.2` with notification-controller `v1.9.4-3` and kustomize-controller `v1.9.6-3`. The RFC 0017 upgrade for `generic-oidc` does not establish that success dispatch works. Coordinate extension upgrades with [the existing upgrade tracker](https://github.com/Altinn/altinn-platform/issues/4241). It records regional availability and Terraform replacement risks. Verify the extension plan before changing a version.
+
+[Upstream notification-controller 1.10.0](https://github.com/fluxcd/notification-controller/blob/v1.10.0/CHANGELOG.md) promotes Alert and Provider to API version `v1`. It still serves `v1beta3`. The examples retain `v1beta3` for the documented Azure baseline. The pilot must select an API version supported by its verified distribution.
+
 Rollout stays blocked until the deployed controller versions pass the success, failure and recovery checks below. Failure delivery alone does not satisfy this prerequisite. A message about applied resources or passed intermediate health checks cannot replace the final result.
 
-These findings follow the [success event implementation](https://github.com/fluxcd/kustomize-controller/blob/v1.9.6/internal/controller/kustomization_controller.go), [dispatch filtering](https://github.com/fluxcd/notification-controller/blob/v1.9.4/internal/server/event_handlers.go) and [provider classification](https://github.com/fluxcd/notification-controller/blob/v1.9.4/internal/server/provider_commit_status.go).
+The [provider classification](https://github.com/fluxcd/notification-controller/blob/v1.10.0/internal/server/provider_commit_status.go) still excludes `githubdispatch` from the groups that receive commit-status updates.
 
 ## Event classification
 
@@ -373,13 +384,32 @@ Use GitHub App authentication. The App requires repository `Contents: write` to 
 
 For the initial design, each product has a dedicated App installed only on its approved destination repositories. Its permissions must not include another product's repositories. A shared App private key must not enter a product namespace. Different installation identifiers do not restrict what that shared private key can access.
 
-The platform provisions the App and stores its private key through the existing secret management mechanism. The namespace-local Secret contains `githubAppID`, `githubAppInstallationID` and `githubAppPrivateKey`. Flux uses those credentials to obtain installation tokens. Do not commit the Secret values to Git.
+The platform provisions the App and supplies its private key through a verified secret management mechanism for the product namespace. [RFC 0017's pilot configuration](https://github.com/Altinn/altinn-platform/blob/main/rfcs/0017-on-demand-flux-reconcile.md#pilot) records that DIS core clusters have no `dis-system-store`. Do not assume that store exists or put private keys in `postBuild.substitute`. The namespace-local Secret contains `githubAppID`, `githubAppInstallationID` and `githubAppPrivateKey`. Flux uses those credentials to obtain installation tokens. Do not commit the Secret values to Git.
 
 The product namespace is the credential trust boundary. Its administrators can access credentials for that product's approved repositories. Repository administrators must accept that scope during onboarding. The platform owns credential rotation and revocation.
 
-Keep cross-namespace restrictions enabled. Network policy must restrict the notification-controller's internal event endpoint to the Flux controllers that emit events. Otherwise, an application pod could submit a forged event to that endpoint. This endpoint is different from the inbound `webhook-receiver` used by RFC 0017.
+Keep cross-namespace restrictions enabled. Verify that the product applier can reconcile Providers and Alerts, and that the selected mechanism can provision the Secret. RFC 0017's admission policy restricts Receiver resources. It does not grant permissions for Providers or Alerts. The outbound subscription needs no Receiver.
 
 Permit notification-controller outbound HTTPS access to `api.github.com` and required name resolution. This path needs no public cluster endpoint, edge gateway route or GitHub-to-cluster connection.
+
+### Internal event endpoint
+
+Network policy must restrict the notification-controller's internal event endpoint to the Flux controllers that emit events. Otherwise, an application pod can submit a forged event. The GitHub App sender check cannot detect events forged through the authorized controller.
+
+The notification-controller has separate ports for these functions:
+
+| Port | Function | Required access |
+|---|---|---|
+| 9090 | Internal Flux events | The authorized Flux controllers. |
+| 9292 | RFC 0017 inbound reconcile requests | Traefik, under the RFC 0017 webhook policy. |
+| 8080 | Metrics | The required monitoring sources. |
+| 9440 | Health probes | The required probe paths. |
+
+The [27 October prerequisite checks](https://github.com/Altinn/altinn-platform/issues/4240#issuecomment-6448060592) confirm these ports in `dis-core-at23`. They identify two policy conflicts. RFC 0017's merged package admits all sources to port 9090. The extension's `allow-webhooks` policy also admits all namespaces to port 9292.
+
+[Kubernetes combines the permissions of matching network policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/#the-two-sorts-of-pod-isolation). Adding a restrictive policy does not override a broad allowance. The implementation must remove or constrain every conflicting allowance through supported configuration. It must coordinate these changes with [RFC 0017's package work](https://github.com/Altinn/altinn-platform/issues/4243).
+
+Verify event isolation with the inbound feature enabled and disabled. Repeat the checks after extension upgrades and policy reconciliation. Keep authorized controller events, the RFC 0017 webhook path, metrics and health probes working.
 
 ## Delivery, repeated events and ordering
 
@@ -395,7 +425,7 @@ The native Provider does not provide a durable event queue, an event replay API 
 | The controller restarts during delivery | An event can be lost. Existing monitoring and manual tests remain available. |
 | A failure has no artifact revision | Report the resource and reason. Do not invent a revision or reuse the previous successful revision. |
 
-Flux event rate limiting reduces some repeated notifications. It is not deployment deduplication. GitHub concurrency groups also do not suppress events after a previous run completes.
+Flux event rate limiting reduces some repeated notifications. It is not deployment deduplication. GitHub concurrency groups also do not suppress events after a previous run completes. RFC 0017's edge rate limits apply only to inbound reconcile requests. They do not limit outbound dispatches or workflow runs.
 
 Each product defines how its jobs handle repeated events. Notifications can suppress repeated Slack messages, and tests must leave the environment safe for another run. Workflows that perform non-repeatable actions need durable deduplication before onboarding.
 
@@ -409,7 +439,7 @@ No delivery promise depends on a particular retry count. The implementation must
 
 | Owner | Responsibility |
 |---|---|
-| Platform team | Obtain and validate the Flux fix. Configure event endpoint protection and outbound connectivity. |
+| Platform team | Obtain and validate the Flux fix. Coordinate shared network policies with RFC 0017 and configure outbound connectivity. |
 | Platform team | Provision repository-scoped Apps, credentials, rotation and delivery monitoring. |
 | Product team | Select application health checks, event sources and environment mappings. |
 | Product team | Publish release metadata and maintain receiving workflows. |
@@ -420,7 +450,7 @@ Add the subscription examples to the product onboarding documentation after the 
 The rollout sequence is:
 
 1. Verify the Flux fix in the supported distribution.
-2. Verify namespace isolation, credentials, network policy and outbound connectivity.
+2. Verify product permissions, secret provisioning, namespace isolation, combined network policies and outbound connectivity.
 3. Pilot Authentication in one non-production environment with a workflow that only records events.
 4. Enable the product's success and failure jobs after the event contract passes validation.
 5. Add the second environment and Dialogporten.
@@ -449,6 +479,10 @@ These are rollout acceptance checks, not checks completed by this documentation 
 | Send a payload with stale application annotations | The consumer rejects the application version and commit mapping. |
 | Remove App access or simulate GitHub rejection | Delivery monitoring detects failure. Application reconciliation continues. |
 | Submit an event from an application pod | Network policy blocks access to the internal event endpoint. |
+| Enable and disable the RFC 0017 feature, then reconcile the extension policies | Event isolation remains effective. Authorized events, metrics and health probes continue. |
+| Exercise the RFC 0017 webhook path after shared policy changes | Traefik reaches port 9292. A direct connection from a product pod remains blocked. |
+| Reconcile a subscription through the product applier | Providers, Alerts and the credential Secret reconcile without additional cross-namespace permissions. |
+| Let polling deploy an artifact without a reconcile request | The result starts the configured jobs without a Receiver or an inbound workflow step. |
 | Reference another namespace or another product's repository | Tenant restrictions or GitHub App permissions reject the operation. |
 | Test maximum resource names and representative error messages | The dispatch stays within GitHub limits. |
 
@@ -484,7 +518,7 @@ Without this feature, products continue to wait, poll or start follow-up jobs in
 # Prior art
 [prior-art]: #prior-art
 
-- [RFC 0017](https://github.com/Altinn/altinn-platform/pull/4180) covers the opposite direction: GitHub asks Flux to reconcile after publication.
+- The accepted [RFC 0017](https://github.com/Altinn/altinn-platform/blob/main/rfcs/0017-on-demand-flux-reconcile.md) covers the opposite direction: GitHub asks Flux to reconcile after publication. [Issue #4237](https://github.com/Altinn/altinn-platform/issues/4237) tracks its implementation.
 - [RFC 0010](https://github.com/Altinn/altinn-platform/pull/3220) and [its implementation proposal](https://github.com/Altinn/altinn-platform/pull/3925) used a custom dispatch service. Both pull requests are closed without merge.
 - [RFC 0016](https://github.com/Altinn/altinn-platform/pull/4144) proposed durable deployment tracking through DIS Console. That pull request is also closed without merge.
 - [Flux's GitHub dispatch documentation](https://fluxcd.io/flux/components/notification/providers/#github-dispatch) describes the native repository event and authentication.
@@ -506,7 +540,9 @@ Before rollout:
 
 - Which upstream release fixes final success dispatch, and when does the supported Azure Flux distribution include it?
 - Do the deployed controllers preserve the documented payload and classification rules after the fix?
-- Do all pilot namespaces enforce the event endpoint network policy and namespace isolation?
+- Which supported policy configuration closes the documented port 9090 and 9292 gaps without extension reconciliation restoring a broad allowance?
+- Do all pilot namespaces enforce event isolation with the RFC 0017 feature enabled and disabled?
+- Which secret management mechanism provisions product App credentials, and do product appliers have the required Provider and Alert permissions?
 - Which product mechanism maps an artifact revision to the application version currently serving requests?
 - What workflow volume, delivery error threshold and stale-event policy does the pilot require?
 
