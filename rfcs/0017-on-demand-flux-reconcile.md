@@ -49,16 +49,15 @@ The expected outcome is that Flux starts to fetch the artifact some seconds afte
 | Dedicated listener | The Traefik listener for reconcile requests. A separate Kubernetes `LoadBalancer` Service exposes it on port 9443 of the shared public addresses, only to the edge cluster's outbound addresses. |
 | Shared public addresses | The existing public IPv4 and IPv6 addresses of the shared Traefik Service in a DIS core cluster. |
 
-The webhook endpoint of an environment is `https://<platform host name>/flux-webhook`.
+The webhook endpoint of an environment is `https://ops.<environment>.dis.altinn.cloud/flux-webhook`.
 
-| Environment | Platform host name |
+| Environment | Webhook endpoint |
 |---|---|
-| `at22` | `platform.at22.altinn.cloud` |
-| `at23` | `platform.at23.altinn.cloud` |
-| `at24` | `platform.at24.altinn.cloud` |
-| `yt01` | `platform.yt01.altinn.cloud` |
-| `tt02` | `platform.tt02.altinn.no` |
-| `prod` | `platform.altinn.no` |
+| `at22` | `https://ops.at22.dis.altinn.cloud/flux-webhook` |
+| `at23` | `https://ops.at23.dis.altinn.cloud/flux-webhook` |
+| `yt01` | `https://ops.yt01.dis.altinn.cloud/flux-webhook` |
+| `tt02` | `https://ops.tt02.dis.altinn.cloud/flux-webhook` |
+| `prod` | `https://ops.prod.dis.altinn.cloud/flux-webhook` |
 
 ## Use the feature
 
@@ -79,7 +78,7 @@ spec:
   type: generic-oidc
   oidcProviders:
     - issuerURL: https://token.actions.githubusercontent.com
-      audience: https://platform.at23.altinn.cloud/flux-webhook
+      audience: https://ops.at23.dis.altinn.cloud/flux-webhook
       validations:
         - expression: claims.repository_owner_id == '5949420' && claims.repository_id == '<repository id>'
           message: token is not issued to the publishing repository
@@ -98,7 +97,7 @@ This is the step in the publishing workflow:
   continue-on-error: true
   uses: Altinn/altinn-platform/actions/flux/trigger-reconcile@<commit>
   with:
-    url: https://platform.at23.altinn.cloud/flux-webhook
+    url: https://ops.at23.dis.altinn.cloud/flux-webhook
     receiver_name: example-manifests
     receiver_namespace: product-example
 ```
@@ -279,7 +278,7 @@ spec:
       - name: github-actions
         issuer: https://token.actions.githubusercontent.com
         audiences:
-          - https://platform.at23.altinn.cloud/flux-webhook
+          - https://ops.at23.dis.altinn.cloud/flux-webhook
         remoteJWKS:
           uri: https://token.actions.githubusercontent.com/.well-known/jwks
         extractFrom:
@@ -367,14 +366,18 @@ The layer `edge` of the package `flux-webhook-receiver` contains the edge route 
 | Property | Value |
 |---|---|
 | Gateway | `eg` in the namespace `envoy-gateway-system` |
-| Listener | `https` |
-| Host name | The platform host name of the environment |
+| Listener | `https` of the `ListenerSet` `dis`, which serves `*.<environment>.dis.altinn.cloud` |
+| Host name | `ops.<environment>.dis.altinn.cloud` |
 | Method | `POST` |
 | Path | Prefix `/flux-webhook/hook` |
 | Rewrite | Host name `flux-webhook.<DEFAULT_GATEWAY_HOSTNAME>` of the DIS core cluster, and path prefix `/hook` |
 | Target | A `Backend` with the host name of the cluster route and port 9443 |
 | Transport Layer Security (TLS) to the target | A `BackendTLSPolicy` verifies the certificate with the system certificate authorities. |
-| Namespace | `flux-webhook`, with the annotation `<platform host name>/edge-allowed-paths: "/flux-webhook"` |
+| Namespace | `flux-webhook`, with the annotation `ops.<environment>.dis.altinn.cloud/edge-allowed-paths: "/flux-webhook"` |
+
+The `ListenerSet` `dis` has a wildcard certificate for `*.<environment>.dis.altinn.cloud`.
+A wildcard DNS record resolves these host names to the edge gateway.
+The host name `ops.<environment>.dis.altinn.cloud` needs no new listener, certificate or DNS record.
 
 The Dialogporten route on `dis-edge-at23` uses the same `Backend`, `BackendTLSPolicy` and `HTTPRoute` resources to reach a DIS core cluster.
 
@@ -656,7 +659,7 @@ The edge route guard uses the same type of policy.
 - The DIS core cluster runs the `microsoft.flux` extension 1.26.1 or later. This version contains Flux 2.9.
 - The notification-controller can connect to `https://token.actions.githubusercontent.com`. It gets the provider configuration and the signing keys from that address.
 - The edge gateway can connect to `https://token.actions.githubusercontent.com`. It gets the signing keys from that address.
-- The edge gateway serves the platform host name of the environment.
+- The `ListenerSet` `dis` of the edge gateway serves `ops.<environment>.dis.altinn.cloud`.
 - The dedicated Service admits the actual outbound addresses of the edge gateway for both IP families.
 - The wildcard DNS record resolves the webhook host name, and the Gateway listener has a valid TLS certificate.
 - The shared public addresses have no other Service on port 9443.
@@ -747,7 +750,7 @@ Enable the workflow step after the following checks pass.
 # Drawbacks
 [drawbacks]: #drawbacks
 
-- The webhook endpoint is on the public platform host name. Through the edge gateway, it connects to a Flux controller in each DIS core cluster.
+- The webhook endpoint is on a public host name of the edge gateway. Through the edge gateway, it connects to a Flux controller in each DIS core cluster.
 - Each reconcile request crosses two gateways. More components can fail, and each component can return an error.
 - Each participating core cluster needs an additional load balancer Service and port 9443 on its shared public addresses.
 - The dedicated Service and the shared Service use the same addresses. An error in the network rules of one Service can affect the other Service.
@@ -769,6 +772,7 @@ Enable the workflow step after the following checks pass.
 
 - The cluster continues to pull. The workflow gets no access to the Kubernetes API and no credentials for the cluster.
 - The workflow connects only to the edge gateway, which is the public entry point for the Altinn APIs.
+- The webhook endpoint has its own host name on the existing `ListenerSet` `dis`. It does not share a host name with the Altinn APIs. The host name has the same pattern in each environment.
 - The edge gateway rejects a request without a valid token before the request reaches a DIS core cluster.
 - The edge gateway limits the request rate for each repository and for the environment. The multi-tenant Traefik configuration keeps its `kubernetesCRD` provider disabled.
 - The dedicated Service applies the same source restriction in every environment without changing the source ranges of existing product ingress.
@@ -794,7 +798,7 @@ Enable the workflow step after the following checks pass.
 | A network connection from the runners to the API server | The runners get direct access to the Kubernetes API. This is opposite to the pull model in RFC 0001. |
 | A reconcile function in DIS Console | The platform team must build and operate a function that Flux already has. |
 | A `Receiver` of the type `github` with a repository webhook | GitHub sends the push event before the workflow publishes the artifact. |
-| A separate host name for the webhook endpoint | It needs a `ListenerSet`, a DNS record and a certificate. The edge route guard can admit a path prefix on the platform host name. The Dialogporten edge route uses the same pattern. |
+| A path prefix on the platform host name | The webhook endpoint then shares a host name and a listener with the Altinn APIs. The platform host names have different patterns, for example `platform.at23.altinn.cloud`, `platform.tt02.altinn.no` and `platform.altinn.no`. The `ListenerSet` `dis` already gives each environment a separate host name with a certificate and a DNS record. |
 | The action in `dis-way/actions` | The move of the shared actions to `dis-way/actions` is not complete ([altinn-platform#3926](https://github.com/Altinn/altinn-platform/pull/3926)). A workflow pins the action to a commit. A later move changes one line in each workflow. |
 
 ## If we do not do this
