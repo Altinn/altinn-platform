@@ -123,8 +123,8 @@ The action reports the response of the webhook endpoint.
 |---|---|---|---|
 | `200` | Flux | Flux accepted the reconcile request. | None. |
 | `400` | Flux | Flux rejected the token, or Flux could not get the provider configuration or the signing keys from GitHub. | Compare the audience and the validations of the `Receiver` with the workflow. If they match, examine the connection from the notification-controller to GitHub. |
-| `401` | Edge gateway | The token is missing, not valid or expired, or it has a different audience. | Compare the address and the audience with the webhook endpoint of the environment. |
-| `403` | Edge gateway | The token does not identify the `Altinn` GitHub organization. | Run the publishing workflow from a repository in `Altinn`. |
+| `401` | Edge gateway | The token is missing, not valid or expired, or the edge gateway could not get the signing keys from GitHub. | Run the publishing workflow again. If the error continues, tell the platform team. |
+| `403` | Edge gateway | The token has a different audience, or it does not identify the `Altinn` GitHub organization. | Compare the address with the webhook endpoint of the environment. Run the publishing workflow from a repository in `Altinn`. |
 | `404` | Flux | No `Receiver` has this name and namespace. | Examine the name, the namespace and the address. |
 | `429` | Edge gateway | The request rate of the repository or of the environment is more than its limit. | None. The action tries again, and the next poll fetches the artifact. |
 | `503` | Flux | The `Receiver` is suspended or not ready. | Examine the status of the `Receiver`. |
@@ -138,7 +138,7 @@ The action reports the response of the webhook endpoint.
 |---|---|---|---|
 | Edge route | Platform team | `dis-way/gitops-manifests`, package `flux-webhook-receiver`, layer `edge` | Exposes the webhook endpoint on the edge gateway. Verifies the token, limits the request rate and forwards the request to the cluster route. |
 | Dedicated listener | Platform team | `dis-way/gitops-manifests`, package `traefik`, the optional layer `multitenancy-flux-webhook` | Adds the load balancer Service on the shared public addresses, the entrypoint and the Gateway listener to the existing Traefik release. |
-| Cluster route | Platform team | `dis-way/gitops-manifests`, package `flux-webhook-receiver`, layer `multitenancy` | Exposes the notification-controller through the dedicated listener. Admits traffic to the webhook port only from the Traefik pods. Admits only authenticated `Receiver` types in product namespaces. |
+| Cluster route | Platform team | `dis-way/gitops-manifests`, package `flux-webhook-receiver`, layer `multitenancy` | Exposes the notification-controller through the dedicated listener. Admits only authenticated `Receiver` types in product namespaces. |
 | Edge configuration | Platform team | `dis-way/core`, `flux/clusters/dis-edge-<environment>-aks` | Deploys the edge layer to an edge cluster. |
 | Cluster configuration | Platform team | `dis-way/core`, the Terraform configuration of each DIS core cluster | Enables the listener and the cluster route. Adds no public address and no Domain Name System (DNS) record. |
 | Module inputs | Platform team | `dis-way/terraform-azurerm-dis-modules`, the `dis_aks_resources_multitenancy` module | Adds the enable flag. The flag selects the Traefik layer and deploys the cluster route. The module rejects an edge source range that is not valid. |
@@ -169,7 +169,6 @@ Edge source ranges only`"]
 flux-webhook listener
 Routes from flux-system only`"]
         receiver["`Flux webhook-receiver · HTTP 80
-Traefik pods only
 Token, repository and branch checks`"]
         source["`OCIRepository
 Reconcile requested`"]
@@ -190,7 +189,7 @@ No Flux webhook route`"]
     receiver -->|"Annotate"| source
     workflow -. "Port 9443: source range blocks" .-> webhookService
     workflow -. "Port 443: no webhook route" .-> sharedService
-    workload -. "Network policy blocks" .-> receiver
+    workload -. "Direct connection: token check only" .-> receiver
 
     classDef client fill:#eff6ff,stroke:#2563eb,color:#172554
     classDef gateway fill:#ecfdf5,stroke:#059669,color:#064e3b
@@ -202,13 +201,14 @@ No Flux webhook route`"]
     class webhookService,traefik restricted
     class receiver,source flux
     class sharedService,workload shared
-    linkStyle 5,6,7 stroke:#b91c1c,stroke-width:2px,stroke-dasharray:5 5
+    linkStyle 5,6 stroke:#b91c1c,stroke-width:2px,stroke-dasharray:5 5
+    linkStyle 7 stroke:#d97706,stroke-width:2px,stroke-dasharray:5 5
 ```
 
 The dedicated Service selects the existing Traefik pods. The design adds no application or ingress controller.
 The dedicated Service uses port 9443 of the shared public addresses. The design adds no public address.
 The source ranges restrict public access. They do not authenticate individual workloads within the edge cluster.
-A network policy admits traffic to the webhook port of the notification-controller only from the Traefik pods.
+A workload in the DIS core cluster can connect to the notification-controller directly. The notification-controller verifies the token. [Network policy](#network-policy) describes this path.
 
 ## Sequence
 
@@ -254,6 +254,9 @@ A `SecurityPolicy` on the edge route does these checks for each reconcile reques
 5. It copies the `repository_id` claim to the header `x-flux-webhook-repository-id` for the rate limit.
 
 The edge gateway forwards the token to the cluster route without a change.
+
+The edge gateway returns `401` for a missing, expired or invalid token.
+It returns `403` for a token with a different audience and for a token from a different organization.
 
 The policy sets `extractFrom` to the `Authorization` header.
 Without `extractFrom`, Envoy also accepts the token in the `access_token` query parameter.
@@ -578,61 +581,23 @@ The notification-controller must continue to verify every reconcile request.
 
 ### Network policy
 
-The layer `multitenancy` also contains one `NetworkPolicy` in the namespace `flux-system`.
-It admits traffic to the webhook port of the notification-controller only from the Traefik pods.
-Without it, a workload in the DIS core cluster can connect to the `webhook-receiver` Service directly.
-That path has no edge gateway and no rate limit. Each request on that path can cause two requests to GitHub.
+The package does not contain a `NetworkPolicy`.
+The `microsoft.flux` extension adds the policy `allow-webhooks` in the namespace `flux-system`.
+That policy admits all namespaces to the webhook port 9292 of the notification-controller.
+Kubernetes adds together all policies that select a pod. Thus a narrower policy cannot restrict port 9292.
+For this reason, the pilot removed the policy `flux-webhook-from-traefik` from the package in version 1.1.1 ([gitops-manifests#2272](https://github.com/dis-way/gitops-manifests/pull/2272)).
+That policy also admitted all namespaces to the events port 9090. The extension admits only `flux-system` to port 9090.
 
-| Property | Value |
-|---|---|
-| Pods | The notification-controller in the namespace `flux-system` |
-| Port with the restriction | The webhook port, 9292 |
-| Admitted source | Pods with the label `app.kubernetes.io/name: traefik` in the namespace `traefik` |
-| Other ports | Events 9090, metrics 8080 and health probes 9440. The policy does not change access to these ports. |
+A workload in a DIS core cluster can therefore connect to the `webhook-receiver` Service directly.
+It can also connect to port 9443 of the Traefik pods through the cluster IP address of the dedicated Service. The source ranges do not apply to that address.
+These paths have no edge gateway and no rate limit.
 
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: flux-webhook-from-traefik
-  namespace: flux-system
-spec:
-  podSelector:
-    matchLabels:
-      app: notification-controller
-  policyTypes:
-    - Ingress
-  ingress:
-    # Only the Traefik pods can connect to the webhook port.
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: traefik
-          podSelector:
-            matchLabels:
-              app.kubernetes.io/name: traefik
-      ports:
-        - port: 9292
-          protocol: TCP
-    # The policy does not change access to the other ports.
-    - ports:
-        - port: 9090 # Events from the Flux controllers
-          protocol: TCP
-        - port: 8080 # Metrics
-          protocol: TCP
-        - port: 9440 # Health probes
-          protocol: TCP
-```
+The platform team accepts these paths ([altinn-platform#4250](https://github.com/Altinn/altinn-platform/issues/4250)):
 
-When a `NetworkPolicy` selects a pod, Kubernetes blocks all incoming traffic to the pod that no policy admits.
-Thus the policy must also admit the other ports of the notification-controller.
-The labels and ports in the example come from the upstream Flux manifests. The pilot must confirm them in the `microsoft.flux` extension.
-The DIS core clusters use Cilium as the network policy engine.
-Kubernetes adds together all policies that select a pod. A different policy that admits all pods to the webhook port removes this restriction.
+- The notification-controller verifies the token of each request. A workload without a valid token from the publishing repository cannot start a reconcile.
+- A request with a token that claims the GitHub issuer causes two requests from the core cluster to GitHub. A workload in the cluster can also send requests to GitHub directly.
 
-The policy does not block a workload that connects to port 9443 of the Traefik pods.
-The workload can use the cluster IP address of the dedicated Service. The source ranges do not apply to that address.
-Traefik then forwards the request to the notification-controller. That path also has no edge gateway and no rate limit.
+[Future possibilities](#future-possibilities) describes policies that block these paths.
 
 ### Receiver admission policy
 
@@ -656,7 +621,7 @@ The edge route guard uses the same type of policy.
 
 ## Prerequisites
 
-- The DIS core cluster runs the `microsoft.flux` extension 1.26.1 or later. This version contains Flux 2.9.
+- The DIS core cluster runs the `microsoft.flux` extension 1.26.2 or later. This version contains Flux 2.9.
 - The notification-controller can connect to `https://token.actions.githubusercontent.com`. It gets the provider configuration and the signing keys from that address.
 - The edge gateway can connect to `https://token.actions.githubusercontent.com`. It gets the signing keys from that address.
 - The `ListenerSet` `dis` of the edge gateway serves `ops.<environment>.dis.altinn.cloud`.
@@ -664,7 +629,6 @@ The edge route guard uses the same type of policy.
 - The wildcard DNS record resolves the webhook host name, and the Gateway listener has a valid TLS certificate.
 - The shared public addresses have no other Service on port 9443.
 - The cluster route attaches only to the dedicated listener.
-- The DIS core cluster enforces network policies.
 
 ## Environment selection
 
@@ -682,6 +646,7 @@ PR #86 and the pilot pull request [#89](https://github.com/Altinn/dialogporten-m
 | The cluster runs a Flux version before 2.9. | The API server rejects the `Receiver`. The syncroot `Kustomization` fails until the product removes the `Receiver`. |
 | A product creates a `Receiver` of a different type, or with a different issuer. | The admission policy rejects the `Receiver`. |
 | The token is missing, expired or not valid. | The edge gateway returns `401`. The request does not reach the DIS core cluster. |
+| The token has the audience of a different environment. | The edge gateway returns `403`. The request does not reach the DIS core cluster. |
 | The repository is outside the `Altinn` GitHub organization. | The edge gateway returns `403`. The request does not reach the DIS core cluster. |
 | A repository sends more requests than the repository limit. | The edge gateway returns `429` to that repository. Requests from other repositories continue. |
 | All repositories together send more requests than the environment limit. | The edge gateway returns `429`. The next poll fetches the artifact. |
@@ -694,7 +659,7 @@ PR #86 and the pilot pull request [#89](https://github.com/Altinn/dialogporten-m
 | The edge gateway is not available. | The action reports an error. The next poll fetches the artifact. |
 | A public caller connects directly to port 9443 of a shared public address. | The source ranges block the connection unless the caller uses an admitted edge outbound address. |
 | A caller sends the webhook host name to port 443 of a shared public address. | No route on the product listeners forwards the request to Flux. |
-| A workload in the DIS core cluster connects to the `webhook-receiver` Service. | The network policy blocks the connection. |
+| A workload in the DIS core cluster connects to the `webhook-receiver` Service. | The notification-controller verifies the token. The edge gateway and its rate limits do not apply. |
 | A workload in the DIS core cluster connects to port 9443 of the Traefik pods. | Traefik forwards the request to Flux. The notification-controller verifies the token. The edge gateway and its rate limits do not apply. |
 | The edge outbound addresses change before the source ranges change. | The dedicated Service blocks the edge gateway. The next poll fetches the artifact. |
 | The dedicated Service is not ready. | The edge gateway cannot reach Flux. The next poll fetches the artifact. Product traffic on ports 80 and 443 continues. |
@@ -710,7 +675,7 @@ PR #86 and the pilot pull request [#89](https://github.com/Altinn/dialogporten-m
 Dialogporten in `at23` is the pilot. The pilot needs these changes:
 
 - The action `actions/flux/trigger-reconcile` in this repository: [altinn-platform#4181](https://github.com/Altinn/altinn-platform/pull/4181). The action must also explain the responses `401`, `403` and `429`.
-- The layer `multitenancy` of the package `flux-webhook-receiver`: [gitops-manifests#2005](https://github.com/dis-way/gitops-manifests/pull/2005). Its route must use the dedicated listener. It must also contain the network policy and the admission policy. The layer `edge` does not exist yet.
+- The layer `multitenancy` of the package `flux-webhook-receiver`: [gitops-manifests#2005](https://github.com/dis-way/gitops-manifests/pull/2005). Its route must use the dedicated listener. It must also contain the admission policy. Version 1.1.1 removed the network policy, see [Network policy](#network-policy). The layer `edge` does not exist yet.
   - The package gets its variables through `postBuild.substitute`. It has no `secrets` layer, because the values are host names and limits, not secrets. The DIS core clusters also have no `dis-system-store`.
 - The optional layer `multitenancy-flux-webhook` in the `traefik` package: [gitops-manifests#2138](https://github.com/dis-way/gitops-manifests/pull/2138). It adds the dedicated Service, entrypoint, listener and Linkerd annotation.
 - The `dis_aks_resources_multitenancy` module needs an explicit enable flag: [dis-modules#151](https://github.com/dis-way/terraform-azurerm-dis-modules/pull/151). The feature defaults to disabled.
@@ -740,9 +705,9 @@ Enable the workflow step after the following checks pass.
 | Connect from outside the admitted ranges to port 9443 of each shared public address with a valid token. | Both IPv4 and IPv6 connections fail before they reach Traefik. |
 | Connect through the edge gateway to port 9443 of each shared public address. | Both IPv4 and IPv6 connections succeed. The edge gateway verifies the core TLS certificate. |
 | Send the webhook host name and a valid token to port 443 of each shared public address. | No request reaches the notification-controller. |
-| Connect from a pod in a product namespace to the `webhook-receiver` Service. | The connection fails. |
+| Send a request from a pod in a product namespace to the `webhook-receiver` Service, with a token from a different repository. | The notification-controller rejects it. |
 | Create a `Receiver` of the type `generic`, or with a different `issuerURL`, in a product namespace. | The API server rejects it. |
-| Examine Flux alerts, metrics and health probes of the notification-controller after the network policy is applied. | They continue to work. |
+| Examine Flux alerts, metrics and health probes of the notification-controller after the cluster route is deployed. | They continue to work. |
 | Check existing product routes and load balancer health probes. | They continue to work. |
 | Create, change and delete the dedicated Service. | The network security group rules of the shared Service do not change. Product traffic continues. |
 | Disable the workflow step or make the webhook unavailable. | Polling continues to fetch artifacts. |
@@ -757,7 +722,7 @@ Enable the workflow step after the following checks pass.
 - The platform team must keep the admitted source ranges aligned with the actual edge outbound addresses.
 - The dedicated listener shares Traefik pods and capacity with product ingress. It does not give separate capacity or isolate failures.
 - The source ranges identify edge outbound addresses. They do not identify the Envoy process or block access from inside the core cluster.
-- A workload in the core cluster can connect to port 9443 of the Traefik pods. That path has no edge gateway and no rate limit.
+- A workload in the core cluster can connect to the `webhook-receiver` Service or to port 9443 of the Traefik pods. These paths have no edge gateway and no rate limit.
 - The edge gateway and each `Receiver` must use the same audience.
 - The feature needs a minimum version of the `microsoft.flux` extension. Azure controls when a cluster gets a new version.
 - The edge gateway and the notification-controller need a connection to GitHub to verify a token.
@@ -823,7 +788,7 @@ Each deployment continues to wait for the poll interval.
 
 Before the feature is stable:
 
-- Do all DIS core clusters run the `microsoft.flux` extension 1.26.1 or later? The implementation must examine each cluster before a product adds a `Receiver`.
+- Do all DIS core clusters run the `microsoft.flux` extension 1.26.2 or later? The implementation must examine each cluster before a product adds a `Receiver`.
 - Can the notification-controller and the edge gateway connect to the GitHub token service in all environments?
 - Can the applier service account of a product namespace create a `Receiver`?
 - Do the observed edge outbound addresses match the configured source ranges for both IP families in every participating environment?
@@ -842,5 +807,6 @@ Out of scope:
 - Add the `Receiver` to the default syncroot, so each new product gets it.
 - Use reconcile requests for the platform packages in `dis-way/gitops-manifests`.
 - Increase the poll interval of a product after its reconcile requests are reliable. This decreases the number of registry requests.
-- **Protect the notification-controller from workloads in the DIS core cluster.** The design protects the webhook endpoint against callers outside the clusters. Its network policy blocks direct connections from workloads to the notification-controller. Its admission policy admits only the GitHub issuer in product namespaces. This change can also protect it against workloads in the same cluster:
+- **Protect the notification-controller from workloads in the DIS core cluster.** The design protects the webhook endpoint against callers outside the clusters. Its admission policy admits only the GitHub issuer in product namespaces. Workloads in the cluster can connect to the notification-controller directly, and the notification-controller verifies their tokens. These changes can block the paths from workloads:
+  - A Cilium policy that blocks port 9292 of the notification-controller for all pods except the Traefik pods. A Cilium deny rule takes precedence over the policy `allow-webhooks` of the extension.
   - Admit traffic to port 9443 of the Traefik pods only from outside the cluster. At this time, a workload can connect to that port through the cluster IP address of the dedicated Service. Traefik then forwards the request to the notification-controller. That policy must not change access to the product ports of Traefik.

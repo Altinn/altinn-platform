@@ -90,15 +90,25 @@ runs:
           { grep -i "^$1:" "${headers_file}" || true; } | tail -n 1 | cut -d: -f2- | tr -d '[:space:]'
         }
 
+        # Prints the largest number among the response headers with this name.
+        largest_header() {
+          { grep -i "^$1:" "${headers_file}" || true; } | cut -d: -f2- | tr -d ' \t\r' \
+            | { grep -E '^[0-9]+$' || true; } | sort -n | tail -n 1
+        }
+
         # Prints the seconds to wait after a 429. Envoy Gateway sends the
         # seconds until its rate limit counter resets in X-RateLimit-Reset.
-        # Retry-After can also be a date. A date, a missing value or a number
-        # with more than four digits gives the longest wait.
+        # A 429 from the edge gateway has two X-RateLimit-Reset headers: one
+        # for the limit of the route, and one for the local limit of the
+        # gateway, which is 0 while that limit is not reached. The largest
+        # value is the time until all counters reset. Retry-After can also be
+        # a date. A date, a missing value or a number with more than four
+        # digits gives the longest wait.
         rate_limit_wait() {
           local hint
           hint=$(response_header retry-after)
           if [[ -z "${hint}" ]]; then
-            hint=$(response_header x-ratelimit-reset)
+            hint=$(largest_header x-ratelimit-reset)
           fi
           if [[ ! "${hint}" =~ ^[0-9]{1,4}$ ]] || (( 10#${hint} > 30 )); then
             echo 30
@@ -183,11 +193,20 @@ runs:
             print_claims
             ;;
           401)
-            echo "::error::The edge gateway rejected the token (HTTP 401). The token is missing, not valid or expired, or its audience is not the webhook endpoint of the environment. The action used the url ${base_url} as the audience. Compare it with the webhook endpoint of the environment. The request did not reach Flux."
+            echo "::error::The edge gateway rejected the token (HTTP 401). The token is missing, not valid or expired, or the edge gateway could not get the signing keys from GitHub. The request did not reach Flux. Run the workflow again. If the error continues, tell the platform team."
             print_claims
             ;;
           403)
-            echo "::error::The edge gateway refused the request (HTTP 403). The token does not identify the Altinn GitHub organization. The edge gateway admits only repository_owner_id 5949420. Run the publishing workflow from a repository in Altinn. The request did not reach Flux."
+            # Envoy names the cause in the body: "Audiences in Jwt are not
+            # allowed" from the token check, "RBAC: access denied" from the
+            # organization rule.
+            if grep -q 'Audiences in Jwt are not allowed' "${body_file}"; then
+              echo "::error::The edge gateway refused the token (HTTP 403). Its audience ${audience} is not the webhook endpoint of this environment. The action uses the url as the audience. Use the webhook endpoint exactly as the README of the action lists it. The request did not reach Flux."
+            elif grep -q 'RBAC: access denied' "${body_file}"; then
+              echo "::error::The edge gateway refused the request (HTTP 403). The token does not identify the Altinn GitHub organization. The edge gateway admits only repository_owner_id 5949420. Run the publishing workflow from a repository in Altinn. The request did not reach Flux."
+            else
+              echo "::error::The edge gateway refused the request (HTTP 403). The audience of the token is not the webhook endpoint of this environment, or the token does not identify the Altinn GitHub organization. The action used the url ${base_url} as the audience. The request did not reach Flux."
+            fi
             print_claims
             ;;
           404)
