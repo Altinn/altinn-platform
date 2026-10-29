@@ -11,7 +11,7 @@ The reconcile request is an optimization. Polling continues, and the next poll f
 ## Requirements
 
 - The webhook endpoint of the environment is enabled. See [Webhook endpoints](#webhook-endpoints).
-- The DIS core cluster runs Flux 2.9 or later, which is the `microsoft.flux` extension 1.26.1 or later. Earlier versions do not have the `generic-oidc` type, and the API server rejects the `Receiver`.
+- The DIS core cluster runs Flux 2.9 or later, which is the `microsoft.flux` extension 1.26.2 or later. Earlier versions do not have the `generic-oidc` type, and the API server rejects the `Receiver`.
 - A `Receiver` of type `generic-oidc` is in your namespace. See [Receiver](#receiver).
 - The calling job has `permissions: id-token: write`.
 - The workflow runs in a repository in the `Altinn` GitHub organization. The edge gateway admits only this organization.
@@ -102,8 +102,8 @@ The action fails for every response except `200`. Its error names the source of 
 | Response | Source | Meaning | Correction |
 |----------|--------|---------|------------|
 | `400` | Flux | Flux rejected the token, or Flux could not get the provider configuration or the signing keys from GitHub. The notification-controller log has the exact reason. | Compare the audience and the `validations` of the `Receiver` with the claims of the token. If they match, examine the connection from the notification-controller to GitHub. |
-| `401` | Edge gateway | The token is missing, not valid or expired, or it has a different audience. | Compare `url` with the webhook endpoint of the environment. |
-| `403` | Edge gateway | The token does not identify the `Altinn` GitHub organization. | Run the publishing workflow from a repository in `Altinn`. |
+| `401` | Edge gateway | The token is missing, not valid or expired, or the edge gateway could not get the signing keys from GitHub. | Run the workflow again. If the error continues, tell the platform team. |
+| `403` | Edge gateway | The body names the cause. `Audiences in Jwt are not allowed`: the audience of the token is not the webhook endpoint of the environment. `RBAC: access denied`: the token does not identify the `Altinn` GitHub organization. | Use the webhook endpoint exactly as [Webhook endpoints](#webhook-endpoints) lists it. Run the publishing workflow from a repository in `Altinn`. |
 | `404` | Flux | No `Receiver` has this name and namespace, or the `Receiver` has never been ready. Flux serves the path only after the `Receiver` has reconciled. | Examine the name, the namespace, `url`, and the status of the `Receiver`. |
 | `429` | Edge gateway | The request rate of the repository or of the environment is more than its limit. | None. The action tries again, and the next poll fetches the artifact. |
 | `500` | Flux | Flux could not request the reconcile. A resource that the `Receiver` lists does not exist, or the `Receiver` is not allowed to reference it. | Examine the `resources` of the `Receiver`. |
@@ -115,7 +115,7 @@ The action fails for every response except `200`. Its error names the source of 
 
 The action tries the reconcile request again after these failures:
 
-- `429`: the edge gateway counts the requests in each minute, so a short wait mostly gets a `429` again. The action waits as long as the `Retry-After` or the `X-RateLimit-Reset` header of the response asks, at least 5 and at most 30 seconds. Without such a header, it waits 30 seconds. It starts no retry later than 2 minutes after the first request.
+- `429`: the edge gateway counts the requests in each minute, so a short wait mostly gets a `429` again. The action waits as long as the `Retry-After` header or the largest `X-RateLimit-Reset` header of the response asks, at least 5 and at most 30 seconds. A `429` from the edge gateway has two `X-RateLimit-Reset` headers, and the one for the local limit of the gateway is `0`. Without such a header, it waits 30 seconds. It starts no retry later than 2 minutes after the first request.
 - A connection error, a timeout, `408`, `500`, `502`, `503` and `504`: at most 3 retries, 5 seconds apart, and none later than 1 minute after the first request.
 
 It does not try `400`, `401`, `403` and `404` again, because the same request gets the same answer. Each request can take 30 seconds, so the retries end at most about 2.5 minutes after the first request. The request for the OIDC token has its own retries, which stop after 1 minute.
