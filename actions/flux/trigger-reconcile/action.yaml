@@ -210,7 +210,7 @@ runs:
             print_claims
             ;;
           404)
-            echo "::error::No Receiver answers at ${hook_url} (HTTP 404). Flux has no Receiver ${receiver}, or the Receiver has never been Ready. Check the receiver name, namespace and url, that the Receiver has type generic-oidc, and that it is Ready. Flux serves the path only after the Receiver has reconciled."
+            echo "::error::No Receiver answers at ${hook_url} (HTTP 404). The webhook endpoint is not enabled in this environment, or Flux has no Receiver ${receiver}, or the Receiver has never been Ready. Check that the README of the action lists the environment as enabled. Check the receiver name, namespace and url, that the Receiver has type generic-oidc, and that it is Ready. Flux serves the path only after the Receiver has reconciled."
             ;;
           429)
             echo "::error::The edge gateway limited the request rate (HTTP 429). This repository or the environment sent more requests than its limit. The action tried ${attempt} times in ${elapsed} s. The next poll fetches the artifact."

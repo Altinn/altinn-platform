@@ -104,8 +104,11 @@ This is the step in the publishing workflow:
 
 The job must have the permission `id-token: write`.
 
+The [README of the action](../actions/flux/trigger-reconcile/README.md) is the guide for product teams. It shows the status of each environment.
+
 ## Rules for product teams
 
+- Use only the environments with the status Enabled in the README of the action.
 - The reconcile request is an optimization. Polling continues, and the next poll fetches the artifact if the reconcile request fails.
 - Set `continue-on-error: true` on the step. A failed reconcile request must not stop a deployment.
 - Send the reconcile request only to the webhook endpoint of the environment that the workflow publishes.
@@ -125,7 +128,7 @@ The action reports the response of the webhook endpoint.
 | `400` | Flux | Flux rejected the token, or Flux could not get the provider configuration or the signing keys from GitHub. | Compare the audience and the validations of the `Receiver` with the workflow. If they match, examine the connection from the notification-controller to GitHub. |
 | `401` | Edge gateway | The token is missing, not valid or expired, or the edge gateway could not get the signing keys from GitHub. | Run the publishing workflow again. If the error continues, tell the platform team. |
 | `403` | Edge gateway | The token has a different audience, or it does not identify the `Altinn` GitHub organization. | Compare the address with the webhook endpoint of the environment. Run the publishing workflow from a repository in `Altinn`. |
-| `404` | Flux | No `Receiver` has this name and namespace. | Examine the name, the namespace and the address. |
+| `404` | Flux or edge gateway | Flux: no `Receiver` has this name and namespace. Edge gateway: the webhook endpoint is not enabled in the environment. | Make sure that the environment is enabled. Examine the name, the namespace and the address. |
 | `429` | Edge gateway | The request rate of the repository or of the environment is more than its limit. | None. The action tries again, and the next poll fetches the artifact. |
 | `503` | Flux | The `Receiver` is suspended or not ready. | Examine the status of the `Receiver`. |
 
