@@ -136,18 +136,24 @@ jobs:
             echo "|---|---|---|---|---|"
           } > "${summary}"
 
-          # record <row> <check> <expected> <response> <pass|fail|skip>
+          # record <row> <check> <expected> <response> <pass|fail>
           record() {
-            local mark
-            case "$5" in
-              pass) mark="✅" ;;
-              skip) mark="⏭️ not run" ;;
-              *)
-                mark="❌"
-                failures=$((failures + 1))
-                ;;
-            esac
+            local mark="✅"
+            if [[ "$5" != "pass" ]]; then
+              mark="❌"
+              failures=$((failures + 1))
+            fi
             printf '| %s | %s | %s | %s | %s |\n' "$1" "$2" "$3" "$4" "${mark}" >> "${summary}"
+          }
+
+          # Prints the limit that a 429 reached: the first value of the
+          # X-RateLimit-Limit header of the route limit, for example 10 in
+          # "10, 10;w=60, 60;w=60". Envoy puts the limit with the fewest
+          # remaining requests first. The local limit of the gateway sends a
+          # second X-RateLimit-Limit header without ";w=".
+          reached_limit() {
+            { grep -i '^x-ratelimit-limit:' "${headers_file}" || true; } | { grep ';w=' || true; } \
+              | head -n 1 | cut -d: -f2- | cut -d, -f1 | tr -d ' \t\r'
           }
 
           # Row 5: no token. Flux never answers 401 or 403, so these come from the edge gateway.
@@ -166,11 +172,11 @@ jobs:
           got=$(response "${status}")
           if [[ "${status}" == "400" && ! -s "${body_file}" ]]; then
             result=pass
-          elif [[ "${status}" == "404" && ! -s "${body_file}" ]]; then
-            result=skip
-            got="${got}: no Receiver with this name and namespace"
           else
             result=fail
+            if [[ "${status}" == "404" && ! -s "${body_file}" ]]; then
+              got="${got}: no Receiver with this name and namespace. This check needs an existing Receiver"
+            fi
           fi
           if [[ "${status}" == "200" ]]; then
             echo "::error::Flux accepted a token from ${GITHUB_REPOSITORY} for Receiver ${RECEIVER_NAMESPACE}/${RECEIVER_NAME}. Examine the validations of the Receiver."
@@ -190,31 +196,46 @@ jobs:
           limited_at=0
           statuses=""
           rate_headers=""
+          reached=""
           for i in $(seq 1 $(( REPOSITORY_LIMIT + 5 ))); do
             status=$(post "${hook_url}" "Authorization: Bearer ${token}")
             statuses+="${status} "
             if [[ "${status}" == "429" ]]; then
               limited_at=${i}
+              reached=$(reached_limit)
               rate_headers=$({ grep -i '^x-ratelimit' "${headers_file}" || true; } | tr -d '\r' | tr '\n' ';' | tr -c 'A-Za-z0-9 =;:,._-' ' ')
               break
             fi
           done
+          # The environment limit can also give a 429, when other repositories
+          # sent requests in the same minute. Only the repository limit passes.
           expected=$(( REPOSITORY_LIMIT + 1 ))
-          if [[ "${limited_at}" == "${expected}" ]]; then result=pass; else result=fail; fi
+          if [[ "${limited_at}" == "${expected}" && "${reached}" == "${REPOSITORY_LIMIT}" ]]; then result=pass; else result=fail; fi
           if [[ "${limited_at}" == "0" ]]; then
             got="no \`429\` in $(( REPOSITORY_LIMIT + 5 )) requests: ${statuses% }"
           else
-            got="\`429\` at request ${limited_at}: ${statuses% }"
+            got="\`429\` at request ${limited_at} from the limit ${reached:-unknown}: ${statuses% }"
           fi
-          record 9 "Requests from one repository in one minute" "\`429\` at request ${expected}" "${got}" "${result}"
+          record 9 "Requests from one repository in one minute" "\`429\` at request ${expected} from the limit ${REPOSITORY_LIMIT}" "${got}" "${result}"
 
+          # Row 10: the edge gateway replaces a false x-flux-webhook-repository-id
+          # with the claim of the token, so the request counts in the full
+          # counter of this repository.
           check="False \`x-flux-webhook-repository-id\` after the \`429\`"
-          if [[ "${limited_at}" != "0" && "$(date -u +%H:%M)" == "${minute}" ]]; then
-            status=$(post "${hook_url}" "Authorization: Bearer ${token}" "x-flux-webhook-repository-id: 1")
-            if [[ "${status}" == "429" ]]; then result=pass; else result=fail; fi
-            record 10 "${check}" "\`429\`: the limit uses the repository of the token" "$(response "${status}")" "${result}"
+          expected="\`429\` from the limit ${REPOSITORY_LIMIT}"
+          if [[ "${limited_at}" == "0" ]]; then
+            record 10 "${check}" "${expected}" "Not run: no \`429\` in row 9" fail
+          elif [[ "$(date -u +%H:%M)" != "${minute}" ]]; then
+            record 10 "${check}" "${expected}" "Not run: a new minute started. Run the workflow again" fail
           else
-            record 10 "${check}" "\`429\`" "No \`429\` in row 9, or the minute changed" skip
+            status=$(post "${hook_url}" "Authorization: Bearer ${token}" "x-flux-webhook-repository-id: 1")
+            spoof_reached=$(reached_limit)
+            if [[ "${status}" == "429" && "${spoof_reached}" == "${REPOSITORY_LIMIT}" ]]; then result=pass; else result=fail; fi
+            got=$(response "${status}")
+            if [[ "${status}" == "429" ]]; then
+              got="${got} from the limit ${spoof_reached:-unknown}"
+            fi
+            record 10 "${check}" "${expected}" "${got}" "${result}"
           fi
 
           {
