@@ -139,3 +139,16 @@ CVE-2026-78667
 CVE-2026-78669
 # https://avd.aquasec.com/nvd/cve-2026-97031
 CVE-2026-97031
+
+# azure-cli bundled Python packages (from the azure-devops-agent base image) - resolved
+# when azure-cli ships PyJWT >= 2.14.0 and certifi >= 2026.10.18
+# https://github.com/advisories/GHSA-pxh4-856f-4h89
+GHSA-pxh4-856f-4h89
+# https://github.com/advisories/GHSA-6q48-6c7w-9gw2 (CRITICAL)
+GHSA-6q48-6c7w-9gw2
+
+# golang library vulnerabilities in kubectl/helm binaries - will be resolved when upstream tools rebuild with Go >= 1.26.10 and x/text >= 0.41.0
+# https://avd.aquasec.com/nvd/cve-2026-111943
+CVE-2026-111943
+# https://avd.aquasec.com/nvd/cve-2026-56851
+CVE-2026-56851
