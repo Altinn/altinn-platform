@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.10.1...tf-azdev-agent-0.11.0) (2026-10-29)
+
+
+### Features
+
+* **tf-azdev-agent:** install PowerShell from the GitHub release ([#4334](https://github.com/Altinn/altinn-platform/issues/4334)) ([2925597](https://github.com/Altinn/altinn-platform/commit/2925597aa16572d81e37fde1c74d9145ac8bb281))
+
 ## [0.10.1](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.10.0...tf-azdev-agent-0.10.1) (2026-10-13)
 
 
