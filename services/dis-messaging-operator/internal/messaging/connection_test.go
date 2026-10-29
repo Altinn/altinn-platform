@@ -2,6 +2,7 @@ package messaging
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
@@ -151,6 +152,58 @@ func TestBuildResourceQuotaErrors(t *testing.T) {
 
 			if got, err := BuildResourceQuota(tt.namespace, tt.maxQueues); err == nil {
 				t.Fatalf("expected an error, got %v", got)
+			}
+		})
+	}
+}
+
+func TestConnectedQueues(t *testing.T) {
+	t.Parallel()
+
+	orders := connectionQueue("product-team-a", "orders", "team-a.orders")
+	invoices := connectionQueue("product-team-a", "invoices", "team-a.sync/invoices")
+	foreign := connectionQueue("product-team-a", "foreign", "team-b.foreign")
+	deleting := connectionQueue("product-team-a", "deleting", "team-a.deleting")
+	deleting.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+	// Created in the same second as orders, in a namespace that comes first.
+	holder := connectionQueue("product-shared", "orders", "TEAM-A.orders")
+
+	tests := map[string]struct {
+		annotations map[string]string
+		queues      []messagingv1alpha1.Queue
+		sameName    []messagingv1alpha1.Queue
+		want        []messagingv1alpha1.Queue
+	}{
+		"no queues": {want: []messagingv1alpha1.Queue{}},
+		"valid names keep their order": {
+			queues: []messagingv1alpha1.Queue{invoices, orders},
+			want:   []messagingv1alpha1.Queue{invoices, orders},
+		},
+		"a name without the prefix gets no key": {
+			queues: []messagingv1alpha1.Queue{orders, foreign},
+			want:   []messagingv1alpha1.Queue{orders},
+		},
+		"a deleting queue gets no key": {
+			queues: []messagingv1alpha1.Queue{deleting, orders},
+			want:   []messagingv1alpha1.Queue{orders},
+		},
+		"the prefix annotation decides": {
+			annotations: map[string]string{PrefixAnnotation: "team-b."},
+			queues:      []messagingv1alpha1.Queue{orders, foreign},
+			want:        []messagingv1alpha1.Queue{foreign},
+		},
+		"a queue whose name another queue holds gets no key": {
+			queues:   []messagingv1alpha1.Queue{orders, invoices},
+			sameName: []messagingv1alpha1.Queue{holder, orders, invoices},
+			want:     []messagingv1alpha1.Queue{invoices},
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			got := ConnectedQueues("product-team-a", tc.annotations, tc.queues, tc.sameName)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("ConnectedQueues() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

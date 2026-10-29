@@ -15,3 +15,30 @@ GHSA-537c-gmf6-5ccf
 GHSA-6v7p-g79w-8964
 # https://avd.aquasec.com/nvd/cve-2025-47273
 CVE-2025-47273
+
+# Azure CLI bundled Python packages - resolved when Azure CLI ships
+# PyJWT >= 2.14.0, certifi >= 2026.10.18 and urllib3 >= 2.8.0
+# https://avd.aquasec.com/nvd/cve-2026-102268 (CRITICAL)
+CVE-2026-102268
+# https://avd.aquasec.com/nvd/cve-2026-102266
+CVE-2026-102266
+# https://avd.aquasec.com/nvd/cve-2026-102267
+CVE-2026-102267
+# https://avd.aquasec.com/nvd/cve-2026-102271
+CVE-2026-102271
+# https://avd.aquasec.com/nvd/cve-2026-102272
+CVE-2026-102272
+# https://avd.aquasec.com/nvd/cve-2026-102273
+CVE-2026-102273
+# https://github.com/advisories/GHSA-pxh4-856f-4h89
+GHSA-pxh4-856f-4h89
+# https://github.com/advisories/GHSA-6q48-6c7w-9gw2 (CRITICAL)
+GHSA-6q48-6c7w-9gw2
+# https://avd.aquasec.com/nvd/cve-2026-97687
+CVE-2026-97687
+# https://avd.aquasec.com/nvd/cve-2026-97689
+CVE-2026-97689
+# msgpack vendored in the pip bundled by Azure CLI (/opt/az/.../pip/_vendor/msgpack) -
+# resolved when Azure CLI ships a pip that vendors msgpack >= 1.2.3
+# https://avd.aquasec.com/nvd/cve-2026-114613
+CVE-2026-114613

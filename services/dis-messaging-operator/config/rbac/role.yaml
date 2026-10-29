@@ -7,7 +7,28 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - configmaps
+  - resourcequotas
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - namespaces
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - application.dis.altinn.cloud
+  resources:
+  - applicationidentities
   verbs:
   - get
   - list
@@ -23,6 +44,13 @@ rules:
   - list
   - patch
   - watch
+- apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
 - apiGroups:
   - messaging.dis.altinn.cloud
   resources:
@@ -55,6 +83,7 @@ rules:
   - namespacesqueues
   verbs:
   - create
+  - delete
   - get
   - list
   - patch

@@ -20,7 +20,7 @@ The reconcile request is an optimization. Polling continues, and the next poll f
 
 | Input | Required | Description |
 |-------|----------|-------------|
-| `url` | Yes | Webhook endpoint of the environment, `https://<platform host>/flux-webhook`. See [Webhook endpoints](#webhook-endpoints). The action also uses it, without trailing slashes, as the audience of the OIDC token. Must use `https`, with no whitespace, query or fragment. The action writes a warning if it does not end in `/flux-webhook`. |
+| `url` | Yes | Webhook endpoint of the environment, `https://ops.<environment>.dis.altinn.cloud/flux-webhook`. See [Webhook endpoints](#webhook-endpoints). The action also uses it, without trailing slashes, as the audience of the OIDC token. Must use `https`, with no whitespace, query or fragment. The action writes a warning if it does not end in `/flux-webhook`. |
 | `receiver_name` | Yes | Name of the `Receiver`. |
 | `receiver_namespace` | Yes | Namespace of the `Receiver`. |
 
@@ -28,11 +28,11 @@ The reconcile request is an optimization. Polling continues, and the next poll f
 
 | Environment | `url` |
 |-------------|-------|
-| `at22` | `https://platform.at22.altinn.cloud/flux-webhook` |
-| `at23` | `https://platform.at23.altinn.cloud/flux-webhook` |
-| `yt01` | `https://platform.yt01.altinn.cloud/flux-webhook` |
-| `tt02` | `https://platform.tt02.altinn.no/flux-webhook` |
-| `prod` | `https://platform.altinn.no/flux-webhook` |
+| `at22` | `https://ops.at22.dis.altinn.cloud/flux-webhook` |
+| `at23` | `https://ops.at23.dis.altinn.cloud/flux-webhook` |
+| `yt01` | `https://ops.yt01.dis.altinn.cloud/flux-webhook` |
+| `tt02` | `https://ops.tt02.dis.altinn.cloud/flux-webhook` |
+| `prod` | `https://ops.prod.dis.altinn.cloud/flux-webhook` |
 
 The platform team enables the endpoint for each environment. [#4237](https://github.com/Altinn/altinn-platform/issues/4237) tracks the rollout.
 
@@ -59,7 +59,7 @@ jobs:
         continue-on-error: true
         uses: Altinn/altinn-platform/actions/flux/trigger-reconcile@<commit> # main
         with:
-          url: https://platform.at23.altinn.cloud/flux-webhook
+          url: https://ops.at23.dis.altinn.cloud/flux-webhook
           receiver_name: example-manifests
           receiver_namespace: product-example
 ```
@@ -78,7 +78,7 @@ spec:
   type: generic-oidc
   oidcProviders:
     - issuerURL: https://token.actions.githubusercontent.com
-      audience: https://platform.at23.altinn.cloud/flux-webhook
+      audience: https://ops.at23.dis.altinn.cloud/flux-webhook
       validations:
         - expression: claims.repository_owner_id == '5949420' && claims.repository_id == '<repository id>'
           message: token is not issued to the publishing repository

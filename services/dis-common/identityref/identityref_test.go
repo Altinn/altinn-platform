@@ -126,6 +126,9 @@ func TestResolveOwnerIdentityForReadyApplicationIdentity(t *testing.T) {
 	if resolved.SourceKind != IdentitySourceApplicationIdentity {
 		t.Fatalf("expected source kind %q, got %q", IdentitySourceApplicationIdentity, resolved.SourceKind)
 	}
+	if resolved.SourceNamespace != testNamespace || resolved.SourceName != testIdentityName {
+		t.Fatalf("expected source %s/%s, got %#v", testNamespace, testIdentityName, resolved)
+	}
 	if resolved.AuthReferenceName != testIdentityName || resolved.ServiceAccountName != testIdentityName {
 		t.Fatalf("expected auth reference and service account names to match %q, got %#v", testIdentityName, resolved)
 	}
@@ -154,6 +157,9 @@ func TestResolveOwnerIdentityForUnreadyApplicationIdentity(t *testing.T) {
 	if resolved.PendingReason != ReasonIdentityNotReady {
 		t.Fatalf("expected pending reason %s, got %q", ReasonIdentityNotReady, resolved.PendingReason)
 	}
+	if resolved.PendingMessage != `ApplicationIdentity "team-a/app-pending" is not ready` {
+		t.Fatalf("expected not ready message, got %q", resolved.PendingMessage)
+	}
 }
 
 func TestResolveOwnerIdentityForMissingApplicationIdentity(t *testing.T) {
@@ -172,7 +178,7 @@ func TestResolveOwnerIdentityForMissingApplicationIdentity(t *testing.T) {
 	if !requeue {
 		t.Fatalf("expected requeue=true for missing identity")
 	}
-	if resolved.PendingMessage != `ApplicationIdentity "app-one-identity" not found` {
+	if resolved.PendingMessage != `ApplicationIdentity "team-a/app-one-identity" not found` {
 		t.Fatalf("expected not found message, got %q", resolved.PendingMessage)
 	}
 }
@@ -210,6 +216,9 @@ func TestResolveOwnerIdentityForServiceAccount(t *testing.T) {
 	if resolved.SourceKind != IdentitySourceServiceAccount {
 		t.Fatalf("expected source kind %q, got %q", IdentitySourceServiceAccount, resolved.SourceKind)
 	}
+	if resolved.SourceNamespace != testNamespace || resolved.SourceName != testSAName {
+		t.Fatalf("expected source %s/%s, got %#v", testNamespace, testSAName, resolved)
+	}
 	if resolved.ServiceAccountName != testSAName || resolved.AuthReferenceName != testSAName {
 		t.Fatalf("expected auth reference and service account names to match %q, got %#v", testSAName, resolved)
 	}
@@ -226,12 +235,12 @@ func TestResolveOwnerIdentityForServiceAccountMissingAnnotations(t *testing.T) {
 		{
 			name:        "missing client id",
 			annotations: map[string]string{ServiceAccountPrincipalIDAnnotation: testPrincipalID},
-			wantMessage: `ServiceAccount "app-one-sa" is missing annotation "azure.workload.identity/client-id"`,
+			wantMessage: `ServiceAccount "team-a/app-one-sa" is missing annotation "azure.workload.identity/client-id"`,
 		},
 		{
 			name:        "missing principal id",
 			annotations: map[string]string{ServiceAccountClientIDAnnotation: "client-123"},
-			wantMessage: `ServiceAccount "app-one-sa" is missing annotation "dis.altinn.cloud/principal-id"`,
+			wantMessage: `ServiceAccount "team-a/app-one-sa" is missing annotation "dis.altinn.cloud/principal-id"`,
 		},
 	}
 
@@ -283,8 +292,58 @@ func TestResolveOwnerIdentityForMissingServiceAccount(t *testing.T) {
 	if !requeue {
 		t.Fatalf("expected requeue=true for missing service account")
 	}
-	if resolved.PendingMessage != `ServiceAccount "app-one-sa" not found` {
+	if resolved.PendingMessage != `ServiceAccount "team-a/app-one-sa" not found` {
 		t.Fatalf("expected not found message, got %q", resolved.PendingMessage)
+	}
+}
+
+func TestSourceDescription(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		resolved ResolvedIdentity
+		want     string
+	}{
+		{
+			name: "application identity with namespace",
+			resolved: ResolvedIdentity{
+				SourceKind: IdentitySourceApplicationIdentity, SourceNamespace: "team-b", SourceName: testIdentityName,
+			},
+			want: `ApplicationIdentity "team-b/app-one-identity"`,
+		},
+		{
+			name: "service account with namespace",
+			resolved: ResolvedIdentity{
+				SourceKind: IdentitySourceServiceAccount, SourceNamespace: testNamespace, SourceName: testSAName,
+			},
+			want: `ServiceAccount "team-a/app-one-sa"`,
+		},
+		{
+			name:     "without namespace",
+			resolved: ResolvedIdentity{SourceKind: IdentitySourceApplicationIdentity, SourceName: testIdentityName},
+			want:     `ApplicationIdentity "app-one-identity"`,
+		},
+		{
+			name:     "without kind",
+			resolved: ResolvedIdentity{SourceNamespace: testNamespace, SourceName: testIdentityName},
+			want:     fallbackSourceDescription,
+		},
+		{
+			name:     "without name",
+			resolved: ResolvedIdentity{SourceKind: IdentitySourceServiceAccount, SourceNamespace: testNamespace},
+			want:     fallbackSourceDescription,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := tt.resolved.SourceDescription(); got != tt.want {
+				t.Fatalf("expected description %q, got %q", tt.want, got)
+			}
+		})
 	}
 }
 

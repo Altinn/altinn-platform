@@ -1,12 +1,15 @@
 package controller
 
 import (
+	"context"
 	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/Altinn/altinn-platform/services/dis-common/identityref"
+	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	servicebusv1 "github.com/Azure/azure-service-operator/v2/api/servicebus/v1api20240101"
 	"github.com/Azure/azure-service-operator/v2/pkg/common/annotations"
@@ -21,6 +24,7 @@ import (
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
 	messagingv1alpha1 "github.com/Altinn/altinn-platform/services/dis-messaging-operator/api/v1alpha1"
@@ -206,15 +210,23 @@ var _ = Describe("Queue CRD schema", func() {
 })
 
 func newReconciler() *QueueReconciler {
+	return reconcilerWith(k8sClient)
+}
+
+func reconcilerWith(c client.Client) *QueueReconciler {
 	return &QueueReconciler{
-		Client: k8sClient,
+		Client: c,
 		Scheme: k8sClient.Scheme(),
 		Config: config.OperatorConfig{SubscriptionID: testSubscriptionID, NamespaceResourceID: testNamespaceResourceID},
 	}
 }
 
 func reconcileQueue(queue *messagingv1alpha1.Queue) *messagingv1alpha1.Queue {
-	_, err := newReconciler().Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(queue)})
+	return reconcileQueueWith(newReconciler(), queue)
+}
+
+func reconcileQueueWith(r *QueueReconciler, queue *messagingv1alpha1.Queue) *messagingv1alpha1.Queue {
+	_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(queue)})
 	Expect(err).NotTo(HaveOccurred())
 
 	stored := &messagingv1alpha1.Queue{}
@@ -414,8 +426,8 @@ var _ = Describe("Queue reconciler", func() {
 		Expect(message).To(ContainSubstring("has no queue name prefix"))
 	})
 
-	It("clears the name and the resource ID when a new namespace prefix makes a ready Queue invalid", func() {
-		queue := productQueue("renamed", "team-a.renamed")
+	It("withdraws the NamespacesQueue and the grants when a new namespace prefix makes a ready Queue invalid", func() {
+		queue := accessQueue("renamed", groupPrincipal(messagingv1alpha1.QueueAccessRoleSender, "group-renamed"))
 		createQueue(queue)
 		reconcileQueue(queue)
 		reportReady(queue, testNamespaceResourceID+"/queues/team-a.renamed")
@@ -424,11 +436,16 @@ var _ = Describe("Queue reconciler", func() {
 		Expect(stored.Status.Name).To(Equal("team-a.renamed"))
 		Expect(stored.Status.ResourceId).NotTo(BeEmpty())
 
+		Expect(grantsOf(queue)).To(HaveLen(1))
+
 		setPrefix(productNamespace, "team-b.")
 		stored = reconcileQueue(queue)
 		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionFalse, messaging.ReasonInvalidName)
 		Expect(stored.Status.Name).To(BeEmpty())
 		Expect(stored.Status.ResourceId).To(BeEmpty())
+		Expect(grantsOf(queue)).To(BeEmpty())
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), &servicebusv1.NamespacesQueue{})
+		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "expected NotFound, got %v", err)
 	})
 
 	It("creates the NamespacesQueue of an invalid Queue once the namespace gets the prefix annotation", func() {
@@ -559,6 +576,32 @@ func reportGrants(queue *messagingv1alpha1.Queue, condition conditions.Condition
 	}
 }
 
+// createIdentity creates an ApplicationIdentity that is not ready yet.
+func createIdentity(namespace, name string) *identityv1alpha1.ApplicationIdentity {
+	identity := &identityv1alpha1.ApplicationIdentity{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
+	Expect(k8sClient.Create(ctx, identity)).To(Succeed())
+	DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, identity))).To(Succeed()) })
+	return identity
+}
+
+// reportIdentity writes, as the identity operator would, Ready=True and
+// principalID in the status of identity.
+func reportIdentity(identity *identityv1alpha1.ApplicationIdentity, principalID string) {
+	identity.Status.ManagedIdentityName = ptr.To(identity.Name)
+	identity.Status.PrincipalID = ptr.To(principalID)
+	identity.Status.Conditions = []metav1.Condition{{
+		Type:               string(identityv1alpha1.ConditionReady),
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "Ready",
+	}}
+	Expect(k8sClient.Status().Update(ctx, identity)).To(Succeed())
+}
+
+func accessMessage(queue *messagingv1alpha1.Queue) string {
+	return meta.FindStatusCondition(queue.Status.Conditions, string(messagingv1alpha1.ConditionAccessReady)).Message
+}
+
 var _ = Describe("Queue access", func() {
 	BeforeEach(createProductNamespace)
 
@@ -605,8 +648,7 @@ var _ = Describe("Queue access", func() {
 		Expect(grantedRoles(queue)).To(ConsistOf("ServicePrincipal/sp-id/" + senderRoleID))
 		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionFalse, messaging.ReasonRoleNotAllowed)
 		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, messaging.ReasonRoleNotAllowed)
-		message := meta.FindStatusCondition(stored.Status.Conditions, string(messagingv1alpha1.ConditionAccessReady)).Message
-		Expect(message).To(HavePrefix(`spec.access.principals[0]: role "owner"`))
+		Expect(accessMessage(stored)).To(HavePrefix(`spec.access.principals[0]: role "owner"`))
 	})
 
 	It("deletes the grant of a removed principal and leaves a RoleAssignment the operator did not create", func() {
@@ -653,8 +695,70 @@ var _ = Describe("Queue access", func() {
 			identityPrincipal(messagingv1alpha1.QueueAccessRoleReceiver, "app-two"))
 		stored = reconcileQueue(queue)
 		Expect(grantedRoles(queue)).To(ConsistOf("Group/kept-id/"+senderRoleID, "Group/removed-id/"+senderRoleID))
-		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionFalse, ReasonIdentityNotReady)
-		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, ReasonIdentityNotReady)
+		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionFalse, identityref.ReasonIdentityNotReady)
+		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, identityref.ReasonIdentityNotReady)
+	})
+
+	It("requeues while the ApplicationIdentity is missing or not ready and grants it once it is ready", func() {
+		queue := accessQueue("pending-identity", identityPrincipal(messagingv1alpha1.QueueAccessRoleSender, "app-pending"))
+		createQueue(queue)
+		result, err := newReconciler().Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(queue)})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(identityRequeueDelay))
+
+		stored := &messagingv1alpha1.Queue{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(queue), stored)).To(Succeed())
+		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionFalse, identityref.ReasonIdentityNotReady)
+		Expect(accessMessage(stored)).To(Equal(`spec.access.principals[0]: ApplicationIdentity "` + productNamespace + `/app-pending" not found`))
+		Expect(grantsOf(queue)).To(BeEmpty())
+
+		identity := createIdentity(productNamespace, "app-pending")
+		stored = reconcileQueue(queue)
+		Expect(accessMessage(stored)).To(Equal(`spec.access.principals[0]: ApplicationIdentity "` + productNamespace + `/app-pending" is not ready`))
+
+		reportIdentity(identity, "pending-id")
+		result, err = newReconciler().Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(queue)})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(BeZero())
+		Expect(grantedRoles(queue)).To(ConsistOf("ServicePrincipal/pending-id/" + senderRoleID))
+	})
+
+	It("grants an ApplicationIdentity in another namespace", func() {
+		reportIdentity(createIdentity(testNamespace, "app-remote"), "remote-id")
+		queue := accessQueue("remote-identity", messagingv1alpha1.QueueAccessPrincipalSpec{
+			Role:        messagingv1alpha1.QueueAccessRoleReceiver,
+			IdentityRef: &messagingv1alpha1.ApplicationIdentityRef{Name: "app-remote", Namespace: testNamespace},
+		})
+		createQueue(queue)
+
+		reconcileQueue(queue)
+		Expect(grantedRoles(queue)).To(ConsistOf("ServicePrincipal/remote-id/" + receiverRoleID))
+	})
+
+	It("moves the grant to the new principal ID of an ApplicationIdentity", func() {
+		identity := createIdentity(productNamespace, "app-moved")
+		reportIdentity(identity, "old-id")
+		queue := accessQueue("moved-identity", identityPrincipal(messagingv1alpha1.QueueAccessRoleSender, "app-moved"))
+		createQueue(queue)
+		reconcileQueue(queue)
+		Expect(grantedRoles(queue)).To(ConsistOf("ServicePrincipal/old-id/" + senderRoleID))
+
+		reportIdentity(identity, "new-id")
+		reconcileQueue(queue)
+		Expect(grantedRoles(queue)).To(ConsistOf("ServicePrincipal/new-id/" + senderRoleID))
+	})
+
+	It("keeps the grant and reports IdentityNotReady when the ApplicationIdentity is deleted", func() {
+		identity := createIdentity(productNamespace, "app-deleted")
+		reportIdentity(identity, "deleted-id")
+		queue := accessQueue("deleted-identity", identityPrincipal(messagingv1alpha1.QueueAccessRoleSender, "app-deleted"))
+		createQueue(queue)
+		reconcileQueue(queue)
+
+		Expect(k8sClient.Delete(ctx, identity)).To(Succeed())
+		stored := reconcileQueue(queue)
+		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionFalse, identityref.ReasonIdentityNotReady)
+		Expect(grantedRoles(queue)).To(ConsistOf("ServicePrincipal/deleted-id/" + senderRoleID))
 	})
 
 	It("mirrors an ASO failure of a grant into AccessReady and Ready", func() {
@@ -674,8 +778,7 @@ var _ = Describe("Queue access", func() {
 		expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionTrue, conditions.ReasonSucceeded)
 		expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionFalse, ReasonAccessNotReady)
 		expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, ReasonAccessNotReady)
-		message := meta.FindStatusCondition(stored.Status.Conditions, string(messagingv1alpha1.ConditionAccessReady)).Message
-		Expect(message).To(Equal("RoleAssignment " + grantsOf(queue)[0].Name + ": Bad-Code: principal not found"))
+		Expect(accessMessage(stored)).To(Equal("RoleAssignment " + grantsOf(queue)[0].Name + ": Bad-Code: principal not found"))
 	})
 
 	It("records a RoleAssignment apply error in AccessReady", func() {
@@ -696,19 +799,185 @@ var _ = Describe("Queue access", func() {
 	})
 })
 
+// startOfSecond waits for the next second. A creationTimestamp has whole
+// seconds, so the Queues that a spec creates right after share it.
+func startOfSecond() {
+	time.Sleep(time.Until(time.Now().Truncate(time.Second).Add(time.Second)))
+}
+
+// detachChecked returns a client whose Delete of a NamespacesQueue fails
+// when the stored object does not have detach-on-delete yet. ASO would
+// delete the Azure queue of the holder.
+func detachChecked() client.Client {
+	direct, err := client.NewWithWatch(cfg, client.Options{Scheme: k8sClient.Scheme()})
+	Expect(err).NotTo(HaveOccurred())
+	return interceptor.NewClient(direct, interceptor.Funcs{
+		List: listByQueueName,
+		Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+			if _, ok := obj.(*servicebusv1.NamespacesQueue); ok {
+				var stored servicebusv1.NamespacesQueue
+				Expect(c.Get(ctx, client.ObjectKeyFromObject(obj), &stored)).To(Succeed())
+				Expect(stored.Annotations).To(HaveKeyWithValue(annotations.ReconcilePolicy,
+					string(annotations.ReconcilePolicyDetachOnDelete)), "detach-on-delete must be stored before the delete")
+			}
+			return c.Delete(ctx, obj, opts...)
+		},
+	})
+}
+
+func expectConflict(r *QueueReconciler, queue *messagingv1alpha1.Queue, holder string) {
+	stored := reconcileQueueWith(r, queue)
+	expectCondition(stored, messagingv1alpha1.ConditionQueueReady, metav1.ConditionFalse, messaging.ReasonConflict)
+	expectCondition(stored, messagingv1alpha1.ConditionAccessReady, metav1.ConditionUnknown, ReasonWaitingForQueue)
+	expectCondition(stored, messagingv1alpha1.ConditionReady, metav1.ConditionFalse, messaging.ReasonConflict)
+	Expect(meta.FindStatusCondition(stored.Status.Conditions, string(messagingv1alpha1.ConditionQueueReady)).Message).
+		To(ContainSubstring("Queue " + holder + " holds the queue name"))
+	Expect(stored.Status.Name).To(BeEmpty())
+}
+
+var _ = Describe("Queue name conflicts", func() {
+	BeforeEach(createProductNamespace)
+
+	It("reports Conflict on the newer Queue, names the oldest one and applies nothing", func() {
+		older := productQueue("conflict-z-older", "team-a.conflict")
+		createQueue(older)
+		startOfSecond()
+		newer := productQueue("conflict-a-newer", "team-a.conflict")
+		createQueue(newer)
+
+		expectConflict(newReconciler(), newer, productNamespace+"/conflict-z-older")
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(newer), &servicebusv1.NamespacesQueue{})
+		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "expected NotFound, got %v", err)
+		expectCondition(reconcileQueue(older), messagingv1alpha1.ConditionQueueReady, metav1.ConditionUnknown, "Reconciling")
+	})
+
+	It("compares names without case in every namespace and passes the name on when the holder is deleted", func() {
+		other := createNamespace("team-")
+		setPrefix(other, "team-a.")
+		holder := productQueue("case-holder", "team-a.Case")
+		Expect(k8sClient.Create(ctx, holder)).To(Succeed())
+		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, holder))).To(Succeed()) })
+		startOfSecond()
+		loser := queueIn(other, "case-loser", "team-a.CASE")
+		createQueue(loser)
+
+		expectConflict(newReconciler(), loser, productNamespace+"/case-holder")
+		Expect(k8sClient.Delete(ctx, holder)).To(Succeed())
+		expectCondition(reconcileQueue(loser), messagingv1alpha1.ConditionQueueReady, metav1.ConditionUnknown, "Reconciling")
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loser), &servicebusv1.NamespacesQueue{})).To(Succeed())
+	})
+
+	It("gives a tie to the first name and releases what the loser applied before it saw the holder", func() {
+		startOfSecond()
+		loser := accessQueue("tie-z", groupPrincipal(messagingv1alpha1.QueueAccessRoleSender, "group-tie"))
+		loser.Spec.DeletionPolicy = messagingv1alpha1.QueueDeletionPolicyDelete
+		createQueue(loser)
+		reconcileQueue(loser)
+		Expect(grantsOf(loser)).NotTo(BeEmpty())
+		// ASO keeps a finalizer on the NamespacesQueue until it has deleted
+		// or detached the Azure queue.
+		var nsQueue servicebusv1.NamespacesQueue
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loser), &nsQueue)).To(Succeed())
+		Expect(nsQueue.Annotations).NotTo(HaveKey(annotations.ReconcilePolicy))
+		nsQueue.Finalizers = []string{"test.dis.altinn.cloud/hold"}
+		Expect(k8sClient.Update(ctx, &nsQueue)).To(Succeed())
+		DeferCleanup(func() {
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loser), &nsQueue)).To(Succeed())
+			nsQueue.Finalizers = nil
+			Expect(k8sClient.Update(ctx, &nsQueue)).To(Succeed())
+		})
+		holder := productQueue("tie-a", "team-a.tie-z")
+		createQueue(holder)
+		Expect(holder.CreationTimestamp).To(Equal(loser.CreationTimestamp), "both Queues must share a second")
+
+		expectConflict(reconcilerWith(detachChecked()), loser, productNamespace+"/tie-a")
+		Expect(grantsOf(loser)).To(BeEmpty())
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loser), &nsQueue)).To(Succeed())
+		Expect(nsQueue.DeletionTimestamp).NotTo(BeNil())
+		Expect(nsQueue.Annotations).To(HaveKeyWithValue(annotations.ReconcilePolicy,
+			string(annotations.ReconcilePolicyDetachOnDelete)))
+	})
+
+	It("lets a valid Queue take the name of an older invalid Queue, until a prefix makes that Queue valid", func() {
+		invalid := newQueue("held-invalid", nil)
+		createQueue(invalid)
+		startOfSecond()
+		valid := productQueue("held-valid", "team-a.held-invalid")
+		createQueue(valid)
+
+		expectCondition(reconcileQueue(invalid), messagingv1alpha1.ConditionQueueReady, metav1.ConditionFalse,
+			messaging.ReasonInvalidName)
+		expectCondition(reconcileQueue(valid), messagingv1alpha1.ConditionQueueReady, metav1.ConditionUnknown, "Reconciling")
+
+		setPrefix(testNamespace, "team-a.")
+		expectCondition(reconcileQueue(invalid), messagingv1alpha1.ConditionQueueReady, metav1.ConditionUnknown, "Reconciling")
+		expectConflict(newReconciler(), valid, testNamespace+"/held-invalid")
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(valid), &servicebusv1.NamespacesQueue{})
+		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "expected NotFound, got %v", err)
+	})
+})
+
 var _ = Describe("Queue watches", func() {
 	BeforeEach(createProductNamespace)
 
-	It("maps a namespace to the Queues in it", func() {
+	It("maps a Queue to the Queues with the same queue name, in any namespace", func() {
+		other := createNamespace("team-")
+		setPrefix(other, "team-a.")
+		local, remote := productQueue("mapped-name-local", "team-a.mapped"), queueIn(other, "mapped-name-remote", "team-a.MAPPED")
+		createQueue(local)
+		createQueue(remote)
+		createQueue(productQueue("mapped-name-other", "team-a.unmapped"))
+
+		reconciler := &QueueReconciler{Client: cachedClient}
+		Eventually(func() []ctrl.Request { return reconciler.sameNameQueues(ctx, local) }).
+			WithTimeout(10 * time.Second).Should(ConsistOf(
+			ctrl.Request{NamespacedName: client.ObjectKeyFromObject(local)},
+			ctrl.Request{NamespacedName: client.ObjectKeyFromObject(remote)},
+		))
+	})
+
+	It("maps a namespace to the Queues in it and to the Queues with the same names elsewhere", func() {
 		first, second := productQueue("first", "team-a.first"), productQueue("second", "team-a.second")
+		rival := newQueue("first-rival", func(q *messagingv1alpha1.Queue) { q.Spec.Name = "team-a.first" })
 		createQueue(first)
 		createQueue(second)
+		createQueue(rival)
 		createQueue(newQueue("elsewhere", nil))
 
 		namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: productNamespace}}
 		Expect(newReconciler().namespaceToQueues(ctx, namespace)).To(ConsistOf(
 			ctrl.Request{NamespacedName: client.ObjectKeyFromObject(first)},
 			ctrl.Request{NamespacedName: client.ObjectKeyFromObject(second)},
+			ctrl.Request{NamespacedName: client.ObjectKeyFromObject(rival)},
+		))
+	})
+
+	It("maps an ApplicationIdentity to the Queues that can grant it a role, in any namespace", func() {
+		local := accessQueue("mapped-local", identityPrincipal(messagingv1alpha1.QueueAccessRoleSender, "app-mapped"))
+		remote := newQueue("mapped-remote", func(q *messagingv1alpha1.Queue) {
+			q.Spec.Access = &messagingv1alpha1.QueueAccessSpec{Principals: []messagingv1alpha1.QueueAccessPrincipalSpec{{
+				Role:        messagingv1alpha1.QueueAccessRoleReceiver,
+				IdentityRef: &messagingv1alpha1.ApplicationIdentityRef{Name: "app-mapped", Namespace: productNamespace},
+			}}}
+		})
+		other := newQueue("mapped-other", func(q *messagingv1alpha1.Queue) {
+			q.Spec.Access = &messagingv1alpha1.QueueAccessSpec{Principals: []messagingv1alpha1.QueueAccessPrincipalSpec{
+				identityPrincipal(messagingv1alpha1.QueueAccessRoleSender, "app-mapped"),
+			}}
+		})
+		createQueue(local)
+		createQueue(remote)
+		createQueue(other)
+
+		reconciler := &QueueReconciler{Client: cachedClient}
+		identity := &identityv1alpha1.ApplicationIdentity{
+			ObjectMeta: metav1.ObjectMeta{Name: "app-mapped", Namespace: productNamespace},
+		}
+		// The cache learns about the Queues through its watch.
+		Eventually(func() []ctrl.Request { return reconciler.identityToQueues(ctx, identity) }).
+			WithTimeout(10 * time.Second).Should(ConsistOf(
+			ctrl.Request{NamespacedName: client.ObjectKeyFromObject(local)},
+			ctrl.Request{NamespacedName: client.ObjectKeyFromObject(remote)},
 		))
 	})
 

@@ -44,7 +44,8 @@ const (
 // Callers map their CR spec onto this struct; a nil field means the reference
 // is not set on the spec.
 type Source struct {
-	// Namespace is the namespace of the CR and of the referenced objects.
+	// Namespace is the namespace of the referenced object. It is the namespace
+	// of the CR unless the CR allows a reference into another namespace.
 	Namespace string
 	// IdentityRefName is spec.identityRef.name, or nil when identityRef is not set.
 	IdentityRefName *string
@@ -55,6 +56,7 @@ type Source struct {
 // ResolvedIdentity contains owner identity values required for provisioning.
 type ResolvedIdentity struct {
 	SourceKind         IdentitySourceKind
+	SourceNamespace    string
 	SourceName         string
 	AuthReferenceName  string
 	ServiceAccountName string
@@ -68,13 +70,21 @@ func (r ResolvedIdentity) IsPending() bool {
 	return r.PendingReason != ""
 }
 
-// SourceDescription returns a human-readable description of the identity source.
+// fallbackSourceDescription describes an identity source whose kind or name is unknown.
+const fallbackSourceDescription = "identity source"
+
+// SourceDescription returns a human-readable description of the identity source
+// in the Kubernetes namespace/name form, for example `ApplicationIdentity "team-a/app-one"`.
 func (r ResolvedIdentity) SourceDescription() string {
 	if r.SourceKind == "" || r.SourceName == "" {
-		return "identity source"
+		return fallbackSourceDescription
+	}
+	if r.SourceNamespace == "" {
+		return fmt.Sprintf("%s %q", r.SourceKind, r.SourceName)
 	}
 
-	return fmt.Sprintf("%s %q", r.SourceKind, r.SourceName)
+	name := types.NamespacedName{Namespace: r.SourceNamespace, Name: r.SourceName}
+	return fmt.Sprintf("%s %q", r.SourceKind, name.String())
 }
 
 // ActiveAuthReferenceName returns the name of the active identity reference.
@@ -130,6 +140,7 @@ func resolveApplicationIdentity(
 	identityName = strings.TrimSpace(identityName)
 	resolved := ResolvedIdentity{
 		SourceKind:         IdentitySourceApplicationIdentity,
+		SourceNamespace:    namespace,
 		SourceName:         identityName,
 		AuthReferenceName:  identityName,
 		ServiceAccountName: identityName,
@@ -178,6 +189,7 @@ func resolveServiceAccount(
 	serviceAccountName = strings.TrimSpace(serviceAccountName)
 	resolved := ResolvedIdentity{
 		SourceKind:         IdentitySourceServiceAccount,
+		SourceNamespace:    namespace,
 		SourceName:         serviceAccountName,
 		AuthReferenceName:  serviceAccountName,
 		ServiceAccountName: serviceAccountName,

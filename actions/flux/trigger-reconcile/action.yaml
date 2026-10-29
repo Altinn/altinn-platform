@@ -3,7 +3,7 @@ description: "Ask Flux to reconcile now: send a reconcile request with the job's
 
 inputs:
   url:
-    description: "Webhook endpoint of the environment on the DIS edge gateway, https://<platform host>/flux-webhook, for example https://platform.at23.altinn.cloud/flux-webhook. The action also uses it, without trailing slashes, as the audience of the OIDC token."
+    description: "Webhook endpoint of the environment on the DIS edge gateway, https://ops.<environment>.dis.altinn.cloud/flux-webhook, for example https://ops.at23.dis.altinn.cloud/flux-webhook. The action also uses it, without trailing slashes, as the audience of the OIDC token."
     required: true
   receiver_name:
     description: "Name of the Flux Receiver to trigger"
@@ -54,7 +54,7 @@ runs:
           exit 1
         fi
         if [[ "${base_url}" != */flux-webhook ]]; then
-          echo "::warning::The url '${base_url}' does not end in /flux-webhook. The webhook endpoint of an environment is https://<platform host>/flux-webhook, for example https://platform.at23.altinn.cloud/flux-webhook."
+          echo "::warning::The url '${base_url}' does not end in /flux-webhook. The webhook endpoint of an environment is https://ops.<environment>.dis.altinn.cloud/flux-webhook, for example https://ops.at23.dis.altinn.cloud/flux-webhook."
         fi
         # The edge gateway accepts only its webhook endpoint as the audience,
         # and the Receiver must expect the same value.

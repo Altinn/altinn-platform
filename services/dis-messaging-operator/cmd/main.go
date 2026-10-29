@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"os"
@@ -24,17 +25,23 @@ import (
 	messagingv1alpha1 "github.com/Altinn/altinn-platform/services/dis-messaging-operator/api/v1alpha1"
 	"github.com/Altinn/altinn-platform/services/dis-messaging-operator/internal/config"
 	"github.com/Altinn/altinn-platform/services/dis-messaging-operator/internal/controller"
+	"github.com/Altinn/altinn-platform/services/dis-messaging-operator/internal/messaging"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	identityv1alpha1 "github.com/Altinn/altinn-platform/services/dis-identity-operator/api/v1alpha1"
 	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
 	servicebusv1 "github.com/Azure/azure-service-operator/v2/api/servicebus/v1api20240101"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -53,6 +60,7 @@ func init() {
 	utilruntime.Must(messagingv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(servicebusv1.AddToScheme(scheme))
 	utilruntime.Must(authorizationv1.AddToScheme(scheme))
+	utilruntime.Must(identityv1alpha1.AddToScheme(scheme))
 
 	// +kubebuilder:scaffold:scheme
 }
@@ -159,6 +167,7 @@ func main() {
 		metricsServerOptions.KeyName = metricsCertKey
 	}
 
+	managedBy := labels.SelectorFromSet(labels.Set{messaging.ManagedByLabel: messaging.ManagedByValue})
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
@@ -166,18 +175,37 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "dis-messaging-operator.dis.altinn.cloud",
+		// The operator reads only its own ConfigMaps and quotas, so it does
+		// not cache every ConfigMap in the cluster.
+		Cache: cache.Options{ByObject: map[client.Object]cache.ByObject{
+			&corev1.ConfigMap{}:     {Label: managedBy},
+			&corev1.ResourceQuota{}: {Label: managedBy},
+		}},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 
+	if err = controller.IndexQueues(context.Background(), mgr.GetFieldIndexer()); err != nil {
+		setupLog.Error(err, "unable to index the Queues")
+		os.Exit(1)
+	}
 	if err = (&controller.QueueReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 		Config: *operatorConfig,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Queue")
+		os.Exit(1)
+	}
+	if err = (&controller.NamespaceReconciler{
+		Client:    mgr.GetClient(),
+		APIReader: mgr.GetAPIReader(),
+		Config:    *operatorConfig,
+		Recorder:  mgr.GetEventRecorder("dis-messaging-operator"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Namespace")
 		os.Exit(1)
 	}
 

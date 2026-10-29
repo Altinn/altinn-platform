@@ -3,6 +3,8 @@ module github.com/Altinn/altinn-platform/services/dis-messaging-operator
 go 1.26.3
 
 require (
+	github.com/Altinn/altinn-platform/services/dis-common v0.0.0-20261027124701-2f687f8960e4
+	github.com/Altinn/altinn-platform/services/dis-identity-operator v0.0.0-20260522135147-5189c1dd13ab
 	github.com/Azure/azure-service-operator/v2 v2.19.0
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0

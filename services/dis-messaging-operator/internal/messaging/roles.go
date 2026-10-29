@@ -66,6 +66,17 @@ type IdentityPrincipal struct {
 	Role messagingv1alpha1.QueueAccessRole
 }
 
+// Resolved returns the principal that the identity gives with principalID,
+// the principal ID of its ApplicationIdentity. A managed identity is a
+// service principal.
+func (p IdentityPrincipal) Resolved(principalID string) Principal {
+	return Principal{
+		ID:   principalID,
+		Type: authorizationv1.RoleAssignmentProperties_PrincipalType_ServicePrincipal,
+		Role: p.Role,
+	}
+}
+
 // SplitPrincipals sorts the principals of a Queue. A principal with a role
 // the operator does not grant goes to NotAllowed, whatever its source. The
 // CRD admits exactly one source per principal.
@@ -153,6 +164,8 @@ func BuildRoleAssignments(
 
 	// A role assignment name must be unique in the Entra tenant, not only at
 	// its scope. The namespace ID makes the queue path unique across clusters.
+	// The Queue name keeps the grants of two Queues with the same queue name
+	// apart, so a Queue that loses the name deletes only its own grants.
 	queuePath := nsQueue.Spec.Owner.ARMID + "/queues/" + nsQueue.Spec.AzureName
 
 	var assignments []*authorizationv1.RoleAssignment
@@ -167,7 +180,7 @@ func BuildRoleAssignments(
 		}
 
 		for _, roleID := range roleIDs {
-			seed := strings.Join([]string{queue.Namespace, queuePath, principal.ID, roleID}, "/")
+			seed := strings.Join([]string{queue.Namespace, queue.Name, queuePath, principal.ID, roleID}, "/")
 			azureName := uuid.NewSHA1(uuid.NameSpaceURL, []byte(seed)).String()
 			if seen[azureName] {
 				continue

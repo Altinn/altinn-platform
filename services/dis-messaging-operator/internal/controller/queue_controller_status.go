@@ -18,8 +18,9 @@ import (
 	messagingv1alpha1 "github.com/Altinn/altinn-platform/services/dis-messaging-operator/api/v1alpha1"
 )
 
-// Reasons of the Queue conditions. messaging.ReasonInvalidName and
-// messaging.ReasonRoleNotAllowed are the others.
+// Reasons of the Queue conditions. messaging.ReasonInvalidName,
+// messaging.ReasonConflict, messaging.ReasonRoleNotAllowed and
+// identityref.ReasonIdentityNotReady are the others.
 const (
 	// ReasonApplyFailed means the operator could not write the
 	// NamespacesQueue or a RoleAssignment.
@@ -30,9 +31,6 @@ const (
 	// ReasonAccessNotReady replaces an ASO reason of a role assignment that
 	// is not a valid condition reason.
 	ReasonAccessNotReady = "AccessNotReady"
-	// ReasonIdentityNotReady means the operator has no principal ID for an
-	// identityRef principal.
-	ReasonIdentityNotReady = "IdentityNotReady"
 	// ReasonWaitingForQueue means the operator grants no roles because it
 	// could not apply the queue.
 	ReasonWaitingForQueue = "WaitingForQueue"
