@@ -1,0 +1,254 @@
+name: Flux webhook acceptance checks
+
+# RFC 0017 (on-demand Flux reconcile): the pilot acceptance checks that need a
+# GitHub Actions OIDC token, run against the webhook endpoint of one
+# environment. The token comes from this repository: it is in Altinn, but it is
+# not the repository that the Receiver accepts. Row numbers follow the table
+# "Pilot acceptance checks" in rfcs/0017-on-demand-flux-reconcile.md, from 1.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment of the webhook endpoint
+        type: choice
+        options: [at22, at23, yt01, tt02, prod]
+        default: at23
+      receiver_name:
+        description: Name of a Receiver that does not accept this repository
+        type: string
+        default: dialogporten-manifests
+      receiver_namespace:
+        description: Namespace of that Receiver
+        type: string
+        default: product-dialogporten
+      repository_limit:
+        description: Requests a minute that the edge gateway admits from one repository
+        type: string
+        default: "10"
+  pull_request:
+    paths:
+      - .github/workflows/flux-webhook-acceptance.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  # The rate limit checks count the requests of one minute. Two runs at the
+  # same time would count each other's requests.
+  group: flux-webhook-acceptance-${{ inputs.environment || 'at23' }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    name: Checks in ${{ inputs.environment || 'at23' }}
+    # A pull request from a fork gets no OIDC token.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ENVIRONMENT: ${{ inputs.environment || 'at23' }}
+      RECEIVER_NAME: ${{ inputs.receiver_name || 'dialogporten-manifests' }}
+      RECEIVER_NAMESPACE: ${{ inputs.receiver_namespace || 'product-dialogporten' }}
+      REPOSITORY_LIMIT: ${{ inputs.repository_limit || '10' }}
+    steps:
+      - name: Run the checks
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]]; then
+            echo "::error::No OIDC token endpoint is available. The job needs 'permissions: id-token: write'."
+            exit 1
+          fi
+          name_pattern='^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$'
+          if [[ ! "${RECEIVER_NAME}" =~ ${name_pattern} || ! "${RECEIVER_NAMESPACE}" =~ ${name_pattern} ]]; then
+            echo "::error::receiver_name and receiver_namespace must be Kubernetes object names."
+            exit 1
+          fi
+          if [[ ! "${REPOSITORY_LIMIT}" =~ ^[1-9][0-9]?$ ]]; then
+            echo "::error::repository_limit must be a number from 1 to 99."
+            exit 1
+          fi
+
+          endpoint="https://ops.${ENVIRONMENT}.dis.altinn.cloud/flux-webhook"
+          # A token for the webhook endpoint of a different environment.
+          other=at23
+          if [[ "${ENVIRONMENT}" == "at23" ]]; then
+            other=at22
+          fi
+          other_endpoint="https://ops.${other}.dis.altinn.cloud/flux-webhook"
+          # Flux derives the path of a generic-oidc Receiver from its name and namespace.
+          digest=$(printf '%s%s' "${RECEIVER_NAME}" "${RECEIVER_NAMESPACE}" | sha256sum | cut -d' ' -f1)
+          hook_url="${endpoint}/hook/${digest}"
+          start_time=$(date -u +%H:%M:%S)
+
+          # Prints an OIDC token of this job with the audience $1.
+          oidc_token() {
+            local audience
+            audience=$(jq -rn --arg v "$1" '$v | @uri')
+            curl -fsS --retry 3 --max-time 30 -H @- \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${audience}" \
+              <<< "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" | jq -er '.value'
+          }
+          token=$(oidc_token "${endpoint}")
+          echo "::add-mask::${token}"
+          other_token=$(oidc_token "${other_endpoint}")
+          echo "::add-mask::${other_token}"
+
+          body_file="${RUNNER_TEMP}/body"
+          headers_file="${RUNNER_TEMP}/headers"
+
+          # post <url> [<header>...] sends a POST and prints the status code,
+          # or 000 if no response arrives. curl reads the URL and the headers
+          # from a config on stdin, so no token shows in the process list.
+          post() {
+            local config header
+            config="url = \"$1\""
+            shift
+            for header in "$@"; do
+              config+=$'\n'"header = \"${header}\""
+            done
+            : > "${body_file}"
+            : > "${headers_file}"
+            curl -sS -o "${body_file}" -D "${headers_file}" -w '%{http_code}' --max-time 20 \
+              -H 'Content-Type: application/json' --data '{}' -K - <<< "${config}" || true
+          }
+
+          # Prints the status and the start of the body for the summary. The
+          # body comes from the network, so only plain characters stay.
+          response() {
+            local text
+            text=$(head -c 80 "${body_file}" | tr -c 'A-Za-z0-9 .,:;_/-' ' ' | tr -s ' ')
+            text="${text% }"
+            echo "\`$1\`${text:+ ${text}}"
+          }
+
+          summary="${RUNNER_TEMP}/summary.md"
+          failures=0
+          {
+            echo "## Flux webhook acceptance checks in ${ENVIRONMENT}"
+            echo
+            echo "Endpoint \`${endpoint}\`. Receiver \`${RECEIVER_NAMESPACE}/${RECEIVER_NAME}\`. Token from \`${GITHUB_REPOSITORY}\`."
+            echo
+            echo "| Row | Check | Expected | Response | Result |"
+            echo "|---|---|---|---|---|"
+          } > "${summary}"
+
+          # record <row> <check> <expected> <response> <pass|fail>
+          record() {
+            local mark="✅"
+            if [[ "$5" != "pass" ]]; then
+              mark="❌"
+              failures=$((failures + 1))
+            fi
+            printf '| %s | %s | %s | %s | %s |\n' "$1" "$2" "$3" "$4" "${mark}" >> "${summary}"
+          }
+
+          # Prints the limit that a 429 reached: the first value of the
+          # X-RateLimit-Limit header of the route limit, for example 10 in
+          # "10, 10;w=60, 60;w=60". Envoy puts the limit with the fewest
+          # remaining requests first. The local limit of the gateway sends a
+          # second X-RateLimit-Limit header without ";w=".
+          reached_limit() {
+            { grep -i '^x-ratelimit-limit:' "${headers_file}" || true; } | { grep ';w=' || true; } \
+              | head -n 1 | cut -d: -f2- | cut -d, -f1 | tr -d ' \t\r'
+          }
+
+          # Row 5: no token. Flux never answers 401 or 403, so these come from the edge gateway.
+          status=$(post "${hook_url}")
+          if [[ "${status}" == "401" ]]; then result=pass; else result=fail; fi
+          record 5 "No token" "\`401\` from the edge gateway" "$(response "${status}")" "${result}"
+
+          # Row 5: a token for the webhook endpoint of another environment.
+          status=$(post "${hook_url}" "Authorization: Bearer ${other_token}")
+          if [[ "${status}" == "401" || "${status}" == "403" ]]; then result=pass; else result=fail; fi
+          record 5 "Audience of ${other}" "\`401\` or \`403\` from the edge gateway" "$(response "${status}")" "${result}"
+
+          # Row 7: a valid token from this repository. Flux answers 400 with an
+          # empty body when the token fails the validations of the Receiver.
+          status=$(post "${hook_url}" "Authorization: Bearer ${token}")
+          got=$(response "${status}")
+          if [[ "${status}" == "400" && ! -s "${body_file}" ]]; then
+            result=pass
+          else
+            result=fail
+            if [[ "${status}" == "404" && ! -s "${body_file}" ]]; then
+              got="${got}: no Receiver with this name and namespace. This check needs an existing Receiver"
+            fi
+          fi
+          if [[ "${status}" == "200" ]]; then
+            echo "::error::Flux accepted a token from ${GITHUB_REPOSITORY} for Receiver ${RECEIVER_NAMESPACE}/${RECEIVER_NAME}. Examine the validations of the Receiver."
+          fi
+          record 7 "Valid token from \`${GITHUB_REPOSITORY}\`" "\`400\` from Flux" "${got}" "${result}"
+
+          # Row 8: the token only in the access_token query parameter.
+          status=$(post "${hook_url}?access_token=${token}")
+          if [[ "${status}" == "401" ]]; then result=pass; else result=fail; fi
+          record 8 "Token only in \`access_token\`" "\`401\` from the edge gateway" "$(response "${status}")" "${result}"
+
+          # Rows 9 and 10: the rate limit service counts the requests of each
+          # calendar minute. Start at the beginning of a new minute, so that the
+          # earlier requests do not count and the burst stays in one minute.
+          sleep $(( 61 - 10#$(date -u +%S) ))
+          minute=$(date -u +%H:%M)
+          limited_at=0
+          statuses=""
+          rate_headers=""
+          reached=""
+          for i in $(seq 1 $(( REPOSITORY_LIMIT + 5 ))); do
+            status=$(post "${hook_url}" "Authorization: Bearer ${token}")
+            statuses+="${status} "
+            if [[ "${status}" == "429" ]]; then
+              limited_at=${i}
+              reached=$(reached_limit)
+              rate_headers=$({ grep -i '^x-ratelimit' "${headers_file}" || true; } | tr -d '\r' | tr '\n' ';' | tr -c 'A-Za-z0-9 =;:,._-' ' ')
+              break
+            fi
+          done
+          # The environment limit can also give a 429, when other repositories
+          # sent requests in the same minute. Only the repository limit passes.
+          expected=$(( REPOSITORY_LIMIT + 1 ))
+          if [[ "${limited_at}" == "${expected}" && "${reached}" == "${REPOSITORY_LIMIT}" ]]; then result=pass; else result=fail; fi
+          if [[ "${limited_at}" == "0" ]]; then
+            got="no \`429\` in $(( REPOSITORY_LIMIT + 5 )) requests: ${statuses% }"
+          else
+            got="\`429\` at request ${limited_at} from the limit ${reached:-unknown}: ${statuses% }"
+          fi
+          record 9 "Requests from one repository in one minute" "\`429\` at request ${expected} from the limit ${REPOSITORY_LIMIT}" "${got}" "${result}"
+
+          # Row 10: the edge gateway replaces a false x-flux-webhook-repository-id
+          # with the claim of the token, so the request counts in the full
+          # counter of this repository.
+          check="False \`x-flux-webhook-repository-id\` after the \`429\`"
+          expected="\`429\` from the limit ${REPOSITORY_LIMIT}"
+          if [[ "${limited_at}" == "0" ]]; then
+            record 10 "${check}" "${expected}" "Not run: no \`429\` in row 9" fail
+          elif [[ "$(date -u +%H:%M)" != "${minute}" ]]; then
+            record 10 "${check}" "${expected}" "Not run: a new minute started. Run the workflow again" fail
+          else
+            status=$(post "${hook_url}" "Authorization: Bearer ${token}" "x-flux-webhook-repository-id: 1")
+            spoof_reached=$(reached_limit)
+            if [[ "${status}" == "429" && "${spoof_reached}" == "${REPOSITORY_LIMIT}" ]]; then result=pass; else result=fail; fi
+            got=$(response "${status}")
+            if [[ "${status}" == "429" ]]; then
+              got="${got} from the limit ${spoof_reached:-unknown}"
+            fi
+            record 10 "${check}" "${expected}" "${got}" "${result}"
+          fi
+
+          {
+            echo
+            echo "Rate limit headers of the \`429\`: \`${rate_headers:-none}\`"
+            echo
+            echo "Not covered here: row 6 needs a token from outside Altinn, and the second half of row 9 needs a token from a second repository."
+            echo "Row 11: the access logs of the edge gateway and Traefik from ${start_time} to $(date -u +%H:%M:%S) UTC must not contain a token (\`eyJ\`) or an \`Authorization\` header."
+          } >> "${summary}"
+
+          cat "${summary}" >> "${GITHUB_STEP_SUMMARY}"
+          cat "${summary}"
+          if (( failures > 0 )); then
+            echo "::error::${failures} checks failed. The job summary shows the details."
+            exit 1
+          fi
