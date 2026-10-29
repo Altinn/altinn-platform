@@ -38,3 +38,7 @@ GHSA-6q48-6c7w-9gw2
 CVE-2026-97687
 # https://avd.aquasec.com/nvd/cve-2026-97689
 CVE-2026-97689
+# msgpack vendored in the pip bundled by Azure CLI (/opt/az/.../pip/_vendor/msgpack) -
+# resolved when Azure CLI ships a pip that vendors msgpack >= 1.2.3
+# https://avd.aquasec.com/nvd/cve-2026-114613
+CVE-2026-114613
