@@ -30,7 +30,7 @@ The reconcile request is an optimization. Polling continues, and the next poll f
 |-------------|-------|--------|
 | `at22` | `https://ops.at22.dis.altinn.cloud/flux-webhook` | Enabled |
 | `at23` | `https://ops.at23.dis.altinn.cloud/flux-webhook` | Enabled |
-| `yt01` | `https://ops.yt01.dis.altinn.cloud/flux-webhook` | Not enabled yet ([#4252](https://github.com/Altinn/altinn-platform/issues/4252)) |
+| `yt01` | `https://ops.yt01.dis.altinn.cloud/flux-webhook` | Enabled |
 | `tt02` | `https://ops.tt02.dis.altinn.cloud/flux-webhook` | Not enabled yet ([#4253](https://github.com/Altinn/altinn-platform/issues/4253)) |
 | `prod` | `https://ops.prod.dis.altinn.cloud/flux-webhook` | Not enabled yet ([#4254](https://github.com/Altinn/altinn-platform/issues/4254)) |
 
