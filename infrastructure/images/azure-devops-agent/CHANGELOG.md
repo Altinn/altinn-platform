@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/Altinn/altinn-platform/compare/azdevops-agent-1.3.0...azdevops-agent-1.4.0) (2026-10-30)
+
+
+### Features
+
+* **azure-devops-agent:** upgrade the base image to Ubuntu 26.04 ([#4349](https://github.com/Altinn/altinn-platform/issues/4349)) ([06d13a4](https://github.com/Altinn/altinn-platform/commit/06d13a4be7d0d8b14381f191f5c33bfa325e318f))
+
 ## [1.3.0](https://github.com/Altinn/altinn-platform/compare/azdevops-agent-1.2.10...azdevops-agent-1.3.0) (2026-10-30)
 
 
