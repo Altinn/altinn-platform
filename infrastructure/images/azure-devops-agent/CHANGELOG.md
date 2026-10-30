@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.0](https://github.com/Altinn/altinn-platform/compare/azdevops-agent-1.2.10...azdevops-agent-1.3.0) (2026-10-30)
+
+
+### Features
+
+* **azure-devops-agent:** stop idle agents with AZP_IDLE_TIMEOUT ([#4319](https://github.com/Altinn/altinn-platform/issues/4319)) ([0f91d56](https://github.com/Altinn/altinn-platform/commit/0f91d5638876568bca5ac89f6758a95e301860f9))
+
+
+### Bug Fixes
+
+* **azure-devops-agent:** ignore CVEs in Python packages bundled by Azure CLI ([#4335](https://github.com/Altinn/altinn-platform/issues/4335)) ([820eec8](https://github.com/Altinn/altinn-platform/commit/820eec8f75300f2d5f3b23bd966fdae04193682f))
+
 ## [1.2.10](https://github.com/Altinn/altinn-platform/compare/azdevops-agent-1.2.9...azdevops-agent-1.2.10) (2026-08-31)
 
 
