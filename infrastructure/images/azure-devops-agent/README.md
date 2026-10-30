@@ -7,6 +7,12 @@ The image is maintained by the platform team.
 
 The image is meant to be as small and lightweight as possible so we keep the dependencies at a minimum to reduce the maintenance cost.
 
+## Configuration
+
+| Variable | Description |
+| --- | --- |
+| `AZP_IDLE_TIMEOUT` | Optional. Seconds the agent waits for a job. If no job has started by then, the agent unregisters and the container exits. Keep it well below the replica timeout of the Container Apps job. |
+
 ## Extending
 
 If any team needs a custom image they are free to roll their own or extend this, but they will be responsible for maintaining this image.
