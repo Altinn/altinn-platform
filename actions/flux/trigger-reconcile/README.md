@@ -26,15 +26,17 @@ The reconcile request is an optimization. Polling continues, and the next poll f
 
 ## Webhook endpoints
 
-| Environment | `url` |
-|-------------|-------|
-| `at22` | `https://ops.at22.dis.altinn.cloud/flux-webhook` |
-| `at23` | `https://ops.at23.dis.altinn.cloud/flux-webhook` |
-| `yt01` | `https://ops.yt01.dis.altinn.cloud/flux-webhook` |
-| `tt02` | `https://ops.tt02.dis.altinn.cloud/flux-webhook` |
-| `prod` | `https://ops.prod.dis.altinn.cloud/flux-webhook` |
+| Environment | `url` | Status |
+|-------------|-------|--------|
+| `at22` | `https://ops.at22.dis.altinn.cloud/flux-webhook` | Not enabled yet ([#4252](https://github.com/Altinn/altinn-platform/issues/4252)) |
+| `at23` | `https://ops.at23.dis.altinn.cloud/flux-webhook` | Enabled |
+| `yt01` | `https://ops.yt01.dis.altinn.cloud/flux-webhook` | Not enabled yet ([#4252](https://github.com/Altinn/altinn-platform/issues/4252)) |
+| `tt02` | `https://ops.tt02.dis.altinn.cloud/flux-webhook` | Not enabled yet ([#4253](https://github.com/Altinn/altinn-platform/issues/4253)) |
+| `prod` | `https://ops.prod.dis.altinn.cloud/flux-webhook` | Not enabled yet ([#4254](https://github.com/Altinn/altinn-platform/issues/4254)) |
 
-The platform team enables the endpoint for each environment. [#4237](https://github.com/Altinn/altinn-platform/issues/4237) tracks the rollout.
+The platform team enables the endpoint for each environment and then updates this table. In an enabled environment, the edge gateway and the DIS core cluster have the routes, and the DIS core cluster runs Flux 2.9. [#4237](https://github.com/Altinn/altinn-platform/issues/4237) tracks the rollout.
+
+Use only the environments with the status Enabled. In the other environments, the edge gateway answers `404`. On a DIS core cluster without Flux 2.9, the API server also rejects the `Receiver`, and the product syncroot fails.
 
 Send the reconcile request only to the endpoint of the environment that the workflow publishes. The endpoint is also the audience of the token, so a token for one environment is not valid in a different environment.
 
@@ -66,7 +68,7 @@ jobs:
 
 ## Receiver
 
-Add the `Receiver` to the product syncroot, next to the `OCIRepository` of the product:
+Add a `Receiver` to the product syncroot of each enabled environment, next to the `OCIRepository` of the product. The audience is different in each environment, so put the `Receiver` in the overlay of the environment:
 
 ```yaml
 apiVersion: notification.toolkit.fluxcd.io/v1
@@ -95,6 +97,10 @@ spec:
 - Use the numeric ids. `5949420` is the id of the `Altinn` organization. Get the id of your repository with `gh api repos/Altinn/<repository> --jq .id`. A name can be reused after a rename or transfer, an id cannot.
 - List only the source (`OCIRepository`) under `resources`. Flux reconciles the `Kustomization` that uses it when the source reports a new revision.
 
+## Example
+
+Dialogporten uses the action in at23. See its [`Receiver`](https://github.com/Altinn/dialogporten-manifests/blob/main/flux/syncroot/at23/dialogporten-receiver.yaml) and the step `Trigger Flux reconcile` in its [publishing workflow](https://github.com/Altinn/dialogporten-manifests/blob/main/.github/workflows/publish-flux-artifacts.yml). The step runs only for the environments in a list, so the workflow does not send requests to an environment that is not enabled.
+
 ## Failures
 
 The action fails for every response except `200`. Its error names the source of the response, and it prints the first 2,000 bytes of the response body. On `400`, `401` and `403` it also prints the non-secret claims of the token.
@@ -104,7 +110,7 @@ The action fails for every response except `200`. Its error names the source of 
 | `400` | Flux | Flux rejected the token, or Flux could not get the provider configuration or the signing keys from GitHub. The notification-controller log has the exact reason. | Compare the audience and the `validations` of the `Receiver` with the claims of the token. If they match, examine the connection from the notification-controller to GitHub. |
 | `401` | Edge gateway | The token is missing, not valid or expired, or the edge gateway could not get the signing keys from GitHub. | Run the workflow again. If the error continues, tell the platform team. |
 | `403` | Edge gateway | The body names the cause. `Audiences in Jwt are not allowed`: the audience of the token is not the webhook endpoint of the environment. `RBAC: access denied`: the token does not identify the `Altinn` GitHub organization. | Use the webhook endpoint exactly as [Webhook endpoints](#webhook-endpoints) lists it. Run the publishing workflow from a repository in `Altinn`. |
-| `404` | Flux | No `Receiver` has this name and namespace, or the `Receiver` has never been ready. Flux serves the path only after the `Receiver` has reconciled. | Examine the name, the namespace, `url`, and the status of the `Receiver`. |
+| `404` | Flux or edge gateway | Flux: no `Receiver` has this name and namespace, or the `Receiver` has never been ready. Flux serves the path only after the `Receiver` has reconciled. Edge gateway: the webhook endpoint is not enabled in this environment. Both send no response body. | Make sure that the environment is enabled. See [Webhook endpoints](#webhook-endpoints). Then examine the name, the namespace, `url`, and the status of the `Receiver`. |
 | `429` | Edge gateway | The request rate of the repository or of the environment is more than its limit. | None. The action tries again, and the next poll fetches the artifact. |
 | `500` | Flux | Flux could not request the reconcile. A resource that the `Receiver` lists does not exist, or the `Receiver` is not allowed to reference it. | Examine the `resources` of the `Receiver`. |
 | `502`, `504` | Edge gateway | The edge gateway could not reach Flux in the DIS core cluster. | None. The next poll fetches the artifact. If the error continues, tell the platform team. |
