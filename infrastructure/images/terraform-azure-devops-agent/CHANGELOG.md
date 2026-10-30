@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.11.0...tf-azdev-agent-0.12.0) (2026-10-30)
+
+
+### Features
+
+* **tf-azdev-agent:** use azure-devops-agent 1.4.0 (Ubuntu 26.04) ([#4352](https://github.com/Altinn/altinn-platform/issues/4352)) ([8775c7d](https://github.com/Altinn/altinn-platform/commit/8775c7d5f7e8c36e8b2a69885fa63d9dad27ed40))
+
 ## [0.11.0](https://github.com/Altinn/altinn-platform/compare/tf-azdev-agent-0.10.1...tf-azdev-agent-0.11.0) (2026-10-29)
 
 
