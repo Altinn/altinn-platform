@@ -1,4 +1,7 @@
-FROM ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517
+FROM ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c
+# The agent is a .NET app and aborts at startup without ICU. On 24.04 libicu was
+# pulled in by libxml2; on 26.04 nothing does, so install it explicitly. The
+# package name follows the ICU version and changes with each Ubuntu release.
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
@@ -9,6 +12,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     git \
     iputils-ping \
     jq \
+    libicu78 \
     unzip \
     lsb-release \
     software-properties-common && \
