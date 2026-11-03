@@ -81,7 +81,7 @@ Both actions belong in `Altinn/altinn-platform`. The [trigger-reconcile README](
 
 1. Select the application Kustomization that represents the rollout.
 2. Configure health checks for its required workloads.
-3. Register the destination repository and its GitHub App credentials with the platform team.
+3. Register the destination repository with the platform team for the shared GitHub App.
 4. Add the Provider and Alert to the product syncroot.
 5. Add the receiving workflow and shared action configuration to the destination repository's default branch.
 6. Validate both success and failure events before enabling the follow-up jobs.
@@ -100,7 +100,7 @@ spec:
   type: githubdispatch
   address: https://github.com/Altinn/altinn-authentication
   secretRef:
-    name: application-github-app
+    name: application-github-token
 ---
 apiVersion: notification.toolkit.fluxcd.io/v1beta3
 kind: Alert
@@ -143,7 +143,7 @@ spec:
 
 `eventSeverity: info` includes errors. Do not add another error Alert for the same Kustomization and Provider. That creates overlapping subscriptions. The source Alert covers failures before the Kustomization can fetch an artifact.
 
-Use exact resource names. The subscription must not select every resource in the namespace. Keep the Provider, its Secret, the Alerts and their event sources in the same product namespace. Cross-namespace access is not necessary.
+Use exact resource names. The subscription must not select every resource in the namespace. Keep the Provider, its token Secret, the Alerts and their event sources in the same product namespace. The platform supplies the Secret's `token` value through the renewal process described below. The product syncroot does not manage that generated value. Flux subscriptions need no cross-namespace access.
 
 ## Define application readiness
 
@@ -423,19 +423,36 @@ GitHub limits `event_type` to 100 characters and `client_payload` to ten top-lev
 
 ## Authentication and tenant isolation
 
-Use GitHub App authentication. A GitHub App is the machine identity that authenticates dispatch requests. It is separate from the deployed product application. The App requires repository `Contents: write` to create a repository dispatch. `Actions: write` is not the permission for this endpoint.
+Use one shared platform GitHub App. A GitHub App is the machine identity that authenticates dispatch requests. It is separate from the deployed product application. The App requires repository `Contents: write` to create a repository dispatch. `Actions: write` is not the permission for this endpoint.
 
-For the initial design, each product has a dedicated App installed only on its approved destination repositories. Its permissions must not include another product's repositories. A shared App private key must not enter a product namespace. Different installation identifiers do not restrict what that shared private key can access.
+Install the shared App only on approved destination repositories. Keep its private key in a platform-controlled namespace. Each product namespace receives an installation token restricted to its approved destination repository. The shared App private key must not enter a product namespace. Different installation identifiers do not restrict what that private key can access.
 
-The platform provisions the App and supplies its private key through a verified secret management mechanism for the product namespace. [RFC 0017's pilot configuration](https://github.com/Altinn/altinn-platform/blob/main/rfcs/0017-on-demand-flux-reconcile.md#pilot) records that DIS core clusters have no `dis-system-store`. Do not assume that store exists or put private keys in `postBuild.substitute`. The namespace-local Secret contains `githubAppID`, `githubAppInstallationID` and `githubAppPrivateKey`. Flux uses those credentials to obtain installation tokens as needed. This design needs no separate platform service to renew those tokens. Do not commit the Secret values to Git.
+Flux can obtain installation tokens itself when its Provider Secret contains `githubAppID`, `githubAppInstallationID` and `githubAppPrivateKey`. This design supplies only the `token` key to each product's Provider. [Flux uses a supplied token directly](https://github.com/fluxcd/notification-controller/blob/v1.10.0/internal/notifier/github_helpers.go); it cannot renew that token without the App credentials. [GitHub installation tokens](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app) expire after one hour. The platform must replace them before expiry.
 
-The alternative uses one shared platform App, with its private key kept outside product namespaces. A platform service creates a token restricted to each destination repository and supplies it through that namespace's Secret. [GitHub installation tokens](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app) expire after one hour. That service must replace each token before it expires. Flux cannot renew a supplied token without the App credentials. This alternative requires additional implementation; it is not a prerequisite for the proposed dedicated Apps.
+The product namespace is the token trust boundary. Its administrators can access the token for that product's approved repository. Repository administrators must accept that scope during onboarding. The platform owns the App, private key rotation, token renewal and revocation. The App sender identifier is shared across products; consumers must also validate the repository and subscription.
 
-The product namespace is the credential trust boundary. Its administrators can access credentials for that product's approved repositories. Repository administrators must accept that scope during onboarding. The platform owns credential rotation and revocation.
+### Token generation and renewal
 
-Keep cross-namespace restrictions enabled. Verify that the product applier can reconcile Providers and Alerts, and that the selected mechanism can provision the Secret. RFC 0017's admission policy restricts Receiver resources. It does not grant permissions for Providers or Alerts. The outbound subscription needs no Receiver.
+Use External Secrets Operator (ESO) for token generation and distribution. This requires platform configuration of existing components, not a custom token service. ESO provides a [GitHub token generator](https://external-secrets.io/latest/api/generator/github/) and [Kubernetes Secret distribution](https://external-secrets.io/latest/provider/kubernetes/#pushsecret).
 
-Permit notification-controller outbound HTTPS access to `api.github.com` and required name resolution. This path needs no public cluster endpoint, edge gateway route or GitHub-to-cluster connection.
+The proposed configuration uses this sequence:
+
+1. Provision the App private key in `platform-system` through the platform's verified secret management mechanism.
+2. Configure a platform-owned `GithubAccessToken` generator for each approved destination repository.
+3. Set explicit `repositories` and `permissions` fields. For Dialogporten, use `repositories: [dialogporten]` and `contents: write`.
+4. Configure an `ExternalSecret` in `platform-system` to generate the repository token every 30 minutes.
+5. Configure a `PushSecret` in `platform-system` to copy the token to the approved product Secret every minute.
+6. Let the product Provider read that local Secret for dispatch requests.
+
+Each PushSecret uses a platform-owned Kubernetes SecretStore with an explicit destination namespace and restricted service account permissions. The platform approves each repository, namespace and Secret mapping. Products cannot change the generator, its permissions or that mapping. Generation failures retain the existing token; distribution failures must not replace it with an empty value. Monitor generation and distribution failures before the current token expires.
+
+The generator reads its private key from the namespace where generation runs. A [ClusterGenerator](https://external-secrets.io/latest/api/generator/cluster/#limitations) does not remove that namespace requirement. Keep generation in `platform-system`. Distribute only the resulting token. Do not commit credentials. Do not put private keys in `postBuild.substitute`.
+
+The inspected [ESO package](https://github.com/dis-way/gitops-manifests/blob/main/oci/external-secrets-operator/base/helmrelease.yaml) declares chart version `2.13.0`. Its [multitenancy secret layer](https://github.com/dis-way/gitops-manifests/blob/main/oci/external-secrets-operator/README.md) now defines `dis-system-store` in `platform-system`. These manifests do not establish that the pilot cluster has those resources. Verify the deployed version, generator support, private key access and restricted token distribution before rollout.
+
+Keep Flux cross-namespace restrictions enabled. [Flux blocks cross-namespace event selection](https://fluxcd.io/flux/components/notification/alerts/#disable-cross-namespace-selectors) with `--no-cross-namespace-refs=true`. Central Alerts therefore cannot replace product subscriptions while that restriction remains enabled. Verify that the product applier can reconcile Providers and Alerts. Verify token provisioning separately through the platform configuration. RFC 0017's admission policy restricts Receiver resources. It does not grant permissions for Providers or Alerts. The outbound subscription needs no Receiver.
+
+Permit notification-controller and the token generator outbound HTTPS access to `api.github.com` and required name resolution. This path needs no public cluster endpoint, edge gateway route or GitHub-to-cluster connection.
 
 ### Internal event endpoint
 
@@ -502,7 +519,7 @@ An upstream durable delivery implementation could preserve the direct path. A pl
 | Owner | Responsibility |
 |---|---|
 | Platform team | Obtain and validate the Flux fix. Coordinate shared network policies with RFC 0017 and configure outbound connectivity. |
-| Platform team | Provision repository-scoped Apps, credentials, rotation and delivery monitoring. |
+| Platform team | Manage the shared App, private key rotation, repository token generation, distribution and monitoring. |
 | Platform team | Implement, test and maintain the shared result action, its contract and onboarding documentation. |
 | Product team | Select application health checks, event sources and environment mappings. |
 | Product team | Publish release metadata, configure the shared action and maintain receiving workflows. |
@@ -537,13 +554,13 @@ The rollout sequence is:
 
 1. Implement the shared action, its documented contract and event fixture tests.
 2. Verify the Flux fix in the supported distribution.
-3. Verify product permissions, secret provisioning, namespace isolation, combined network policies and outbound connectivity.
+3. Verify token generation, renewal, distribution, product permissions, namespace isolation, combined network policies and outbound connectivity.
 4. Pilot Dialogporten in `at23` with the shared action, initially recording validated results only.
 5. Enable the product's success and failure jobs after the event contract passes validation.
 6. Add a second environment and Authentication with the same action.
 7. Expand to other products after the platform and product teams review the pilot.
 
-Suspend the Alerts to stop dispatches during rollback. Application reconciliation continues. Revoke the App credentials if access must stop immediately.
+Suspend the affected Alerts to stop dispatches during rollback. Application reconciliation continues. For offboarding, stop token distribution. Remove the repository from the shared App installation. Do not revoke the shared App for a routine product rollback.
 
 Monitor `NotificationDispatchFailed` events, controller errors, credential failures and event rate limiting. Keep resource readiness alerts independent from GitHub delivery. Products monitor their follow-up jobs and report their results through their existing mechanisms.
 
@@ -583,7 +600,11 @@ The deployed integration must pass these checks:
 | Submit an event from an application pod | Network policy blocks access to the internal event endpoint. |
 | Enable and disable the RFC 0017 feature, then reconcile the extension policies | Event isolation remains effective. Authorized events, metrics and health probes continue. |
 | Exercise the RFC 0017 webhook path after shared policy changes | Valid requests work. The Receiver rejects invalid tokens on direct connections. |
-| Reconcile a subscription through the product applier | Providers, Alerts and the credential Secret reconcile without additional cross-namespace permissions. |
+| Reconcile a subscription through the product applier | Providers and Alerts reconcile without additional cross-namespace permissions. Platform configuration supplies the token Secret. |
+| Renew and distribute tokens across two expiry periods | Dispatch continues with replacement tokens without restarting notification-controller. |
+| Interrupt token generation or distribution | Monitoring reports the failure before expiry. Existing tokens remain available until they expire. |
+| Use a product token for another product's repository | GitHub rejects access, even when both repositories use the shared App. |
+| Attempt to change token generation or distribution from a product namespace | Authorization rejects access to the private key, generator and destination mapping. |
 | Let polling deploy an artifact without a reconcile request | The result starts the configured jobs without a Receiver or an inbound workflow step. |
 | Reference another namespace or another product's repository | Tenant restrictions or GitHub App permissions reject the operation. |
 | Test maximum resource names and representative error messages | The dispatch stays within GitHub limits. |
@@ -595,7 +616,8 @@ The deployed integration must pass these checks:
 - Native events expose Flux resource names and reasons to product workflows.
 - Best-effort delivery cannot replace a durable deployment history or guarantee a result for every release.
 - Repeated reconciliations can create additional workflow runs, notification noise and job costs.
-- A dedicated GitHub App per product adds credential administration.
+- The shared GitHub App requires automatic token renewal and distribution for each destination repository.
+- A shared App credential failure can affect several products.
 - GitHub requires `Contents: write`, which grants more access than dispatch alone needs.
 - The shared action needs maintenance, and products must update their pinned commits for fixes or contract changes.
 - Incorrect health checks or stale release metadata can produce misleading test results.
@@ -612,8 +634,9 @@ The direct path follows the proposed architecture and uses the existing notifica
 | A generic Flux Provider that calls GitHub directly | Its body is a Flux event. GitHub requires an `event_type` and `client_payload` envelope. Authentication and body adaptation remain necessary. |
 | GitHub `workflow_dispatch` | Selects a workflow and ref, but the native Flux Provider uses `repository_dispatch`. It needs an adapter. |
 | Flux's `github` commit-status Provider | Updates commit status. A manifest commit can belong to a different repository from the application workflow. |
-| Central Providers and Alerts with a shared App key | Keeps the key outside product namespaces, but needs cross-namespace event selection and an explicit authorization design. |
-| Repository-scoped installation tokens in product namespaces | Avoids multiple App registrations, but requires automatic token replacement before expiry. The shared App private key must remain protected. |
+| Central Providers and Alerts with a shared App key | Flux handles tokens, but the required namespace restriction blocks these Alerts from selecting product events. |
+| Dedicated product GitHub Apps | Flux can manage tokens directly with a product-specific private key. This adds App registrations and separate key administration. |
+| A custom token renewal service | Can supply restricted tokens, but duplicates capabilities available through ESO. |
 | Durable deployment tracking and polling | Supports exact attempts and reliable completion. It is a larger contract than triggering follow-up workflows. |
 | Fixed waits or scheduled tests | Needs no new event integration, but delays tests and does not establish which release they test. |
 
@@ -638,7 +661,6 @@ Before the team accepts this RFC:
 
 - Can the Dialogporten pilot tolerate a missing notification or test run after a GitHub outage or controller restart?
 - If every result must reach GitHub, which durable capture and delivery design replaces the native delivery assumption?
-- Can the platform provision a dedicated Dialogporten GitHub App installed only on its approved destination repositories?
 
 Before rollout:
 
@@ -646,7 +668,9 @@ Before rollout:
 - Do the deployed controllers preserve the documented payload and classification rules after the fix?
 - Do all pilot clusters remove the old broad allowance on port 9090 and restrict `flux-system` workloads to trusted platform components?
 - Do all pilot namespaces enforce event isolation with the RFC 0017 feature enabled and disabled?
-- Which secret management mechanism provisions product App credentials, and do product appliers have the required Provider and Alert permissions?
+- Which shared App registration and installation does the platform use?
+- Does the pilot's ESO installation support the proposed generator and restricted token distribution?
+- Does the private key provisioning path work in `platform-system`, and do product appliers have the required Provider and Alert permissions?
 - Which product mechanism maps an artifact revision to the application version currently serving requests?
 - What workflow volume, delivery error threshold and stale-event policy does the pilot require?
 
