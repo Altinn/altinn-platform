@@ -9,7 +9,7 @@
 # Summary
 [summary]: #summary
 
-Flux sends reconciliation events directly to product repositories through its notification-controller and the `githubdispatch` provider. After a deployment succeeds or a reconciliation attempt fails, product-owned GitHub workflows run the required follow-up jobs. Examples include Slack notifications, end-to-end tests and Bruno tests. Each event identifies the product, environment, cluster, resource and available release information. This completes the reverse direction of the accepted [RFC 0017](https://github.com/Altinn/altinn-platform/blob/main/rfcs/0017-on-demand-flux-reconcile.md). The design requires a verified Flux fix before rollout, because the inspected notification-controller filters out the final success event. Delivery is best effort, and workflows must tolerate missing, repeated and late events.
+Flux sends reconciliation events directly to product repositories through its notification-controller and the `githubdispatch` provider. A shared GitHub action validates each event and returns its result and deployment metadata. After a deployment succeeds or a reconciliation attempt fails, product-owned GitHub workflows run the required follow-up jobs. Examples include Slack notifications, end-to-end tests and Bruno tests. Each event identifies the product, environment, cluster, resource and available release information. This completes the reverse direction of the accepted [RFC 0017](https://github.com/Altinn/altinn-platform/blob/main/rfcs/0017-on-demand-flux-reconcile.md). The design requires a verified Flux fix before rollout, because the inspected notification-controller filters out the final success event. Delivery is best effort, and workflows must tolerate missing, repeated and late events.
 
 # Motivation
 [motivation]: #motivation
@@ -50,8 +50,10 @@ flowchart LR
     flux["Flux application reconciliation"] --> nc["notification-controller"]
     nc -->|"githubdispatch: result and metadata"| dp["Dialogporten repository"]
     nc -->|"githubdispatch: result and metadata"| auth["Authentication repository"]
-    dp --> dpjobs["Product workflows"]
-    auth --> route{"Result and environment"}
+    dp --> dpaction["Shared result action"]
+    dpaction --> dpjobs["Product jobs"]
+    auth --> authaction["Shared result action"]
+    authaction --> route{"Result and environment"}
     route -->|"Success"| success["Success workflows: end-to-end tests, Bruno tests, other jobs"]
     route -->|"Failure"| failure["Failure workflows: Slack notifications, other jobs"]
 ```
@@ -66,13 +68,22 @@ The event starts a new workflow run. It does not resume the workflow that reques
 
 The RFC 0017 route, Receiver and workflow step are optional for this feature. Polling also produces reconciliation results. The [RFC 0017 implementation tracker](https://github.com/Altinn/altinn-platform/issues/4237) covers the inbound path separately. An inbound request failure does not prove a deployment failure, because polling can still deploy the artifact.
 
+The two directions use separate shared actions:
+
+| Action | Workflow | Result |
+|---|---|---|
+| Existing `actions/flux/trigger-reconcile` | The publishing workflow, after it pushes and tags the artifact. | Confirms acceptance of the reconcile request. |
+| Proposed `actions/flux/read-reconciliation-result` | The receiving workflow, triggered by `repository_dispatch`. | Validates the event and returns `succeeded`, `failed` or `ignored`. |
+
+Both actions belong in `Altinn/altinn-platform`. The [trigger-reconcile README](https://github.com/Altinn/altinn-platform/blob/main/actions/flux/trigger-reconcile/README.md) lists enabled inbound endpoints at `https://ops.<environment>.dis.altinn.cloud/flux-webhook`. An enabled inbound endpoint does not establish that outbound notifications are ready.
+
 ## Configure a product
 
 1. Select the application Kustomization that represents the rollout.
 2. Configure health checks for its required workloads.
 3. Register the destination repository and its GitHub App credentials with the platform team.
 4. Add the Provider and Alert to the product syncroot.
-5. Add the receiving workflow to the destination repository's default branch.
+5. Add the receiving workflow and shared action configuration to the destination repository's default branch.
 6. Validate both success and failure events before enabling the follow-up jobs.
 
 The examples use illustrative Authentication resource names and cluster names. They are not verified deployment configuration.
@@ -162,7 +173,9 @@ The product must include every workload required for a completed application rol
 
 The native Provider derives `event_type` from the resource: `{Kind}/{Name}.{Namespace}`. It puts the Flux event in `client_payload`. It does not support a custom event name such as `deployment-succeeded`.
 
-The following workflow shows result and environment routing. It assumes two product-owned reusable workflows:
+The shared `read-reconciliation-result` action handles event validation and classification. Products use its outputs in regular jobs or reusable workflows. They do not need to copy the classification code.
+
+The action requires implementation before a product can use the following example. Replace `<commit>` with a reviewed full commit identifier when the action is available. The workflow assumes two product-owned reusable workflows:
 
 | Workflow | Inputs | Example jobs |
 |---|---|---|
@@ -185,45 +198,35 @@ permissions:
 jobs:
   classify:
     runs-on: ubuntu-latest
+    permissions: {}
     outputs:
       outcome: ${{ steps.event.outputs.outcome }}
       environment: ${{ steps.event.outputs.environment }}
       revision: ${{ steps.event.outputs.revision }}
+      event_json: ${{ steps.event.outputs.event_json }}
     steps:
       - id: event
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        env:
-          EXPECTED_SENDER_ID: ${{ vars.FLUX_DISPATCH_BOT_ID }}
+        uses: Altinn/altinn-platform/actions/flux/read-reconciliation-result@<commit>
         with:
-          script: |
-            const e = context.payload.client_payload;
-            const m = e?.metadata ?? {};
-            const o = e?.involvedObject ?? {};
-            const clusters = {staging: 'staging-cluster', test: 'test-cluster'};
-            const controllers = {
-              Kustomization: 'kustomize-controller',
-              OCIRepository: 'source-controller'
-            };
-            const valid = process.env.EXPECTED_SENDER_ID &&
-              String(context.payload.sender?.id) === process.env.EXPECTED_SENDER_ID &&
-              m.schema_version === '1' && m.product === 'authentication' &&
-              m.repository === 'Altinn/altinn-authentication' &&
-              Object.hasOwn(clusters, m.environment) &&
-              m.cluster === clusters[m.environment] &&
-              o.name === 'authentication-app' && o.namespace === 'product-authentication' &&
-              Object.hasOwn(controllers, o.kind) &&
-              e.reportingController === controllers[o.kind] &&
-              context.payload.action === `${o.kind}/${o.name}.${o.namespace}`;
-            if (!valid) throw new Error('Unrecognized Flux event');
-            const success = o.kind === 'Kustomization' &&
-              e.reason === 'ReconciliationSucceeded' && e.severity === 'info';
-            const outcome = e.severity === 'error' ? 'failed' : success ? 'succeeded' : 'ignored';
-            if (success && !/^.+@sha256:[a-f0-9]{64}$/.test(m.revision ?? '')) {
-              throw new Error('Missing OCI artifact revision');
-            }
-            core.setOutput('outcome', outcome);
-            core.setOutput('environment', m.environment);
-            core.setOutput('revision', m.revision ?? '');
+          expected_sender_id: ${{ vars.FLUX_DISPATCH_BOT_ID }}
+          product: authentication
+          subscriptions: |
+            [
+              {
+                "environment": "staging",
+                "cluster": "staging-cluster",
+                "namespace": "product-authentication",
+                "kustomization": "authentication-app",
+                "oci_repository": "authentication-app"
+              },
+              {
+                "environment": "test",
+                "cluster": "test-cluster",
+                "namespace": "product-authentication",
+                "kustomization": "authentication-app",
+                "oci_repository": "authentication-app"
+              }
+            ]
 
   success-staging:
     needs: classify
@@ -247,7 +250,7 @@ jobs:
     uses: ./.github/workflows/deployment-failed.yml
     with:
       environment: ${{ needs.classify.outputs.environment }}
-      flux_event: ${{ toJSON(github.event.client_payload) }}
+      flux_event: ${{ needs.classify.outputs.event_json }}
 ```
 
 The receiving workflow must exist on the default branch. `github.sha` identifies that branch's commit, not the deployed application commit. A checkout at the deployed application commit requires a separate, validated application commit value.
@@ -257,9 +260,47 @@ Pass payload values through action inputs or environment variables. Do not inser
 # Reference-level explanation
 [reference-level-explanation]: #reference-level-explanation
 
+## Shared action contract
+
+The platform maintains `actions/flux/read-reconciliation-result` with its README and tests. The action reads the GitHub event from `GITHUB_EVENT_PATH`. It requires the event type `repository_dispatch` and validates the envelope before processing `client_payload`. It needs no repository checkout, GitHub API call, cluster credentials or `id-token: write` permission.
+
+All inputs are required. Products set them through trusted workflow configuration or repository variables, not from the incoming event.
+
+| Input | Meaning |
+|---|---|
+| `expected_sender_id` | Numeric GitHub bot identifier of the approved dispatch App. An empty value is an error. |
+| `product` | Expected `metadata.product` value. |
+| `subscriptions` | JSON array of permitted environment, cluster, namespace and resource combinations. Wildcards are not permitted. |
+
+Each subscription requires `environment`, `cluster`, `namespace` and `kustomization`. The optional `oci_repository` selects source failure events. The action matches all fields against one subscription. It does not combine an environment from one entry with a resource from another.
+
+The action checks the sender, contract version, field types, product and destination repository. The event repository and `metadata.repository` must match `GITHUB_REPOSITORY`. It verifies the involved object, reporting controller and resource-derived dispatch type. Kustomization events require `kustomize-controller`; OCIRepository events require `source-controller`.
+
+The action applies the [event classification](#event-classification) and [metadata contract](#metadata-contract) below. Success requires a controller-provided OCI revision with a SHA-256 digest. A source failure can have no revision. Optional application metadata requires a valid mapping to the event's revision.
+
+| Output | Meaning |
+|---|---|
+| `outcome` | `succeeded`, `failed` or `ignored`. |
+| `environment` | Validated product environment. |
+| `cluster` | Validated cluster identifier. |
+| `revision` | Artifact revision, or an empty string when unavailable. |
+| `app_version` | Application version, or an empty string when the release mapping is unavailable or invalid. |
+| `app_commit` | Full application commit identifier, or an empty string when the release mapping is unavailable or invalid. |
+| `event_json` | Validated Flux event encoded as JSON, including the resource, reason, severity, timestamp and diagnostic message. |
+
+The action removes unbound or invalid `app_version`, `app_commit` and `release_revision` fields from `event_json`. It preserves other supported fields and additional Flux fields. It uses safe output encoding, including for multiline messages. Consumers treat these outputs as data.
+
+A deployment failure produces `outcome: failed` while the action step succeeds. This lets the product run its failure jobs. Valid progress events produce `outcome: ignored`. Invalid events or configuration fail the action before it publishes outputs.
+
+Do not set `continue-on-error: true` on this action. Keep follow-up jobs dependent on successful validation and the corresponding outcome. The inbound action's error policy does not apply to event validation.
+
+The action classifies one delivered event. It does not wait for a deployment, retry dispatch delivery, suppress duplicate jobs or query the running application. Product jobs retain the release checks and repeated-event handling described below.
+
+The action README records the supported contract versions and validated environments. Products pin a reviewed action commit. Incompatible changes require an explicit contract migration. The inbound endpoint status table does not enable this action's subscriptions.
+
 ## Flux compatibility prerequisite
 
-The source review covers these upstream versions on 2026-10-28. This RFC does not verify the versions in running DIS clusters.
+The source review covers these upstream versions on 2026-11-03. This RFC does not independently verify the versions in running DIS clusters.
 
 | Notification-controller | Kustomize-controller | Result |
 |---|---|---|
@@ -276,7 +317,9 @@ The `DisableCommitStatusEvent` feature gate removes that success event. It does 
 
 The implementation must obtain an upstream fix that forwards final success events to `githubdispatch`. It must consume that fix through the supported Flux distribution. Do not change the shared controllers manually or disable tenant isolation to work around this requirement.
 
-[Microsoft's release notes](https://learn.microsoft.com/en-us/azure/azure-arc/kubernetes/flux-gitops-release-notes) list extension `1.26.2` with notification-controller `v1.9.4-3` and kustomize-controller `v1.9.6-3`. The RFC 0017 upgrade for `generic-oidc` does not establish that success dispatch works. Coordinate extension upgrades with [the existing upgrade tracker](https://github.com/Altinn/altinn-platform/issues/4241). It records regional availability and Terraform replacement risks. Verify the extension plan before changing a version.
+[Microsoft's release notes](https://learn.microsoft.com/en-us/azure/azure-arc/kubernetes/flux-gitops-release-notes) list extension `1.26.2` with notification-controller `v1.9.4-3` and kustomize-controller `v1.9.6-3`. The `1.26.4` notes list security updates. The RFC 0017 upgrade for `generic-oidc` does not establish that success dispatch works.
+
+The [upgrade tracker](https://github.com/Altinn/altinn-platform/issues/4241) reports Flux 2.9.6 in `at23`, `at22`, `yt01` and `tt02`. Follow its automatic-upgrade guidance. Verify the running controllers with `flux version` and check the extension's provisioning state. Azure's `currentVersion` can report a version that failed to install. Each outbound pilot still needs the verified fix and result checks.
 
 [Upstream notification-controller 1.10.0](https://github.com/fluxcd/notification-controller/blob/v1.10.0/CHANGELOG.md) promotes Alert and Provider to API version `v1`. It still serves `v1beta3`. The examples retain `v1beta3` for the documented Azure baseline. The pilot must select an API version supported by its verified distribution.
 
@@ -394,20 +437,22 @@ Permit notification-controller outbound HTTPS access to `api.github.com` and req
 
 ### Internal event endpoint
 
-Network policy must restrict the notification-controller's internal event endpoint to the Flux controllers that emit events. Otherwise, an application pod can submit a forged event. The GitHub App sender check cannot detect events forged through the authorized controller.
+The internal event endpoint must accept only trusted platform workloads in `flux-system`. Product namespaces must not reach it. The platform controls which workloads run in `flux-system`. Otherwise, an application pod can submit a forged event. The GitHub App sender check cannot detect events forged through the authorized controller.
 
 The notification-controller has separate ports for these functions:
 
 | Port | Function | Required access |
 |---|---|---|
-| 9090 | Internal Flux events | The authorized Flux controllers. |
-| 9292 | RFC 0017 inbound reconcile requests | Traefik, under the RFC 0017 webhook policy. |
+| 9090 | Internal Flux events | Trusted platform workloads in `flux-system`. Product pods cannot connect. |
+| 9292 | RFC 0017 inbound reconcile requests | Traefik and direct cluster connections. The Receiver validates every token. |
 | 8080 | Metrics | The required monitoring sources. |
 | 9440 | Health probes | The required probe paths. |
 
-The [27 October prerequisite checks](https://github.com/Altinn/altinn-platform/issues/4240#issuecomment-6448060592) confirm these ports in `dis-core-at23`. They identify two policy conflicts. RFC 0017's merged package admits all sources to port 9090. The extension's `allow-webhooks` policy also admits all namespaces to port 9292.
+The [RFC 0017 network policy section](https://github.com/Altinn/altinn-platform/blob/main/rfcs/0017-on-demand-flux-reconcile.md#network-policy) records the current design. Package version 1.1.1 removes `flux-webhook-from-traefik` through [gitops-manifests#2272](https://github.com/dis-way/gitops-manifests/pull/2272). This removes its broad allowance on port 9090. The extension admits only `flux-system` to that port.
 
-[Kubernetes combines the permissions of matching network policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/#the-two-sorts-of-pod-isolation). Adding a restrictive policy does not override a broad allowance. The implementation must remove or constrain every conflicting allowance through supported configuration. It must coordinate these changes with [RFC 0017's package work](https://github.com/Altinn/altinn-platform/issues/4243).
+The extension's `allow-webhooks` policy still admits all namespaces to port 9292. RFC 0017 accepts that path because the Receiver verifies the token. Closing that path is not a prerequisite for outbound notifications. The acceptance does not apply to the internal event endpoint on port 9090.
+
+[Kubernetes combines the permissions of matching network policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/#the-two-sorts-of-pod-isolation). Adding a restrictive policy does not override a broad allowance. Verify the deployed package and all policies that select the notification-controller. Use the extension's namespace isolation when the acceptance checks pass. Do not restore the removed allowance on port 9090.
 
 Verify event isolation with the inbound feature enabled and disabled. Repeat the checks after extension upgrades and policy reconciliation. Keep authorized controller events, the RFC 0017 webhook path, metrics and health probes working.
 
@@ -441,20 +486,22 @@ No delivery promise depends on a particular retry count. The implementation must
 |---|---|
 | Platform team | Obtain and validate the Flux fix. Coordinate shared network policies with RFC 0017 and configure outbound connectivity. |
 | Platform team | Provision repository-scoped Apps, credentials, rotation and delivery monitoring. |
+| Platform team | Implement, test and maintain the shared result action, its contract and onboarding documentation. |
 | Product team | Select application health checks, event sources and environment mappings. |
-| Product team | Publish release metadata and maintain receiving workflows. |
+| Product team | Publish release metadata, configure the shared action and maintain receiving workflows. |
 | Product team | Verify the running release and handle repeated or stale events. |
 
-Add the subscription examples to the product onboarding documentation after the pilot. Keep controller configuration and shared policy changes in their existing infrastructure repositories. No new platform service is part of this RFC.
+Keep the shared action and its README beside `trigger-reconcile` in this repository. Add the subscription examples to the product onboarding documentation after the pilot. Keep controller configuration and shared policy changes in their existing infrastructure repositories. No new platform service is part of this RFC.
 
 The rollout sequence is:
 
-1. Verify the Flux fix in the supported distribution.
-2. Verify product permissions, secret provisioning, namespace isolation, combined network policies and outbound connectivity.
-3. Pilot Authentication in one non-production environment with a workflow that only records events.
-4. Enable the product's success and failure jobs after the event contract passes validation.
-5. Add the second environment and Dialogporten.
-6. Expand to other products after the platform and product teams review the pilot.
+1. Implement the shared action, its documented contract and event fixture tests.
+2. Verify the Flux fix in the supported distribution.
+3. Verify product permissions, secret provisioning, namespace isolation, combined network policies and outbound connectivity.
+4. Pilot Authentication with the shared action in one non-production environment, initially recording validated results only.
+5. Enable the product's success and failure jobs after the event contract passes validation.
+6. Add the second environment and Dialogporten with the same action.
+7. Expand to other products after the platform and product teams review the pilot.
 
 Suspend the Alerts to stop dispatches during rollback. Application reconciliation continues. Revoke the App credentials if access must stop immediately.
 
@@ -463,6 +510,21 @@ Monitor `NotificationDispatchFailed` events, controller errors, credential failu
 ## Implementation validation
 
 These are rollout acceptance checks, not checks completed by this documentation change.
+
+The action implementation must include automated fixture tests for its contract:
+
+| Check | Required result |
+|---|---|
+| Missing inputs, malformed subscriptions or an unsupported GitHub event | The action fails before publishing outputs. |
+| Unknown sender, schema, repository, controller or resource | The action rejects the event. |
+| Valid fields taken from different subscription entries | The action rejects the combination. |
+| Success without a valid OCI revision | The action rejects the event. |
+| Deployment failure, including a source failure without a revision | The action step succeeds with `outcome: failed`. Failure jobs remain eligible. |
+| Valid progress or waiting event | The action returns `ignored`. No result jobs run. |
+| Missing or stale application release mapping | Application version and commit outputs are empty. The event output omits the unbound release fields. |
+| Multiline messages and workflow command syntax in event fields | Output encoding preserves data without executing commands or creating additional outputs. |
+
+The deployed integration must pass these checks:
 
 | Check | Required result |
 |---|---|
@@ -480,7 +542,7 @@ These are rollout acceptance checks, not checks completed by this documentation 
 | Remove App access or simulate GitHub rejection | Delivery monitoring detects failure. Application reconciliation continues. |
 | Submit an event from an application pod | Network policy blocks access to the internal event endpoint. |
 | Enable and disable the RFC 0017 feature, then reconcile the extension policies | Event isolation remains effective. Authorized events, metrics and health probes continue. |
-| Exercise the RFC 0017 webhook path after shared policy changes | Traefik reaches port 9292. A direct connection from a product pod remains blocked. |
+| Exercise the RFC 0017 webhook path after shared policy changes | Valid requests work. The Receiver rejects invalid tokens on direct connections. |
 | Reconcile a subscription through the product applier | Providers, Alerts and the credential Secret reconcile without additional cross-namespace permissions. |
 | Let polling deploy an artifact without a reconcile request | The result starts the configured jobs without a Receiver or an inbound workflow step. |
 | Reference another namespace or another product's repository | Tenant restrictions or GitHub App permissions reject the operation. |
@@ -495,15 +557,17 @@ These are rollout acceptance checks, not checks completed by this documentation 
 - Repeated reconciliations can create additional workflow runs, notification noise and job costs.
 - A dedicated GitHub App per product adds credential administration.
 - GitHub requires `Contents: write`, which grants more access than dispatch alone needs.
+- The shared action needs maintenance, and products must update their pinned commits for fixes or contract changes.
 - Incorrect health checks or stale release metadata can produce misleading test results.
 
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
 
-The direct path follows the proposed architecture and uses the existing notification-controller. Product repositories keep control of all jobs that follow a deployment result. An upstream compatibility fix is preferable to a new platform service for this initial scope.
+The direct path follows the proposed architecture and uses the existing notification-controller. Product repositories keep control of all jobs that follow a deployment result. The shared action gives products one maintained implementation of event validation and classification. An upstream compatibility fix is preferable to a new platform service for this initial scope.
 
 | Alternative | Assessment |
 |---|---|
+| Inline validation in every product workflow | Duplicates the event contract and its fixes. The shared action keeps validation consistent while products select their jobs. |
 | A custom dispatch service | Can normalize events, keep delivery state and hold shared credentials. It adds a service and an operational contract. |
 | A generic Flux Provider that calls GitHub directly | Its body is a Flux event. GitHub requires an `event_type` and `client_payload` envelope. Authentication and body adaptation remain necessary. |
 | GitHub `workflow_dispatch` | Selects a workflow and ref, but the native Flux Provider uses `repository_dispatch`. It needs an adapter. |
@@ -540,7 +604,7 @@ Before rollout:
 
 - Which upstream release fixes final success dispatch, and when does the supported Azure Flux distribution include it?
 - Do the deployed controllers preserve the documented payload and classification rules after the fix?
-- Which supported policy configuration closes the documented port 9090 and 9292 gaps without extension reconciliation restoring a broad allowance?
+- Do all pilot clusters remove the old broad allowance on port 9090 and restrict `flux-system` workloads to trusted platform components?
 - Do all pilot namespaces enforce event isolation with the RFC 0017 feature enabled and disabled?
 - Which secret management mechanism provisions product App credentials, and do product appliers have the required Provider and Alert permissions?
 - Which product mechanism maps an artifact revision to the application version currently serving requests?
@@ -556,7 +620,6 @@ Out of scope:
 # Future possibilities
 [future-possibilities]: #future-possibilities
 
-- Provide a shared workflow for event validation and result classification.
 - Generate subscriptions from approved product configuration.
 - Add HelmRelease events with a separately verified readiness and metadata contract.
 - Add durable delivery and replay if product requirements exceed the native Provider's guarantees.
