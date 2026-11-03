@@ -86,7 +86,7 @@ Both actions belong in `Altinn/altinn-platform`. The [trigger-reconcile README](
 5. Add the receiving workflow and shared action configuration to the destination repository's default branch.
 6. Validate both success and failure events before enabling the follow-up jobs.
 
-The examples use illustrative Authentication resource names and cluster names. They are not verified deployment configuration.
+The examples use illustrative Authentication resource names and cluster names. They are not verified deployment configuration. The initial pilot uses Dialogporten in `at23`, as specified under [Ownership and rollout](#ownership-and-rollout).
 
 This subscription receives application events and source errors:
 
@@ -423,11 +423,13 @@ GitHub limits `event_type` to 100 characters and `client_payload` to ten top-lev
 
 ## Authentication and tenant isolation
 
-Use GitHub App authentication. The App requires repository `Contents: write` to create a repository dispatch. `Actions: write` is not the permission for this endpoint.
+Use GitHub App authentication. A GitHub App is the machine identity that authenticates dispatch requests. It is separate from the deployed product application. The App requires repository `Contents: write` to create a repository dispatch. `Actions: write` is not the permission for this endpoint.
 
 For the initial design, each product has a dedicated App installed only on its approved destination repositories. Its permissions must not include another product's repositories. A shared App private key must not enter a product namespace. Different installation identifiers do not restrict what that shared private key can access.
 
-The platform provisions the App and supplies its private key through a verified secret management mechanism for the product namespace. [RFC 0017's pilot configuration](https://github.com/Altinn/altinn-platform/blob/main/rfcs/0017-on-demand-flux-reconcile.md#pilot) records that DIS core clusters have no `dis-system-store`. Do not assume that store exists or put private keys in `postBuild.substitute`. The namespace-local Secret contains `githubAppID`, `githubAppInstallationID` and `githubAppPrivateKey`. Flux uses those credentials to obtain installation tokens. Do not commit the Secret values to Git.
+The platform provisions the App and supplies its private key through a verified secret management mechanism for the product namespace. [RFC 0017's pilot configuration](https://github.com/Altinn/altinn-platform/blob/main/rfcs/0017-on-demand-flux-reconcile.md#pilot) records that DIS core clusters have no `dis-system-store`. Do not assume that store exists or put private keys in `postBuild.substitute`. The namespace-local Secret contains `githubAppID`, `githubAppInstallationID` and `githubAppPrivateKey`. Flux uses those credentials to obtain installation tokens as needed. This design needs no separate platform service to renew those tokens. Do not commit the Secret values to Git.
+
+The alternative uses one shared platform App, with its private key kept outside product namespaces. A platform service creates a token restricted to each destination repository and supplies it through that namespace's Secret. [GitHub installation tokens](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app) expire after one hour. That service must replace each token before it expires. Flux cannot renew a supplied token without the App credentials. This alternative requires additional implementation; it is not a prerequisite for the proposed dedicated Apps.
 
 The product namespace is the credential trust boundary. Its administrators can access credentials for that product's approved repositories. Repository administrators must accept that scope during onboarding. The platform owns credential rotation and revocation.
 
@@ -458,7 +460,7 @@ Verify event isolation with the inbound feature enabled and disabled. Repeat the
 
 ## Delivery, repeated events and ordering
 
-The native Provider does not provide a durable event queue, an event replay API or exactly-once delivery. Notification-controller acknowledges inbound events separately from the asynchronous GitHub request. A successful GitHub response confirms dispatch acceptance, not workflow completion.
+The native Provider does not guarantee at-least-once delivery. The success event compatibility fix does not establish this guarantee. The Provider supplies no durable event queue or event replay API. The inspected [notification-controller handler](https://github.com/fluxcd/notification-controller/blob/v1.10.0/internal/server/event_handlers.go) acknowledges an inbound event while its GitHub request runs asynchronously. If the request fails, the controller reports an error without retaining a durable delivery record. A controller restart can also lose an unfinished request. A later reconciliation can emit a new result, but it does not replay the missing result. A successful GitHub response confirms dispatch acceptance, not workflow completion.
 
 | Situation | Required behavior |
 |---|---|
@@ -480,6 +482,21 @@ Notification jobs can report historical results with the event time and revision
 
 No delivery promise depends on a particular retry count. The implementation must measure the supported controller's behavior during GitHub failures. This RFC defines the event trigger and its contract. Products define the downstream job logic in GitHub, including tests, notifications and other actions.
 
+### What at-least-once delivery requires
+
+At-least-once delivery requires each deployment result to remain recoverable until GitHub accepts it. It permits repeated deliveries. This needs more than an HTTP retry setting:
+
+1. Commit each result and its pending delivery record together in durable storage at the producer.
+2. Retry pending deliveries until GitHub acknowledges acceptance, including after process restarts.
+3. Retain failed deliveries during outages or credential errors. Resume them after recovery.
+4. Give each result a stable identifier. Make its consumers tolerate repeated delivery.
+
+This follows the [transactional outbox pattern](https://learn.microsoft.com/en-us/azure/architecture/databases/guide/transactional-out-box-cosmos). Delivery depends on eventual recovery of GitHub, credentials and the delivery worker. Workflow completion needs separate tracking if that guarantee is also required.
+
+A durable receiver only protects events after it stores them. Adding a queue after Flux does not recover events lost before they reach that queue. Polling current Flux status can also miss intermediate failure and recovery results.
+
+An upstream durable delivery implementation could preserve the direct path. A platform dispatcher with durable result capture changes the architecture and requires a separate design. Neither mechanism exists in this proposal. If every result must reach GitHub, the native design alone does not meet that requirement.
+
 ## Ownership and rollout
 
 | Owner | Responsibility |
@@ -493,14 +510,37 @@ No delivery promise depends on a particular retry count. The implementation must
 
 Keep the shared action and its README beside `trigger-reconcile` in this repository. Add the subscription examples to the product onboarding documentation after the pilot. Keep controller configuration and shared policy changes in their existing infrastructure repositories. No new platform service is part of this RFC.
 
+### Dialogporten pilot
+
+The first pilot uses Dialogporten in `at23`. The proposed destination is `Altinn/dialogporten`, where product workflows select the follow-up jobs.
+
+| Setting | Pilot value |
+|---|---|
+| Product | `dialogporten` |
+| Environment | `at23` |
+| Cluster | `dis-core-at23-aks` |
+| Namespace | `product-dialogporten` |
+| Application Kustomization | `dialogporten-apps` |
+| OCIRepository | `dialogporten-manifests` |
+| Application path | `./environments/at23` |
+| Destination repository | `Altinn/dialogporten` |
+
+The [Dialogporten syncroot](https://github.com/Altinn/dialogporten-manifests/blob/main/flux/syncroot/at23/kustomization.yaml) and [RFC 0017 onboarding issue](https://github.com/Altinn/altinn-platform/issues/4249) establish the existing `at23` integration. The outbound pilot still needs its own Provider, Alerts, credentials and receiving workflow.
+
+The [application Kustomization](https://github.com/Altinn/dialogporten-manifests/blob/main/flux/syncroot/base/dialogporten-flux-kustomization.yaml) has no `wait` or `healthChecks` configuration in the source inspected on 2026-11-03. Before enabling success jobs, the product must configure and validate health checks for every required workload. Applying manifests alone does not establish rollout completion.
+
+The [OCIRepository](https://github.com/Altinn/dialogporten-manifests/blob/main/flux/syncroot/base/dialogporten-oci-repository.yaml) follows the `main` tag. Its artifact revision therefore uses `main@sha256:<digest>`, while the subscription environment remains `at23`. The environment does not determine the artifact tag. Confirm these values against the deployed resources before enabling the subscription.
+
+### Rollout sequence
+
 The rollout sequence is:
 
 1. Implement the shared action, its documented contract and event fixture tests.
 2. Verify the Flux fix in the supported distribution.
 3. Verify product permissions, secret provisioning, namespace isolation, combined network policies and outbound connectivity.
-4. Pilot Authentication with the shared action in one non-production environment, initially recording validated results only.
+4. Pilot Dialogporten in `at23` with the shared action, initially recording validated results only.
 5. Enable the product's success and failure jobs after the event contract passes validation.
-6. Add the second environment and Dialogporten with the same action.
+6. Add a second environment and Authentication with the same action.
 7. Expand to other products after the platform and product teams review the pilot.
 
 Suspend the Alerts to stop dispatches during rollback. Application reconciliation continues. Revoke the App credentials if access must stop immediately.
@@ -568,12 +608,12 @@ The direct path follows the proposed architecture and uses the existing notifica
 | Alternative | Assessment |
 |---|---|
 | Inline validation in every product workflow | Duplicates the event contract and its fixes. The shared action keeps validation consistent while products select their jobs. |
-| A custom dispatch service | Can normalize events, keep delivery state and hold shared credentials. It adds a service and an operational contract. |
+| A custom dispatch service | Can normalize events, keep delivery state and hold shared credentials. At-least-once delivery also requires durable result capture. |
 | A generic Flux Provider that calls GitHub directly | Its body is a Flux event. GitHub requires an `event_type` and `client_payload` envelope. Authentication and body adaptation remain necessary. |
 | GitHub `workflow_dispatch` | Selects a workflow and ref, but the native Flux Provider uses `repository_dispatch`. It needs an adapter. |
 | Flux's `github` commit-status Provider | Updates commit status. A manifest commit can belong to a different repository from the application workflow. |
 | Central Providers and Alerts with a shared App key | Keeps the key outside product namespaces, but needs cross-namespace event selection and an explicit authorization design. |
-| Repository-scoped installation tokens in product namespaces | Avoids multiple App registrations, but requires a platform token renewal mechanism. The shared App private key must remain protected. |
+| Repository-scoped installation tokens in product namespaces | Avoids multiple App registrations, but requires automatic token replacement before expiry. The shared App private key must remain protected. |
 | Durable deployment tracking and polling | Supports exact attempts and reliable completion. It is a larger contract than triggering follow-up workflows. |
 | Fixed waits or scheduled tests | Needs no new event integration, but delays tests and does not establish which release they test. |
 
@@ -596,9 +636,9 @@ Without this feature, products continue to wait, poll or start follow-up jobs in
 
 Before the team accepts this RFC:
 
-- Does best-effort delivery meet the requirements of the pilot's notifications, tests and other follow-up jobs?
-- Does the platform accept dedicated product Apps, or must it provide repository-scoped token renewal before onboarding?
-- Which Authentication resource and environment form the first pilot?
+- Can the Dialogporten pilot tolerate a missing notification or test run after a GitHub outage or controller restart?
+- If every result must reach GitHub, which durable capture and delivery design replaces the native delivery assumption?
+- Can the platform provision a dedicated Dialogporten GitHub App installed only on its approved destination repositories?
 
 Before rollout:
 
