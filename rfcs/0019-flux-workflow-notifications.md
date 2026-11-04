@@ -300,7 +300,33 @@ The action README records the supported contract versions and validated environm
 
 ## Flux compatibility prerequisite
 
-The source review covers these upstream versions on 2026-11-03. This RFC does not independently verify the versions in running DIS clusters.
+### Pilot cluster evidence
+
+Operator-provided command output on 2026-11-04 establishes the deployed versions in `dis-core-at23-aks`, the Dialogporten pilot cluster. The evidence includes pod images and readiness, Azure extension status, and `flux version --context dis-core-at23-aks`.
+
+| Component or setting | Observed value |
+|---|---|
+| Azure `microsoft.flux` extension | `1.26.4` |
+| Extension provisioning state | `Succeeded` |
+| Automatic upgrades | `true` |
+| Pinned extension version | `null` |
+| Flux distribution | `flux-v2.9.6` |
+| notification-controller | `v1.9.4-7` |
+| kustomize-controller | `v1.9.6-7` |
+| source-controller | `v1.9.6-7` |
+| helm-controller | `v1.6.5-8` |
+| fluxconfig-agent and fluxconfig-controller | `1.26.4` |
+| fluent-bit-mdm | `1.26.4` |
+
+The controller images use `mcr.microsoft.com/oss/v2/fluxcd/`. The Azure agent, configuration controller and logging images use `mcr.microsoft.com/azurek8sflux/`. The pod output reports every listed container as ready.
+
+The `flux: v2.7.5` line identifies the local command-line interface (CLI). The `distribution: flux-v2.9.6` line identifies the cluster distribution. These values describe different components.
+
+This evidence confirms the pilot's installed versions and successful extension provisioning. It does not test final success dispatch through `githubdispatch`. The upstream review below does not inspect changes in the Azure builds.
+
+### Upstream source review
+
+The source review covers these upstream versions on 2026-11-03:
 
 | Notification-controller | Kustomize-controller | Result |
 |---|---|---|
@@ -317,9 +343,9 @@ The `DisableCommitStatusEvent` feature gate removes that success event. It does 
 
 The implementation must obtain an upstream fix that forwards final success events to `githubdispatch`. It must consume that fix through the supported Flux distribution. Do not change the shared controllers manually or disable tenant isolation to work around this requirement.
 
-[Microsoft's release notes](https://learn.microsoft.com/en-us/azure/azure-arc/kubernetes/flux-gitops-release-notes) list extension `1.26.2` with notification-controller `v1.9.4-3` and kustomize-controller `v1.9.6-3`. The `1.26.4` notes list security updates. The RFC 0017 upgrade for `generic-oidc` does not establish that success dispatch works.
+[Microsoft's release notes](https://learn.microsoft.com/en-us/azure/azure-arc/kubernetes/flux-gitops-release-notes) describe extension `1.26.4` as a security update to Go packages and base images. They do not document a fix for final success dispatch. The pilot's notification-controller and kustomize-controller tags retain the upstream versions in the first row above. The Azure build suffixes do not establish that success dispatch works.
 
-The [upgrade tracker](https://github.com/Altinn/altinn-platform/issues/4241) reports Flux 2.9.6 in `at23`, `at22`, `yt01` and `tt02`. Follow its automatic-upgrade guidance. Verify the running controllers with `flux version` and check the extension's provisioning state. Azure's `currentVersion` can report a version that failed to install. Each outbound pilot still needs the verified fix and result checks.
+The [upgrade tracker](https://github.com/Altinn/altinn-platform/issues/4241) also reports Flux 2.9.6 in `at22`, `yt01` and `tt02`. The operator-provided evidence above covers only `at23`. Follow the tracker's automatic-upgrade guidance. Verify running controller images and the extension's provisioning state before adding each environment. Azure's `currentVersion` alone can report a version that failed to install. Each outbound pilot still needs the verified fix and result checks.
 
 [Upstream notification-controller 1.10.0](https://github.com/fluxcd/notification-controller/blob/v1.10.0/CHANGELOG.md) promotes Alert and Provider to API version `v1`. It still serves `v1beta3`. The examples retain `v1beta3` for the documented Azure baseline. The pilot must select an API version supported by its verified distribution.
 
