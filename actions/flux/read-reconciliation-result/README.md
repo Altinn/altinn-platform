@@ -35,7 +35,7 @@ Each event starts a new workflow run. The event does not go to the workflow that
 | `app_commit` | Full application commit from the release metadata of this revision. Empty when it is not available. |
 | `event_json` | The validated Flux event as one line of JSON: the resource, `reason`, `severity`, `timestamp`, `message` and `metadata`. The action removes release metadata that does not belong to the revision. |
 
-The action also writes the result to the job summary.
+The action also writes the result to the job summary. If it cannot write the summary, it writes a warning, and the step still succeeds.
 
 ## Classification
 

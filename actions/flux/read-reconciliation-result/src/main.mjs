@@ -3,7 +3,7 @@
 // action before it publishes any output.
 
 import { evaluate, InvalidEventError, InvalidInputError, parseInputs } from './contract.mjs';
-import { errorCommand, formatOutputs } from './github.mjs';
+import { errorCommand, formatOutputs, warningCommand } from './github.mjs';
 
 // io provides readFile(path), appendFile(path, text) and write(text).
 // Returns the exit code.
@@ -53,8 +53,14 @@ export function run(env, io) {
       event_json: result.eventJson,
     }),
   );
+  // The outputs exist now. A failed summary must not fail the step, because
+  // that would skip the jobs that depend on it.
   if (env.GITHUB_STEP_SUMMARY) {
-    io.appendFile(env.GITHUB_STEP_SUMMARY, summary(result));
+    try {
+      io.appendFile(env.GITHUB_STEP_SUMMARY, summary(result));
+    } catch (error) {
+      io.write(warningCommand('Job summary not written', `The action could not write the job summary: ${error.message}`));
+    }
   }
   // Every value in this line passed a pattern check, so the line cannot
   // contain a line break or start a workflow command.

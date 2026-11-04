@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
+import { formatOutputs } from '../src/github.mjs';
 import { run } from '../src/main.mjs';
 import { ACTION_DIR, fixture, INPUT_ENV, parseOutputs } from './helpers.mjs';
 
@@ -29,12 +30,12 @@ function prepare(event, env = {}) {
   };
 }
 
-function runAction(event, env) {
+function runAction(event, env, appendFile = (path, text) => writeFileSync(path, text, { flag: 'a' })) {
   const { files, env: actionEnv } = prepare(event, env);
   let stdout = '';
   const code = run(actionEnv, {
     readFile: (path) => readFileSync(path, 'utf8'),
-    appendFile: (path, text) => writeFileSync(path, text, { flag: 'a' }),
+    appendFile,
     write: (text) => {
       stdout += text;
     },
@@ -42,6 +43,20 @@ function runAction(event, env) {
   const rawOutput = readFileSync(files.output, 'utf8');
   return { code, stdout, rawOutput, outputs: parseOutputs(rawOutput), summary: readFileSync(files.summary, 'utf8') };
 }
+
+describe('output file', () => {
+  it('keeps a value with line breaks and delimiter-like lines as one output', () => {
+    const value = 'first\nEOF\nghadelimiter_x\n::set-output name=outcome::succeeded\noutcome<<EOF\nlast';
+    const text = formatOutputs({ event_json: value, outcome: 'failed' });
+    assert.deepEqual(parseOutputs(text), { event_json: value, outcome: 'failed' });
+  });
+
+  it('uses a delimiter that the value does not contain', () => {
+    const [header] = formatOutputs({ outcome: 'ignored' }).split('\n');
+    const delimiter = header.slice('outcome<<'.length);
+    assert.match(delimiter, /^ghadelimiter_[0-9a-f-]{36}$/);
+  });
+});
 
 describe('action', () => {
   it('publishes every output for a success', () => {
@@ -75,6 +90,17 @@ describe('action', () => {
     const result = runAction(fixture('flux-2.9-source-failed'));
     assert.match(result.summary, /^### Flux reconciliation result/);
     assert.match(result.summary, /\| failed \| at23 \| dis-core-at23-aks \| `OCIRepository\/dialogporten-manifests\.product-dialogporten` \| OCIArtifactPullFailed \| - \| - \|/);
+  });
+
+  it('keeps the outputs and succeeds when the job summary cannot be written', () => {
+    const appendFile = (path, text) => {
+      if (path.endsWith('summary')) throw new Error('disk full');
+      writeFileSync(path, text, { flag: 'a' });
+    };
+    const result = runAction(fixture('flux-2.9-health-check-passed'), {}, appendFile);
+    assert.equal(result.code, 0);
+    assert.equal(result.outputs.outcome, 'succeeded');
+    assert.match(result.stdout, /^::warning title=Job summary not written::The action could not write the job summary: disk full$/m);
   });
 
   it('fails without outputs for an invalid event', () => {

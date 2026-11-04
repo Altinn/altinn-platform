@@ -12,7 +12,7 @@ export class InvalidInputError extends Error {}
 export class InvalidEventError extends Error {}
 
 // Kubernetes object names (RFC 1123 subdomain) and namespaces (RFC 1123 label).
-const OBJECT_NAME = /^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$/;
+const OBJECT_NAME = /^(?=.{1,253}$)[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$/;
 const NAMESPACE = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/;
 // Product, environment and cluster identifiers. No wildcards.
 const IDENTIFIER = /^[A-Za-z0-9]([A-Za-z0-9._-]{0,61}[A-Za-z0-9])?$/;
@@ -24,6 +24,8 @@ const CONTROLLER = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/;
 const OCI_REVISION = /^([A-Za-z0-9_][A-Za-z0-9._-]{0,127}@)?sha256:[a-f0-9]{64}$/;
 const APP_VERSION = /^[A-Za-z0-9][A-Za-z0-9.+_-]{0,127}$/;
 const APP_COMMIT = /^[a-f0-9]{40}$/;
+// An RFC 3339 time, as Kubernetes writes metav1.Time.
+const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
 const SEVERITIES = new Set(['info', 'error', 'trace']);
 
@@ -95,7 +97,7 @@ function parseSubscriptions(raw) {
 
 function requireMatch(value, pattern, name) {
   if (typeof value !== 'string' || !pattern.test(value)) {
-    throw new InvalidInputError(`${name} must be an exact name. Wildcards are not permitted. Got ${quote(value)}.`);
+    throw new InvalidInputError(`${name} must be an exact, valid name. Wildcards are not permitted. Got ${quote(value)}.`);
   }
 }
 
@@ -208,7 +210,11 @@ function readFluxEvent(payload) {
   if (typeof payload.message !== 'string') {
     throw new InvalidEventError('client_payload.message must be a string.');
   }
-  if (typeof payload.timestamp !== 'string' || Number.isNaN(Date.parse(payload.timestamp))) {
+  if (
+    typeof payload.timestamp !== 'string' ||
+    !TIMESTAMP.test(payload.timestamp) ||
+    Number.isNaN(Date.parse(payload.timestamp))
+  ) {
     throw new InvalidEventError(`client_payload.timestamp must be a time, got ${quote(payload.timestamp)}.`);
   }
   // Flux 2.10 events (event API v1) add the action field. The action is only

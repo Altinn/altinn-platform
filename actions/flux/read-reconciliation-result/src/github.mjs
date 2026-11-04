@@ -31,3 +31,7 @@ export function escapeProperty(value) {
 export function errorCommand(title, message) {
   return `::error title=${escapeProperty(title)}::${escapeData(message)}\n`;
 }
+
+export function warningCommand(title, message) {
+  return `::warning title=${escapeProperty(title)}::${escapeData(message)}\n`;
+}

@@ -60,6 +60,11 @@ describe('inputs', () => {
       /Wildcards are not permitted/,
     ],
     [
+      'a name with an empty label',
+      { INPUT_SUBSCRIPTIONS: JSON.stringify([{ ...subscription, kustomization: 'dialogporten..apps' }]) },
+      /subscriptions\[0\]\.kustomization must be an exact, valid name/,
+    ],
+    [
       'a wildcard environment',
       { INPUT_SUBSCRIPTIONS: JSON.stringify([{ ...subscription, environment: '*' }]) },
       /Wildcards are not permitted/,
@@ -333,6 +338,25 @@ describe('rejection', () => {
 
   it('rejects a time that is not a date', () => {
     assertRejected(changed(success, (e) => (e.client_payload.timestamp = 'yesterday')), /timestamp must be a time, got "yesterday"/);
+  });
+
+  it('rejects a time that is only digits', () => {
+    // Date.parse accepts "0" and a Unix time.
+    assertRejected(changed(success, (e) => (e.client_payload.timestamp = '0')), /timestamp must be a time/);
+    assertRejected(changed(success, (e) => (e.client_payload.timestamp = '1762261512')), /timestamp must be a time/);
+  });
+
+  it('accepts an RFC 3339 time with fractions and an offset', () => {
+    const event = changed(success, (e) => (e.client_payload.timestamp = '2026-11-04T14:05:12.123456+01:00'));
+    assert.equal(evaluateEvent(event).outcome, 'succeeded');
+  });
+
+  it('rejects an involved object name with an empty label', () => {
+    const event = changed(success, (e) => {
+      e.client_payload.involvedObject.name = 'dialogporten..apps';
+      e.action = 'Kustomization/dialogporten..apps.product-dialogporten';
+    });
+    assertRejected(event, /involvedObject\.name is not valid/);
   });
 
   it('rejects an event without client_payload', () => {
