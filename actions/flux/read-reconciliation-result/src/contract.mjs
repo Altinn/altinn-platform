@@ -25,7 +25,7 @@ const OCI_REVISION = /^([A-Za-z0-9_][A-Za-z0-9._-]{0,127}@)?sha256:[a-f0-9]{64}$
 const APP_VERSION = /^[A-Za-z0-9][A-Za-z0-9.+_-]{0,127}$/;
 const APP_COMMIT = /^[a-f0-9]{40}$/;
 // An RFC 3339 time, as Kubernetes writes metav1.Time.
-const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
+const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
 const SEVERITIES = new Set(['info', 'error', 'trace']);
 
@@ -215,7 +215,8 @@ function readFluxEvent(payload) {
   if (
     typeof payload.timestamp !== 'string' ||
     !TIMESTAMP.test(payload.timestamp) ||
-    Number.isNaN(Date.parse(payload.timestamp))
+    Number.isNaN(Date.parse(payload.timestamp)) ||
+    !isCalendarDay(payload.timestamp)
   ) {
     throw new InvalidEventError(`client_payload.timestamp must be a time, got ${quote(payload.timestamp)}.`);
   }
@@ -239,6 +240,17 @@ function readFluxEvent(payload) {
     reportingController: payload.reportingController,
     metadata,
   };
+}
+
+// Date.parse moves a day that the month does not have into the next month,
+// for example 2026-02-30 to 2026-03-02.
+function isCalendarDay(timestamp) {
+  const year = Number(timestamp.slice(0, 4));
+  const month = Number(timestamp.slice(5, 7));
+  const day = Number(timestamp.slice(8, 10));
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+  return day >= 1 && day <= days;
 }
 
 function requireEventMatch(value, pattern, name) {

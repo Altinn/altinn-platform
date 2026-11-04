@@ -346,6 +346,24 @@ describe('rejection', () => {
     assertRejected(changed(success, (e) => (e.client_payload.timestamp = '1762261512')), /timestamp must be a time/);
   });
 
+  it('rejects a day or an hour that does not exist', () => {
+    // Date.parse moves these times into the next month or day.
+    for (const timestamp of [
+      '2026-02-30T12:00:00Z',
+      '2025-02-29T12:00:00Z',
+      '2100-02-29T12:00:00Z',
+      '2026-04-31T12:00:00Z',
+      '2026-01-01T24:00:00Z',
+    ]) {
+      assertRejected(changed(success, (e) => (e.client_payload.timestamp = timestamp)), /timestamp must be a time/);
+    }
+  });
+
+  it('accepts a leap day', () => {
+    const event = changed(success, (e) => (e.client_payload.timestamp = '2024-02-29T23:59:59Z'));
+    assert.equal(evaluateEvent(event).outcome, 'succeeded');
+  });
+
   it('accepts an RFC 3339 time with fractions and an offset', () => {
     const event = changed(success, (e) => (e.client_payload.timestamp = '2026-11-04T14:05:12.123456+01:00'));
     assert.equal(evaluateEvent(event).outcome, 'succeeded');
