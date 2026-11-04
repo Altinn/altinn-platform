@@ -60,6 +60,14 @@ override_data {
 }
 
 override_data {
+  target = data.github_rest_api.oidc_subject["correspondence-manifests"]
+  values = {
+    code = 200
+    body = "{\"use_default\":true,\"use_immutable_subject\":false,\"sub_claim_prefix\":\"repo:Altinn/correspondence-manifests\"}"
+  }
+}
+
+override_data {
   target = data.github_rest_api.oidc_subject["dialogporten-frontend-manifests"]
   values = {
     code = 200
@@ -110,7 +118,7 @@ run "configured_repositories_have_one_identity_each" {
       "altinn-auth", "altinn-dashboards-grafana", "altinn-platform",
       "altinn-platform-dis-proxies", "altinn-studio", "altinn-verification-dis-poc",
       "dialogporten-frontend-manifests", "dialogporten-manifests", "info.altinn.no",
-      "pre-invoice-system", "dis-padawan", "altinn-profile"
+      "pre-invoice-system", "dis-padawan", "altinn-profile", "correspondence-manifests"
     ])
     error_message = "Each repository must have exactly one publishing identity keyed by its repository name."
   }
