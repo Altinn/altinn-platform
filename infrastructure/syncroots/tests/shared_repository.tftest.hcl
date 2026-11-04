@@ -60,6 +60,14 @@ override_data {
 }
 
 override_data {
+  target = data.github_rest_api.oidc_subject["correspondence-manifests"]
+  values = {
+    code = 200
+    body = "{\"use_default\":true,\"use_immutable_subject\":false,\"sub_claim_prefix\":\"repo:Altinn/correspondence-manifests\"}"
+  }
+}
+
+override_data {
   target = data.github_rest_api.oidc_subject["dialogporten-frontend-manifests"]
   values = {
     code = 200
