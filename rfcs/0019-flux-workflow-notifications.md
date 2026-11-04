@@ -2,9 +2,9 @@
 - Title: Trigger GitHub workflows from Flux reconciliation results
 - Start Date: 2026-10-15
 - RFC PR: [altinn/altinn-platform#4214](https://github.com/Altinn/altinn-platform/pull/4214)
-- Github Issue: N/A; implementation issues follow RFC acceptance.
+- Github Issue: [altinn/altinn-platform#4369](https://github.com/Altinn/altinn-platform/issues/4369)
 - Product/Category: CI/CD
-- State: **REVIEW**
+- State: **ACCEPTED**
 
 # Summary
 [summary]: #summary
@@ -683,10 +683,7 @@ Without this feature, products continue to wait, poll or start follow-up jobs in
 # Unresolved questions
 [unresolved-questions]: #unresolved-questions
 
-Before the team accepts this RFC:
-
-- Can the Dialogporten pilot tolerate a missing notification or test run after a GitHub outage or controller restart?
-- If every result must reach GitHub, which durable capture and delivery design replaces the native delivery assumption?
+None for the accepted design. The initial scope uses best-effort delivery. Consumers that require every result need a separate durable delivery design.
 
 Before rollout:
 
