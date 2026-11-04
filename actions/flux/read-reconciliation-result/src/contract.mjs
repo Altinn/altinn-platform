@@ -40,7 +40,9 @@ const SUBSCRIPTION_KEYS = new Set(['environment', 'cluster', 'namespace', 'kusto
 // kustomize-controller emits this event when a new revision changed resources
 // and passed the health checks, or when a failed rollout recovers. The final
 // ReconciliationSucceeded event fires after every reconcile, and
-// notification-controller does not send it to githubdispatch.
+// notification-controller does not send it to githubdispatch. The event has
+// no reason of its own, so the action matches the message. Altinn/altinn-platform#4373
+// asks Flux for a stable reason.
 const HEALTH_CHECK_PASSED = 'Health check passed in ';
 
 export function parseInputs(env) {
