@@ -2,8 +2,8 @@
 // the event, and publishes the outputs. Invalid inputs or events fail the
 // action before it publishes any output.
 
-import { evaluate, InvalidEventError, InvalidInputError, parseInputs } from './contract.mjs';
-import { errorCommand, formatOutputs, warningCommand } from './github.mjs';
+import { evaluate, InvalidEventError, InvalidInputError, parseInputs, quote } from './contract.mjs';
+import { errorCommand, formatOutputs } from './github.mjs';
 
 // io provides readFile(path), appendFile(path, text) and write(text).
 // Returns the exit code.
@@ -53,32 +53,11 @@ export function run(env, io) {
       event_json: result.eventJson,
     }),
   );
-  // The outputs exist now. A failed summary must not fail the step, because
-  // that would skip the jobs that depend on it.
-  if (env.GITHUB_STEP_SUMMARY) {
-    try {
-      io.appendFile(env.GITHUB_STEP_SUMMARY, summary(result));
-    } catch (error) {
-      io.write(warningCommand('Job summary not written', `The action could not write the job summary: ${error.message}`));
-    }
-  }
-  // Every value in this line passed a pattern check, so the line cannot
-  // contain a line break or start a workflow command.
+  // The reason comes from the event, so it is quoted onto one line. The other
+  // values equal inputs or constants, or passed a pattern check.
   io.write(
     `Outcome ${result.outcome}: ${result.resource}, environment ${result.environment}, ` +
-      `cluster ${result.cluster}, reason ${result.reason}, revision ${result.revision || 'none'}\n`,
+      `cluster ${result.cluster}, reason ${quote(result.reason)}, revision ${result.revision || 'none'}\n`,
   );
   return 0;
-}
-
-function summary(result) {
-  const cell = (value) => (value ? `\`${value}\`` : '-');
-  return [
-    '### Flux reconciliation result',
-    '',
-    '| Outcome | Environment | Cluster | Resource | Reason | Revision | Application |',
-    '|---|---|---|---|---|---|---|',
-    `| ${result.outcome} | ${result.environment} | ${result.cluster} | ${cell(result.resource)} | ${result.reason} | ${cell(result.revision)} | ${cell(result.appVersion)} |`,
-    '',
-  ].join('\n');
 }

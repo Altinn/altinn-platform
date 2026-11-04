@@ -12,10 +12,9 @@ const OUTPUT_NAMES = ['outcome', 'environment', 'cluster', 'revision', 'app_vers
 
 function prepare(event, env = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'read-reconciliation-result-'));
-  const files = { event: join(dir, 'event.json'), output: join(dir, 'output'), summary: join(dir, 'summary') };
+  const files = { event: join(dir, 'event.json'), output: join(dir, 'output') };
   writeFileSync(files.event, typeof event === 'string' ? event : JSON.stringify(event));
   writeFileSync(files.output, '');
-  writeFileSync(files.summary, '');
   return {
     files,
     env: {
@@ -24,24 +23,23 @@ function prepare(event, env = {}) {
       GITHUB_EVENT_PATH: files.event,
       GITHUB_REPOSITORY: 'Altinn/dialogporten',
       GITHUB_OUTPUT: files.output,
-      GITHUB_STEP_SUMMARY: files.summary,
       ...env,
     },
   };
 }
 
-function runAction(event, env, appendFile = (path, text) => writeFileSync(path, text, { flag: 'a' })) {
+function runAction(event, env) {
   const { files, env: actionEnv } = prepare(event, env);
   let stdout = '';
   const code = run(actionEnv, {
     readFile: (path) => readFileSync(path, 'utf8'),
-    appendFile,
+    appendFile: (path, text) => writeFileSync(path, text, { flag: 'a' }),
     write: (text) => {
       stdout += text;
     },
   });
   const rawOutput = readFileSync(files.output, 'utf8');
-  return { code, stdout, rawOutput, outputs: parseOutputs(rawOutput), summary: readFileSync(files.summary, 'utf8') };
+  return { code, stdout, rawOutput, outputs: parseOutputs(rawOutput) };
 }
 
 describe('output file', () => {
@@ -86,30 +84,12 @@ describe('action', () => {
     assert.equal(result.outputs.outcome, 'ignored');
   });
 
-  it('writes a step summary', () => {
-    const result = runAction(fixture('flux-2.9-source-failed'));
-    assert.match(result.summary, /^### Flux reconciliation result/);
-    assert.match(result.summary, /\| failed \| at23 \| dis-core-at23-aks \| `OCIRepository\/dialogporten-manifests\.product-dialogporten` \| OCIArtifactPullFailed \| - \| - \|/);
-  });
-
-  it('keeps the outputs and succeeds when the job summary cannot be written', () => {
-    const appendFile = (path, text) => {
-      if (path.endsWith('summary')) throw new Error('disk full');
-      writeFileSync(path, text, { flag: 'a' });
-    };
-    const result = runAction(fixture('flux-2.9-health-check-passed'), {}, appendFile);
-    assert.equal(result.code, 0);
-    assert.equal(result.outputs.outcome, 'succeeded');
-    assert.match(result.stdout, /^::warning title=Job summary not written::The action could not write the job summary: disk full$/m);
-  });
-
   it('fails without outputs for an invalid event', () => {
     const event = fixture('flux-2.9-health-check-passed');
     event.sender.id = 41898282;
     const result = runAction(event);
     assert.equal(result.code, 1);
     assert.equal(result.rawOutput, '');
-    assert.equal(result.summary, '');
     assert.match(result.stdout, /^::error title=Rejected Flux result event::The event was sent by /);
   });
 
@@ -141,8 +121,9 @@ describe('action', () => {
     assert.match(result.stdout, /^::error title=Invalid configuration of read-reconciliation-result::The action cannot read the event file/);
   });
 
-  it('keeps a message with line breaks and workflow commands as data', () => {
+  it('keeps a message and a reason with line breaks and workflow commands as data', () => {
     const event = fixture('flux-2.9-build-failed');
+    event.client_payload.reason = 'BuildFailed\n::set-output name=outcome::succeeded';
     const result = runAction(event);
     assert.equal(result.code, 0);
     // The message contains "outcome<<EOF" and "::set-output", but adds no output.
@@ -152,7 +133,7 @@ describe('action', () => {
     assert.equal(result.outputs.event_json.includes('\n'), false);
     // Nothing that the action writes to the log starts a workflow command.
     assert.equal(result.stdout.split('\n').some((line) => line.startsWith('::')), false);
-    assert.equal(result.summary.includes('set-output'), false);
+    assert.match(result.stdout, /reason "BuildFailed\\n::set-output name=outcome::succeeded"/);
   });
 
   it('keeps event values in an error message on one line', () => {

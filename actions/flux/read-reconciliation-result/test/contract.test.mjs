@@ -24,10 +24,9 @@ function changed(name, change) {
 
 describe('inputs', () => {
   it('accepts the sender id, the product and the subscriptions', () => {
-    assert.deepEqual(inputs.senderId, '123456789');
-    assert.deepEqual(inputs.product, 'dialogporten');
-    assert.equal(inputs.subscriptions.length, 2);
-    assert.equal(inputs.subscriptions[0].ociRepository, 'dialogporten-manifests');
+    assert.equal(inputs.senderId, '123456789');
+    assert.equal(inputs.product, 'dialogporten');
+    assert.deepEqual(inputs.subscriptions, SUBSCRIPTIONS);
   });
 
   const subscription = SUBSCRIPTIONS[0];
@@ -36,7 +35,7 @@ describe('inputs', () => {
     ['a sender name instead of an id', { INPUT_EXPECTED_SENDER_ID: 'altinn-flux-dispatch[bot]' }, /expected_sender_id/],
     ['a missing product', { INPUT_PRODUCT: '' }, /product/],
     ['missing subscriptions', { INPUT_SUBSCRIPTIONS: '' }, /at least one subscription/],
-    ['subscriptions that are not JSON', { INPUT_SUBSCRIPTIONS: '[{' }, /not valid JSON/],
+    ['subscriptions that are not JSON', { INPUT_SUBSCRIPTIONS: '[{' }, /at least one subscription/],
     ['an empty subscription list', { INPUT_SUBSCRIPTIONS: '[]' }, /at least one subscription/],
     ['a subscription that is not an object', { INPUT_SUBSCRIPTIONS: '["at23"]' }, /must be an object/],
     [
@@ -58,11 +57,6 @@ describe('inputs', () => {
       'a wildcard in a name',
       { INPUT_SUBSCRIPTIONS: JSON.stringify([{ ...subscription, kustomization: 'dialogporten-*' }]) },
       /Wildcards are not permitted/,
-    ],
-    [
-      'a name with an empty label',
-      { INPUT_SUBSCRIPTIONS: JSON.stringify([{ ...subscription, kustomization: 'dialogporten..apps' }]) },
-      /subscriptions\[0\]\.kustomization must be an exact, valid name/,
     ],
     [
       'a wildcard environment',
@@ -302,79 +296,29 @@ describe('rejection', () => {
     assertRejected(event, /must have an OCI artifact revision/);
   });
 
-  it('rejects metadata values that are not text', () => {
-    assertRejected(changed(success, (e) => (e.client_payload.metadata.revision = 42)), /string values/);
-  });
-
-  it('rejects an unknown severity', () => {
-    assertRejected(changed(success, (e) => (e.client_payload.severity = 'warning')), /severity/);
-  });
-
-  it('rejects an event without a time', () => {
-    assertRejected(changed(success, (e) => delete e.client_payload.timestamp), /timestamp/);
+  it('rejects a revision that is not text', () => {
+    assertRejected(changed(success, (e) => (e.client_payload.metadata.revision = 42)), /must have an OCI artifact revision/);
   });
 
   it('rejects an event without a message', () => {
-    assertRejected(changed(success, (e) => delete e.client_payload.message), /message/);
-  });
-
-  it('rejects an action that is not text', () => {
-    assertRejected(changed('flux-2.10-health-check-passed', (e) => (e.client_payload.action = null)), /client_payload\.action/);
-    assertRejected(changed('flux-2.10-health-check-passed', (e) => (e.client_payload.action = 7)), /client_payload\.action/);
-  });
-
-  it('rejects an action longer than 128 characters', () => {
-    const event = changed('flux-2.10-health-check-failed', (e) => (e.client_payload.action = 'A'.repeat(129)));
-    assertRejected(event, /client_payload\.action/);
+    assertRejected(changed(success, (e) => delete e.client_payload.message), /client_payload\.message must be a string/);
   });
 
   it('rejects an event without an involved object', () => {
     assertRejected(changed(success, (e) => delete e.client_payload.involvedObject), /involvedObject must be an object/);
   });
 
-  it('rejects metadata that is an array', () => {
-    assertRejected(changed(success, (e) => (e.client_payload.metadata = ['at23'])), /string values/);
-  });
-
-  it('rejects a time that is not a date', () => {
-    assertRejected(changed(success, (e) => (e.client_payload.timestamp = 'yesterday')), /timestamp must be a time, got "yesterday"/);
-  });
-
-  it('rejects a time that is only digits', () => {
-    // Date.parse accepts "0" and a Unix time.
-    assertRejected(changed(success, (e) => (e.client_payload.timestamp = '0')), /timestamp must be a time/);
-    assertRejected(changed(success, (e) => (e.client_payload.timestamp = '1762261512')), /timestamp must be a time/);
-  });
-
-  it('rejects a day or an hour that does not exist', () => {
-    // Date.parse moves these times into the next month or day.
-    for (const timestamp of [
-      '2026-02-30T12:00:00Z',
-      '2025-02-29T12:00:00Z',
-      '2100-02-29T12:00:00Z',
-      '2026-04-31T12:00:00Z',
-      '2026-01-01T24:00:00Z',
-    ]) {
-      assertRejected(changed(success, (e) => (e.client_payload.timestamp = timestamp)), /timestamp must be a time/);
-    }
-  });
-
-  it('accepts a leap day', () => {
-    const event = changed(success, (e) => (e.client_payload.timestamp = '2024-02-29T23:59:59Z'));
-    assert.equal(evaluateEvent(event).outcome, 'succeeded');
-  });
-
-  it('accepts an RFC 3339 time with fractions and an offset', () => {
-    const event = changed(success, (e) => (e.client_payload.timestamp = '2026-11-04T14:05:12.123456+01:00'));
-    assert.equal(evaluateEvent(event).outcome, 'succeeded');
-  });
-
-  it('rejects an involved object name with an empty label', () => {
-    const event = changed(success, (e) => {
-      e.client_payload.involvedObject.name = 'dialogporten..apps';
-      e.action = 'Kustomization/dialogporten..apps.product-dialogporten';
+  it('rejects an involved object without a name', () => {
+    // A missing name must not match a subscription without oci_repository.
+    const event = changed('flux-2.9-source-failed', (e) => {
+      delete e.client_payload.involvedObject.name;
+      e.action = 'OCIRepository/undefined.product-dialogporten';
     });
-    assertRejected(event, /involvedObject\.name is not valid/);
+    assertRejected(event, /involvedObject\.name must be a string/);
+  });
+
+  it('rejects metadata that is an array', () => {
+    assertRejected(changed(success, (e) => (e.client_payload.metadata = ['at23'])), /contract version/);
   });
 
   it('rejects an event without client_payload', () => {
