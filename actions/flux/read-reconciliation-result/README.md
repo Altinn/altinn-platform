@@ -82,7 +82,7 @@ The action returns the values only when they are valid and `release_revision` is
 ## Limits
 
 - Delivery is best effort. Flux does not retry a failed delivery, so an event can be lost. Keep a manual way to start the jobs.
-- An event can arrive more than once, late or out of order. Check the running release before and after the tests.
+- An event can arrive more than once, late or out of order. The action does not remove repeated events. Check the running release before and after the tests.
 
 ## Tests
 
