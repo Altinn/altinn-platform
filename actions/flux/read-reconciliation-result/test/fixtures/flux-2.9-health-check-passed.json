@@ -1,0 +1,55 @@
+{
+  "action": "Kustomization/dialogporten-apps.product-dialogporten",
+  "branch": "main",
+  "client_payload": {
+    "involvedObject": {
+      "kind": "Kustomization",
+      "namespace": "product-dialogporten",
+      "name": "dialogporten-apps",
+      "uid": "0b7c2f1e-3d4a-4b5c-8d6e-7f8091a2b3c4",
+      "apiVersion": "kustomize.toolkit.fluxcd.io/v1",
+      "resourceVersion": "48211937"
+    },
+    "severity": "info",
+    "timestamp": "2026-11-04T13:05:12Z",
+    "message": "Health check passed in 48.172645193s",
+    "reason": "Progressing",
+    "metadata": {
+      "cluster": "dis-core-at23-aks",
+      "environment": "at23",
+      "product": "dialogporten",
+      "repository": "Altinn/dialogporten",
+      "schema_version": "1",
+      "revision": "main@sha256:c4793fb94443793eb32e1128b2d4d2cb4c20bed467a6929ec09f78cb87af21a1",
+      "originRevision": "main/98992a89ff23924d8f5938d828a7ece27aa8258d",
+      "app_version": "1.126.0",
+      "app_commit": "73361783f788ba08290ab5429911bffb04b4bbf5",
+      "release_revision": "main@sha256:c4793fb94443793eb32e1128b2d4d2cb4c20bed467a6929ec09f78cb87af21a1"
+    },
+    "reportingController": "kustomize-controller",
+    "reportingInstance": "kustomize-controller-6c9d8b7f5-x2k8p"
+  },
+  "repository": {
+    "id": 100000001,
+    "name": "dialogporten",
+    "full_name": "Altinn/dialogporten",
+    "private": false,
+    "owner": {
+      "login": "Altinn",
+      "id": 5949420,
+      "type": "Organization"
+    }
+  },
+  "organization": {
+    "login": "Altinn",
+    "id": 5949420
+  },
+  "installation": {
+    "id": 100000002
+  },
+  "sender": {
+    "login": "altinn-flux-dispatch[bot]",
+    "id": 123456789,
+    "type": "Bot"
+  }
+}
