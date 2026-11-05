@@ -1,0 +1,51 @@
+name: Flux read-reconciliation-result Test
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - actions/flux/read-reconciliation-result/**
+      - .github/workflows/flux-read-reconciliation-result-test.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - actions/flux/read-reconciliation-result/**
+      - .github/workflows/flux-read-reconciliation-result-test.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: actions/flux/read-reconciliation-result
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      # The action runs on the Node.js 24 of the runner (runs.using: node24).
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24
+
+      # TypeScript checks the types. The action itself has no dependencies.
+      - name: Install TypeScript
+        run: npm ci --ignore-scripts
+
+      - name: Check types
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test

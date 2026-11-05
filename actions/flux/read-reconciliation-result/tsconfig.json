@@ -1,0 +1,17 @@
+{
+  // Node.js runs the .ts files directly, so tsc only checks the types. These are
+  // the settings that the Node.js documentation recommends for type stripping.
+  "compilerOptions": {
+    "noEmit": true,
+    "target": "esnext",
+    "module": "nodenext",
+    "rewriteRelativeImportExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "types": ["node"]
+  },
+  "include": ["index.ts", "src", "test"]
+}

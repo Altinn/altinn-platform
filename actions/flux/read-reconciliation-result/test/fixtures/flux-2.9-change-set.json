@@ -1,0 +1,52 @@
+{
+  "action": "Kustomization/dialogporten-apps.product-dialogporten",
+  "branch": "main",
+  "client_payload": {
+    "involvedObject": {
+      "kind": "Kustomization",
+      "namespace": "product-dialogporten",
+      "name": "dialogporten-apps",
+      "uid": "0b7c2f1e-3d4a-4b5c-8d6e-7f8091a2b3c4",
+      "apiVersion": "kustomize.toolkit.fluxcd.io/v1",
+      "resourceVersion": "48211937"
+    },
+    "severity": "info",
+    "timestamp": "2026-11-04T13:05:12Z",
+    "message": "Deployment/product-dialogporten/web-api-eu configured\nDeployment/product-dialogporten/web-api-so configured",
+    "reason": "Progressing",
+    "metadata": {
+      "cluster": "dis-core-at23-aks",
+      "environment": "at23",
+      "product": "dialogporten",
+      "repository": "Altinn/dialogporten",
+      "schema_version": "1",
+      "revision": "main@sha256:65b52ff3986b5ad33bd0ebdb49a989113e42ea761a96a4558f6644f86c8b582f",
+      "originRevision": "main/96aab310922ac95384650eef3bd51fa612ff8f97"
+    },
+    "reportingController": "kustomize-controller",
+    "reportingInstance": "kustomize-controller-6c9d8b7f5-x2k8p"
+  },
+  "repository": {
+    "id": 100000001,
+    "name": "dialogporten",
+    "full_name": "Altinn/dialogporten",
+    "private": false,
+    "owner": {
+      "login": "Altinn",
+      "id": 5949420,
+      "type": "Organization"
+    }
+  },
+  "organization": {
+    "login": "Altinn",
+    "id": 5949420
+  },
+  "installation": {
+    "id": 100000002
+  },
+  "sender": {
+    "login": "altinn-flux-dispatch[bot]",
+    "id": 123456789,
+    "type": "Bot"
+  }
+}

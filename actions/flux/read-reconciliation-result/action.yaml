@@ -1,0 +1,34 @@
+name: Read a Flux reconciliation result
+description: "Validate a repository_dispatch event that Flux sent after a reconciliation, and return succeeded, failed or ignored with the deployment metadata"
+
+inputs:
+  expected_sender_id:
+    description: "Numeric id of the bot account of the platform GitHub App that sends the events. Set it in the workflow or a repository variable, not from the event."
+    required: true
+  product:
+    description: "Product identifier. The event must have the same metadata.product."
+    required: true
+  subscriptions:
+    description: 'JSON array of the subscriptions that the workflow accepts. Each entry has "environment", "cluster", "namespace" and "kustomization", and can have "oci_repository". Wildcards are not permitted.'
+    required: true
+
+outputs:
+  outcome:
+    description: "succeeded, failed or ignored"
+  environment:
+    description: "Environment of the matching subscription"
+  cluster:
+    description: "Cluster of the matching subscription"
+  revision:
+    description: "OCI artifact revision, for example main@sha256:<digest>, or an empty string when the event has no OCI revision with a SHA-256 digest"
+  app_version:
+    description: "Application version from release metadata for this revision, or an empty string"
+  app_commit:
+    description: "Full application commit from release metadata for this revision, or an empty string"
+  event_json:
+    description: "The validated Flux event as JSON, without release metadata that does not belong to the revision"
+
+runs:
+  using: node24
+  # Node.js 24 runs TypeScript directly, so the action has no build step.
+  main: index.ts
