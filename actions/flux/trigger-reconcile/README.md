@@ -31,8 +31,8 @@ The reconcile request is an optimization. Polling continues, and the next poll f
 | `at22` | `https://ops.at22.dis.altinn.cloud/flux-webhook` | Enabled |
 | `at23` | `https://ops.at23.dis.altinn.cloud/flux-webhook` | Enabled |
 | `yt01` | `https://ops.yt01.dis.altinn.cloud/flux-webhook` | Enabled |
-| `tt02` | `https://ops.tt02.dis.altinn.cloud/flux-webhook` | Not enabled yet ([#4253](https://github.com/Altinn/altinn-platform/issues/4253)) |
-| `prod` | `https://ops.prod.dis.altinn.cloud/flux-webhook` | Not enabled yet ([#4254](https://github.com/Altinn/altinn-platform/issues/4254)) |
+| `tt02` | `https://ops.tt02.dis.altinn.cloud/flux-webhook` | Enabled |
+| `prod` | `https://ops.prod.dis.altinn.cloud/flux-webhook` | Enabled |
 
 The platform team enables the endpoint for each environment and then updates this table. In an enabled environment, the edge gateway and the DIS core cluster have the routes, and the DIS core cluster runs Flux 2.9. [#4237](https://github.com/Altinn/altinn-platform/issues/4237) tracks the rollout.
 
