@@ -3,8 +3,8 @@ module "gh_runners_correspondence_manifests" {
 
   resource_group_name           = azurerm_resource_group.gh_runners.name
   repository_name               = "correspondence-manifests"
-  private_runners_address_space = "172.17.129.0/24"
-  private_runners_prefix        = "corr"
+  private_runners_address_space = "172.17.141.0/24"
+  private_runners_prefix        = "corrm"
   altinn_app_id                 = var.altinn_app_id
   altinn_app_install_id         = var.altinn_app_install_id
   altinn_app_key                = var.altinn_app_key
