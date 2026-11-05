@@ -30,4 +30,5 @@ outputs:
 
 runs:
   using: node24
-  main: index.mjs
+  # Node.js 24 runs TypeScript directly, so the action has no build step.
+  main: index.ts

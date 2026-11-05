@@ -14,6 +14,37 @@ export class InvalidInputError extends Error {}
 // The event does not satisfy the contract. It is not a deployment result.
 export class InvalidEventError extends Error {}
 
+export type Outcome = 'succeeded' | 'failed' | 'ignored';
+
+export interface Subscription {
+  environment: string;
+  cluster: string;
+  namespace: string;
+  kustomization: string;
+  oci_repository?: string;
+}
+
+export interface Inputs {
+  senderId: string;
+  product: string;
+  subscriptions: Subscription[];
+}
+
+export interface Result {
+  outcome: Outcome;
+  environment: string;
+  cluster: string;
+  revision: string;
+  appVersion: string;
+  appCommit: string;
+  eventJson: string;
+  resource: string;
+  reason: string;
+}
+
+// A JSON object from the event or the inputs. Its values are not checked yet.
+type JsonObject = Record<string, unknown>;
+
 const SENDER_ID = /^[1-9][0-9]{0,19}$/;
 // The product and the subscription values. Exact names, so no wildcards.
 const NAME = /^[A-Za-z0-9]([A-Za-z0-9._-]{0,251}[A-Za-z0-9])?$/;
@@ -28,7 +59,7 @@ const CONTROLLERS = new Map([
   ['OCIRepository', 'source-controller'],
 ]);
 
-const SUBSCRIPTION_KEYS = ['environment', 'cluster', 'namespace', 'kustomization', 'oci_repository'];
+const SUBSCRIPTION_KEYS: readonly string[] = ['environment', 'cluster', 'namespace', 'kustomization', 'oci_repository'];
 
 // kustomize-controller emits this event when a new revision changed resources
 // and passed the health checks, or when a failed rollout recovers. The final
@@ -38,7 +69,7 @@ const SUBSCRIPTION_KEYS = ['environment', 'cluster', 'namespace', 'kustomization
 // asks Flux for a stable reason.
 const HEALTH_CHECK_PASSED = 'Health check passed in ';
 
-export function parseInputs(env) {
+export function parseInputs(env: NodeJS.ProcessEnv): Inputs {
   const senderId = (env.INPUT_EXPECTED_SENDER_ID ?? '').trim();
   if (!SENDER_ID.test(senderId)) {
     throw new InvalidInputError('expected_sender_id must be the numeric id of the bot account of the dispatch App.');
@@ -50,8 +81,8 @@ export function parseInputs(env) {
   return { senderId, product, subscriptions: parseSubscriptions(env.INPUT_SUBSCRIPTIONS ?? '') };
 }
 
-function parseSubscriptions(raw) {
-  let list;
+function parseSubscriptions(raw: string): Subscription[] {
+  let list: unknown;
   try {
     list = JSON.parse(raw);
   } catch {
@@ -60,14 +91,14 @@ function parseSubscriptions(raw) {
   if (!Array.isArray(list) || list.length === 0) {
     throw new InvalidInputError('subscriptions must be a JSON array with at least one subscription.');
   }
-  list.forEach((entry, index) => {
+  list.forEach((entry: unknown, index) => {
     const at = `subscriptions[${index}]`;
     if (!isObject(entry)) {
       throw new InvalidInputError(`${at} must be an object.`);
     }
-    const unknown = Object.keys(entry).find((key) => !SUBSCRIPTION_KEYS.includes(key));
-    if (unknown !== undefined) {
-      throw new InvalidInputError(`${at} has the unknown key ${quote(unknown)}.`);
+    const extra = Object.keys(entry).find((key) => !SUBSCRIPTION_KEYS.includes(key));
+    if (extra !== undefined) {
+      throw new InvalidInputError(`${at} has the unknown key ${quote(extra)}.`);
     }
     for (const key of SUBSCRIPTION_KEYS) {
       if (key === 'oci_repository' && entry[key] === undefined) continue;
@@ -76,26 +107,33 @@ function parseSubscriptions(raw) {
       }
     }
   });
-  return list;
+  // The loop above checked every entry.
+  return list as Subscription[];
 }
 
 // Validates a repository_dispatch event and classifies the Flux event in it.
 // Throws InvalidEventError if the event does not satisfy the contract.
-export function evaluate({ inputs, eventName, event, repository }) {
+export function evaluate({ inputs, eventName, event, repository }: {
+  inputs: Inputs;
+  eventName: string;
+  event: unknown;
+  repository: string;
+}): Result {
   if (eventName !== 'repository_dispatch') {
     throw new InvalidEventError(`The action supports only repository_dispatch events, got ${quote(eventName)}.`);
   }
   if (!isObject(event)) {
     throw new InvalidEventError('The event payload is not a JSON object.');
   }
-  const senderId = event.sender?.id;
+  const senderId = field(event.sender, 'id');
   if (!Number.isSafeInteger(senderId) || String(senderId) !== inputs.senderId) {
     throw new InvalidEventError(
-      `The event was sent by ${quote(event.sender?.login)} with id ${quote(senderId)}, not by the dispatch App (id ${inputs.senderId}).`,
+      `The event was sent by ${quote(field(event.sender, 'login'))} with id ${quote(senderId)}, not by the dispatch App (id ${inputs.senderId}).`,
     );
   }
-  if (!sameRepository(event.repository?.full_name, repository)) {
-    throw new InvalidEventError(`The event belongs to ${quote(event.repository?.full_name)}, not to ${repository}.`);
+  const fullName = field(event.repository, 'full_name');
+  if (!sameRepository(fullName, repository)) {
+    throw new InvalidEventError(`The event belongs to ${quote(fullName)}, not to ${repository}.`);
   }
 
   const payload = event.client_payload;
@@ -105,16 +143,15 @@ export function evaluate({ inputs, eventName, event, repository }) {
   const object = payload.involvedObject;
   requireStrings(object, ['kind', 'name', 'namespace'], 'client_payload.involvedObject');
   requireStrings(payload, ['severity', 'reason', 'message', 'reportingController'], 'client_payload');
-  const metadata = isObject(payload.metadata) ? payload.metadata : {};
+  const metadata: JsonObject = isObject(payload.metadata) ? payload.metadata : {};
 
   const resource = `${object.kind}/${object.name}.${object.namespace}`;
   if (event.action !== resource) {
     throw new InvalidEventError(`The event type ${quote(event.action)} does not match the involved object ${quote(resource)}.`);
   }
-  if (!CONTRACT_VERSIONS.includes(metadata.schema_version)) {
-    throw new InvalidEventError(
-      `Unsupported contract version ${quote(metadata.schema_version)}. Supported: ${CONTRACT_VERSIONS.join(', ')}.`,
-    );
+  const version = metadata.schema_version;
+  if (typeof version !== 'string' || !CONTRACT_VERSIONS.includes(version)) {
+    throw new InvalidEventError(`Unsupported contract version ${quote(version)}. Supported: ${CONTRACT_VERSIONS.join(', ')}.`);
   }
   if (metadata.product !== inputs.product) {
     throw new InvalidEventError(`The event is for the product ${quote(metadata.product)}, not ${quote(inputs.product)}.`);
@@ -151,11 +188,6 @@ export function evaluate({ inputs, eventName, event, repository }) {
   }
 
   const release = bindRelease(metadata, revision);
-  const published = structuredClone(payload);
-  for (const key of release.unbound) {
-    delete published.metadata[key];
-  }
-
   return {
     outcome,
     environment: subscription.environment,
@@ -163,13 +195,13 @@ export function evaluate({ inputs, eventName, event, repository }) {
     revision,
     appVersion: release.appVersion,
     appCommit: release.appCommit,
-    eventJson: JSON.stringify(published),
+    eventJson: JSON.stringify({ ...payload, metadata: release.metadata }),
     resource,
     reason: payload.reason,
   };
 }
 
-function classify(payload, kind) {
+function classify(payload: { severity: string; reason: string; message: string; action?: unknown }, kind: string): Outcome {
   if (payload.severity === 'error') {
     return 'failed';
   }
@@ -186,19 +218,24 @@ function classify(payload, kind) {
 }
 
 // Release metadata describes one artifact. It applies only when its
-// release_revision equals the revision that the controller reports.
-function bindRelease(metadata, revision) {
+// release_revision equals the revision that the controller reports. The
+// returned metadata keeps only the release fields that apply.
+function bindRelease(metadata: JsonObject, revision: string) {
   const bound = revision !== '' && metadata.release_revision === revision;
   const appVersion = bound && matches(metadata.app_version, APP_VERSION) ? metadata.app_version : '';
   const appCommit = bound && matches(metadata.app_commit, APP_COMMIT) ? metadata.app_commit : '';
-  const unbound = [];
-  if (!appVersion && 'app_version' in metadata) unbound.push('app_version');
-  if (!appCommit && 'app_commit' in metadata) unbound.push('app_commit');
-  if ((!bound || (!appVersion && !appCommit)) && 'release_revision' in metadata) unbound.push('release_revision');
-  return { appVersion, appCommit, unbound };
+  const published = { ...metadata };
+  if (!appVersion) delete published.app_version;
+  if (!appCommit) delete published.app_commit;
+  if (!appVersion && !appCommit) delete published.release_revision;
+  return { appVersion, appCommit, metadata: published };
 }
 
-function requireStrings(object, keys, prefix) {
+function requireStrings<K extends string>(
+  object: JsonObject,
+  keys: readonly K[],
+  prefix: string,
+): asserts object is JsonObject & Record<K, string> {
   for (const key of keys) {
     if (typeof object[key] !== 'string') {
       throw new InvalidEventError(`${prefix}.${key} must be a string, got ${quote(object[key])}.`);
@@ -206,21 +243,26 @@ function requireStrings(object, keys, prefix) {
   }
 }
 
-function matches(value, pattern) {
+function matches(value: unknown, pattern: RegExp): value is string {
   return typeof value === 'string' && pattern.test(value);
 }
 
 // GitHub repository names are not case sensitive.
-function sameRepository(value, repository) {
-  return typeof value === 'string' && typeof repository === 'string' && value.toLowerCase() === repository.toLowerCase();
+function sameRepository(value: unknown, repository: string): boolean {
+  return typeof value === 'string' && value.toLowerCase() === repository.toLowerCase();
 }
 
-function isObject(value) {
+function isObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+// Reads a field of a value that may not be an object.
+function field(value: unknown, key: string): unknown {
+  return isObject(value) ? value[key] : undefined;
+}
+
 // Quotes a value from the event for a message. The result is one line.
-export function quote(value) {
+export function quote(value: unknown): string {
   const text = value === undefined ? 'undefined' : JSON.stringify(value) ?? String(value);
   return text.length > 120 ? `${text.slice(0, 117)}...` : text;
 }

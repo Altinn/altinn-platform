@@ -4,13 +4,13 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import { formatOutputs } from '../src/github.mjs';
-import { run } from '../src/main.mjs';
-import { ACTION_DIR, fixture, INPUT_ENV, parseOutputs } from './helpers.mjs';
+import { formatOutputs } from '../src/github.ts';
+import { run } from '../src/main.ts';
+import { ACTION_DIR, fixture, INPUT_ENV, parseOutputs } from './helpers.ts';
 
 const OUTPUT_NAMES = ['outcome', 'environment', 'cluster', 'revision', 'app_version', 'app_commit', 'event_json'];
 
-function prepare(event, env = {}) {
+function prepare(event: unknown, env: Record<string, string> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'read-reconciliation-result-'));
   const files = { event: join(dir, 'event.json'), output: join(dir, 'output') };
   writeFileSync(files.event, typeof event === 'string' ? event : JSON.stringify(event));
@@ -28,7 +28,7 @@ function prepare(event, env = {}) {
   };
 }
 
-function runAction(event, env) {
+function runAction(event: unknown, env?: Record<string, string>) {
   const { files, env: actionEnv } = prepare(event, env);
   let stdout = '';
   const code = run(actionEnv, {
@@ -149,7 +149,7 @@ describe('action', () => {
 
   it('runs from the entry point of the action', () => {
     const { files, env } = prepare(fixture('flux-2.10-health-check-passed'));
-    const child = spawnSync(process.execPath, ['index.mjs'], {
+    const child = spawnSync(process.execPath, ['index.ts'], {
       cwd: ACTION_DIR,
       env: { PATH: process.env.PATH, ...env },
       encoding: 'utf8',
@@ -164,7 +164,7 @@ describe('action', () => {
     const event = fixture('flux-2.10-health-check-passed');
     event.client_payload.metadata.schema_version = '9';
     const { files, env } = prepare(event);
-    const child = spawnSync(process.execPath, ['index.mjs'], {
+    const child = spawnSync(process.execPath, ['index.ts'], {
       cwd: ACTION_DIR,
       env: { PATH: process.env.PATH, ...env },
       encoding: 'utf8',

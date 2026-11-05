@@ -1,7 +1,7 @@
 // Entry point of the read-reconciliation-result action.
 
 import { appendFileSync, readFileSync } from 'node:fs';
-import { run } from './src/main.mjs';
+import { run } from './src/main.ts';
 
 process.exitCode = run(process.env, {
   readFile: (path) => readFileSync(path, 'utf8'),

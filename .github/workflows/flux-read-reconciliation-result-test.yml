@@ -40,5 +40,12 @@ jobs:
         with:
           node-version: 24
 
+      # TypeScript checks the types. The action itself has no dependencies.
+      - name: Install TypeScript
+        run: npm ci --ignore-scripts
+
+      - name: Check types
+        run: npm run typecheck
+
       - name: Run tests
-        run: node --test "test/*.test.mjs"
+        run: npm test

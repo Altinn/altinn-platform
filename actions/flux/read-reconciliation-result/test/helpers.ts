@@ -1,15 +1,17 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import type { Subscription } from '../src/contract.ts';
 
 export const ACTION_DIR = fileURLToPath(new URL('..', import.meta.url));
 
 // The fixtures are repository_dispatch events as GitHub delivers them, with the
-// Flux event in client_payload. The ids and digests are examples.
-export function fixture(name) {
+// Flux event in client_payload. The ids and digests are examples. The tests
+// change fields to break the contract, so the type is any.
+export function fixture(name: string): any {
   return JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), 'utf8'));
 }
 
-export const SUBSCRIPTIONS = [
+export const SUBSCRIPTIONS: Subscription[] = [
   {
     environment: 'at23',
     cluster: 'dis-core-at23-aks',
@@ -34,8 +36,8 @@ export const INPUT_ENV = {
 
 // Parses a GITHUB_OUTPUT file the same way as the runner: name<<delimiter,
 // the value lines, then the delimiter.
-export function parseOutputs(text) {
-  const outputs = {};
+export function parseOutputs(text: string): Record<string, string> {
+  const outputs: Record<string, string> = {};
   const lines = text.split('\n');
   for (let i = 0; i < lines.length; i++) {
     if (lines[i] === '') continue;

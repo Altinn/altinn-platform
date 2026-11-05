@@ -1,22 +1,22 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { evaluate, InvalidEventError, InvalidInputError, parseInputs } from '../src/contract.mjs';
-import { fixture, INPUT_ENV, SUBSCRIPTIONS } from './helpers.mjs';
+import { evaluate, InvalidEventError, InvalidInputError, parseInputs, type Outcome } from '../src/contract.ts';
+import { fixture, INPUT_ENV, SUBSCRIPTIONS } from './helpers.ts';
 
 const inputs = parseInputs(INPUT_ENV);
 
-function evaluateEvent(event, overrides = {}) {
+function evaluateEvent(event: unknown, overrides: { eventName?: string } = {}) {
   return evaluate({ inputs, eventName: 'repository_dispatch', event, repository: 'Altinn/dialogporten', ...overrides });
 }
 
-function assertRejected(event, pattern, overrides) {
+function assertRejected(event: unknown, pattern: RegExp, overrides?: { eventName?: string }) {
   assert.throws(
     () => evaluateEvent(event, overrides),
     (error) => error instanceof InvalidEventError && pattern.test(error.message),
   );
 }
 
-function changed(name, change) {
+function changed(name: string, change: (event: any) => void) {
   const event = fixture(name);
   change(event);
   return event;
@@ -30,7 +30,7 @@ describe('inputs', () => {
   });
 
   const subscription = SUBSCRIPTIONS[0];
-  const cases = [
+  const cases: [string, Record<string, string>, RegExp][] = [
     ['a missing sender id', { INPUT_EXPECTED_SENDER_ID: '' }, /expected_sender_id/],
     ['a sender name instead of an id', { INPUT_EXPECTED_SENDER_ID: 'altinn-flux-dispatch[bot]' }, /expected_sender_id/],
     ['a missing product', { INPUT_PRODUCT: '' }, /product/],
@@ -75,7 +75,7 @@ describe('inputs', () => {
 });
 
 describe('classification', () => {
-  const cases = [
+  const cases: [string, Outcome][] = [
     ['flux-2.9-health-check-passed', 'succeeded'],
     ['flux-2.10-health-check-passed', 'succeeded'],
     ['flux-2.9-health-check-failed', 'failed'],

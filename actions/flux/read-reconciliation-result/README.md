@@ -84,10 +84,12 @@ The action returns the values only when they are valid and `release_revision` is
 - Delivery is best effort. Flux does not retry a failed delivery, so an event can be lost. Keep a manual way to start the jobs.
 - An event can arrive more than once, late or out of order. The action does not remove repeated events. Check the running release before and after the tests.
 
-## Tests
+## Development
 
-Run the tests in this directory with Node.js 21 or later:
+The action is TypeScript that Node.js 24 runs directly, without a build step or runtime dependencies. TypeScript is a development dependency that checks the types. Check the types and run the tests in this directory with Node.js 24 or later:
 
 ```sh
-node --test "test/*.test.mjs"
+npm ci
+npm run typecheck
+npm test
 ```
