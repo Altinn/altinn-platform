@@ -30,7 +30,7 @@ RUN mkdir -p -m 755 /etc/apt/keyrings && \
 
 # Install yq (the Go implementation from mikefarah/yq, not the unrelated python yq in apt)
 # renovate: datasource=github-releases depName=yq packageName=mikefarah/yq versioning=semver
-ARG YQ_VERSION=4.54.1
+ARG YQ_VERSION=4.54.2
 RUN curl -fsSL "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_$(dpkg --print-architecture)" -o /usr/local/bin/yq && \
     chmod 0755 /usr/local/bin/yq && \
     yq --version
@@ -41,6 +41,7 @@ RUN apt-get clean && \
 COPY scripts/entrypoint.sh ./entrypoint.sh
 COPY scripts/app-token.sh ./app-token.sh
 COPY scripts/token.sh ./token.sh
+COPY scripts/github-api.sh ./github-api.sh
 RUN chmod +x ./entrypoint.sh && \
     chmod +x ./app-token.sh && \
     chmod +x ./token.sh && \
@@ -49,6 +50,7 @@ RUN chmod +x ./entrypoint.sh && \
     ./entrypoint.sh \
     ./app-token.sh \
     ./token.sh \
+    ./github-api.sh \
     /_work
 
 USER runner
