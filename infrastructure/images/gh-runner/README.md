@@ -28,6 +28,19 @@ RUN apt-get update && apt-get install -y curl jq && \
 USER runner
 ```
 
+## GitHub API rate limiting
+
+All runners using the same GitHub App share the rate limit of its installation. The entrypoint therefore:
+
+- Retries rate limited (403/429), server (5xx) and network errors, honouring `Retry-After` and `X-RateLimit-Reset`.
+  The total wait per request is capped by `GITHUB_API_RETRY_BUDGET` (seconds, default `600`). If the rate limit
+  resets later than that, the runner waits out the whole budget before giving up, rather than exiting at once and being
+  restarted. The app JWT is signed again before every attempt, so it doesn't expire during long waits.
+- Fails the runner with a clear log message when it does not get a token, instead of registering with an empty one.
+- Uses `INSTALL_ID` (optional) to request the access token directly, saving one API call per runner.
+
+See [scripts/entrypoint.sh](scripts/entrypoint.sh) for all supported environment variables.
+
 ## Maintenance
 Renovate is enabled on this repository and will automatically create a PR when there is a new version of the base image.
 
