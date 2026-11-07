@@ -1,7 +1,7 @@
 - Feature Name: `central_observability`
 - Title: Central observability platform for logs and traces
 - Start Date: 2026-11-07
-- RFC PR: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/pull/0000)
+- RFC PR: [altinn/altinn-platform#4401](https://github.com/Altinn/altinn-platform/pull/4401)
 - Github Issue: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/issues/0000)
 - Product/Category: Observability
 - State: **REVIEW** (possible states are: **REVIEW**, **ACCEPTED** and **REJECTED**)
