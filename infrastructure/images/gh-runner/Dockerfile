@@ -7,7 +7,7 @@ USER root
 # and pick up Ubuntu security fixes newer than the base image (e.g. openssl)
 RUN apt-get update && \
     apt-get upgrade -y --no-install-recommends && \
-    apt-get install -y --no-install-recommends wget uuid-runtime make xz-utils
+    apt-get install -y --no-install-recommends wget uuid-runtime make xz-utils libatomic1
 
 # Install Azure CLI
 RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
