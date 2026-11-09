@@ -14,7 +14,10 @@ resource "azurerm_subnet" "gh_runners" {
   resource_group_name  = var.resource_group_name
   virtual_network_name = azurerm_virtual_network.gh_runners.name
   address_prefixes     = [var.private_runners_address_space]
-  service_endpoints    = ["Microsoft.KeyVault"]
+
+  service_endpoint {
+    service = "Microsoft.KeyVault"
+  }
 
   delegation {
     name = "Microsoft.App.environments"
@@ -27,7 +30,7 @@ resource "azurerm_subnet" "gh_runners" {
 
 module "container_apps_gh_runners" {
   source      = "Altinn/altinn-modules/azurerm//modules/github_runner_container_app_jobs"
-  version     = "1.3.0"
+  version     = "2.1.0"
   app_id      = var.altinn_app_id
   install_id  = var.altinn_app_install_id
   app_key     = var.altinn_app_key
@@ -36,13 +39,15 @@ module "container_apps_gh_runners" {
   repos = [
     var.repository_name
   ]
-  resource_prefix          = var.private_runners_prefix
-  infrastructure_subnet_id = azurerm_subnet.gh_runners.id
-  resource_group_name      = var.resource_group_name
-  runner_cpu               = var.runner_cpu
-  runner_memory            = var.runner_memory
-  runner_labels            = var.runner_labels
-  runner_image             = var.runner_image
+  resource_prefix             = var.private_runners_prefix
+  infrastructure_subnet_id    = azurerm_subnet.gh_runners.id
+  resource_group_name         = var.resource_group_name
+  runner_cpu                  = var.runner_cpu
+  runner_memory               = var.runner_memory
+  runner_labels               = var.runner_labels
+  runner_image                = var.runner_image
+  polling_interval_in_seconds = var.polling_interval_in_seconds
+  scaler_enable_etags         = var.scaler_enable_etags
   additional_tags = merge(
     var.tags,
     { submodule = "${var.repository_name}-github-runners" }
