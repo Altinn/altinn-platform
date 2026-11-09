@@ -364,3 +364,24 @@ CVE-2026-84008
 # Found in the azure-cli virtualenv (/opt/az, certifi 2024.7.4) and the system
 # Python - resolved when azure-cli/Ubuntu ship certifi >= 2026.10.19
 GHSA-6q48-6c7w-9gw2
+
+# undici 6.27.0/6.28.0 in npm packages shipped with the base image and Node.js -
+# resolved when actions/runner and nodesource ship undici >= 6.29.1
+# undici: Certificate validation bypass via dropped TLS options in Agent
+CVE-2026-109383
+# undici: DoS via unhandled stream error on excessive content
+CVE-2026-109869
+# undici: DoS via TLS renegotiation with mismatched certificate
+CVE-2026-87018
+
+# azure-cli bundled Python packages (/opt/az) - resolved when azure-cli ships
+# msgpack >= 1.2.3 and oauthlib >= 4.0.0
+# msgpack: DoS via memory leak during map deserialization
+CVE-2026-114613
+# oauthlib: privilege escalation via client identity confusion in token grant handlers
+CVE-2026-118669
+
+# go-jose v4.1.4 in containerd (base image). No Docker workloads run on these
+# runners - resolved when actions/runner ships containerd built with go-jose >= 4.1.6
+# go-jose: DoS via crafted RSA parameters in JWKs
+CVE-2026-116587

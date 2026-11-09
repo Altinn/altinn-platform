@@ -25,6 +25,8 @@ if [[ ! ${_GITHUB_API_RETRY_BUDGET} =~ ^[0-9]+$ ]]; then
   echo "GITHUB_API_RETRY_BUDGET must be a whole number of seconds, got '${_GITHUB_API_RETRY_BUDGET}'. Using 600" >&2
   _GITHUB_API_RETRY_BUDGET=600
 fi
+# Force base 10, so a value with leading zeros such as "090" is not read as octal
+_GITHUB_API_RETRY_BUDGET=$((10#${_GITHUB_API_RETRY_BUDGET}))
 _GITHUB_API_MAX_ATTEMPTS=10
 
 # Print the value of a response header from a curl header dump (case-insensitive).
