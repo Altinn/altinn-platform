@@ -69,7 +69,7 @@ variable "runner_image" {
   type        = string
   description = "Runner image. Override per repository to roll a new image out to one repository at a time before changing this default."
   # renovate: datasource=docker depName=ghcr.io/altinn/altinn-platform/gh-runner
-  default = "ghcr.io/altinn/altinn-platform/gh-runner:v0.10.0"
+  default = "ghcr.io/altinn/altinn-platform/gh-runner:v0.11.1"
 }
 
 variable "polling_interval_in_seconds" {
