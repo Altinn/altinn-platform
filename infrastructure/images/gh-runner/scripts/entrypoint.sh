@@ -15,7 +15,7 @@ export PATH=${PATH}:/actions-runner
 # LABELS (optional) Runner labels. Default: default
 # RUNNER_GROUP (optional) Name of runner group. Default: Default
 # RUNNER_GROUP_ID (optional) Id of runner group. Default: 1
-# GITHUB_API_RETRY_BUDGET (optional) Max seconds to wait for retries of a rate limited or failed GitHub API request. Default: 600
+# GITHUB_API_RETRY_BUDGET (optional) Max seconds to wait for retries of a rate limited or failed GitHub API request. Default: 600 (max 3600)
 
 # Un-export these, so that they must be passed explicitly to the environment of
 # any command that needs them.  This may help prevent leaks.

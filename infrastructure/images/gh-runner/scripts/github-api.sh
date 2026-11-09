@@ -8,7 +8,7 @@
 #
 # Optional environment variables:
 # * GITHUB_HOST, the GitHub host. Default: github.com
-# * GITHUB_API_RETRY_BUDGET, max seconds to spend waiting for retries per request. Default: 600
+# * GITHUB_API_RETRY_BUDGET, max seconds to spend waiting for retries per request. Default: 600 (max 3600)
 
 _GITHUB_HOST=${GITHUB_HOST:-"github.com"}
 
@@ -25,8 +25,16 @@ if [[ ! ${_GITHUB_API_RETRY_BUDGET} =~ ^[0-9]+$ ]]; then
   echo "GITHUB_API_RETRY_BUDGET must be a whole number of seconds, got '${_GITHUB_API_RETRY_BUDGET}'. Using 600" >&2
   _GITHUB_API_RETRY_BUDGET=600
 fi
-# Force base 10, so a value with leading zeros such as "090" is not read as octal
-_GITHUB_API_RETRY_BUDGET=$((10#${_GITHUB_API_RETRY_BUDGET}))
+# Strip leading zeros, so a value such as "090" is not read as octal
+_GITHUB_API_RETRY_BUDGET=${_GITHUB_API_RETRY_BUDGET#"${_GITHUB_API_RETRY_BUDGET%%[!0]*}"}
+_GITHUB_API_RETRY_BUDGET=${_GITHUB_API_RETRY_BUDGET:-0}
+# Cap at the installation token lifetime (1 hour). The length check comes first,
+# so huge values can't overflow bash arithmetic into a negative budget.
+_GITHUB_API_MAX_RETRY_BUDGET=3600
+if ((${#_GITHUB_API_RETRY_BUDGET} > ${#_GITHUB_API_MAX_RETRY_BUDGET} || _GITHUB_API_RETRY_BUDGET > _GITHUB_API_MAX_RETRY_BUDGET)); then
+  echo "GITHUB_API_RETRY_BUDGET is capped at ${_GITHUB_API_MAX_RETRY_BUDGET} seconds" >&2
+  _GITHUB_API_RETRY_BUDGET=${_GITHUB_API_MAX_RETRY_BUDGET}
+fi
 _GITHUB_API_MAX_ATTEMPTS=10
 
 # Print the value of a response header from a curl header dump (case-insensitive).

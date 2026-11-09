@@ -369,7 +369,12 @@ CVE-2026-84008
 GHSA-6q48-6c7w-9gw2
 
 # undici 6.27.0/6.28.0 in npm packages shipped with the base image and Node.js -
-# resolved when actions/runner and nodesource ship undici >= 6.29.1
+# resolved when actions/runner and nodesource ship undici >= 6.29.1.
+# Accepted because, as for the other bundled npm dependencies above, these copies
+# are not used by our own scripts and are only reached through tooling invoked by
+# our own workflows. The runners only run private workflows in our organizations,
+# so no untrusted code controls the TLS options passed to undici. Review when the
+# actions-runner base image or Node.js is bumped.
 # undici: Certificate validation bypass via dropped TLS options in Agent
 CVE-2026-109383
 # undici: DoS via unhandled stream error on excessive content

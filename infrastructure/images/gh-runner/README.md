@@ -33,7 +33,7 @@ USER runner
 All runners using the same GitHub App share the rate limit of its installation. The entrypoint therefore:
 
 - Retries rate limited (403/429), server (5xx) and network errors, honouring `Retry-After` and `X-RateLimit-Reset`.
-  The total wait per request is capped by `GITHUB_API_RETRY_BUDGET` (seconds, default `600`). If the rate limit
+  The total wait per request is capped by `GITHUB_API_RETRY_BUDGET` (seconds, default `600`, max `3600`). If the rate limit
   resets later than that, the runner waits out the whole budget before giving up, rather than exiting at once and being
   restarted. The app JWT is signed again before every attempt, so it doesn't expire during long waits.
 - Fails the runner with a clear log message when it does not get a token, instead of registering with an empty one.
