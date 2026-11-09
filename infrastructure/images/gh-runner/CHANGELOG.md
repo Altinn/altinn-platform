@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.10.2...ghrunner-0.11.0) (2026-11-09)
+
+
+### Features
+
+* **gh-runner:** retry rate limited GitHub API calls and bump deps ([#4400](https://github.com/Altinn/altinn-platform/issues/4400)) ([9dbf24e](https://github.com/Altinn/altinn-platform/commit/9dbf24e3d5fdfee7c2deb4fd500b6429e7582508))
+
 ## [0.10.2](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.10.1...ghrunner-0.10.2) (2026-10-23)
 
 
