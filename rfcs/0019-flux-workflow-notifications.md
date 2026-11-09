@@ -9,7 +9,7 @@
 # Summary
 [summary]: #summary
 
-Flux sends reconciliation events directly to product repositories through its notification-controller and the `githubdispatch` provider. A shared GitHub action validates each event and returns its result and deployment metadata. After a deployment succeeds or a reconciliation attempt fails, product-owned GitHub workflows run the required follow-up jobs. Examples include Slack notifications, end-to-end tests and Bruno tests. Each event identifies the product, environment, cluster, resource and available release information. This completes the reverse direction of the accepted [RFC 0017](https://github.com/Altinn/altinn-platform/blob/main/rfcs/0017-on-demand-flux-reconcile.md). The design requires a verified Flux fix before rollout, because the inspected notification-controller filters out the final success event. Delivery is best effort, and workflows must tolerate missing, repeated and late events.
+Flux sends reconciliation events directly to product repositories through its notification-controller and the `githubdispatch` provider. A shared GitHub action validates each event and returns its result and deployment metadata. After a deployment succeeds or a reconciliation attempt fails, product-owned GitHub workflows run the required follow-up jobs. Examples include Slack notifications, end-to-end tests and Bruno tests. Each event identifies the product, environment, cluster, resource and available release information. This completes the reverse direction of the accepted [RFC 0017](https://github.com/Altinn/altinn-platform/blob/main/rfcs/0017-on-demand-flux-reconcile.md). The success signal is the health check event of the application Kustomization, because the notification-controller filters out the final success event. Delivery is best effort, and workflows must tolerate missing, repeated and late events.
 
 # Motivation
 [motivation]: #motivation
@@ -73,18 +73,19 @@ The two directions use separate shared actions:
 | Action | Workflow | Result |
 |---|---|---|
 | Existing `actions/flux/trigger-reconcile` | The publishing workflow, after it pushes and tags the artifact. | Confirms acceptance of the reconcile request. |
-| Proposed `actions/flux/read-reconciliation-result` | The receiving workflow, triggered by `repository_dispatch`. | Validates the event and returns `succeeded`, `failed` or `ignored`. |
+| `actions/flux/read-reconciliation-result` | The receiving workflow, triggered by `repository_dispatch`. | Validates the event and returns `succeeded`, `failed` or `ignored`. |
 
 Both actions belong in `Altinn/altinn-platform`. The [trigger-reconcile README](https://github.com/Altinn/altinn-platform/blob/main/actions/flux/trigger-reconcile/README.md) lists enabled inbound endpoints at `https://ops.<environment>.dis.altinn.cloud/flux-webhook`. An enabled inbound endpoint does not establish that outbound notifications are ready.
 
 ## Configure a product
 
 1. Select the application Kustomization that represents the rollout.
-2. Configure health checks for its required workloads.
-3. Register the destination repository with the platform team for the shared GitHub App.
-4. Add the Provider and Alert to the product syncroot.
-5. Add the receiving workflow and shared action configuration to the destination repository's default branch.
-6. Validate both success and failure events before enabling the follow-up jobs.
+2. Configure health checks for its required workloads. Without health checks, Flux sends no success event.
+3. Limit what the dispatch token can do in the destination repository. See [Destination repository](#destination-repository).
+4. Register the destination repository with the platform team. The platform team adds the repository to the shared GitHub App installation and configures the token.
+5. Add the Provider and Alert to the product syncroot.
+6. Add the receiving workflow and shared action configuration to the destination repository's default branch.
+7. Validate both success and failure events before enabling the follow-up jobs.
 
 The examples use illustrative Authentication resource names and cluster names. They are not verified deployment configuration. The initial pilot uses Dialogporten in `at23`, as specified under [Ownership and rollout](#ownership-and-rollout).
 
@@ -147,7 +148,7 @@ Use exact resource names. The subscription must not select every resource in the
 
 ## Define application readiness
 
-Set `spec.wait: true` or explicit `spec.healthChecks` on the application Kustomization. Set a timeout that covers the expected rollout duration.
+Set `spec.wait: true` or explicit `spec.healthChecks` on the application Kustomization. Set a timeout that covers the expected rollout duration. Flux sends the success event only when one of these settings is present. Without them, the product receives only failure events.
 
 This fragment checks a required Deployment:
 
@@ -175,7 +176,7 @@ The native Provider derives `event_type` from the resource: `{Kind}/{Name}.{Name
 
 The shared `read-reconciliation-result` action handles event validation and classification. Products use its outputs in regular jobs or reusable workflows. They do not need to copy the classification code.
 
-The action requires implementation before a product can use the following example. Replace `<commit>` with a reviewed full commit identifier when the action is available. The workflow assumes two product-owned reusable workflows:
+Replace `<commit>` with a reviewed full commit identifier of the action. The workflow assumes two product-owned reusable workflows:
 
 | Workflow | Inputs | Example jobs |
 |---|---|---|
@@ -286,7 +287,7 @@ The action applies the [event classification](#event-classification) and [metada
 | `revision` | Artifact revision, or an empty string when unavailable. |
 | `app_version` | Application version, or an empty string when the release mapping is unavailable or invalid. |
 | `app_commit` | Full application commit identifier, or an empty string when the release mapping is unavailable or invalid. |
-| `event_json` | Validated Flux event encoded as JSON, including the resource, reason, severity, timestamp and diagnostic message. |
+| `event_json` | The Flux event encoded as JSON, including the resource, reason, severity, timestamp and diagnostic message. The action checks only the fields that it reads. It does not check other fields, such as `timestamp`. |
 
 The action removes unbound or invalid `app_version`, `app_commit` and `release_revision` fields from `event_json`. It preserves other supported fields and additional Flux fields. It uses safe output encoding, including for multiline messages. Consumers treat these outputs as data.
 
@@ -296,7 +297,7 @@ Do not set `continue-on-error: true` on this action. Keep follow-up jobs depende
 
 The action classifies one delivered event. It does not wait for a deployment, retry dispatch delivery, suppress duplicate jobs or query the running application. Product jobs retain the release checks and repeated-event handling described below.
 
-The action README records the supported contract versions and validated environments. Products pin a reviewed action commit. Incompatible changes require an explicit contract migration. The inbound endpoint status table does not enable this action's subscriptions.
+The fixture tests of the action cover the success event of each supported Flux version. Products pin a reviewed action commit. Incompatible changes require an explicit contract migration. The inbound endpoint status table does not enable this action's subscriptions.
 
 ## Flux compatibility prerequisite
 
@@ -341,27 +342,47 @@ The inspected code has a compatibility problem:
 
 The `DisableCommitStatusEvent` feature gate removes that success event. It does not make the event available to `githubdispatch`.
 
-The implementation must obtain an upstream fix that forwards final success events to `githubdispatch`. It must consume that fix through the supported Flux distribution. Do not change the shared controllers manually or disable tenant isolation to work around this requirement.
+The design therefore uses the [health check success event](#health-check-success-event) as the success signal. Do not change the shared controllers manually or disable tenant isolation to get the final success event.
 
-[Microsoft's release notes](https://learn.microsoft.com/en-us/azure/azure-arc/kubernetes/flux-gitops-release-notes) describe extension `1.26.4` as a security update to Go packages and base images. They do not document a fix for final success dispatch. The pilot's notification-controller and kustomize-controller tags retain the upstream versions in the first row above. The Azure build suffixes do not establish that success dispatch works.
+[Microsoft's release notes](https://learn.microsoft.com/en-us/azure/azure-arc/kubernetes/flux-gitops-release-notes) describe extension `1.26.4` as a security update to Go packages and base images. They do not document a change to final success dispatch. The pilot's notification-controller and kustomize-controller tags retain the upstream versions in the first row above. The Azure build suffixes do not prove that the events match upstream. The pilot checks below verify the events.
 
-The [upgrade tracker](https://github.com/Altinn/altinn-platform/issues/4241) also reports Flux 2.9.6 in `at22`, `yt01` and `tt02`. The operator-provided evidence above covers only `at23`. Follow the tracker's automatic-upgrade guidance. Verify running controller images and the extension's provisioning state before adding each environment. Azure's `currentVersion` alone can report a version that failed to install. Each outbound pilot still needs the verified fix and result checks.
+The [upgrade tracker](https://github.com/Altinn/altinn-platform/issues/4241) also reports Flux 2.9.6 in `at22`, `yt01` and `tt02`. The operator-provided evidence above covers only `at23`. Follow the tracker's automatic-upgrade guidance. Verify running controller images and the extension's provisioning state before adding each environment. Azure's `currentVersion` alone can report a version that failed to install. Each outbound pilot still needs the result checks.
 
 [Upstream notification-controller 1.10.0](https://github.com/fluxcd/notification-controller/blob/v1.10.0/CHANGELOG.md) promotes Alert and Provider to API version `v1`. It still serves `v1beta3`. The examples retain `v1beta3` for the documented Azure baseline. The pilot must select an API version supported by its verified distribution.
 
-Rollout stays blocked until the deployed controller versions pass the success, failure and recovery checks below. Failure delivery alone does not satisfy this prerequisite. A message about applied resources or passed intermediate health checks cannot replace the final result.
+Rollout requires that the deployed controller versions pass the success, failure and recovery checks below. Failure delivery alone does not satisfy this prerequisite. A message about applied resources does not replace the health check event.
 
 The [provider classification](https://github.com/fluxcd/notification-controller/blob/v1.10.0/internal/server/provider_commit_status.go) still excludes `githubdispatch` from the groups that receive commit-status updates.
+
+### Health check success event
+
+The kustomize-controller sends the event `Health check passed in <duration>` after the health checks of a Kustomization pass. This event is not a commit-status update, so the notification-controller sends it to `githubdispatch`.
+
+| Property | Value |
+|---|---|
+| Severity | `info` |
+| Reason | `Progressing` |
+| Message | Starts with `Health check passed in `. |
+| Action | Empty in Flux 2.9. `HealthCheck` in Flux 2.10. Notification-controller 1.10 sends an empty action for an event from kustomize-controller 1.9. |
+
+The kustomize-controller sends the event in two cases:
+
+- The health checks pass, and the Kustomization was not healthy before. This includes the first rollout and a recovery after a failure.
+- The health checks pass for a new revision that changed resources.
+
+A new revision that changes no resources sends no success event. A repeated reconcile of a healthy revision also sends no success event. The event requires `spec.wait: true` or `spec.healthChecks` on the Kustomization.
+
+The event has no reason of its own, so the shared action matches the start of the message. A Flux upgrade can change the message. The fixture tests of the action cover the success event of each supported Flux version. [Issue #4373](https://github.com/Altinn/altinn-platform/issues/4373) asks upstream for a stable reason in [fluxcd/flux2#3933](https://github.com/fluxcd/flux2/issues/3933).
 
 ## Event classification
 
 | Event | Consumer result | Action |
 |---|---|---|
-| Application Kustomization, `ReconciliationSucceeded`, severity `info` | `succeeded` | Run the product's success jobs for the configured environment. |
+| Application Kustomization, [health check success event](#health-check-success-event), severity `info` | `succeeded` | Run the product's success jobs for the configured environment. |
 | Application Kustomization, severity `error` | `failed` | Run the product's failure jobs with the failed attempt and its reason. |
 | Selected OCIRepository, severity `error` | `failed` | Run the product's failure jobs for a source failure. The attempted artifact can be unknown. |
 | `DependencyNotReady` with severity `info` | `ignored` | Flux is waiting. Do not report successful deployment. |
-| Progress, resource changes or source success | `ignored` | Do not start deployment result jobs. |
+| Other progress events, `ReconciliationSucceeded`, resource changes or source success | `ignored` | Do not start deployment result jobs. |
 | An unknown schema, sender, resource or environment | Invalid | Reject the event and report the configuration error. |
 
 Failures can include `HealthCheckFailed`, `BuildFailed` and `ReconciliationFailed`. Consumers preserve the actual reason instead of requiring a fixed failure list. A failure describes one attempt. Flux can retry the same revision and later report success.
@@ -423,8 +444,8 @@ This representative success payload omits optional native Flux fields:
       "namespace": "product-authentication"
     },
     "severity": "info",
-    "reason": "ReconciliationSucceeded",
-    "message": "Reconciliation finished",
+    "reason": "Progressing",
+    "message": "Health check passed in 48.172645193s",
     "reportingController": "kustomize-controller",
     "timestamp": "2026-10-15T13:05:00Z",
     "metadata": {
@@ -451,19 +472,23 @@ GitHub limits `event_type` to 100 characters and `client_payload` to ten top-lev
 
 Use one shared platform GitHub App. A GitHub App is the machine identity that authenticates dispatch requests. It is separate from the deployed product application. The App requires repository `Contents: write` to create a repository dispatch. `Actions: write` is not the permission for this endpoint.
 
-Install the shared App only on approved destination repositories. Keep its private key in a platform-controlled namespace. Each product namespace receives an installation token restricted to its approved destination repository. The shared App private key must not enter a product namespace. Different installation identifiers do not restrict what that private key can access.
+Install the shared App only on approved destination repositories. Keep its private key in the platform Key Vault and in a platform-controlled namespace. Each product namespace receives an installation token restricted to its approved destination repository. The shared App private key must not enter a product namespace. Different installation identifiers do not restrict what that private key can access.
 
 Flux can obtain installation tokens itself when its Provider Secret contains `githubAppID`, `githubAppInstallationID` and `githubAppPrivateKey`. This design supplies only the `token` key to each product's Provider. [Flux uses a supplied token directly](https://github.com/fluxcd/notification-controller/blob/v1.10.0/internal/notifier/github_helpers.go); it cannot renew that token without the App credentials. [GitHub installation tokens](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app) expire after one hour. The platform must replace them before expiry.
 
 The product namespace is the token trust boundary. Its administrators can access the token for that product's approved repository. Repository administrators must accept that scope during onboarding. The platform owns the App, private key rotation, token renewal and revocation. The App sender identifier is shared across products; consumers must also validate the repository and subscription.
 
+The shared App is `dis-flux-dispatch`. The `Altinn` organization owns it, and the App is private. It has the permissions `Contents: write` and `Metadata: read`, and no webhook or event subscriptions. Its installation includes only selected repositories. Adding a destination repository to the installation is the approval step for onboarding. Offboarding removes the repository from the installation. GitHub refuses a token for a repository outside the installation.
+
+The dispatch sender is the bot user `dis-flux-dispatch[bot]`. Workflows compare its numeric user identifier, not its name.
+
 ### Token generation and renewal
 
 Use External Secrets Operator (ESO) for token generation and distribution. This requires platform configuration of existing components, not a custom token service. ESO provides a [GitHub token generator](https://external-secrets.io/latest/api/generator/github/) and [Kubernetes Secret distribution](https://external-secrets.io/latest/provider/kubernetes/#pushsecret).
 
-The proposed configuration uses this sequence:
+The configuration uses this sequence:
 
-1. Provision the App private key in `platform-system` through the platform's verified secret management mechanism.
+1. Store the App private key in the platform Key Vault. An `ExternalSecret` in `platform-system` reads it. See [Private key provisioning](#private-key-provisioning).
 2. Configure a platform-owned `GithubAccessToken` generator for each approved destination repository.
 3. Set explicit `repositories` and `permissions` fields. For Dialogporten, use `repositories: [dialogporten]` and `contents: write`.
 4. Configure an `ExternalSecret` in `platform-system` to generate the repository token every 30 minutes.
@@ -472,13 +497,36 @@ The proposed configuration uses this sequence:
 
 Each PushSecret uses a platform-owned Kubernetes SecretStore with an explicit destination namespace and restricted service account permissions. The platform approves each repository, namespace and Secret mapping. Products cannot change the generator, its permissions or that mapping. Generation failures retain the existing token; distribution failures must not replace it with an empty value. Monitor generation and distribution failures before the current token expires.
 
+The platform configures each mapping in the `flux_dispatch_tokens` input of the `dis_aks_resources_multitenancy` module. A mapping has a name of at most 15 characters, a repository, a product namespace and a Secret name. Each mapping has its own destination Secret. The module rejects two mappings with the same namespace and Secret name ([dis-modules#171](https://github.com/dis-way/terraform-azurerm-dis-modules/pull/171)).
+
+Do not change the repository and the namespace of a mapping in one change. Until the next token refresh, up to 30 minutes later, the new namespace gets a token for the old repository. Add a new mapping instead, and then remove the old mapping.
+
 The generator reads its private key from the namespace where generation runs. A [ClusterGenerator](https://external-secrets.io/latest/api/generator/cluster/#limitations) does not remove that namespace requirement. Keep generation in `platform-system`. Distribute only the resulting token. Do not commit credentials. Do not put private keys in `postBuild.substitute`.
 
-The inspected [ESO package](https://github.com/dis-way/gitops-manifests/blob/main/oci/external-secrets-operator/base/helmrelease.yaml) declares chart version `2.13.0`. Its [multitenancy secret layer](https://github.com/dis-way/gitops-manifests/blob/main/oci/external-secrets-operator/README.md) now defines `dis-system-store` in `platform-system`. These manifests do not establish that the pilot cluster has those resources. Verify the deployed version, generator support, private key access and restricted token distribution before rollout.
+The [ESO package](https://github.com/dis-way/gitops-manifests/blob/main/oci/external-secrets-operator/base/helmrelease.yaml) declares chart version `2.14.0`. Its [multitenancy secret layer](https://github.com/dis-way/gitops-manifests/blob/main/oci/external-secrets-operator/README.md) defines `dis-system-store` in `platform-system`. Package version 1.15.0 adds the token layers ([gitops-manifests#2424](https://github.com/dis-way/gitops-manifests/pull/2424)). The pilot cluster runs ESO 2.14.0, and `dis-system-store` is valid there ([#4372](https://github.com/Altinn/altinn-platform/issues/4372)). Verify private key access and restricted token distribution before rollout.
 
 Keep Flux cross-namespace restrictions enabled. [Flux blocks cross-namespace event selection](https://fluxcd.io/flux/components/notification/alerts/#disable-cross-namespace-selectors) with `--no-cross-namespace-refs=true`. Central Alerts therefore cannot replace product subscriptions while that restriction remains enabled. Verify that the product applier can reconcile Providers and Alerts. Verify token provisioning separately through the platform configuration. RFC 0017's admission policy restricts Receiver resources. It does not grant permissions for Providers or Alerts. The outbound subscription needs no Receiver.
 
 Permit notification-controller and the token generator outbound HTTPS access to `api.github.com` and required name resolution. This path needs no public cluster endpoint, edge gateway route or GitHub-to-cluster connection.
+
+#### Private key provisioning
+
+The platform keeps the App private key as a GitHub Actions secret in its infrastructure repository. The Terraform workflow passes the key in an ephemeral variable to the `ephemeral_secrets` input of the `dis_system_kv` module ([dis-modules#170](https://github.com/dis-way/terraform-azurerm-dis-modules/pull/170)). The module writes the key as a write-only Key Vault secret. Saved plans and the Terraform state do not contain the key.
+
+Terraform cannot detect a change to a write-only value. The workflow therefore computes a hash of the key and passes it to the `secret_versions` input. A new key changes the version, and Terraform writes the new key.
+
+The `dis_aks_resources_multitenancy` module writes the App identifier and the installation identifier to the same Key Vault. An `ExternalSecret` in `platform-system` reads the three values into one Secret for the token generators.
+
+### Destination repository
+
+A token with `Contents: write` can send a `repository_dispatch` event of any type. It can also create and update branches and tags. The destination repository must limit this access before the platform distributes a token:
+
+- Every workflow that acts on a `repository_dispatch` event accepts only its expected sender. [Altinn/dialogporten#4590](https://github.com/Altinn/dialogporten/pull/4590) adds a reusable sender check.
+- The receiving workflow accepts only the bot user of the App, through `expected_sender_id`.
+- Rulesets prevent the App from creating or updating the branches and tags that start deployments. The App is not in a bypass list.
+- A deploy job that checks out a ref from the event payload accepts only refs from the protected release process.
+
+If these limits are not practical, use a destination repository without deploy workflows or secrets. [Issue #4390](https://github.com/Altinn/altinn-platform/issues/4390) records the remaining access for the pilot.
 
 ### Internal event endpoint
 
@@ -503,7 +551,7 @@ Verify event isolation with the inbound feature enabled and disabled. Repeat the
 
 ## Delivery, repeated events and ordering
 
-The native Provider does not guarantee at-least-once delivery. The success event compatibility fix does not establish this guarantee. The Provider supplies no durable event queue or event replay API. The inspected [notification-controller handler](https://github.com/fluxcd/notification-controller/blob/v1.10.0/internal/server/event_handlers.go) acknowledges an inbound event while its GitHub request runs asynchronously. If the request fails, the controller reports an error without retaining a durable delivery record. A controller restart can also lose an unfinished request. A later reconciliation can emit a new result, but it does not replay the missing result. A successful GitHub response confirms dispatch acceptance, not workflow completion.
+The native Provider does not guarantee at-least-once delivery. The health check success event does not establish this guarantee. The Provider supplies no durable event queue or event replay API. The inspected [notification-controller handler](https://github.com/fluxcd/notification-controller/blob/v1.10.0/internal/server/event_handlers.go) acknowledges an inbound event while its GitHub request runs asynchronously. If the request fails, the controller reports an error without retaining a durable delivery record. A controller restart can also lose an unfinished request. A later reconciliation can emit a new result, but it does not replay the missing result. A successful GitHub response confirms dispatch acceptance, not workflow completion.
 
 | Situation | Required behavior |
 |---|---|
@@ -544,10 +592,11 @@ An upstream durable delivery implementation could preserve the direct path. A pl
 
 | Owner | Responsibility |
 |---|---|
-| Platform team | Obtain and validate the Flux fix. Coordinate shared network policies with RFC 0017 and configure outbound connectivity. |
+| Platform team | Validate the success event on each Flux version, and ask upstream for a stable reason. Coordinate shared network policies with RFC 0017 and configure outbound connectivity. |
 | Platform team | Manage the shared App, private key rotation, repository token generation, distribution and monitoring. |
 | Platform team | Implement, test and maintain the shared result action, its contract and onboarding documentation. |
 | Product team | Select application health checks, event sources and environment mappings. |
+| Product team | Limit what the dispatch token can do in the destination repository. |
 | Product team | Publish release metadata, configure the shared action and maintain receiving workflows. |
 | Product team | Verify the running release and handle repeated or stale events. |
 
@@ -555,7 +604,7 @@ Keep the shared action and its README beside `trigger-reconcile` in this reposit
 
 ### Dialogporten pilot
 
-The first pilot uses Dialogporten in `at23`. The proposed destination is `Altinn/dialogporten`, where product workflows select the follow-up jobs.
+The first pilot uses Dialogporten in `at23`. The destination is `Altinn/dialogporten`, where product workflows select the follow-up jobs.
 
 | Setting | Pilot value |
 |---|---|
@@ -570,7 +619,7 @@ The first pilot uses Dialogporten in `at23`. The proposed destination is `Altinn
 
 The [Dialogporten syncroot](https://github.com/Altinn/dialogporten-manifests/blob/main/flux/syncroot/at23/kustomization.yaml) and [RFC 0017 onboarding issue](https://github.com/Altinn/altinn-platform/issues/4249) establish the existing `at23` integration. The outbound pilot still needs its own Provider, Alerts, credentials and receiving workflow.
 
-The [application Kustomization](https://github.com/Altinn/dialogporten-manifests/blob/main/flux/syncroot/base/dialogporten-flux-kustomization.yaml) has no `wait` or `healthChecks` configuration in the source inspected on 2026-11-03. Before enabling success jobs, the product must configure and validate health checks for every required workload. Applying manifests alone does not establish rollout completion.
+The [application Kustomization](https://github.com/Altinn/dialogporten-manifests/blob/main/flux/syncroot/base/dialogporten-flux-kustomization.yaml) has no `wait` or `healthChecks` configuration in the source inspected on 2026-11-03. Without them, Flux sends no success event. Before enabling success jobs, the product must configure and validate health checks for every required workload. Applying manifests alone does not establish rollout completion.
 
 The [OCIRepository](https://github.com/Altinn/dialogporten-manifests/blob/main/flux/syncroot/base/dialogporten-oci-repository.yaml) follows the `main` tag. Its artifact revision therefore uses `main@sha256:<digest>`, while the subscription environment remains `at23`. The environment does not determine the artifact tag. Confirm these values against the deployed resources before enabling the subscription.
 
@@ -579,16 +628,17 @@ The [OCIRepository](https://github.com/Altinn/dialogporten-manifests/blob/main/f
 The rollout sequence is:
 
 1. Implement the shared action, its documented contract and event fixture tests.
-2. Verify the Flux fix in the supported distribution.
-3. Verify token generation, renewal, distribution, product permissions, namespace isolation, combined network policies and outbound connectivity.
-4. Pilot Dialogporten in `at23` with the shared action, initially recording validated results only.
-5. Enable the product's success and failure jobs after the event contract passes validation.
-6. Add a second environment and Authentication with the same action.
-7. Expand to other products after the platform and product teams review the pilot.
+2. Verify the health check success event on the deployed Flux versions.
+3. Limit what the dispatch token can do in the destination repository.
+4. Verify token generation, renewal, distribution, product permissions, namespace isolation, combined network policies and outbound connectivity.
+5. Pilot Dialogporten in `at23` with the shared action, initially recording validated results only.
+6. Enable the product's success and failure jobs after the event contract passes validation.
+7. Add a second environment and Authentication with the same action.
+8. Expand to other products after the platform and product teams review the pilot.
 
 Suspend the affected Alerts to stop dispatches during rollback. Application reconciliation continues. For offboarding, stop token distribution. Remove the repository from the shared App installation. Do not revoke the shared App for a routine product rollback.
 
-Monitor `NotificationDispatchFailed` events, controller errors, credential failures and event rate limiting. Keep resource readiness alerts independent from GitHub delivery. Products monitor their follow-up jobs and report their results through their existing mechanisms.
+Monitor `NotificationDispatchFailed` events, controller errors, credential failures and event rate limiting. The Flux extension upgrades automatically. Run the success event checks again after each upgrade, because the success classification matches the message text. Keep resource readiness alerts independent from GitHub delivery. Products monitor their follow-up jobs and report their results through their existing mechanisms.
 
 ## Implementation validation
 
@@ -604,6 +654,7 @@ The action implementation must include automated fixture tests for its contract:
 | Success without a valid OCI revision | The action rejects the event. |
 | Deployment failure, including a source failure without a revision | The action step succeeds with `outcome: failed`. Failure jobs remain eligible. |
 | Valid progress or waiting event | The action returns `ignored`. No result jobs run. |
+| Health check success event of each supported Flux version | The action returns `succeeded`. `ReconciliationSucceeded` returns `ignored`. |
 | Missing or stale application release mapping | Application version and commit outputs are empty. The event output omits the unbound release fields. |
 | Multiline messages and workflow command syntax in event fields | Output encoding preserves data without executing commands or creating additional outputs. |
 
@@ -611,7 +662,7 @@ The deployed integration must pass these checks:
 
 | Check | Required result |
 |---|---|
-| Reconcile a healthy application on the deployed Flux versions | GitHub receives the final `ReconciliationSucceeded` event with its artifact revision. |
+| Reconcile a healthy application on the deployed Flux versions | GitHub receives the health check success event with its artifact revision. |
 | Keep old replicas healthy while the replacement fails | Required health checks fail. No success jobs start for the failed rollout. |
 | Cause a build error and a health-check timeout | The failure workflow receives the actual reason and available revision. |
 | Configure a Slack notification for failure | A failed deployment starts the notification job with the correct environment and failure details. |
@@ -630,6 +681,8 @@ The deployed integration must pass these checks:
 | Renew and distribute tokens across two expiry periods | Dispatch continues with replacement tokens without restarting notification-controller. |
 | Interrupt token generation or distribution | Monitoring reports the failure before expiry. Existing tokens remain available until they expire. |
 | Use a product token for another product's repository | GitHub rejects access, even when both repositories use the shared App. |
+| Send an existing dispatch event type of the destination repository with a token from the App | The workflows of the destination repository reject the event. |
+| Create or update a release tag or branch with a token from the App | The rulesets reject the change. |
 | Attempt to change token generation or distribution from a product namespace | Authorization rejects access to the private key, generator and destination mapping. |
 | Let polling deploy an artifact without a reconcile request | The result starts the configured jobs without a Receiver or an inbound workflow step. |
 | Reference another namespace or another product's repository | Tenant restrictions or GitHub App permissions reject the operation. |
@@ -638,20 +691,20 @@ The deployed integration must pass these checks:
 # Drawbacks
 [drawbacks]: #drawbacks
 
-- Rollout depends on an upstream Flux fix and its availability in the supported distribution.
+- The success classification matches the message text of the health check event. A Flux upgrade can change that text until upstream adds a stable reason.
 - Native events expose Flux resource names and reasons to product workflows.
 - Best-effort delivery cannot replace a durable deployment history or guarantee a result for every release.
 - Repeated reconciliations can create additional workflow runs, notification noise and job costs.
 - The shared GitHub App requires automatic token renewal and distribution for each destination repository.
 - A shared App credential failure can affect several products.
-- GitHub requires `Contents: write`, which grants more access than dispatch alone needs.
+- GitHub requires `Contents: write`, which grants more access than dispatch alone needs. Each destination repository must limit that access with sender checks and rulesets.
 - The shared action needs maintenance, and products must update their pinned commits for fixes or contract changes.
 - Incorrect health checks or stale release metadata can produce misleading test results.
 
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
 
-The direct path follows the proposed architecture and uses the existing notification-controller. Product repositories keep control of all jobs that follow a deployment result. The shared action gives products one maintained implementation of event validation and classification. An upstream compatibility fix is preferable to a new platform service for this initial scope.
+The direct path follows the proposed architecture and uses the existing notification-controller. Product repositories keep control of all jobs that follow a deployment result. The shared action gives products one maintained implementation of event validation and classification. The health check event works with the deployed Flux versions. The initial scope therefore needs no upstream fix and no new platform service.
 
 | Alternative | Assessment |
 |---|---|
@@ -687,15 +740,17 @@ None for the accepted design. The initial scope uses best-effort delivery. Consu
 
 Before rollout:
 
-- Which upstream release fixes final success dispatch, and when does the supported Azure Flux distribution include it?
-- Do the deployed controllers preserve the documented payload and classification rules after the fix?
+- Do the deployed controllers preserve the documented payload and classification rules after each Flux upgrade?
 - Do all pilot clusters remove the old broad allowance on port 9090 and restrict `flux-system` workloads to trusted platform components?
 - Do all pilot namespaces enforce event isolation with the RFC 0017 feature enabled and disabled?
-- Which shared App registration and installation does the platform use?
-- Does the pilot's ESO installation support the proposed generator and restricted token distribution?
-- Does the private key provisioning path work in `platform-system`, and do product appliers have the required Provider and Alert permissions?
+- Do token generation and restricted token distribution work in the pilot cluster?
+- Does the private key provisioning path work in `platform-system`?
 - Which product mechanism maps an artifact revision to the application version currently serving requests?
 - What workflow volume, delivery error threshold and stale-event policy does the pilot require?
+
+Not a prerequisite:
+
+- Does upstream add a stable reason for the health check success event? When does the Azure Flux distribution include it?
 
 Out of scope:
 
