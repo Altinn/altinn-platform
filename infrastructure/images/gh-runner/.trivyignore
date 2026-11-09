@@ -297,6 +297,9 @@ CVE-2026-56862
 # x/text: DoS via invalid UTF-8 input
 CVE-2026-56852
 
+# x/net/html: DoS via crafted HTML input (fixed in x/net >= 0.62.0)
+CVE-2026-78661
+
 # Ubuntu OS package from the base image. A fixed package exists
 # (3.0.13-0ubuntu3.11); it arrives when the pinned base image is rebuilt.
 # Revisit if the base image bump lags — this one is fixable on our side with an
