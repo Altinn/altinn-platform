@@ -297,6 +297,9 @@ CVE-2026-56862
 # x/text: DoS via invalid UTF-8 input
 CVE-2026-56852
 
+# x/net/html: DoS via crafted HTML input (fixed in x/net >= 0.62.0)
+CVE-2026-78661
+
 # Ubuntu OS package from the base image. A fixed package exists
 # (3.0.13-0ubuntu3.11); it arrives when the pinned base image is rebuilt.
 # Revisit if the base image bump lags — this one is fixable on our side with an
@@ -364,3 +367,29 @@ CVE-2026-84008
 # Found in the azure-cli virtualenv (/opt/az, certifi 2024.7.4) and the system
 # Python - resolved when azure-cli/Ubuntu ship certifi >= 2026.10.19
 GHSA-6q48-6c7w-9gw2
+
+# undici 6.27.0/6.28.0 in npm packages shipped with the base image and Node.js -
+# resolved when actions/runner and nodesource ship undici >= 6.29.1.
+# Accepted because, as for the other bundled npm dependencies above, these copies
+# are not used by our own scripts and are only reached through tooling invoked by
+# our own workflows. The runners only run private workflows in our organizations,
+# so no untrusted code controls the TLS options passed to undici. Review when the
+# actions-runner base image or Node.js is bumped.
+# undici: Certificate validation bypass via dropped TLS options in Agent
+CVE-2026-109383
+# undici: DoS via unhandled stream error on excessive content
+CVE-2026-109869
+# undici: DoS via TLS renegotiation with mismatched certificate
+CVE-2026-87018
+
+# azure-cli bundled Python packages (/opt/az) - resolved when azure-cli ships
+# msgpack >= 1.2.3 and oauthlib >= 4.0.0
+# msgpack: DoS via memory leak during map deserialization
+CVE-2026-114613
+# oauthlib: privilege escalation via client identity confusion in token grant handlers
+CVE-2026-118669
+
+# go-jose v4.1.4 in containerd (base image). No Docker workloads run on these
+# runners - resolved when actions/runner ships containerd built with go-jose >= 4.1.6
+# go-jose: DoS via crafted RSA parameters in JWKs
+CVE-2026-116587
