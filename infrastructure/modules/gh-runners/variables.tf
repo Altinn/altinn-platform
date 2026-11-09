@@ -71,3 +71,15 @@ variable "runner_image" {
   # renovate: datasource=docker depName=ghcr.io/altinn/altinn-platform/gh-runner
   default = "ghcr.io/altinn/altinn-platform/gh-runner:v0.10.0"
 }
+
+variable "polling_interval_in_seconds" {
+  type        = number
+  description = "How often (in seconds) the scaler polls GitHub for queued jobs. Each poll costs API calls against the shared GitHub App installation rate limit."
+  default     = 20
+}
+
+variable "scaler_enable_etags" {
+  type        = bool
+  description = "Use conditional requests (ETags) when the scaler polls GitHub. Unchanged responses (HTTP 304) do not count against the rate limit."
+  default     = false
+}
