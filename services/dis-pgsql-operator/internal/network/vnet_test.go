@@ -49,3 +49,10 @@ func TestFetchVNetLocation_NilConfig(t *testing.T) {
 		t.Fatalf("expected error for nil config, got nil")
 	}
 }
+
+// TestNormalizeLocation checks that a display name becomes the canonical region.
+func TestNormalizeLocation(t *testing.T) {
+	if got := normalizeLocation(" Norway East "); got != "norwayeast" {
+		t.Fatalf("normalizeLocation = %q, want %q", got, "norwayeast")
+	}
+}

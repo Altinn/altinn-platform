@@ -42,11 +42,18 @@ func FetchVNetLocation(
 
 	location := ""
 	if resp.Location != nil {
-		location = strings.TrimSpace(*resp.Location)
+		location = normalizeLocation(*resp.Location)
 	}
 	if location == "" {
 		return "", fmt.Errorf("%w: %s/%s", ErrEmptyVNetLocation, cfg.ResourceGroup, cfg.DBVNetName)
 	}
 
 	return location, nil
+}
+
+// normalizeLocation returns the canonical form of an Azure region name: lowercase, no whitespace.
+// The reconciler replaces a stored FlexibleServer spec that differs from the desired one,
+// so the region must always have one form.
+func normalizeLocation(location string) string {
+	return strings.ToLower(strings.Join(strings.Fields(location), ""))
 }
