@@ -9,6 +9,7 @@ import (
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/test/azfakes"
 )
 
+// fetchFakeVNetLocation runs FetchVNetLocation against a fake VNet in the given location.
 func fetchFakeVNetLocation(t *testing.T, location string) (string, error) {
 	t.Helper()
 
@@ -22,6 +23,7 @@ func fetchFakeVNetLocation(t *testing.T, location string) (string, error) {
 	return FetchVNetLocation(context.Background(), cfg, env.Cred, env.ARM)
 }
 
+// TestFetchVNetLocation_ReturnsLocation checks that the region of the VNet is returned.
 func TestFetchVNetLocation_ReturnsLocation(t *testing.T) {
 	got, err := fetchFakeVNetLocation(t, "swedencentral")
 	if err != nil {
@@ -32,6 +34,7 @@ func TestFetchVNetLocation_ReturnsLocation(t *testing.T) {
 	}
 }
 
+// TestFetchVNetLocation_EmptyLocationIsError checks that a VNet without a region is an error.
 func TestFetchVNetLocation_EmptyLocationIsError(t *testing.T) {
 	_, err := fetchFakeVNetLocation(t, "")
 	if !errors.Is(err, ErrEmptyVNetLocation) {
@@ -39,6 +42,7 @@ func TestFetchVNetLocation_EmptyLocationIsError(t *testing.T) {
 	}
 }
 
+// TestFetchVNetLocation_NilConfig checks that a nil config is an error.
 func TestFetchVNetLocation_NilConfig(t *testing.T) {
 	env := azfakes.NewNetworkEnv(nil, azfakes.VirtualNetworksServerWithLocation("norwayeast"))
 	if _, err := FetchVNetLocation(context.Background(), nil, env.Cred, env.ARM); err == nil {
