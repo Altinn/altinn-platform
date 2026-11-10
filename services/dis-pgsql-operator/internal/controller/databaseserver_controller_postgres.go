@@ -22,13 +22,10 @@ import (
 	genruntime "github.com/Azure/azure-service-operator/v2/pkg/genruntime"
 )
 
-// TODO: at the moment location is hardcoded here, but maybe
-// in the future we want to derive it from the database server spec?
-// The defaults for storage size and tier are also hardcoded
+// The defaults for storage size and tier are hardcoded
 // until we release the beta version.
 const (
 	defaultStorageGB               int32 = 32
-	loc                                  = "norwayeast"
 	defaultAvailabilityZone              = "1"
 	defaultHAStandbyZone                 = "2"
 	defaultMaintenanceDayOfWeek          = 0
@@ -306,6 +303,13 @@ func (r *DatabaseServerReconciler) ensurePostgresServer(
 	serverAzureName := r.flexibleServerAzureName(db, existingPtr)
 	db.Status.ServerName = serverAzureName
 
+	// Azure requires a VNet-integrated server to be in the region of its VNet.
+	// main.go reads the region of the DBs VNet from Azure at startup.
+	serverLocation := strings.TrimSpace(r.Config.Location)
+	if serverLocation == "" {
+		return fmt.Errorf("operator config has no location for the DBs VNet")
+	}
+
 	// define if dev/prod profile
 	profile := dbUtil.GetProfile(db.Spec.ServerType)
 
@@ -349,7 +353,7 @@ func (r *DatabaseServerReconciler) ensurePostgresServer(
 	// 5) Build server
 	desiredSpec := dbforpostgresqlv1.FlexibleServer_Spec{
 		AzureName: serverAzureName,
-		Location:  to.Ptr(loc),
+		Location:  to.Ptr(serverLocation),
 
 		Owner: &genruntime.KnownResourceReference{
 			ARMID: fmt.Sprintf("/subscriptions/%s/resourceGroups/%s", r.Config.SubscriptionId, r.Config.ResourceGroup),
@@ -392,7 +396,7 @@ func (r *DatabaseServerReconciler) ensurePostgresServer(
 			"k8sName", k8sName,
 			"azureName", serverAzureName,
 			"namespace", ns,
-			"location", loc,
+			"location", serverLocation,
 			"version", versionStr,
 			"subnetID", resourceReferenceLogValue(networkConfig.Network.DelegatedSubnetResourceReference),
 			"zoneID", resourceReferenceLogValue(networkConfig.Network.PrivateDnsZoneArmResourceReference),

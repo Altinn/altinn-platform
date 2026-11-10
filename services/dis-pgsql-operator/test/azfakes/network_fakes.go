@@ -1,6 +1,7 @@
 package azfakes
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -50,6 +51,34 @@ func SubnetsServerWithSubnets(subnets []*armnetwork.Subnet) *networkfake.Subnets
 
 			// Configure the pager with a single HTTP 200 page.
 			resp.AddPage(http.StatusOK, page, nil)
+			return
+		},
+	}
+}
+
+// VirtualNetworksServerWithLocation returns a fake VirtualNetworksServer.
+// Its Get answers with one VNet in the given location.
+// An empty location makes the VNet carry no location at all.
+// Tests use that to check how the operator handles a VNet without a region.
+func VirtualNetworksServerWithLocation(location string) *networkfake.VirtualNetworksServer {
+	return &networkfake.VirtualNetworksServer{
+		// Get is the fake for VirtualNetworksClient.Get.
+		Get: func(
+			ctx context.Context,
+			resourceGroupName string,
+			virtualNetworkName string,
+			options *armnetwork.VirtualNetworksClientGetOptions,
+		) (resp azfake.Responder[armnetwork.VirtualNetworksClientGetResponse], errResp azfake.ErrorResponder) {
+			vnet := armnetwork.VirtualNetwork{
+				Name: to.Ptr(virtualNetworkName),
+			}
+			if location != "" {
+				vnet.Location = to.Ptr(location)
+			}
+
+			resp.SetResponse(http.StatusOK, armnetwork.VirtualNetworksClientGetResponse{
+				VirtualNetwork: vnet,
+			}, nil)
 			return
 		},
 	}
