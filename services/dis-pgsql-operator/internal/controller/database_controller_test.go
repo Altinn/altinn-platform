@@ -1561,6 +1561,7 @@ var _ = Describe("DatabaseServer controller", func() {
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
 
 		Eventually(func(g Gomega) struct {
+			location         string
 			availabilityZone string
 			standbyZone      string
 			storageType      dbforpostgresqlv1.StorageType
@@ -1585,7 +1586,9 @@ var _ = Describe("DatabaseServer controller", func() {
 			g.Expect(s.Spec.MaintenanceWindow.DayOfWeek).NotTo(BeNil())
 			g.Expect(s.Spec.MaintenanceWindow.StartHour).NotTo(BeNil())
 			g.Expect(s.Spec.MaintenanceWindow.StartMinute).NotTo(BeNil())
+			g.Expect(s.Spec.Location).NotTo(BeNil())
 			return struct {
+				location         string
 				availabilityZone string
 				standbyZone      string
 				storageType      dbforpostgresqlv1.StorageType
@@ -1594,6 +1597,7 @@ var _ = Describe("DatabaseServer controller", func() {
 				maintenanceHour  int
 				maintenanceMin   int
 			}{
+				location:         *s.Spec.Location,
 				availabilityZone: *s.Spec.AvailabilityZone,
 				standbyZone:      *s.Spec.HighAvailability.StandbyAvailabilityZone,
 				storageType:      *s.Spec.Storage.Type,
@@ -1604,6 +1608,7 @@ var _ = Describe("DatabaseServer controller", func() {
 			}
 		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
 			Should(Equal(struct {
+				location         string
 				availabilityZone string
 				standbyZone      string
 				storageType      dbforpostgresqlv1.StorageType
@@ -1612,6 +1617,8 @@ var _ = Describe("DatabaseServer controller", func() {
 				maintenanceHour  int
 				maintenanceMin   int
 			}{
+				// The suite configures this region on the reconciler. See suite_test.go.
+				location:         "swedencentral",
 				availabilityZone: "1",
 				standbyZone:      "2",
 				storageType:      dbforpostgresqlv1.StorageType_Premium_LRS,
