@@ -495,7 +495,7 @@ The configuration uses this sequence:
 5. Configure a `PushSecret` in `platform-system` to copy the token to the approved product Secret every minute.
 6. Let the product Provider read that local Secret for dispatch requests.
 
-Each PushSecret uses a platform-owned Kubernetes SecretStore with an explicit destination namespace and restricted service account permissions. The platform approves each repository, namespace and Secret mapping. Products cannot change the generator, its permissions or that mapping. Generation failures retain the existing token; distribution failures must not replace it with an empty value. A Grafana alert reports generation and distribution failures before the current token expires (see [Monitoring](#monitoring)).
+Each PushSecret uses a platform-owned Kubernetes SecretStore with an explicit destination namespace and restricted service account permissions. The platform approves each repository, namespace and Secret mapping. Products cannot change the generator, its permissions or that mapping. Generation failures retain the existing token; distribution failures must not replace it with an empty value. Grafana shows generation and distribution failures before the current token expires (see [Monitoring](#monitoring)).
 
 The platform configures each mapping in the `flux_dispatch_tokens` input of the `dis_aks_resources_multitenancy` module. A mapping has a name of at most 15 characters, a repository, a product namespace and a Secret name. Each mapping has its own destination Secret. The module rejects two mappings with the same namespace and Secret name ([dis-modules#171](https://github.com/dis-way/terraform-azurerm-dis-modules/pull/171)).
 
@@ -559,7 +559,7 @@ The native Provider does not guarantee at-least-once delivery. The health check 
 | A failure is followed by success for the same revision | Both results remain eligible for processing. |
 | A new release replaces an older event before tests start | The test workflow detects the revision mismatch and skips the stale test. |
 | An event arrives out of order | It does not overwrite a newer deployment result without current-state verification. |
-| GitHub is unavailable or rejects the dispatch | Flux continues reconciling. A Grafana alert reports the delivery error. |
+| GitHub is unavailable or rejects the dispatch | Flux continues reconciling. Grafana shows the delivery error. |
 | The controller restarts during delivery | An event can be lost. Grafana readiness dashboards and manual tests remain available. |
 | A failure has no artifact revision | Report the resource and reason. Do not invent a revision or reuse the previous successful revision. |
 
@@ -640,16 +640,16 @@ Suspend the affected Alerts to stop dispatches during rollback. Application reco
 
 ### Monitoring
 
-Monitoring uses Grafana dashboards and alert rules, kept as code in [Altinn/altinn-dashboards-grafana](https://github.com/Altinn/altinn-dashboards-grafana) and deployed to the central Grafana. The platform team owns the rules below and routes them to its Slack channel. Products add their own rules in their product folder.
+Monitoring uses Grafana dashboards and alert rules, kept as code in [Altinn/altinn-dashboards-grafana](https://github.com/Altinn/altinn-dashboards-grafana) and deployed to the central Grafana. A platform dashboard shows the signals below. The platform team adds alert rules for them after it reviews its alerting as a whole, including where alerts go (#4422). Products add their own rules in their product folder.
 
 | Signal | Source in Grafana | What it shows |
 |---|---|---|
 | `NotificationDispatchFailed` Warning events on product Alerts | Container Insights `KubeEvents` in the cluster's Log Analytics workspace | GitHub did not receive a result. Flux keeps reconciling. |
 | Warning events on the `flux-dispatch-*` objects in `platform-system` | The same `KubeEvents` | Token generation or distribution failed. The current token stays valid until it expires. |
-| The Flux extension version | Azure Resource Graph | The extension upgraded itself. The success classification matches message text, so run the success event and isolation checks again, then record the new version in the alert rule. |
+| The Flux extension version | Azure Resource Graph | The extension upgraded itself. The success classification matches message text, so run the success event and isolation checks again, then record the version they passed on. |
 | Kustomization readiness | kube-state-metrics `gotk_resource_info` | A failed deployment, independent of GitHub delivery. |
 
-notification-controller has no metric for failed deliveries, and dis-core does not collect its metrics, so the rules read Warning events. Event rate limiting produces no Warning event, so the pilot measures dispatch volume from the receiving workflow's runs. A failed follow-up job shows in the product's GitHub Actions. Products monitor their follow-up jobs and report their results through their existing mechanisms.
+notification-controller has no metric for failed deliveries, and dis-core does not collect its metrics, so the dashboard reads Warning events. Event rate limiting produces no Warning event, so the pilot measures dispatch volume from the receiving workflow's runs. A failed follow-up job shows in the product's GitHub Actions. Products monitor their follow-up jobs and report their results through their existing mechanisms.
 
 ## Implementation validation
 
@@ -684,14 +684,13 @@ The deployed integration must pass these checks:
 | Repeat a reconciliation and restart notification-controller | Consumers tolerate repeated or missing events. |
 | Publish two releases while a workflow waits for a runner | The older event cannot certify the newer release. |
 | Send a payload with stale application annotations | The consumer rejects the application version and commit mapping. |
-| Remove App access or simulate GitHub rejection | A Grafana alert reports the delivery failure. Application reconciliation continues. |
+| Remove App access or simulate GitHub rejection | Grafana shows the delivery failure. Application reconciliation continues. |
 | Submit an event from an application pod | Network policy blocks access to the internal event endpoint. |
 | Enable and disable the RFC 0017 feature, then reconcile the extension policies | Event isolation remains effective. Authorized events, metrics and health probes continue. |
 | Exercise the RFC 0017 webhook path after shared policy changes | Valid requests work. The Receiver rejects invalid tokens on direct connections. |
 | Reconcile a subscription through the product applier | Providers and Alerts reconcile without additional cross-namespace permissions. Platform configuration supplies the token Secret. |
 | Renew and distribute tokens across two expiry periods | Dispatch continues with replacement tokens without restarting notification-controller. |
-| Interrupt token generation or distribution | A Grafana alert reports the failure before expiry. Existing tokens remain available until they expire. |
-| Set a different validated Flux extension version in the alert rule | A Grafana alert names the cluster and its current extension version. |
+| Interrupt token generation or distribution | Grafana shows the failure before expiry. Existing tokens remain available until they expire. |
 | Use a product token for another product's repository | GitHub rejects access, even when both repositories use the shared App. |
 | Send an existing dispatch event type of the destination repository with a token from the App | The workflows of the destination repository reject the event. |
 | Create or update a release tag or branch with a token from the App | The rulesets reject the change. |
