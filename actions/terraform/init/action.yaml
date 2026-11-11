@@ -74,6 +74,14 @@ outputs:
 runs:
   using: composite
   steps:
+    # DEPRECATED: this action has moved to dis-way/actions.
+    # Remove this step together with the rest of the action once all
+    # consumers have migrated to the new location.
+    - name: Deprecation notice
+      shell: bash
+      run: |
+        echo "::warning title=Deprecated action::Altinn/altinn-platform/actions/terraform/init has moved to dis-way/actions/altinn/terraform/init. Update your workflow to the new location - this copy will be removed."
+
     - name: Terraform Install
       id: install
       uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4

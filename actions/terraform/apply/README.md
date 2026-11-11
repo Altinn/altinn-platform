@@ -1,5 +1,12 @@
 # Introduction
 
+> [!WARNING]
+> **Deprecated — this action has moved to [`dis-way/actions`](https://github.com/dis-way/actions).**
+>
+> It now lives at `dis-way/actions/altinn/terraform/apply`. Update your workflow to the new
+> location; this copy will be removed once all consumers have migrated.
+> See [the migration notes](../../README.md) for status and the full action list.
+
 This GitHub Action downloads the previously generated Terraform plan from GitHub artifacts and executes `terraform apply` with the downloaded plan. This action will not run unless the `altinn/altinn-platform/actions/terraform/plan` action has been executed first.
 
 ## Sample
