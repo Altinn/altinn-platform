@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.11.1...ghrunner-0.12.0) (2026-11-12)
+
+
+### Features
+
+* **gh-runners:** roll out runner image v0.11.1 to all repositories ([#4414](https://github.com/Altinn/altinn-platform/issues/4414)) ([952d3d9](https://github.com/Altinn/altinn-platform/commit/952d3d9945249c2f662e200d0a0c389161cd21e5))
+
 ## [0.11.1](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.11.0...ghrunner-0.11.1) (2026-11-09)
 
 
