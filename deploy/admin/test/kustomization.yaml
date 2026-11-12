@@ -11,3 +11,16 @@ patches:
         namespace: product-dis
       spec:
         name: dis_console_admin_test
+  - target:
+      kind: DatabaseServer
+      name: dis-console-central
+    patch: |-
+      - op: replace
+        path: /spec/serverType
+        value: prod
+      - op: add
+        path: /spec/highAvailabilityEnabled
+        value: false
+      - op: add
+        path: /spec/backupRetentionDays
+        value: 14
