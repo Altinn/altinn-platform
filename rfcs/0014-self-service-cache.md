@@ -61,7 +61,7 @@ The application connects to `host:port` inside the cluster and sends a password.
 
 **Read the password from the Secret mount, not from an environment variable.** A rotation adds a new password. The old one stays valid for a grace period, 7 days by default. An application that reads the Secret as a file picks up the new value and reconnects with it. An application that copied the password into an environment variable at start keeps its open connection. It reconnects with the old value and fails when the grace period ends, days after the rotation. It needs a restart before then.
 
-**Rotation is automatic.** `spec.passwordRotation.intervalDays` rotates on a schedule; the team makes no change for it. The platform default is off until the applications on the platform read the password as described above. The target default is 90 days. Two fields are for the exception, a password that may have leaked. `requestedAt` asks for one rotation now. `previousValidFor: 0s` drops the old password at once.
+**Rotation is automatic.** The operator rotates the password every 90 days. The team makes no change for it. `spec.passwordRotation.intervalDays` sets another interval, and 0 turns the schedule off. The schedule is safe only for an application that reads the password as described above. Two fields are for the exception, a password that may have leaked. `requestedAt` asks for one rotation now. `previousValidFor: 0s` drops the old password at once.
 
 ```yaml
 spec:
@@ -81,7 +81,7 @@ spec:
 - `persistence` (optional `bool`): default `false`. A cache does not keep data by default.
 - `evictionPolicy` (optional): a Valkey `maxmemory-policy` value: `noeviction | allkeys-lru | allkeys-lfu | allkeys-random | volatile-lru | volatile-lfu | volatile-random | volatile-ttl`. Default `noeviction`.
 - `passwordRotation` (optional), see Password rotation and Rotation triggers:
-  - `intervalDays`: rotates on a schedule. 0 to 365. Default 0, off.
+  - `intervalDays`: rotates on a schedule. 0 to 365. Default 90. 0 turns the schedule off.
   - `requestedAt`: asks for one rotation now.
   - `previousValidFor`: how long the old password stays valid after a rotation. 0 to 168h. Default 7 days, from an operator flag. At most half of the interval.
 
@@ -230,7 +230,7 @@ The schedule is the normal mode. A request is for a password that may have leake
 
 - `spec.passwordRotation.requestedAt` asks for one rotation. A value later than `status.passwordRotation.requestedAt` starts it; the value itself is only a marker. A request made during a period runs when the period ends.
 
-- `spec.passwordRotation.intervalDays` rotates on a schedule, counted from `status.passwordRotation.lastRotatedAt`. The platform default is 0, off, until applications on the platform reload the password without a restart. The target default is 90 days. The dis-console agent reads the password from an environment variable today, and it is the first application to change.
+- `spec.passwordRotation.intervalDays` rotates on a schedule, counted from `status.passwordRotation.lastRotatedAt`. The default is 90 days. 0 turns the schedule off. A Cache from before the default keeps its stored 0 until its manifest sets the field. An application must read the password from the mounted Secret file. An application that reads it one time at start needs a restart before the grace period ends.
 
 - `spec.passwordRotation.previousValidFor` sets how long the previous password stays valid, from 0 (a password that may have leaked) to 7 days. An operator flag sets the default of 7 days.
 
