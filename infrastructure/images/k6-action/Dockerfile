@@ -1,4 +1,4 @@
-FROM golang:1.26-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca  AS builder
+FROM golang:1.27-alpine@sha256:eb61c3873c97416fff0116553fff65d67a3549f72e11d9758849a689cdd8b523  AS builder
 # renovate: datasource=github-tags depName=kubectl packageName=kubernetes/kubectl versioning=semver extractVersion=^kubernetes-(?<version>.*)$
 ARG KUBECTL_VERSION=1.37.1
 # renovate: datasource=github-releases depName=kubeseal packageName=bitnami/sealed-secrets versioning=semver extractVersion=^sealed-secrets-(?<version>.*)$
@@ -60,7 +60,7 @@ RUN go build . && \
 FROM ghcr.io/altinn/altinn-platform/k6-image:v2.2.0@sha256:31b45631fe80a14855d9bcacdd0a645c9502d4a8637ae4dbb3788c8e921d86e8 AS k6image
 
 # Final image with the needed binaries and helper files
-FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+FROM alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /jsonnet/vendor /jsonnet/vendor
 
