@@ -115,6 +115,10 @@ var _ = BeforeSuite(func() {
 
 	// Operator config for tests
 	config := config.OperatorConfig{
+		// Location is the region of the DBs VNet. main.go reads it from Azure.
+		// The tests use "swedencentral" to show that the FlexibleServer
+		// gets the configured region.
+		Location:           "swedencentral",
 		ResourceGroup:      "rg-dis-dev-network",
 		DBVNetName:         "vnet-dis-dev-001",
 		AKSVNetName:        "aks-vnet-dis-dev-001",

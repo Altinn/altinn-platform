@@ -11,9 +11,8 @@ module "gh_runners_dis_padawan" {
   host_ip                       = var.host_ip
   runner_cpu                    = "1.0"
   runner_memory                 = "2Gi"
-  # Testing the rate limit hardening on dis-padawan before rolling it out to
-  # the other repositories: the new runner image and ETags in the scaler.
-  runner_image        = "ghcr.io/altinn/altinn-platform/gh-runner:v0.11.0"
+  # ETags made no measurable difference to the rate limit in testing
+  # (2026-11-09); kept on here only.
   scaler_enable_etags = true
   tags = merge(local.tags, {
     finops_product = "altinn-platform"

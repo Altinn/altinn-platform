@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.14.0...dis-pgsql-v0.15.0) (2026-11-11)
+
+
+### Features
+
+* **dis-pgsql:** create servers in the region of the DBs vnet ([#4424](https://github.com/Altinn/altinn-platform/issues/4424)) ([13447e4](https://github.com/Altinn/altinn-platform/commit/13447e444e3138e2ed5cb7420c46a18cc444c625))
+
 ## [0.14.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.13.2...dis-pgsql-v0.14.0) (2026-10-26)
 
 

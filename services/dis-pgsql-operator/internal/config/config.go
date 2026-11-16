@@ -26,6 +26,12 @@ type OperatorConfig struct {
 	// UserProvisionImage is the image used for user provisioning Jobs.
 	UserProvisionImage string
 
+	// Location is the Azure region of the DBs VNet.
+	// main.go reads it from Azure at startup and sets it after construction.
+	// The operator creates every FlexibleServer in this region.
+	// Azure requires a VNet-integrated server to be in the region of its VNet.
+	Location string
+
 	// UseAzFakes toggles Azure fake servers (used for kind/local).
 	UseAzFakes bool
 

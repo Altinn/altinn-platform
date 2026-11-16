@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.11.0...ghrunner-0.11.1) (2026-11-09)
+
+
+### Bug Fixes
+
+* **gh-runner:** install libatomic1 so Node 26 can run ([#4411](https://github.com/Altinn/altinn-platform/issues/4411)) ([9341ea4](https://github.com/Altinn/altinn-platform/commit/9341ea4fe2dc3abcbd4daaaa40f2c5129a590927))
+
 ## [0.11.0](https://github.com/Altinn/altinn-platform/compare/ghrunner-0.10.2...ghrunner-0.11.0) (2026-11-09)
 
 

@@ -294,7 +294,9 @@ func main() {
 			"10.100.1.16/28",
 			"10.100.1.32/28",
 		})
-		env := azfakes.NewNetworkEnv(srv)
+		// Fake DBs VNet. The operator creates servers in the region of this VNet.
+		vnetSrv := azfakes.VirtualNetworksServerWithLocation("norwayeast")
+		env := azfakes.NewNetworkEnv(srv, vnetSrv)
 		cred = env.Cred
 		armOpts = env.ARM
 		setupLog.Info("running with Azure SDK fakes for armnetwork")
@@ -329,7 +331,7 @@ func main() {
 	}
 	opCfg.BaseTags = baseTags
 
-	// Startup context just for fetching the subnet catalog
+	// Startup context just for fetching the subnet catalog and the VNet location
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -342,6 +344,19 @@ func main() {
 		}
 		os.Exit(1)
 	}
+
+	// The operator creates every FlexibleServer in the region of the DBs VNet.
+	location, err := network.FetchVNetLocation(ctx, opCfg, cred, armOpts)
+	if err != nil {
+		if errors.Is(err, network.ErrEmptyVNetLocation) {
+			setupLog.Error(err, "DBs VNet has no location; check VNet config for PostgreSQL")
+		} else {
+			setupLog.Error(err, "failed to fetch the DBs VNet from Azure")
+		}
+		os.Exit(1)
+	}
+	opCfg.Location = location
+	setupLog.Info("using the region of the DBs VNet for new servers", "location", location)
 
 	if err := (&controller.DatabaseServerReconciler{
 		Client:        mgr.GetClient(),

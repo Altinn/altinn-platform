@@ -154,7 +154,7 @@ func fakeSubnet(name, singular string, plural ...string) *armnetwork.Subnet {
 func fetchFakeCatalog(t *testing.T, subnets []*armnetwork.Subnet) (*SubnetCatalog, error) {
 	t.Helper()
 
-	env := azfakes.NewNetworkEnv(azfakes.SubnetsServerWithSubnets(subnets))
+	env := azfakes.NewNetworkEnv(azfakes.SubnetsServerWithSubnets(subnets), nil)
 	cfg := &config.OperatorConfig{
 		SubscriptionId: "00000000-0000-0000-0000-000000000000",
 		ResourceGroup:  "rg-fake",
