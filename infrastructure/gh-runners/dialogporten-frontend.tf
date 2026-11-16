@@ -6,6 +6,7 @@ module "gh_runners_dialogporten_frontend" {
   repository_name               = "dialogporten-frontend"
   private_runners_address_space = "172.17.133.0/24"
   private_runners_prefix        = "af"
+  runner_image                  = "ghcr.io/altinn/dialogporten-frontend-gh-runner:latest"
   altinn_app_id                 = var.altinn_app_id
   altinn_app_install_id         = var.altinn_app_install_id
   altinn_app_key                = var.altinn_app_key
