@@ -12,6 +12,7 @@ on:
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
+  queue: max
 
 env:
   ENVIRONMENT: test
@@ -27,6 +28,7 @@ permissions:
 jobs:
   plan:
     name: Plan (${{ matrix.runner }})
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     environment: reader
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -78,6 +80,7 @@ jobs:
   apply:
     name: Apply (${{ matrix.runner }})
     needs: plan
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     environment: test
     runs-on: ${{ matrix.runner }}
     strategy:

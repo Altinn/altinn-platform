@@ -61,7 +61,7 @@ delete_all_versions() {
   az_blob delete --name "$blob" --output none || return 1
   versions=$(az_blob list --prefix "$blob" --include v --query '[].versionId' --output tsv) || return 1
   for version in $versions; do
-    az rest --method delete --url "${url}?versionid=${version}" --resource https://storage.azure.com/ \
+    az rest --method delete --url "${url}?versionid=${version}" --resource https://storage.azure.com \
       --headers x-ms-version=2023-11-03 --only-show-errors --output none || return 1
   done
 }

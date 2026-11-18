@@ -2,7 +2,7 @@
 
 This GitHub Action downloads the Terraform plan file that the `altinn/altinn-platform/actions/terraform/plan` action stored beside the Terraform state. It verifies the plan file against the checksum from the plan job and executes `terraform apply` with it. This action fails unless the plan action has been executed first in the same workflow run.
 
-After a successful apply the action deletes the plan file. If the delete fails, the job prints a warning. To apply again, re-run all jobs so that the plan job makes a new plan file. If the apply fails, the plan file stays and you can re-run the apply job.
+After a successful apply the action deletes the plan file. If the delete fails, the job prints a warning. To apply again, re-run all jobs so that the plan job makes a new plan file. If the apply fails, the plan file stays. You can re-run the apply job if the failed apply did not change the state. If it did, Terraform rejects the plan file as stale, and you must re-run all jobs.
 
 If the action finds no checksum artifact, the plan job stored no plan file. The plan job ran on a `pull_request` event, or it uses another version of the actions.
 
