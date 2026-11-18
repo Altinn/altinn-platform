@@ -46,8 +46,8 @@ inputs:
     default: 1.15.6
   tf_log_level:
     required: false
-    description: Terraform Log level
-    default: INFO
+    description: Terraform log level. Allowed values are INFO, WARN and ERROR. The action fails on every other value, because the job log can be public and levels such as DEBUG and TRACE can print secret values.
+    default: WARN
 
 outputs:
   init_step_stdout:
@@ -87,8 +87,38 @@ runs:
       env:
         TERRAFORM_LOG_LEVEL: ${{ inputs.tf_log_level }}
       run: |
-        SAFE_TERRAFORM_LOG_LEVEL=$(echo "${TERRAFORM_LOG_LEVEL:-INFO}" | tr -d '\n')
-        echo "TF_LOG=$SAFE_TERRAFORM_LOG_LEVEL" >> "$GITHUB_ENV"
+        # Allow list: Terraform uses TRACE for JSON and for every level it does not know.
+        # Only the three words below go into GITHUB_ENV, never the value of the caller.
+        shopt -s nocasematch
+        allowed_level() {
+          case "$1" in
+            INFO) echo INFO ;;
+            WARN) echo WARN ;;
+            ERROR) echo ERROR ;;
+            *) return 1 ;;
+          esac
+        }
+        refused=0
+        refuse() {
+          echo "::error title=Terraform log level refused::$1 is '$(printf '%s' "$2" | tr -d '\r\n')'. Allowed values: INFO, WARN, ERROR. The job log can be public, and other levels can print secret values."
+          refused=1
+        }
+
+        input=$(printf '%s' "$TERRAFORM_LOG_LEVEL" | tr -d '\r\n')
+        if ! level=$(allowed_level "${input:-WARN}"); then
+          refuse tf_log_level "$input"
+          level=WARN
+        fi
+        echo "TF_LOG=$level" >> "$GITHUB_ENV"
+
+        # Terraform reads these variables too. The workflow of the caller can set them.
+        for name in TF_LOG TF_LOG_CORE TF_LOG_PROVIDER; do
+          if [ -n "${!name}" ] && ! allowed_level "${!name}" > /dev/null; then
+            refuse "$name" "${!name}"
+            echo "$name=$level" >> "$GITHUB_ENV"
+          fi
+        done
+        exit "$refused"
 
     - name: Terraform Set State File Path
       id: state_file_path
@@ -110,14 +140,14 @@ runs:
     - name: Terraform Format
       id: fmt
       shell: bash
-      if: always()
+      if: always() && steps.logger.outcome == 'success'
       working-directory: ${{ inputs.working_directory }}
       run: terraform fmt -check
 
     - name: Terraform Init
       id: init
       shell: bash
-      if: always()
+      if: always() && steps.logger.outcome == 'success'
       working-directory: ${{ inputs.working_directory }}
       env:
         ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
@@ -138,7 +168,7 @@ runs:
     - name: Terraform Validate
       id: validate
       shell: bash
-      if: always()
+      if: always() && steps.logger.outcome == 'success'
       working-directory: ${{ inputs.working_directory }}
       run: |
         terraform version

@@ -6,6 +6,8 @@ Note: Similar to the other action, this action will not run unless the `altinn/a
 
 The action downloads, verifies and deletes the plan file in the same way as the apply action. See [Plan file](../plan/README.md#plan-file). If `init` uses another storage account than the default, give the same `tf_arm_storage_account_name` to this action.
 
+The `init` action sets the Terraform log level. See [Log level](../plan/README.md#log-level).
+
 
 ## Sample
 ```yaml

@@ -8,6 +8,8 @@ If the action finds no checksum artifact, the plan job stored no plan file. The 
 
 See [Plan file](../plan/README.md#plan-file) for where the plan file is and what the actions need.
 
+See [Log level](../plan/README.md#log-level) for the allowed values of `tf_log_level`.
+
 ## Sample
 ```yaml
 jobs:

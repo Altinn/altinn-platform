@@ -17,6 +17,22 @@ Requirements:
 - The plan job and the apply job run in the same workflow run.
 - Both jobs use the same version of these actions and the same `oidc_type`, `oidc_value` and `tf_state_name`.
 
+## Log level
+
+The `init` action sets the Terraform log level for the job. The plan and apply actions run `init` first.
+
+- `tf_log_level` accepts `INFO`, `WARN` and `ERROR`, in upper or lower case. The default is `WARN`.
+- At `WARN`, Terraform prints no `[INFO]` log lines, for example the lines with the Terraform version and the command arguments. The plan output, the job summary and the pull request comment do not change.
+- The action refuses every other value, for example `DEBUG`, `TRACE` and `JSON`. The job log can be public, and these levels can print secret values.
+- The action also refuses such a value in the environment variables `TF_LOG`, `TF_LOG_CORE` and `TF_LOG_PROVIDER`, because Terraform reads them too.
+- When the action refuses a value, the step fails with an error, and `init` runs no Terraform command. The action also sets the refused variables to a safe level for the rest of the job.
+
+Limits:
+
+- The check stops mistakes. It does not stop a workflow that sets these variables after `init`, on its own steps, or in `env` on a step that calls `plan-only` or `apply-only`.
+- A value in `env` on the step that calls `init`, `plan` or `apply` stays in effect for that step. The step fails, but the `terraform plan` command of the plan action still starts with that value. It stops early when `terraform init` has not run in that directory.
+- To get debug logs, run Terraform in a place where the log is not public.
+
 ## Sample
 ```yaml
 jobs:

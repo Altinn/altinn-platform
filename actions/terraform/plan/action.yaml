@@ -40,8 +40,8 @@ inputs:
   tf_version:
     description: Terraform Version
   tf_log_level:
-    description: Terraform Log level
-    default: INFO
+    description: Terraform log level. Allowed values are INFO, WARN and ERROR. The action fails on every other value, because the job log can be public and levels such as DEBUG and TRACE can print secret values.
+    default: WARN
   tf_args:
     description: Terraform arguments
     required: false
