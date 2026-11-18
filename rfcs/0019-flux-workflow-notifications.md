@@ -83,13 +83,13 @@ Both actions belong in `Altinn/altinn-platform`. The [trigger-reconcile README](
 2. Configure health checks for its required workloads. Without health checks, Flux sends no success event.
 3. Limit what the dispatch token can do in the destination repository. See [Destination repository](#destination-repository).
 4. Register the destination repository with the platform team. The platform team adds the repository to the shared GitHub App installation and configures the token.
-5. Add the Provider and Alert to the product syncroot.
+5. Add the Provider and Alerts to the product syncroot.
 6. Add the receiving workflow and shared action configuration to the destination repository's default branch.
 7. Validate both success and failure events before enabling the follow-up jobs.
 
 The examples use illustrative Authentication resource names and cluster names. They are not verified deployment configuration. The initial pilot uses Dialogporten in `at23`, as specified under [Ownership and rollout](#ownership-and-rollout).
 
-This subscription receives application events and source errors:
+This subscription receives the success event of the application and the errors of the application and its source:
 
 ```yaml
 apiVersion: notification.toolkit.fluxcd.io/v1beta3
@@ -115,6 +115,8 @@ spec:
   eventSources:
     - kind: Kustomization
       name: authentication-app
+  inclusionList:
+    - "^Health check passed in "
   eventMetadata:
     schema_version: "1"
     product: authentication
@@ -125,13 +127,15 @@ spec:
 apiVersion: notification.toolkit.fluxcd.io/v1beta3
 kind: Alert
 metadata:
-  name: application-source-errors
+  name: application-errors
   namespace: product-authentication
 spec:
   providerRef:
     name: application-github
   eventSeverity: error
   eventSources:
+    - kind: Kustomization
+      name: authentication-app
     - kind: OCIRepository
       name: authentication-app
   eventMetadata:
@@ -142,7 +146,12 @@ spec:
     repository: Altinn/altinn-authentication
 ```
 
-`eventSeverity: info` includes errors. Do not add another error Alert for the same Kustomization and Provider. That creates overlapping subscriptions. The source Alert covers failures before the Kustomization can fetch an artifact.
+Each event that an Alert sends starts a workflow run. The Alerts send only success and failure events:
+
+- The info Alert sends only the [health check success event](#health-check-success-event). Its `inclusionList` removes progress events, for example the change set at the start of a rollout. It also removes errors, because `eventSeverity: info` includes errors.
+- The error Alert sends the failures of the Kustomization and of the OCIRepository. Source failures occur before the Kustomization can fetch an artifact.
+
+Do not remove the `inclusionList`. Without it, both Alerts send each Kustomization error, and each progress event starts a run that returns `ignored`.
 
 Use exact resource names. The subscription must not select every resource in the namespace. Keep the Provider, its token Secret, the Alerts and their event sources in the same product namespace. The platform supplies the Secret's `token` value through the renewal process described below. The product syncroot does not manage that generated value. Flux subscriptions need no cross-namespace access.
 
