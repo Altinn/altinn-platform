@@ -4,6 +4,8 @@ This GitHub Action is similar to `altinn/altinn-platform/actions/terraform/apply
 
 Note: Similar to the other action, this action will not run unless the `altinn/altinn-platform/actions/terraform/plan-only` action has been executed first.
 
+The action downloads, verifies and deletes the plan file in the same way as the apply action. See [Plan file](../plan/README.md#plan-file). If `init` uses another storage account than the default, give the same `tf_arm_storage_account_name` to this action.
+
 
 ## Sample
 ```yaml

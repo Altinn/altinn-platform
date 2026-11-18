@@ -1,0 +1,122 @@
+name: Terraform Actions Test
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/terraform-actions-test.yml
+      - actions/terraform/**
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  ENVIRONMENT: test
+  TF_PROJECT: ./actions/terraform/test
+  TF_STORAGE_ACCOUNT: altinnterraformstorage02
+  ARM_CLIENT_ID: ${{ secrets.TF_AZURE_CLIENT_ID }}
+  ARM_SUBSCRIPTION_ID: 1ce8e9af-c2d6-44e7-9c5e-099a308056fe
+  ARM_TENANT_ID: cd0026d8-283b-4a55-9bfa-d0ef4a8ba21c
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Plan (${{ matrix.runner }})
+    environment: reader
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [self-hosted, ubuntu-latest]
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Login to Azure
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
+        with:
+          client-id: ${{ env.ARM_CLIENT_ID }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Terraform Plan
+        uses: ./actions/terraform/plan
+        env:
+          TF_VAR_run_id: ${{ github.run_id }}-${{ github.run_attempt }}
+        with:
+          working_directory: ${{ env.TF_PROJECT }}
+          oidc_type: environment
+          oidc_value: ${{ env.ENVIRONMENT }}
+          arm_client_id: ${{ env.ARM_CLIENT_ID }}
+          arm_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
+          tf_arm_storage_account_name: ${{ env.TF_STORAGE_ACCOUNT }}
+          tf_state_name: actions-terraform-test-${{ matrix.runner }}.tfstate
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
+          store_plan_on_pull_request: "true"
+
+      - name: Check that the plan file is stored with its index tag
+        shell: bash
+        run: |
+          blob="${TF_STATE_FILE}.plans/${GITHUB_RUN_ID}.tfplan"
+          kind=$(az storage blob list --auth-mode login --account-name "$TF_STORAGE_ACCOUNT" --container-name tfstates --prefix "$blob" --include t --query "[0].tags.kind" --output tsv)
+          if [ "$kind" != terraform-plan ]; then
+            echo "::error::The plan file $blob is missing or has no index tag."
+            exit 1
+          fi
+
+  apply:
+    name: Apply (${{ matrix.runner }})
+    needs: plan
+    environment: test
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [self-hosted, ubuntu-latest]
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Login to Azure
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
+        with:
+          client-id: ${{ env.ARM_CLIENT_ID }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Terraform Apply
+        uses: ./actions/terraform/apply
+        with:
+          working_directory: ${{ env.TF_PROJECT }}
+          oidc_type: environment
+          oidc_value: ${{ env.ENVIRONMENT }}
+          arm_client_id: ${{ env.ARM_CLIENT_ID }}
+          arm_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
+          tf_arm_storage_account_name: ${{ env.TF_STORAGE_ACCOUNT }}
+          tf_state_name: actions-terraform-test-${{ matrix.runner }}.tfstate
+
+      - name: Check that no version of the plan file is left
+        shell: bash
+        run: |
+          blob="${TF_STATE_FILE}.plans/${GITHUB_RUN_ID}.tfplan"
+          left=$(az storage blob list --auth-mode login --account-name "$TF_STORAGE_ACCOUNT" --container-name tfstates --prefix "$blob" --include v --query "length(@)" --output tsv)
+          if [ "$left" != 0 ]; then
+            echo "::error::$left version(s) of the plan file $blob are left."
+            exit 1
+          fi
