@@ -23,8 +23,9 @@ The `init` action sets the Terraform log level for the job. The plan and apply a
 
 - `tf_log_level` accepts `INFO`, `WARN` and `ERROR`, in upper or lower case. The default is `WARN`.
 - At `WARN`, Terraform prints no `[INFO]` log lines, for example the lines with the Terraform version and the command arguments. The plan output, the job summary and the pull request comment do not change.
+- At `INFO`, the log shows the command arguments, and these include `tf_args`. Do not put secret values in `tf_args`.
 - The action refuses every other value, for example `DEBUG`, `TRACE` and `JSON`. The job log can be public, and these levels can print secret values.
-- The action also refuses such a value in the environment variables `TF_LOG`, `TF_LOG_CORE` and `TF_LOG_PROVIDER`, because Terraform reads them too.
+- The action also refuses such a value in the environment variables `TF_LOG`, `TF_LOG_CORE`, `TF_LOG_PROVIDER`, `TF_LOG_CLOUD` and `TF_LOG_STACKS`, because Terraform reads them too.
 - When the action refuses a value, the step fails with an error, and `init` runs no Terraform command. The action also sets the refused variables to a safe level for the rest of the job.
 
 Limits:

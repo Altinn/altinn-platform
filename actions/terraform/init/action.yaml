@@ -89,6 +89,8 @@ runs:
       run: |
         # Allow list: Terraform uses TRACE for JSON and for every level it does not know.
         # Only the three words below go into GITHUB_ENV, never the value of the caller.
+        # LC_ALL=C makes the case-insensitive match ASCII only. Else 'İNFO' matches INFO, and Terraform reads it as TRACE.
+        export LC_ALL=C
         shopt -s nocasematch
         allowed_level() {
           case "$1" in
@@ -112,7 +114,7 @@ runs:
         echo "TF_LOG=$level" >> "$GITHUB_ENV"
 
         # Terraform reads these variables too. The workflow of the caller can set them.
-        for name in TF_LOG TF_LOG_CORE TF_LOG_PROVIDER; do
+        for name in TF_LOG TF_LOG_CORE TF_LOG_PROVIDER TF_LOG_CLOUD TF_LOG_STACKS; do
           if [ -n "${!name}" ] && ! allowed_level "${!name}" > /dev/null; then
             refuse "$name" "${!name}"
             echo "$name=$level" >> "$GITHUB_ENV"
