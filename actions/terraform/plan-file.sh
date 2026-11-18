@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Stores, fetches and deletes the Terraform plan file beside the Terraform state.
-# Usage: plan-file.sh store|fetch|delete
+# Usage: plan-file.sh checksum|store|fetch|delete
 set -euo pipefail
 
 container=tfstates
@@ -19,7 +19,8 @@ az_blob() {
     --container-name "$container" --only-show-errors "$@"
 }
 
-store() {
+# Decides if the plan file is stored, and writes its checksum for the checksum artifact.
+checksum() {
   if [ "${GITHUB_EVENT_NAME:-}" = pull_request ] && [ "${STORE_ON_PULL_REQUEST:-}" != true ]; then
     echo "Pull request run. The plan file is not stored."
     echo "TF_PLAN_FILE=not stored on a pull request run" >> "$GITHUB_ENV"
@@ -29,11 +30,14 @@ store() {
   mkdir -p "$(dirname "$CHECKSUM_FILE")"
   sha256sum tfplan.out | cut -d' ' -f1 > "$CHECKSUM_FILE"
   [[ "$(cat "$CHECKSUM_FILE")" =~ ^[0-9a-f]{64}$ ]] || fail "Could not make a checksum of tfplan.out."
+  echo "store=true" >> "$GITHUB_OUTPUT"
+}
+
+store() {
   az_blob upload --name "$blob" --file tfplan.out --overwrite true --no-progress --output none \
     || fail "Could not upload the plan file to ${location}."
   echo "Stored the plan file at ${location}."
   echo "TF_PLAN_FILE=${location}" >> "$GITHUB_ENV"
-  echo "stored=true" >> "$GITHUB_OUTPUT"
 }
 
 fetch() {
@@ -69,6 +73,7 @@ delete_all_versions() {
 [[ "$STORAGE_ACCOUNT" =~ ^[a-z0-9]{3,24}$ ]] || fail "The storage account name is not valid."
 
 case "${1:-}" in
+  checksum) checksum ;;
   store) store ;;
   fetch) fetch ;;
   delete)
@@ -78,5 +83,5 @@ case "${1:-}" in
       echo "::warning title=Terraform plan file not deleted::Could not delete ${location} or one of its versions. The apply did succeed. Delete the blob and its versions by hand."
     fi
     ;;
-  *) fail "Usage: plan-file.sh store|fetch|delete" ;;
+  *) fail "Usage: plan-file.sh checksum|store|fetch|delete" ;;
 esac
