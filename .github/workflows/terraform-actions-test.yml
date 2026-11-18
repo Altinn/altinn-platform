@@ -123,3 +123,53 @@ jobs:
             echo "::error::$left version(s) of the plan file $blob are left."
             exit 1
           fi
+
+  refuse-log-level:
+    name: Refuse log level (${{ matrix.runner }})
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [self-hosted, ubuntu-latest]
+    env:
+      TF_LOG_CORE: TRACE
+      TF_LOG_PROVIDER: İNFO
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Terraform Init with refused log levels
+        id: init
+        continue-on-error: true
+        uses: ./actions/terraform/init
+        with:
+          working_directory: ${{ env.TF_PROJECT }}
+          oidc_type: environment
+          oidc_value: ${{ env.ENVIRONMENT }}
+          arm_client_id: ${{ env.ARM_CLIENT_ID }}
+          arm_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
+          tf_state_name: actions-terraform-test-refused.tfstate
+          tf_log_level: debug
+
+      - name: Check that init refused the log levels
+        shell: bash
+        env:
+          ACTION_OUTCOME: ${{ steps.init.outcome }}
+          INIT_STEP_OUTCOME: ${{ steps.init.outputs.init_step_outcome }}
+        run: |
+          failed=0
+          check() {
+            if [ "$2" != "$3" ]; then
+              echo "::error::$1 is '$2', want '$3'."
+              failed=1
+            fi
+          }
+          check "The init action" "$ACTION_OUTCOME" failure
+          check "The terraform init step" "$INIT_STEP_OUTCOME" skipped
+          check TF_LOG "$TF_LOG" WARN
+          check TF_LOG_CORE "$TF_LOG_CORE" WARN
+          check TF_LOG_PROVIDER "$TF_LOG_PROVIDER" WARN
+          exit "$failed"

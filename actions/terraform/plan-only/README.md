@@ -4,6 +4,8 @@ This GitHub Action is similar to `altinn/altinn-platform/actions/terraform/plan`
 
 The action stores the plan file in the same way as the plan action. See [Plan file](../plan/README.md#plan-file). If `init` uses another storage account than the default, give the same `tf_arm_storage_account_name` to this action.
 
+The `init` action sets the Terraform log level. See [Log level](../plan/README.md#log-level).
+
 
 ## Sample
 ```yaml
