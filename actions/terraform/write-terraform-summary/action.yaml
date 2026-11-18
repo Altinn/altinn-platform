@@ -55,7 +55,7 @@ runs:
         TERRAFORM_FMT_OUTCOME: ${{ env.FMT_STEP_OUTCOME }}
         TERRAFORM_VALIDATE_OUTCOME: ${{ env.VALIDATE_STEP_OUTCOME }}
         TERRAFORM_STATE_FILE: ${{ env.TF_STATE_FILE }}
-        ARTIFACT_KEY: ${{ env.ARTIFACT_KEY }}
+        PLAN_FILE: ${{ env.TF_PLAN_FILE || env.ARTIFACT_KEY }}
         OIDC_TYPE: ${{ inputs.oidc_type }}
         OIDC_VALUE: ${{ inputs.oidc_value }}
         EVENT_NAME: ${{ github.event_name }}
@@ -93,7 +93,7 @@ runs:
           | Action | \`${process.env.EVENT_NAME}\` |
           | Working Directory | \`${process.env.WORKING_DIRECTORY}\` |
           | State | \`${process.env.TERRAFORM_STATE_FILE}\` |
-          | Artifact | \`${process.env.ARTIFACT_KEY}\` |`;
+          | Plan File | \`${process.env.PLAN_FILE}\` |`;
 
           // 2. Set the output variable
           const fs = require('fs');
@@ -142,7 +142,7 @@ runs:
         TERRAFORM_FMT_OUTCOME: ${{ env.FMT_STEP_OUTCOME }}
         TERRAFORM_VALIDATE_OUTCOME: ${{ env.VALIDATE_STEP_OUTCOME }}
         TERRAFORM_STATE_FILE: ${{ env.TF_STATE_FILE }}
-        ARTIFACT_KEY: ${{ env.ARTIFACT_KEY }}
+        PLAN_FILE: ${{ env.TF_PLAN_FILE || env.ARTIFACT_KEY }}
         EVENT_NAME: ${{ github.event_name }}
         OIDC_TYPE: ${{ inputs.oidc_type  }}
         OIDC_VALUE: ${{ inputs.oidc_value }}
@@ -191,7 +191,7 @@ runs:
           | Action | \`${process.env.EVENT_NAME}\` |
           | Working Directory | \`${process.env.WORKING_DIRECTORY}\` |
           | State File | \`${process.env.TERRAFORM_STATE_FILE}\` |
-          | Plan File | \`${process.env.ARTIFACT_KEY}\` |`;
+          | Plan File | \`${process.env.PLAN_FILE}\` |`;
 
           // 3. If we have a comment, update it, otherwise create a new one
           if (botComment) {

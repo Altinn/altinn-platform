@@ -82,12 +82,29 @@ runs:
         ARTIFACT_KEY="${TF_STATE_FILE////_}.tfplan"
         echo "ARTIFACT_KEY=$ARTIFACT_KEY" >> $GITHUB_ENV
 
-    - name: Download Plan
-      id: artifact
+    - name: Download Plan Checksum
       uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
       with:
-        name: ${{ env.ARTIFACT_KEY }}
-        path: ${{ inputs.working_directory }}
+        name: ${{ env.ARTIFACT_KEY }}.sha256
+        path: ${{ runner.temp }}/${{ env.ARTIFACT_KEY }}.sha256
+
+    - name: Azure Login for Plan File
+      uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
+      env:
+        AZURE_CONFIG_DIR: ${{ runner.temp }}/terraform-plan-file-azure
+      with:
+        client-id: ${{ inputs.arm_client_id }}
+        tenant-id: ${{ inputs.arm_tenant_id }}
+        allow-no-subscriptions: true
+
+    - name: Download Plan File
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      env:
+        AZURE_CONFIG_DIR: ${{ runner.temp }}/terraform-plan-file-azure
+        STORAGE_ACCOUNT: ${{ inputs.tf_arm_storage_account_name }}
+        CHECKSUM_FILE: ${{ runner.temp }}/${{ env.ARTIFACT_KEY }}.sha256/tfplan.sha256
+      run: bash "$GITHUB_ACTION_PATH/../plan-file.sh" fetch
 
     - name: Terraform Apply
       id: apply
@@ -103,3 +120,10 @@ runs:
         ARM_USE_OIDC: "true"
         TERRAFORM_ARGS: ${{ inputs.tf_args }}
         TERRAFORM_OUTPUT_FILE: ${{ inputs.tf_output_file }}
+
+    - name: Delete Plan File
+      shell: bash
+      env:
+        AZURE_CONFIG_DIR: ${{ runner.temp }}/terraform-plan-file-azure
+        STORAGE_ACCOUNT: ${{ inputs.tf_arm_storage_account_name }}
+      run: bash "$GITHUB_ACTION_PATH/../plan-file.sh" delete

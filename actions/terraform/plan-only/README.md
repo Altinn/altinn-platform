@@ -2,6 +2,8 @@
 
 This GitHub Action is similar to `altinn/altinn-platform/actions/terraform/plan` but requires `altinn/altinn-platform/actions/terraform/init` to be run first. This allows you, for example, to run `terraform output` commands you might need before running the Plan.
 
+The action stores the plan file in the same way as the plan action. See [Plan file](../plan/README.md#plan-file). If `init` uses another storage account than the default, give the same `tf_arm_storage_account_name` to this action.
+
 
 ## Sample
 ```yaml
