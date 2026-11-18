@@ -81,7 +81,7 @@ runs:
     - name: Terraform Plan
       id: plan
       shell: bash
-      if: always()
+      if: always() && steps.terraform_init.outputs.init_step_outcome == 'success'
       working-directory: ${{ inputs.working_directory }}
       run: |
         terraform plan -detailed-exitcode -no-color -input=false -out tfplan.out $TERRAFORM_ARGS 2>&1 > tfplan.log  && cat tfplan.log || export EC=$?; cat tfplan.log; exit $EC

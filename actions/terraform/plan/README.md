@@ -26,12 +26,11 @@ The `init` action sets the Terraform log level for the job. The plan and apply a
 - At `INFO`, the log shows the command arguments, and these include `tf_args`. Do not put secret values in `tf_args`.
 - The action refuses every other value, for example `DEBUG`, `TRACE` and `JSON`. The job log can be public, and these levels can print secret values.
 - The action also refuses such a value in the environment variables `TF_LOG`, `TF_LOG_CORE`, `TF_LOG_PROVIDER`, `TF_LOG_CLOUD` and `TF_LOG_STACKS`, because Terraform reads them too.
-- When the action refuses a value, the step fails with an error, and `init` runs no Terraform command. The action also sets the refused variables to a safe level for the rest of the job.
+- When the action refuses a value, the step fails with an error, and `init`, `plan` and `apply` run no Terraform command. The action also sets the refused variables to a safe level for the rest of the job.
 
 Limits:
 
 - The check stops mistakes. It does not stop a workflow that sets these variables after `init`, on its own steps, or in `env` on a step that calls `plan-only` or `apply-only`.
-- A value in `env` on the step that calls `init`, `plan` or `apply` stays in effect for that step. The step fails, but the `terraform plan` command of the plan action still starts with that value. It stops early when `terraform init` has not run in that directory.
 - To get debug logs, run Terraform in a place where the log is not public.
 
 ## Sample
