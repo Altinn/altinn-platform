@@ -90,7 +90,7 @@ jobs:
           done
 
       - name: Terraform Plan
-        uses: Altinn/altinn-platform/actions/terraform/plan@cd48d3d472e66fdb58c1305979d97a50d5edca0c # main
+        uses: Altinn/altinn-platform/actions/terraform/plan@0ec43c51ddbcae13f4f9e1a5dafb3a58f01651f4 # main
         env:
           TF_VAR_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
           TF_VAR_altinn_app_id: ${{ vars.GH_RUNNERS_APP_ID }}
@@ -165,7 +165,7 @@ jobs:
           done
 
       - name: Terraform Init
-        uses: Altinn/altinn-platform/actions/terraform/init@cd48d3d472e66fdb58c1305979d97a50d5edca0c # main
+        uses: Altinn/altinn-platform/actions/terraform/init@0ec43c51ddbcae13f4f9e1a5dafb3a58f01651f4 # main
         with:
           working_directory: ${{ env.TF_PROJECT }}
           oidc_type: environment
@@ -173,6 +173,12 @@ jobs:
           arm_client_id: ${{ env.ARM_CLIENT_ID }}
           arm_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
           tf_state_name: ${{ env.TF_STATE_NAME }}
+
+      - name: Delete Stored Plan File
+        if: always()
+        env:
+          STORAGE_ACCOUNT: altinnterraformstorage02
+        run: bash actions/terraform/plan-file.sh delete
 
       - name: Terraform Apply
         working-directory: ${{ env.TF_PROJECT }}
