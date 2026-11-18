@@ -8,13 +8,12 @@ This GitHub Action executes `terraform plan` against a specified environment and
 - The action publishes only the SHA-256 checksum of the plan file as a GitHub artifact. The apply action uses it to verify the plan file.
 - On `pull_request` events the action stores no plan file, because no job applies those plans. Every other event stores one. Set `store_plan_on_pull_request: "true"` if a job applies the plan in the same pull request run.
 - The apply action deletes the plan file after a successful apply. If the delete fails, the job prints a warning and the plan file stays. A plan file that no job applies also stays in the storage account.
-- The blob has the index tag `kind=terraform-plan`, so a storage lifecycle rule can find plan files.
 - The actions use their own Azure CLI session. They do not change the Azure CLI session of the caller.
 
 Requirements:
 
 - The runner has the Azure CLI (`az`).
-- The identity has the Storage Blob Data Owner role for the state path. The actions set a blob index tag and delete blob versions.
+- The identity has the Storage Blob Data Owner role for the state path. The apply action deletes blob versions.
 - The plan job and the apply job run in the same workflow run.
 - Both jobs use the same version of these actions and the same `oidc_type`, `oidc_value` and `tf_state_name`.
 

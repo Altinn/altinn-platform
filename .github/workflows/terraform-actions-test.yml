@@ -65,13 +65,13 @@ jobs:
           gh_token: ${{ secrets.GITHUB_TOKEN }}
           store_plan_on_pull_request: "true"
 
-      - name: Check that the plan file is stored with its index tag
+      - name: Check that the plan file is stored
         shell: bash
         run: |
           blob="${TF_STATE_FILE}.plans/${GITHUB_RUN_ID}.tfplan"
-          kind=$(az storage blob list --auth-mode login --account-name "$TF_STORAGE_ACCOUNT" --container-name tfstates --prefix "$blob" --include t --query "[0].tags.kind" --output tsv)
-          if [ "$kind" != terraform-plan ]; then
-            echo "::error::The plan file $blob is missing or has no index tag."
+          stored=$(az storage blob list --auth-mode login --account-name "$TF_STORAGE_ACCOUNT" --container-name tfstates --prefix "$blob" --query "length(@)" --output tsv)
+          if [ "$stored" != 1 ]; then
+            echo "::error::The plan file $blob is not in the storage account."
             exit 1
           fi
 

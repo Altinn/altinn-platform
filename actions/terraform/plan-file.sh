@@ -29,9 +29,8 @@ store() {
   mkdir -p "$(dirname "$CHECKSUM_FILE")"
   sha256sum tfplan.out | cut -d' ' -f1 > "$CHECKSUM_FILE"
   [[ "$(cat "$CHECKSUM_FILE")" =~ ^[0-9a-f]{64}$ ]] || fail "Could not make a checksum of tfplan.out."
-  # The index tag lets a storage lifecycle rule find plan files.
-  az_blob upload --name "$blob" --file tfplan.out --overwrite true --tags kind=terraform-plan \
-    --no-progress --output none || fail "Could not upload the plan file to ${location}."
+  az_blob upload --name "$blob" --file tfplan.out --overwrite true --no-progress --output none \
+    || fail "Could not upload the plan file to ${location}."
   echo "Stored the plan file at ${location}."
   echo "TF_PLAN_FILE=${location}" >> "$GITHUB_ENV"
   echo "stored=true" >> "$GITHUB_OUTPUT"
