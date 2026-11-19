@@ -173,3 +173,21 @@ jobs:
           check TF_LOG_CORE "$TF_LOG_CORE" WARN
           check TF_LOG_PROVIDER "$TF_LOG_PROVIDER" WARN
           exit "$failed"
+
+  delete-plan-file:
+    name: Delete plan file with a stub (${{ matrix.runner }})
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [self-hosted, ubuntu-latest]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Test the delete of the plan file
+        shell: bash
+        run: bash actions/terraform/test/plan-file-delete-test.sh
