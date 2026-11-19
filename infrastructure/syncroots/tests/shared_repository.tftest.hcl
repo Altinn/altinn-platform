@@ -36,22 +36,6 @@ override_data {
 }
 
 override_data {
-  target = data.github_rest_api.oidc_subject["altinn-studio"]
-  values = {
-    code = 200
-    body = "{\"use_default\":true,\"use_immutable_subject\":false,\"sub_claim_prefix\":\"repo:Altinn/altinn-studio\"}"
-  }
-}
-
-override_data {
-  target = data.github_rest_api.oidc_subject["altinn-verification-dis-poc"]
-  values = {
-    code = 200
-    body = "{\"use_default\":true,\"use_immutable_subject\":false,\"sub_claim_prefix\":\"repo:Altinn/altinn-verification-dis-poc\"}"
-  }
-}
-
-override_data {
   target = data.github_rest_api.oidc_subject["altinn-profile-manifests"]
   values = {
     code = 200
@@ -80,6 +64,22 @@ override_data {
   values = {
     code = 200
     body = "{\"use_default\":true,\"use_immutable_subject\":false,\"sub_claim_prefix\":\"repo:Altinn/altinn-eformidling-manifests\"}"
+  }
+}
+
+override_data {
+  target = data.github_rest_api.oidc_subject["altinn-studio"]
+  values = {
+    code = 200
+    body = "{\"use_default\":true,\"use_immutable_subject\":false,\"sub_claim_prefix\":\"repo:Altinn/altinn-studio\"}"
+  }
+}
+
+override_data {
+  target = data.github_rest_api.oidc_subject["altinn-verification-dis-poc"]
+  values = {
+    code = 200
+    body = "{\"use_default\":true,\"use_immutable_subject\":false,\"sub_claim_prefix\":\"repo:Altinn/altinn-verification-dis-poc\"}"
   }
 }
 
