@@ -24,6 +24,7 @@ resource "azuread_application_password" "grafana_smtp" {
 
   rotate_when_changed = {
     rotation = time_rotating.grafana_smtp_secret.id
+    manual   = "2026-11-19"
   }
 
   lifecycle {
