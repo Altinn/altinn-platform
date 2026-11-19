@@ -7,13 +7,15 @@ This GitHub Action executes `terraform plan` against a specified environment and
 - The action stores the plan file in container `tfstates` of the state storage account. The blob path is `<state path>.plans/<run id>.tfplan`.
 - The action publishes only the SHA-256 checksum of the plan file as a GitHub artifact. The apply action uses it to verify the plan file.
 - On `pull_request` events the action stores no plan file, because no job applies those plans. Every other event stores one. Set `store_plan_on_pull_request: "true"` if a job applies the plan in the same pull request run.
-- The apply action deletes the plan file after a successful apply. If the delete fails, the job prints a warning, and the plan file or some of its versions stay. A plan file that no job applies also stays in the storage account.
+- The apply action deletes the plan file after a successful apply. If the delete fails, the job prints a warning, and the plan file stays. A plan file that no job applies also stays in the storage account.
+- If the storage account has blob versioning, the deleted plan file becomes an old version. The apply action deletes the old versions too. If the identity may not delete blob versions, the old versions stay, and the job log says so. The job prints no warning for this.
 - The actions use their own Azure CLI session. They do not change the Azure CLI session of the caller.
 
 Requirements:
 
 - The runner has the Azure CLI (`az`).
-- The identity has the Storage Blob Data Owner role for the state path. The apply action deletes blob versions.
+- The identity has the same blob access as the state backend needs for the state path: read, write and delete. The actions need no other role.
+- Optional: the right to delete blob versions (`Microsoft.Storage/storageAccounts/blobServices/containers/blobs/deleteBlobVersion/action`, part of the Storage Blob Data Owner role). With it, the apply action deletes the old versions of the plan file at once. Without it, they stay.
 - The plan job and the apply job run in the same workflow run.
 - Both jobs use the same version of these actions and the same `oidc_type`, `oidc_value` and `tf_state_name`.
 
