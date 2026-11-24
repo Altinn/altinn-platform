@@ -109,6 +109,7 @@ func ensureUserProvisionJobForReconciler(
 
 	hasCurrent := false
 	deletedCurrent := false
+	hasOutdated := false
 	for i := range jobs.Items {
 		job := jobs.Items[i]
 		if job.Name == jobName {
@@ -129,7 +130,14 @@ func ensureUserProvisionJobForReconciler(
 			hasCurrent = true
 			continue
 		}
-		policy := metav1.DeletePropagationBackground
+		// A Pod of an outdated Job can still write to the DIS DB server.
+		// Foreground deletion keeps the Job until its Pods are gone.
+		// The new Job must wait for that.
+		hasOutdated = true
+		if !job.DeletionTimestamp.IsZero() {
+			continue
+		}
+		policy := metav1.DeletePropagationForeground
 		if err := r.Delete(ctx, &job, &client.DeleteOptions{
 			PropagationPolicy: &policy,
 		}); err != nil && !apierrors.IsNotFound(err) {
@@ -137,7 +145,7 @@ func ensureUserProvisionJobForReconciler(
 		}
 	}
 
-	if hasCurrent || deletedCurrent {
+	if hasCurrent || deletedCurrent || hasOutdated {
 		return nil
 	}
 

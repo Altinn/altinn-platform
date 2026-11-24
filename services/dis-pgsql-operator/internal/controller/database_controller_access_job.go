@@ -14,6 +14,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -61,7 +62,22 @@ func (r *DatabaseReconciler) ensureDatabaseAccess(
 		return false, "", "", fmt.Errorf("get FlexibleServersDatabase %s/%s: %w", database.Namespace, asoDatabaseName, err)
 	}
 
-	wantedHash := databaseAccessHash(database, serverName, db.UID, asoDatabase.UID, adminIdentity, accessPrincipals)
+	var flexibleServer dbforpostgresqlv1.FlexibleServer
+	if err := r.Get(ctx, types.NamespacedName{
+		Name:      serverName,
+		Namespace: database.Namespace,
+	}, &flexibleServer); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, databaseReasonProvisioning, "Waiting for the database server", nil
+		}
+		return false, "", "", fmt.Errorf("get FlexibleServer %s/%s: %w", database.Namespace, serverName, err)
+	}
+
+	wantedHash := databaseAccessHash(database, serverName, databaseAccessTargetUIDs{
+		DatabaseServer: db.UID,
+		FlexibleServer: flexibleServer.UID,
+		Database:       asoDatabase.UID,
+	}, adminIdentity, accessPrincipals)
 	if database.Status.ProvisionedAccessHash == wantedHash {
 		// The wanted access is in place. A Job is not necessary.
 		// The finished Job can be gone, because its TTL deletes it.
@@ -96,7 +112,7 @@ func (r *DatabaseReconciler) ensureDatabaseAccess(
 		return false, "", "", err
 	}
 
-	complete, err := r.databaseAccessJobComplete(ctx, database, jobName)
+	complete, err := r.databaseAccessJobComplete(ctx, database, serverName, jobName)
 	if err != nil {
 		return false, "", "", err
 	}
@@ -255,36 +271,52 @@ func databaseAccessPayloadRole(role storagev1alpha1.DatabaseAccessRole) dbUtil.A
 	}
 }
 
+// databaseAccessJobComplete reports if the wanted Job is complete and no other
+// access Job of the Database exists. Another Job, or a Job in deletion, can
+// have a Pod that still writes to the DIS DB server.
 func (r *DatabaseReconciler) databaseAccessJobComplete(
 	ctx context.Context,
 	database *storagev1alpha1.Database,
+	serverName string,
 	jobName string,
 ) (bool, error) {
-	var job batchv1.Job
-	if err := r.Get(ctx, types.NamespacedName{
-		Name:      jobName,
-		Namespace: database.Namespace,
-	}, &job); err != nil {
-		if apierrors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("get Database access Job %s/%s: %w", database.Namespace, jobName, err)
+	var jobs batchv1.JobList
+	if err := r.List(ctx, &jobs,
+		client.InNamespace(database.Namespace),
+		client.MatchingLabels(userProvisionJobLabels(databaseAccessJobLabels(serverName, database.Name))),
+	); err != nil {
+		return false, fmt.Errorf("list Database access Jobs for %s/%s: %w", database.Namespace, database.Name, err)
 	}
 
-	return jobConditionTrue(&job, batchv1.JobComplete), nil
+	complete := false
+	for i := range jobs.Items {
+		job := &jobs.Items[i]
+		if job.Name != jobName || !job.DeletionTimestamp.IsZero() {
+			return false, nil
+		}
+		complete = jobConditionTrue(job, batchv1.JobComplete)
+	}
+	return complete, nil
+}
+
+// databaseAccessTargetUIDs holds the UIDs of the resources that an access Job
+// provisions against. A resource that is created again has a new UID.
+type databaseAccessTargetUIDs struct {
+	DatabaseServer types.UID
+	FlexibleServer types.UID
+	Database       types.UID
 }
 
 // databaseAccessHash returns the hash of the wanted access of a Database.
 // The hash changes when an input of the provisioning Job changes.
-// The hash also changes when the DatabaseServer resource or the database
-// resource is created again, because a new resource has a new UID.
+// The hash also changes when the DatabaseServer, the FlexibleServer or the
+// database resource is created again.
 // A change to this payload makes the operator provision the access of all
 // Databases again.
 func databaseAccessHash(
 	database *storagev1alpha1.Database,
 	serverName string,
-	serverUID types.UID,
-	asoDatabaseUID types.UID,
+	targetUIDs databaseAccessTargetUIDs,
 	adminIdentity resolvedAdminIdentity,
 	accessPrincipals []dbUtil.AccessPrincipal,
 ) string {
@@ -294,9 +326,10 @@ func databaseAccessHash(
 	}
 	payload := strings.Join([]string{
 		"server=" + serverName,
-		"serverUID=" + string(serverUID),
+		"serverUID=" + string(targetUIDs.DatabaseServer),
+		"flexibleServerUID=" + string(targetUIDs.FlexibleServer),
 		"database=" + database.Status.DatabaseName,
-		"databaseUID=" + string(asoDatabaseUID),
+		"databaseUID=" + string(targetUIDs.Database),
 		"host=" + database.Status.Host,
 		"adminSA=" + adminIdentity.ServiceAccountName,
 		"admin=" + adminIdentity.Name,
