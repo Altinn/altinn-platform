@@ -235,6 +235,12 @@ spec:
                   It is populated in a later reconciliation slice.
                 format: int32
                 type: integer
+              provisionedAccessHash:
+                description: |-
+                  provisionedAccessHash is the hash of the access that the last completed
+                  provisioning Job applied. The operator starts a provisioning Job only
+                  when this value is empty.
+                type: string
               validationErrors:
                 description: validationErrors contains field-level validation failures.
                 items:
