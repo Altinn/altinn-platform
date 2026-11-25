@@ -10,9 +10,11 @@ import (
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/connection"
 	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/naming"
+	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -48,7 +50,51 @@ func (r *DatabaseReconciler) ensureDatabaseAccess(
 		return false, databaseReasonProvisioning, message, nil
 	}
 
-	jobName := databaseAccessProvisionJobName(database, serverName, adminIdentity, accessPrincipals)
+	var asoDatabase dbforpostgresqlv1.FlexibleServersDatabase
+	asoDatabaseName := databaseASOResourceName(serverName, database.Status.DatabaseName)
+	if err := r.Get(ctx, types.NamespacedName{
+		Name:      asoDatabaseName,
+		Namespace: database.Namespace,
+	}, &asoDatabase); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, databaseReasonProvisioning, "Waiting for the database", nil
+		}
+		return false, "", "", fmt.Errorf("get FlexibleServersDatabase %s/%s: %w", database.Namespace, asoDatabaseName, err)
+	}
+
+	var flexibleServer dbforpostgresqlv1.FlexibleServer
+	if err := r.Get(ctx, types.NamespacedName{
+		Name:      serverName,
+		Namespace: database.Namespace,
+	}, &flexibleServer); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, databaseReasonProvisioning, "Waiting for the database server", nil
+		}
+		return false, "", "", fmt.Errorf("get FlexibleServer %s/%s: %w", database.Namespace, serverName, err)
+	}
+
+	wantedHash := databaseAccessHash(database, serverName, databaseAccessTargetUIDs{
+		DatabaseServer: db.UID,
+		FlexibleServer: flexibleServer.UID,
+		Database:       asoDatabase.UID,
+	}, adminIdentity, accessPrincipals)
+	if database.Status.ProvisionedAccessHash == wantedHash {
+		// The wanted access is in place. A Job is not necessary.
+		// The finished Job can be gone, because its TTL deletes it.
+		if err := r.publishDatabaseConnections(ctx, database, serviceConnections); err != nil {
+			return false, "", "", err
+		}
+		return true, databaseReasonReady, "Database access is ready", nil
+	}
+	if database.Status.ProvisionedAccessHash != "" {
+		// The wanted access changed. Clear the record before a new Job starts.
+		// A Job thus runs only while the record is empty.
+		// The next reconcile creates the Job.
+		database.Status.ProvisionedAccessHash = ""
+		return false, databaseReasonProvisioning, "Database access changed and is provisioned again", nil
+	}
+
+	jobName := databaseAccessProvisionJobName(database, wantedHash)
 	if err := r.ensureUserProvisionJobForTarget(ctx, userProvisionJobSpec{
 		Owner:               database,
 		JobName:             jobName,
@@ -66,28 +112,39 @@ func (r *DatabaseReconciler) ensureDatabaseAccess(
 		return false, "", "", err
 	}
 
-	complete, err := r.databaseAccessJobComplete(ctx, database, jobName)
+	complete, err := r.databaseAccessJobComplete(ctx, database, serverName, jobName)
 	if err != nil {
 		return false, "", "", err
 	}
 	if complete {
-		coords := make([]connection.Coordinates, 0, len(serviceConnections))
-		for _, sc := range serviceConnections {
-			coords = append(coords, connection.Coordinates{
-				Host:        database.Status.Host,
-				Port:        database.Status.Port,
-				DBName:      database.Status.DatabaseName,
-				User:        sc.ManagedIdentityName,
-				IdentityRef: sc.IdentityRef,
-			})
-		}
-		if err := r.reconcileConnectionConfigMaps(ctx, database, coords); err != nil {
+		if err := r.publishDatabaseConnections(ctx, database, serviceConnections); err != nil {
 			return false, "", "", err
 		}
+		database.Status.ProvisionedAccessHash = wantedHash
 		return true, databaseReasonReady, "Database access is ready", nil
 	}
 
 	return false, databaseReasonProvisioning, "Database access provisioning job is running", nil
+}
+
+// publishDatabaseConnections writes one connection ConfigMap for each service
+// connection of the Database.
+func (r *DatabaseReconciler) publishDatabaseConnections(
+	ctx context.Context,
+	database *storagev1alpha1.Database,
+	serviceConnections []resolvedServiceConnection,
+) error {
+	coords := make([]connection.Coordinates, 0, len(serviceConnections))
+	for _, sc := range serviceConnections {
+		coords = append(coords, connection.Coordinates{
+			Host:        database.Status.Host,
+			Port:        database.Status.Port,
+			DBName:      database.Status.DatabaseName,
+			User:        sc.ManagedIdentityName,
+			IdentityRef: sc.IdentityRef,
+		})
+	}
+	return r.reconcileConnectionConfigMaps(ctx, database, coords)
 }
 
 // resolvedServiceConnection pairs a service principal's spec identityRef.name
@@ -214,28 +271,52 @@ func databaseAccessPayloadRole(role storagev1alpha1.DatabaseAccessRole) dbUtil.A
 	}
 }
 
+// databaseAccessJobComplete reports if the wanted Job is complete and no other
+// access Job of the Database exists. Another Job, or a Job in deletion, can
+// have a Pod that still writes to the DIS DB server.
 func (r *DatabaseReconciler) databaseAccessJobComplete(
 	ctx context.Context,
 	database *storagev1alpha1.Database,
+	serverName string,
 	jobName string,
 ) (bool, error) {
-	var job batchv1.Job
-	if err := r.Get(ctx, types.NamespacedName{
-		Name:      jobName,
-		Namespace: database.Namespace,
-	}, &job); err != nil {
-		if apierrors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("get Database access Job %s/%s: %w", database.Namespace, jobName, err)
+	var jobs batchv1.JobList
+	if err := r.List(ctx, &jobs,
+		client.InNamespace(database.Namespace),
+		client.MatchingLabels(userProvisionJobLabels(databaseAccessJobLabels(serverName, database.Name))),
+	); err != nil {
+		return false, fmt.Errorf("list Database access Jobs for %s/%s: %w", database.Namespace, database.Name, err)
 	}
 
-	return jobConditionTrue(&job, batchv1.JobComplete), nil
+	complete := false
+	for i := range jobs.Items {
+		job := &jobs.Items[i]
+		if job.Name != jobName || !job.DeletionTimestamp.IsZero() {
+			return false, nil
+		}
+		complete = jobConditionTrue(job, batchv1.JobComplete)
+	}
+	return complete, nil
 }
 
-func databaseAccessProvisionJobName(
+// databaseAccessTargetUIDs holds the UIDs of the resources that an access Job
+// provisions against. A resource that is created again has a new UID.
+type databaseAccessTargetUIDs struct {
+	DatabaseServer types.UID
+	FlexibleServer types.UID
+	Database       types.UID
+}
+
+// databaseAccessHash returns the hash of the wanted access of a Database.
+// The hash changes when an input of the provisioning Job changes.
+// The hash also changes when the DatabaseServer, the FlexibleServer or the
+// database resource is created again.
+// A change to this payload makes the operator provision the access of all
+// Databases again.
+func databaseAccessHash(
 	database *storagev1alpha1.Database,
 	serverName string,
+	targetUIDs databaseAccessTargetUIDs,
 	adminIdentity resolvedAdminIdentity,
 	accessPrincipals []dbUtil.AccessPrincipal,
 ) string {
@@ -245,7 +326,10 @@ func databaseAccessProvisionJobName(
 	}
 	payload := strings.Join([]string{
 		"server=" + serverName,
+		"serverUID=" + string(targetUIDs.DatabaseServer),
+		"flexibleServerUID=" + string(targetUIDs.FlexibleServer),
 		"database=" + database.Status.DatabaseName,
+		"databaseUID=" + string(targetUIDs.Database),
 		"host=" + database.Status.Host,
 		"adminSA=" + adminIdentity.ServiceAccountName,
 		"admin=" + adminIdentity.Name,
@@ -254,9 +338,15 @@ func databaseAccessProvisionJobName(
 		"revokePublicConnect=true",
 		"searchPathScope=database",
 	}, ";")
-	hash := naming.StableSHA256Hex(payload)[:8]
+	return naming.StableSHA256Hex(payload)
+}
+
+// databaseAccessProvisionJobName returns the Job name for an access hash.
+// A complete Job with this name shows that the access with this hash is
+// provisioned.
+func databaseAccessProvisionJobName(database *storagev1alpha1.Database, accessHash string) string {
 	base := fmt.Sprintf("%s-access-provision", database.Name)
-	return naming.WithRequiredSuffix(base, "-"+hash, 63, "ldb")
+	return naming.WithRequiredSuffix(base, "-"+accessHash[:8], 63, "ldb")
 }
 
 func databaseAccessJobLabels(serverName, databaseName string) map[string]string {

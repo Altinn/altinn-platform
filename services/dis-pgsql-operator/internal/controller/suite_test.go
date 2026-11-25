@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,11 +18,13 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -150,7 +153,44 @@ var _ = BeforeSuite(func() {
 		defer GinkgoRecover()
 		Expect(k8sManager.Start(ctx)).To(Succeed())
 	}()
+
+	go finishForegroundJobDeletions(ctx)
 })
+
+// holdJobDeletions stops finishForegroundJobDeletions while it is true.
+// A spec sets it to keep a deleted Job, as if its Pods still run.
+var holdJobDeletions atomic.Bool
+
+// finishForegroundJobDeletions removes the foregroundDeletion finalizer from
+// Jobs that are in deletion. envtest has no garbage collector to do this.
+func finishForegroundJobDeletions(ctx context.Context) {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		if holdJobDeletions.Load() {
+			continue
+		}
+		var jobs batchv1.JobList
+		if err := k8sClient.List(ctx, &jobs); err != nil {
+			continue
+		}
+		for i := range jobs.Items {
+			job := &jobs.Items[i]
+			if job.DeletionTimestamp.IsZero() {
+				continue
+			}
+			if controllerutil.RemoveFinalizer(job, metav1.FinalizerDeleteDependents) {
+				// A failed update is tried again on the next tick.
+				_ = k8sClient.Update(ctx, job)
+			}
+		}
+	}
+}
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")

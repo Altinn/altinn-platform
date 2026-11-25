@@ -415,6 +415,61 @@ var _ = Describe("DatabaseServer controller", func() {
 		return databases.Items
 	}
 
+	// waitForProvisionedAccessHash waits until the Database records an access
+	// hash that is not the previous hash, and AccessReady is true.
+	waitForProvisionedAccessHash := func(ctx context.Context, database *storagev1alpha1.Database, previous string) string {
+		var hash string
+		Eventually(func(g Gomega) {
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(database), &updated)).To(Succeed())
+			g.Expect(updated.Status.ProvisionedAccessHash).NotTo(BeEmpty())
+			g.Expect(updated.Status.ProvisionedAccessHash).NotTo(Equal(previous))
+			g.Expect(meta.IsStatusConditionTrue(updated.Status.Conditions, databaseConditionAccessReady)).To(BeTrue())
+			hash = updated.Status.ProvisionedAccessHash
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+		return hash
+	}
+
+	// provisionDatabaseAccess creates a Database on a shared server, completes
+	// its access Job and waits for the access hash.
+	provisionDatabaseAccess := func(ctx context.Context, serverName, databaseName string) (*storagev1alpha1.Database, batchv1.Job, string) {
+		db := newSharedDatabaseServer(serverName)
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
+
+		database := newDatabase(databaseName, db.Name)
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			return len(listDatabaseASOChildren(g, database.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+
+		markDatabaseASOReady(ctx, database)
+
+		job := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
+		completeDatabaseAccessJob(ctx, job)
+		return database, job, waitForProvisionedAccessHash(ctx, database, "")
+	}
+
+	// deleteFinishedAccessJob deletes a finished Job, as the Job TTL does.
+	// envtest has no TTL controller.
+	deleteFinishedAccessJob := func(ctx context.Context, job batchv1.Job) {
+		Expect(k8sClient.Delete(ctx, &job,
+			client.PropagationPolicy(metav1.DeletePropagationBackground),
+		)).To(Succeed())
+		// The test client reads from a cache. Wait until the cache drops the Job.
+		Eventually(func(g Gomega) {
+			var jobs batchv1.JobList
+			g.Expect(k8sClient.List(ctx, &jobs, client.InNamespace(job.Namespace))).To(Succeed())
+			for i := range jobs.Items {
+				g.Expect(jobs.Items[i].UID).NotTo(Equal(job.UID))
+			}
+		}).WithTimeout(10 * time.Second).WithPolling(100 * time.Millisecond).
+			Should(Succeed())
+	}
+
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
 		ensureNamespace(ctx, ns)
@@ -4187,6 +4242,142 @@ var _ = Describe("DatabaseServer controller", func() {
 			err := k8sClient.Get(ctx, types.NamespacedName{Name: staleName, Namespace: database.Namespace}, &corev1.ConfigMap{})
 			g.Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		}).WithTimeout(15 * time.Second).WithPolling(500 * time.Millisecond).
+			Should(Succeed())
+	})
+
+	It("does not create a new access Job after the finished Job is deleted", func() {
+		database, job, hash := provisionDatabaseAccess(ctx, "shared-db-database-access-job-ttl", "router-access-job-ttl")
+		deleteFinishedAccessJob(ctx, job)
+
+		Consistently(func(g Gomega) {
+			var jobs batchv1.JobList
+			g.Expect(k8sClient.List(ctx, &jobs,
+				client.InNamespace(database.Namespace),
+				client.MatchingLabels(map[string]string{databaseNameLabelKey: database.Name}),
+			)).To(Succeed())
+			g.Expect(jobs.Items).To(BeEmpty())
+
+			var updated storagev1alpha1.Database
+			g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(database), &updated)).To(Succeed())
+			g.Expect(updated.Status.ProvisionedAccessHash).To(Equal(hash))
+			g.Expect(meta.IsStatusConditionTrue(updated.Status.Conditions, databaseConditionAccessReady)).To(BeTrue())
+		}).WithTimeout(5 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+	})
+
+	It("creates a new access Job when the wanted access changes", func() {
+		database, oldJob, oldHash := provisionDatabaseAccess(ctx, "shared-db-database-access-change", "router-access-change")
+
+		Eventually(func() error {
+			var current storagev1alpha1.Database
+			if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(database), &current); err != nil {
+				return err
+			}
+			current.Spec.Access.Principals[1].Role = storagev1alpha1.DatabaseAccessRoleReader
+			return k8sClient.Update(ctx, &current)
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		// The finished Job still exists. The operator replaces it with a new Job.
+		var newJob batchv1.Job
+		Eventually(func(g Gomega) {
+			var jobs batchv1.JobList
+			g.Expect(k8sClient.List(ctx, &jobs,
+				client.InNamespace(database.Namespace),
+				client.MatchingLabels(map[string]string{databaseNameLabelKey: database.Name}),
+			)).To(Succeed())
+			g.Expect(jobs.Items).To(HaveLen(1))
+			g.Expect(jobs.Items[0].Name).NotTo(Equal(oldJob.Name))
+			newJob = jobs.Items[0]
+		}).WithTimeout(30 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		var payload string
+		for _, env := range newJob.Spec.Template.Spec.Containers[0].Env {
+			if env.Name == dbUtil.AccessPrincipalsEnv {
+				payload = env.Value
+			}
+		}
+		accessPrincipals, err := dbUtil.ParseAccessPrincipalsPayload(payload)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(accessPrincipals).To(ContainElement(dbUtil.AccessPrincipal{
+			Role:          dbUtil.AccessRoleReader,
+			Name:          databaseOwnerGroup,
+			PrincipalID:   databaseOwnerPrincipalID,
+			PrincipalType: dbUtil.PrincipalTypeGroup,
+		}))
+
+		// The record is empty while the new Job runs.
+		var running storagev1alpha1.Database
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(database), &running)).To(Succeed())
+		Expect(running.Status.ProvisionedAccessHash).To(BeEmpty())
+		Expect(meta.IsStatusConditionTrue(running.Status.Conditions, databaseConditionAccessReady)).To(BeFalse())
+
+		completeDatabaseAccessJob(ctx, newJob)
+		waitForProvisionedAccessHash(ctx, database, oldHash)
+	})
+
+	It("creates the new access Job only after the outdated Job is gone", func() {
+		db := newSharedDatabaseServer("shared-db-database-access-outdated")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
+
+		database := newDatabase("router-access-outdated", db.Name)
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			return len(listDatabaseASOChildren(g, database.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+
+		markDatabaseASOReady(ctx, database)
+		oldJob := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
+
+		// Keep the deleted Job, as if its Pod still runs.
+		holdJobDeletions.Store(true)
+		defer holdJobDeletions.Store(false)
+
+		Eventually(func() error {
+			var current storagev1alpha1.Database
+			if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(database), &current); err != nil {
+				return err
+			}
+			current.Spec.Access.Principals[1].Role = storagev1alpha1.DatabaseAccessRoleReader
+			return k8sClient.Update(ctx, &current)
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		listAccessJobs := func(g Gomega) []batchv1.Job {
+			var jobs batchv1.JobList
+			g.Expect(k8sClient.List(ctx, &jobs,
+				client.InNamespace(database.Namespace),
+				client.MatchingLabels(map[string]string{databaseNameLabelKey: database.Name}),
+			)).To(Succeed())
+			return jobs.Items
+		}
+
+		Eventually(func(g Gomega) {
+			jobs := listAccessJobs(g)
+			g.Expect(jobs).To(HaveLen(1))
+			g.Expect(jobs[0].Name).To(Equal(oldJob.Name))
+			g.Expect(jobs[0].DeletionTimestamp.IsZero()).To(BeFalse())
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		Consistently(func(g Gomega) {
+			jobs := listAccessJobs(g)
+			g.Expect(jobs).To(HaveLen(1))
+			g.Expect(jobs[0].Name).To(Equal(oldJob.Name))
+		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		holdJobDeletions.Store(false)
+
+		Eventually(func(g Gomega) {
+			jobs := listAccessJobs(g)
+			g.Expect(jobs).To(HaveLen(1))
+			g.Expect(jobs[0].Name).NotTo(Equal(oldJob.Name))
+		}).WithTimeout(30 * time.Second).WithPolling(250 * time.Millisecond).
 			Should(Succeed())
 	})
 

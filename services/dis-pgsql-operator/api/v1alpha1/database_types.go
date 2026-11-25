@@ -151,6 +151,12 @@ type DatabaseStatus struct {
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
+	// provisionedAccessHash is the hash of the access that the last completed
+	// provisioning Job applied. The operator starts a provisioning Job only
+	// when this value is empty.
+	// +optional
+	ProvisionedAccessHash string `json:"provisionedAccessHash,omitempty"`
+
 	// conditions represent the current validation/provisioning state.
 	// +listType=map
 	// +listMapKey=type
