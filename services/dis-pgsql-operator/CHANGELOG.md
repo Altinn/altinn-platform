@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.15.0...dis-pgsql-v0.15.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* **dis-pgsql:** create the access job only when the wanted access changes ([#4483](https://github.com/Altinn/altinn-platform/issues/4483)) ([78fac8d](https://github.com/Altinn/altinn-platform/commit/78fac8d66a8c62707bfbe32658bc4887c4ed8a86))
+
 ## [0.15.0](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.14.0...dis-pgsql-v0.15.0) (2026-11-11)
 
 
