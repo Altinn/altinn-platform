@@ -60,6 +60,24 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
+// Leader election timings.
+// The controller-runtime defaults are 15 s, 10 s and 2 s.
+// With the defaults, the operator stops when it cannot renew the lease within 10 s.
+// These longer values let the operator continue when the API server is slow.
+// Safety rule: lease duration >= 1.5 x renew deadline + retry period.
+// With this rule, a leader stops before another instance can take the lease.
+// After a restart, the new pod waits 90 s to about 112 s before it takes the lease.
+// No instance reconciles in that time.
+const (
+	// leaderElectionLeaseDuration is the time that another instance waits before it takes the lease.
+	leaderElectionLeaseDuration = 90 * time.Second
+	// leaderElectionRenewDeadline is the time that the leader tries to renew the lease before it stops.
+	leaderElectionRenewDeadline = 45 * time.Second
+	// leaderElectionRetryPeriod is the time between two tries to renew the lease.
+	// An instance that waits for the lease adds a random delay to this time.
+	leaderElectionRetryPeriod = 10 * time.Second
+)
+
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
@@ -263,6 +281,11 @@ func main() {
 		metricsServerOptions.KeyName = metricsCertKey
 	}
 
+	// The manager options take pointers, so the constants need local copies.
+	leaseDuration := leaderElectionLeaseDuration
+	renewDeadline := leaderElectionRenewDeadline
+	retryPeriod := leaderElectionRetryPeriod
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
@@ -270,17 +293,18 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "12faf103.dis.altinn.cloud",
-		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
-		// when the Manager ends. This requires the binary to immediately end when the
-		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
-		// speeds up voluntary leader transitions as the new leader don't have to wait
-		// LeaseDuration time first.
-		//
-		// In the default scaffold provided, the program ends immediately after
-		// the manager stops, so would be fine to enable this option. However,
-		// if you are doing or is intended to do any operation such as perform cleanups
-		// after the manager stops then its usage might be unsafe.
-		// LeaderElectionReleaseOnCancel: true,
+		LeaseDuration:          &leaseDuration,
+		RenewDeadline:          &renewDeadline,
+		RetryPeriod:            &retryPeriod,
+		// LeaderElectionReleaseOnCancel stays off.
+		// With this option, a leader that fails to renew the lease first tries to release it.
+		// The controllers stop only after that try ends.
+		// The try can take up to the renew deadline when the API server is slow.
+		// In that time the lease can expire, and a second instance can become the leader.
+		// Two active instances can give one subnet to two servers.
+		// The cost of leaving the option off: after each restart, the new pod waits
+		// at least the lease duration before it takes the lease.
+		// No instance reconciles in that time.
 	})
 	if err != nil {
 		setupLog.Error(err, "Failed to start manager")
