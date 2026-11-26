@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.2](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.15.1...dis-pgsql-v0.15.2) (2026-11-26)
+
+
+### Bug Fixes
+
+* **dis-pgsql:** create the debug access job only when the wanted debug access changes ([#4491](https://github.com/Altinn/altinn-platform/issues/4491)) ([5af6d1f](https://github.com/Altinn/altinn-platform/commit/5af6d1f256403c8f4f1f542e6ca3ffcae745b472))
+* **dis-pgsql:** tolerate slow lease renewals ([#4492](https://github.com/Altinn/altinn-platform/issues/4492)) ([a548b0f](https://github.com/Altinn/altinn-platform/commit/a548b0f2db2d80e216906b0558bd2c0aab52906f))
+
 ## [0.15.1](https://github.com/Altinn/altinn-platform/compare/dis-pgsql-v0.15.0...dis-pgsql-v0.15.1) (2026-11-25)
 
 
