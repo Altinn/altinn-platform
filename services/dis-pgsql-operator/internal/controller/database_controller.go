@@ -51,6 +51,11 @@ type DatabaseReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 
+	// APIReader reads from the API server and not from the cache. The access
+	// Job path uses it for the Job list. main.go and the test suite must set
+	// it; without it the Job path falls back to the cache.
+	APIReader client.Reader
+
 	Config config.OperatorConfig
 }
 

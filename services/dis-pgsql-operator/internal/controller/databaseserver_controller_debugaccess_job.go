@@ -260,6 +260,10 @@ func (r *DatabaseServerReconciler) serverReadyDatabases(
 // shared Job machinery (ensureUserProvisionJobForReconciler) can create the
 // server-debug provisioning Job, exactly as DatabaseReconciler does for the
 // per-database access Job.
+func (r *DatabaseServerReconciler) userProvisionJobReader() client.Reader {
+	return r.liveReader()
+}
+
 func (r *DatabaseServerReconciler) userProvisionJobScheme() *runtime.Scheme {
 	return r.Scheme
 }

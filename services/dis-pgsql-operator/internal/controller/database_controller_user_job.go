@@ -57,13 +57,22 @@ type userProvisionJobSpec struct {
 }
 
 type userProvisionJobReconciler interface {
-	List(context.Context, client.ObjectList, ...client.ListOption) error
 	Delete(context.Context, client.Object, ...client.DeleteOption) error
 	Create(context.Context, client.Object, ...client.CreateOption) error
 
+	// userProvisionJobReader returns the reader for the Job list. It must
+	// read from the API server, because the cache can be behind.
+	userProvisionJobReader() client.Reader
 	userProvisionJobScheme() *runtime.Scheme
 	userProvisionJobImage() string
 	userProvisionJobUseAzFakes() bool
+}
+
+func (r *DatabaseReconciler) userProvisionJobReader() client.Reader {
+	if r.APIReader != nil {
+		return r.APIReader
+	}
+	return r.Client
 }
 
 func (r *DatabaseReconciler) userProvisionJobScheme() *runtime.Scheme {
@@ -83,6 +92,10 @@ func (r *DatabaseReconciler) userProvisionJobUseAzFakes() bool {
 // only when the wanted Job is complete and is the only Job with these labels.
 // The result comes from the one Job list that the function reads. A pass that
 // creates or deletes a Job thus always reports false.
+//
+// The function reads the Job list from the API server and not from the cache.
+// The cache can miss a Job that a pass before this one created, or still show
+// a Job without the deletion that a pass before this one started.
 func ensureUserProvisionJobForReconciler(
 	ctx context.Context,
 	r userProvisionJobReconciler,
@@ -108,7 +121,7 @@ func ensureUserProvisionJobForReconciler(
 	labels := userProvisionJobLabels(spec.Labels)
 
 	var jobs batchv1.JobList
-	if err := r.List(ctx, &jobs, client.InNamespace(ns), client.MatchingLabels(labels)); err != nil {
+	if err := r.userProvisionJobReader().List(ctx, &jobs, client.InNamespace(ns), client.MatchingLabels(labels)); err != nil {
 		return false, fmt.Errorf("list user provisioning jobs for %s/%s: %w", ns, spec.Owner.GetName(), err)
 	}
 
@@ -151,9 +164,9 @@ func ensureUserProvisionJobForReconciler(
 	}
 
 	if current != nil && hasOutdated && current.DeletionTimestamp.IsZero() {
-		// The current Job and an outdated Job exist at the same time. This can
-		// occur when the wanted access changes before the cache shows the first
-		// Job. The Pods of the two Jobs can then write in any sequence.
+		// The current Job and an outdated Job exist at the same time. An
+		// operator version before this one can leave Jobs in this state.
+		// The Pods of the two Jobs can then write in any sequence.
 		// Delete the current Job also. The next Job then runs alone.
 		policy := metav1.DeletePropagationForeground
 		if err := r.Delete(ctx, current, &client.DeleteOptions{
