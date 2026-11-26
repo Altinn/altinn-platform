@@ -7,6 +7,7 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -16,6 +17,7 @@ import (
 	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/naming"
 	authorizationv1 "github.com/Azure/azure-service-operator/v2/api/authorization/v1api20220401"
+	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
 )
 
 const (
@@ -37,25 +39,26 @@ var debugAccessBuiltinRoles = []string{debugBuiltinRolePgMonitor, debugBuiltinRo
 const debugAccessProvisionMaintenanceDatabase = "postgres"
 
 // ensureDebugAccessProvisioning grants read-only PostgreSQL debug access on a
-// dedicated server: it runs a user-provisioning Job in server-debug mode that
-// ensures a managed NOLOGIN role holding pg_monitor + pg_read_all_data and
-// CONNECT on all databases, and makes each resolved debug principal a member.
+// dedicated server. A user provisioning Job in server-debug mode does the
+// work. The Job makes sure that a managed NOLOGIN role has pg_monitor,
+// pg_read_all_data and CONNECT on all databases. The Job also makes each
+// resolved debug principal a member of that role.
 //
-// It mirrors ensureDatabaseAccess but at server scope. The Job name embeds a
-// hash of the resolved principal set, the built-in roles, and the server's
-// Database resources, so changing any of them produces a new Job that re-runs
-// the reconcile (which also revokes principals no longer desired and grants
-// CONNECT on new databases). Debug access is dedicated-only; the caller must
-// not invoke it for shared servers. The DebugAccessReady condition remains
-// control-plane-driven (set by ensureDebugAccessRoleAssignments) and is not
-// touched here.
+// Debug access is for dedicated servers only. The caller must not call this
+// function for shared servers. The DebugAccessReady condition belongs to
+// ensureDebugAccessRoleAssignments. This function does not change it.
 //
-// status.debugAccessProvisionedHash records that grants may exist in the
-// server. When spec.debugAccess is removed after having been provisioned, one
-// revocation Job runs with an empty principal set (the membership reconcile
-// then revokes every member) and the marker is cleared once that Job
-// completes. The managed debug role itself is kept: it is inert without
-// members.
+// Two status fields control the Job:
+//
+//   - status.debugAccessAppliedHash is the hash of the debug access that the
+//     last completed Job applied. The operator creates no Job while this hash
+//     is equal to the wanted hash. A finished Job that its TTL deleted thus
+//     does not cause a new Job.
+//   - status.debugAccessProvisionedHash records that grants can exist in the
+//     DIS DB server. The operator sets it before a Job starts. When
+//     spec.debugAccess is removed, one revocation Job runs with no principals
+//     and the operator clears the field when that Job completes. The managed
+//     debug role stays. It has no effect without members.
 func (r *DatabaseServerReconciler) ensureDebugAccessProvisioning(
 	ctx context.Context,
 	db *storagev1alpha1.DatabaseServer,
@@ -92,15 +95,96 @@ func (r *DatabaseServerReconciler) ensureDebugAccessProvisioning(
 		return nil
 	}
 
-	databaseNames, err := r.serverDatabaseNames(ctx, db)
+	var flexibleServer dbforpostgresqlv1.FlexibleServer
+	if err := r.Get(ctx, client.ObjectKeyFromObject(db), &flexibleServer); err != nil {
+		// A later reconcile continues when the FlexibleServer exists.
+		return client.IgnoreNotFound(err)
+	}
+	databases, err := r.serverReadyDatabases(ctx, db)
 	if err != nil {
 		return err
 	}
 
 	builtinRoles := dbUtil.NormalizeBuiltinRoles(strings.Join(debugAccessBuiltinRoles, ","))
-	jobName := debugAccessProvisionJobName(db, adminIdentity, accessPrincipals, builtinRoles, databaseNames)
+	wantedHash := debugAccessHash(db, flexibleServer.UID, adminIdentity, accessPrincipals, builtinRoles, databases)
+	if db.Status.DebugAccessAppliedHash == wantedHash {
+		// The wanted debug access is in place. A Job is not necessary.
+		// The finished Job can be gone, because its TTL deletes it.
+		return nil
+	}
+	if db.Status.DebugAccessAppliedHash != "" {
+		// The wanted debug access changed. Clear the record before a new Job
+		// starts. A Job thus runs only while the record is empty.
+		// The status update triggers the reconcile that creates the Job.
+		logger.Info("debug access changed; clearing the applied record")
+		return r.persistDebugAccessHashes(ctx, db, db.Status.DebugAccessProvisionedHash, "")
+	}
 
-	if err := ensureUserProvisionJobForReconciler(ctx, r, userProvisionJobSpec{
+	// Record that grants can exist before the Job starts.
+	if err := r.persistDebugAccessHashes(ctx, db, wantedHash, ""); err != nil {
+		return err
+	}
+
+	jobName := debugAccessProvisionJobName(db, wantedHash)
+	if err := ensureUserProvisionJobForReconciler(
+		ctx, r, debugAccessJobSpec(db, adminIdentity, jobName, accessPrincipals, builtinRoles),
+	); err != nil {
+		return err
+	}
+
+	complete, err := r.debugAccessJobComplete(ctx, db, jobName)
+	if err != nil || !complete {
+		return err
+	}
+	logger.Info("debug access provisioning Job completed", "jobName", jobName)
+	return r.persistDebugAccessHashes(ctx, db, wantedHash, wantedHash)
+}
+
+// ensureDebugAccessRevocation runs the server-debug Job with no principals.
+// The membership reconcile of that Job revokes every member of the managed
+// debug role. When the Job completes, this function clears
+// status.debugAccessProvisionedHash. The Owns(batchv1.Job) watch triggers a
+// reconcile when the Job completes.
+func (r *DatabaseServerReconciler) ensureDebugAccessRevocation(
+	ctx context.Context,
+	db *storagev1alpha1.DatabaseServer,
+	adminIdentity resolvedAdminIdentity,
+) error {
+	logger := log.FromContext(ctx)
+	if db.Status.DebugAccessAppliedHash != "" {
+		// The revocation Job removes the applied debug access. Clear the record
+		// before that Job starts. The status update triggers the reconcile that
+		// creates the Job.
+		return r.persistDebugAccessHashes(ctx, db, db.Status.DebugAccessProvisionedHash, "")
+	}
+
+	builtinRoles := dbUtil.NormalizeBuiltinRoles(strings.Join(debugAccessBuiltinRoles, ","))
+	// The hash gives the name of the revocation Job only. The targets are not
+	// necessary for that.
+	jobName := debugAccessProvisionJobName(db, debugAccessHash(db, "", adminIdentity, nil, builtinRoles, nil))
+
+	complete, err := r.debugAccessJobComplete(ctx, db, jobName)
+	if err != nil {
+		return err
+	}
+	if complete {
+		logger.Info("debug access revocation Job completed; clearing provisioned marker", "jobName", jobName)
+		return r.persistDebugAccessHashes(ctx, db, "", "")
+	}
+
+	return ensureUserProvisionJobForReconciler(ctx, r, debugAccessJobSpec(db, adminIdentity, jobName, nil, builtinRoles))
+}
+
+// debugAccessJobSpec returns the spec of the server-debug Job. A nil principal
+// list gives the revocation Job.
+func debugAccessJobSpec(
+	db *storagev1alpha1.DatabaseServer,
+	adminIdentity resolvedAdminIdentity,
+	jobName string,
+	accessPrincipals []dbUtil.AccessPrincipal,
+	builtinRoles []string,
+) userProvisionJobSpec {
+	return userProvisionJobSpec{
 		Owner:              db,
 		JobName:            jobName,
 		Labels:             debugAccessProvisionJobLabels(db.Name),
@@ -112,69 +196,60 @@ func (r *DatabaseServerReconciler) ensureDebugAccessProvisioning(
 		AccessPrincipals:   accessPrincipals,
 		ServerDebugAccess:  true,
 		DebugBuiltinRoles:  builtinRoles,
-	}); err != nil {
-		return err
 	}
-
-	return r.persistDebugAccessProvisionedHash(ctx, db, debugAccessPrincipalsHash(accessPrincipals))
 }
 
-// ensureDebugAccessRevocation runs the server-debug Job with an empty principal
-// set so the membership reconcile revokes every member of the managed debug
-// role, and clears status.debugAccessProvisionedHash once that Job completes.
-// The Owns(batchv1.Job) watch re-triggers the reconcile on Job completion.
-func (r *DatabaseServerReconciler) ensureDebugAccessRevocation(
+// debugAccessJobComplete reports if the wanted Job is complete and no other
+// debug access Job of the server exists. Another Job, or a Job in deletion,
+// can have a Pod that still writes to the DIS DB server.
+func (r *DatabaseServerReconciler) debugAccessJobComplete(
 	ctx context.Context,
 	db *storagev1alpha1.DatabaseServer,
-	adminIdentity resolvedAdminIdentity,
-) error {
-	logger := log.FromContext(ctx)
-	builtinRoles := dbUtil.NormalizeBuiltinRoles(strings.Join(debugAccessBuiltinRoles, ","))
-	jobName := debugAccessProvisionJobName(db, adminIdentity, nil, builtinRoles, nil)
-
-	var job batchv1.Job
-	err := r.Get(ctx, types.NamespacedName{Namespace: db.Namespace, Name: jobName}, &job)
-	switch {
-	case err == nil && jobConditionTrue(&job, batchv1.JobComplete):
-		logger.Info("debug access revocation Job completed; clearing provisioned marker", "jobName", jobName)
-		return r.persistDebugAccessProvisionedHash(ctx, db, "")
-	case err != nil && !apierrors.IsNotFound(err):
-		return err
+	jobName string,
+) (bool, error) {
+	var jobs batchv1.JobList
+	if err := r.List(ctx, &jobs,
+		client.InNamespace(db.Namespace),
+		client.MatchingLabels(userProvisionJobLabels(debugAccessProvisionJobLabels(db.Name))),
+	); err != nil {
+		return false, err
 	}
 
-	return ensureUserProvisionJobForReconciler(ctx, r, userProvisionJobSpec{
-		Owner:              db,
-		JobName:            jobName,
-		Labels:             debugAccessProvisionJobLabels(db.Name),
-		ServiceAccountName: adminIdentity.ServiceAccountName,
-		AdminIdentityName:  adminIdentity.Name,
-		ServerName:         db.Name,
-		DatabaseHost:       db.Status.Host,
-		DatabaseName:       debugAccessProvisionMaintenanceDatabase,
-		AccessPrincipals:   nil,
-		ServerDebugAccess:  true,
-		DebugBuiltinRoles:  builtinRoles,
-	})
+	complete := false
+	for i := range jobs.Items {
+		job := &jobs.Items[i]
+		if job.Name != jobName || !job.DeletionTimestamp.IsZero() {
+			return false, nil
+		}
+		complete = jobConditionTrue(job, batchv1.JobComplete)
+	}
+	return complete, nil
 }
 
-// persistDebugAccessProvisionedHash updates status.debugAccessProvisionedHash
-// when it changed.
-func (r *DatabaseServerReconciler) persistDebugAccessProvisionedHash(
+// persistDebugAccessHashes updates status.debugAccessProvisionedHash and
+// status.debugAccessAppliedHash when one of them changed.
+func (r *DatabaseServerReconciler) persistDebugAccessHashes(
 	ctx context.Context,
 	db *storagev1alpha1.DatabaseServer,
-	hash string,
+	provisionedHash string,
+	appliedHash string,
 ) error {
-	if db.Status.DebugAccessProvisionedHash == hash {
+	if db.Status.DebugAccessProvisionedHash == provisionedHash && db.Status.DebugAccessAppliedHash == appliedHash {
 		return nil
 	}
-	db.Status.DebugAccessProvisionedHash = hash
+	db.Status.DebugAccessProvisionedHash = provisionedHash
+	db.Status.DebugAccessAppliedHash = appliedHash
 	return r.Status().Update(ctx, db)
 }
 
-// serverDatabaseNames returns the sorted PostgreSQL database names of the
-// Database resources that target this server, so the provisioning Job re-runs
-// (and grants CONNECT) when a database is added or removed.
-func (r *DatabaseServerReconciler) serverDatabaseNames(
+// serverReadyDatabases returns one sorted entry for each Database resource of
+// this server whose database exists on the DIS DB server. The provisioning Job
+// grants CONNECT only on databases that exist when it runs. A Database thus
+// counts only when its DatabaseReady condition is true, and the Job runs
+// again after a new database is ready. Each entry has the database name and
+// the UID of the database resource, because a database that is created again
+// has no grants.
+func (r *DatabaseServerReconciler) serverReadyDatabases(
 	ctx context.Context,
 	db *storagev1alpha1.DatabaseServer,
 ) ([]string, error) {
@@ -183,20 +258,30 @@ func (r *DatabaseServerReconciler) serverDatabaseNames(
 		return nil, err
 	}
 
-	names := make([]string, 0, len(databases.Items))
+	entries := make([]string, 0, len(databases.Items))
 	for i := range databases.Items {
-		item := databases.Items[i]
+		item := &databases.Items[i]
 		if item.Spec.Server.Name != db.Name {
 			continue
 		}
-		name := strings.TrimSpace(item.Spec.Name)
-		if name == "" {
+		name := item.Status.DatabaseName
+		if name == "" || !meta.IsStatusConditionTrue(item.Status.Conditions, databaseConditionDatabaseReady) {
 			continue
 		}
-		names = append(names, name)
+		var asoDatabase dbforpostgresqlv1.FlexibleServersDatabase
+		if err := r.Get(ctx, types.NamespacedName{
+			Name:      databaseASOResourceName(db.Name, name),
+			Namespace: db.Namespace,
+		}, &asoDatabase); err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			return nil, err
+		}
+		entries = append(entries, name+"/"+string(asoDatabase.UID))
 	}
-	slices.Sort(names)
-	return names, nil
+	slices.Sort(entries)
+	return entries, nil
 }
 
 // The DatabaseServerReconciler implements userProvisionJobReconciler so the
@@ -277,27 +362,21 @@ func debugAccessPrincipalTypeToPayload(
 	return dbUtil.PrincipalTypeService
 }
 
-// debugAccessPrincipalsHash is the opaque status marker for a provisioned
-// principal set.
-func debugAccessPrincipalsHash(accessPrincipals []dbUtil.AccessPrincipal) string {
-	accessPayload, err := dbUtil.MarshalAccessPrincipals(accessPrincipals)
-	if err != nil {
-		accessPayload = err.Error()
-	}
-	return naming.StableSHA256Hex(accessPayload)[:12]
-}
-
-// debugAccessProvisionJobName returns a deterministic Job name whose hash covers
-// the admin identity, the resolved principal set, the built-in roles, and the
-// server's databases, so any change to the desired debug access produces a new
-// Job that re-runs the reconcile (adds/removes principals, grants CONNECT on
-// new databases).
-func debugAccessProvisionJobName(
+// debugAccessHash returns the hash of the wanted debug access of a server.
+// The hash changes when an input of the provisioning Job changes. The hash
+// also changes when the set of ready databases changes, because the Job must
+// grant CONNECT on each new database. The hash also changes when the
+// DatabaseServer or the FlexibleServer is created again. The image of the
+// provisioning Job is not an input. A new image thus does not start a Job.
+// A change to this payload makes the operator provision the debug access of
+// all servers again.
+func debugAccessHash(
 	db *storagev1alpha1.DatabaseServer,
+	flexibleServerUID types.UID,
 	adminIdentity resolvedAdminIdentity,
 	accessPrincipals []dbUtil.AccessPrincipal,
 	builtinRoles []string,
-	databaseNames []string,
+	databases []string,
 ) string {
 	accessPayload, err := dbUtil.MarshalAccessPrincipals(accessPrincipals)
 	if err != nil {
@@ -305,17 +384,25 @@ func debugAccessProvisionJobName(
 	}
 	payload := strings.Join([]string{
 		"server=" + db.Name,
+		"serverUID=" + string(db.UID),
+		"flexibleServerUID=" + string(flexibleServerUID),
 		"host=" + db.Status.Host,
 		"adminSA=" + adminIdentity.ServiceAccountName,
 		"admin=" + adminIdentity.Name,
 		"access=" + accessPayload,
 		"builtin=" + strings.Join(builtinRoles, ","),
-		"databases=" + strings.Join(databaseNames, ","),
+		"databases=" + strings.Join(databases, ","),
 		"mode=server-debug",
 	}, ";")
-	hash := naming.StableSHA256Hex(payload)[:8]
+	return naming.StableSHA256Hex(payload)
+}
+
+// debugAccessProvisionJobName returns the Job name for a debug access hash.
+// A complete Job with this name shows that the debug access with this hash
+// is provisioned.
+func debugAccessProvisionJobName(db *storagev1alpha1.DatabaseServer, accessHash string) string {
 	base := naming.EnsureLowerAlphaPrefix(naming.SanitizeLowerHyphen(db.Name), "db")
-	return naming.WithRequiredSuffix(base+"-debug-provision", "-"+hash, 63, "db")
+	return naming.WithRequiredSuffix(base+"-debug-provision", "-"+accessHash[:8], 63, "db")
 }
 
 func debugAccessProvisionJobLabels(serverName string) map[string]string {

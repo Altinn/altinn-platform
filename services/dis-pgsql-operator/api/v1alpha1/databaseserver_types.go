@@ -254,13 +254,19 @@ type DatabaseServerStatus struct {
 	// +optional
 	ResourceID string `json:"resourceId,omitempty"`
 
-	// debugAccessProvisionedHash is an opaque marker of the debug-access
-	// principal set most recently provisioned into PostgreSQL (data plane).
-	// A non-empty value means grants may exist in the server, so when
-	// spec.debugAccess is removed the controller runs one revocation Job
-	// (empty principal set) and clears this field once that Job completes.
+	// debugAccessProvisionedHash is the hash of the debug access that the
+	// operator last started to provision. A non-empty value means that grants
+	// can exist in the DIS DB server. When spec.debugAccess is removed, the
+	// operator runs one revocation Job and clears this field when that Job
+	// completes.
 	// +optional
 	DebugAccessProvisionedHash string `json:"debugAccessProvisionedHash,omitempty"`
+
+	// debugAccessAppliedHash is the hash of the debug access that the last
+	// completed provisioning Job applied. The operator starts a debug access
+	// Job only when this value is empty.
+	// +optional
+	DebugAccessAppliedHash string `json:"debugAccessAppliedHash,omitempty"`
 
 	// conditions represent the current state of the DatabaseServer resource.
 	// Each condition has a unique type and reflects the status of a specific aspect of the resource.

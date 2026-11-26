@@ -107,7 +107,7 @@ func ensureUserProvisionJobForReconciler(
 		return fmt.Errorf("list user provisioning jobs for %s/%s: %w", ns, spec.Owner.GetName(), err)
 	}
 
-	hasCurrent := false
+	var current *batchv1.Job
 	deletedCurrent := false
 	hasOutdated := false
 	for i := range jobs.Items {
@@ -127,7 +127,7 @@ func ensureUserProvisionJobForReconciler(
 				deletedCurrent = true
 				continue
 			}
-			hasCurrent = true
+			current = &jobs.Items[i]
 			continue
 		}
 		// A Pod of an outdated Job can still write to the DIS DB server.
@@ -145,7 +145,24 @@ func ensureUserProvisionJobForReconciler(
 		}
 	}
 
-	if hasCurrent || deletedCurrent || hasOutdated {
+	if current != nil && hasOutdated && current.DeletionTimestamp.IsZero() {
+		// The current Job and an outdated Job exist at the same time. This can
+		// occur when the wanted access changes before the cache shows the first
+		// Job. The Pods of the two Jobs can then write in any sequence.
+		// Delete the current Job also. The next Job then runs alone.
+		policy := metav1.DeletePropagationForeground
+		if err := r.Delete(ctx, current, &client.DeleteOptions{
+			PropagationPolicy: &policy,
+		}); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("delete user provisioning Job %s/%s: %w", current.Namespace, current.Name, err)
+		}
+		logger.Info("deleting user provisioning Job that ran beside an outdated Job",
+			"jobName", current.Name,
+			"namespace", current.Namespace,
+		)
+	}
+
+	if current != nil || deletedCurrent || hasOutdated {
 		return nil
 	}
 

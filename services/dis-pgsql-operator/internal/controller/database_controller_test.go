@@ -2765,8 +2765,82 @@ var _ = Describe("DatabaseServer controller", func() {
 			ShouldNot(BeEmpty())
 	})
 
-	It("runs a revocation Job and clears the provisioned marker when debugAccess is removed", func() {
-		db := newDedicatedDatabaseServer("my-app-db-debug-revoke", directAuth(
+	listDebugAccessJobs := func(g Gomega, db *storagev1alpha1.DatabaseServer) []batchv1.Job {
+		var jobs batchv1.JobList
+		g.Expect(k8sClient.List(ctx, &jobs,
+			client.InNamespace(db.Namespace),
+			client.MatchingLabels(debugAccessProvisionJobLabels(db.Name)),
+		)).To(Succeed())
+		return jobs.Items
+	}
+
+	debugAccessStatus := func(g Gomega, db *storagev1alpha1.DatabaseServer) storagev1alpha1.DatabaseServerStatus {
+		var updated storagev1alpha1.DatabaseServer
+		g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(db), &updated)).To(Succeed())
+		return updated.Status
+	}
+
+	// waitForDebugAccessJob waits until the server has one debug access Job
+	// and that Job is not the previous Job.
+	waitForDebugAccessJob := func(db *storagev1alpha1.DatabaseServer, previousName string) batchv1.Job {
+		var job batchv1.Job
+		Eventually(func(g Gomega) {
+			jobs := listDebugAccessJobs(g, db)
+			g.Expect(jobs).To(HaveLen(1))
+			g.Expect(jobs[0].Name).NotTo(Equal(previousName))
+			job = jobs[0]
+		}).WithTimeout(30 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+		return job
+	}
+
+	// deleteFinishedDebugAccessJob deletes a finished Job, as the Job TTL does.
+	// envtest has no TTL controller.
+	deleteFinishedDebugAccessJob := func(db *storagev1alpha1.DatabaseServer, job batchv1.Job) {
+		Expect(k8sClient.Delete(ctx, &job,
+			client.PropagationPolicy(metav1.DeletePropagationBackground),
+		)).To(Succeed())
+		// The test client reads from a cache. Wait until the cache drops the Job.
+		Eventually(func(g Gomega) {
+			g.Expect(listDebugAccessJobs(g, db)).NotTo(ContainElement(HaveField("UID", job.UID)))
+		}).WithTimeout(10 * time.Second).WithPolling(100 * time.Millisecond).
+			Should(Succeed())
+	}
+
+	// expectNoDebugAccessJob checks for some seconds that the server gets no
+	// debug access Job and keeps its status hashes.
+	expectNoDebugAccessJob := func(db *storagev1alpha1.DatabaseServer, provisionedHash, appliedHash string) {
+		Consistently(func(g Gomega) {
+			g.Expect(listDebugAccessJobs(g, db)).To(BeEmpty())
+			status := debugAccessStatus(g, db)
+			g.Expect(status.DebugAccessProvisionedHash).To(Equal(provisionedHash))
+			g.Expect(status.DebugAccessAppliedHash).To(Equal(appliedHash))
+		}).WithTimeout(3 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+	}
+
+	// finishDebugAccessJob completes a provisioning Job and waits until the
+	// server records a new applied hash. Then it deletes the finished Job.
+	finishDebugAccessJob := func(db *storagev1alpha1.DatabaseServer, job batchv1.Job, previousHash string) string {
+		completeDatabaseAccessJob(ctx, job)
+		var hash string
+		Eventually(func(g Gomega) {
+			status := debugAccessStatus(g, db)
+			g.Expect(status.DebugAccessAppliedHash).NotTo(BeEmpty())
+			g.Expect(status.DebugAccessAppliedHash).NotTo(Equal(previousHash))
+			g.Expect(status.DebugAccessProvisionedHash).To(Equal(status.DebugAccessAppliedHash))
+			hash = status.DebugAccessAppliedHash
+		}).WithTimeout(30 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+		Expect(job.Name).To(HaveSuffix("-" + hash[:8]))
+		deleteFinishedDebugAccessJob(db, job)
+		return hash
+	}
+
+	// startDebugAccess creates a dedicated server with one debug principal and
+	// waits for its debug access Job.
+	startDebugAccess := func(name string) (*storagev1alpha1.DatabaseServer, batchv1.Job) {
+		db := newDedicatedDatabaseServer(name, directAuth(
 			adminManagedIdentity,
 			adminManagedIdentityID,
 			adminManagedIdentity,
@@ -2784,73 +2858,117 @@ var _ = Describe("DatabaseServer controller", func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, db)).To(Succeed())
-
 		markASOReady(ctx, db)
+		return db, waitForDebugAccessJob(db, "")
+	}
 
-		serverKey := types.NamespacedName{Name: db.Name, Namespace: db.Namespace}
+	// revokeDebugAccess removes spec.debugAccess and checks that one revocation
+	// Job runs and that the operator then clears the provisioned marker.
+	revokeDebugAccess := func(db *storagev1alpha1.DatabaseServer, previousJobName string) {
+		Eventually(func() error {
+			var current storagev1alpha1.DatabaseServer
+			if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(db), &current); err != nil {
+				return err
+			}
+			current.Spec.DebugAccess = nil
+			return k8sClient.Update(ctx, &current)
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		job := waitForDebugAccessJob(db, previousJobName)
+		Expect(job.Spec.Template.Spec.Containers[0].Env).To(ContainElement(And(
+			HaveField("Name", dbUtil.AccessPrincipalsEnv),
+			HaveField("Value", ContainSubstring(`"principals":[]`)),
+		)))
+		// Grants can exist until the revocation Job completes.
+		status := debugAccessStatus(Default, db)
+		Expect(status.DebugAccessProvisionedHash).NotTo(BeEmpty())
+		Expect(status.DebugAccessAppliedHash).To(BeEmpty())
+
+		completeDatabaseAccessJob(ctx, job)
 		Eventually(func(g Gomega) string {
-			var updated storagev1alpha1.DatabaseServer
-			g.Expect(k8sClient.Get(ctx, serverKey, &updated)).To(Succeed())
-			return updated.Status.DebugAccessProvisionedHash
-		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
+			return debugAccessStatus(g, db).DebugAccessProvisionedHash
+		}).WithTimeout(30 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(BeEmpty())
+
+		deleteFinishedDebugAccessJob(db, job)
+		expectNoDebugAccessJob(db, "", "")
+	}
+
+	It("does not create a new debug access Job after the finished Job is deleted", func() {
+		db, job := startDebugAccess("my-app-db-debug-job-ttl")
+		hash := finishDebugAccessJob(db, job, "")
+
+		expectNoDebugAccessJob(db, hash, hash)
+	})
+
+	It("creates a new debug access Job when a debug principal is added", func() {
+		db, oldJob := startDebugAccess("my-app-db-debug-principal")
+		oldHash := finishDebugAccessJob(db, oldJob, "")
+
+		Eventually(func() error {
+			var current storagev1alpha1.DatabaseServer
+			if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(db), &current); err != nil {
+				return err
+			}
+			current.Spec.DebugAccess.Principals = append(current.Spec.DebugAccess.Principals,
+				storagev1alpha1.DebugAccessPrincipalSpec{
+					ServicePrincipal: &storagev1alpha1.DatabaseServicePrincipalSpec{
+						Name:        "debug-app",
+						PrincipalId: databaseExternalServicePrincipalID,
+					},
+				},
+			)
+			return k8sClient.Update(ctx, &current)
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		newJob := waitForDebugAccessJob(db, oldJob.Name)
+		// The applied record is empty while the new Job runs. The marker stays.
+		status := debugAccessStatus(Default, db)
+		Expect(status.DebugAccessAppliedHash).To(BeEmpty())
+		Expect(status.DebugAccessProvisionedHash).NotTo(BeEmpty())
+
+		finishDebugAccessJob(db, newJob, oldHash)
+	})
+
+	It("creates a new debug access Job when a Database of the server becomes ready", func() {
+		db, oldJob := startDebugAccess("my-app-db-debug-database")
+		oldHash := finishDebugAccessJob(db, oldJob, "")
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
+
+		database := newDatabase("router-debug-access", db.Name)
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+		Eventually(func(g Gomega) int {
+			return len(listDatabaseASOChildren(g, database.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+
+		// The database does not exist on the DIS DB server yet. A Job cannot
+		// grant CONNECT on it.
+		expectNoDebugAccessJob(db, oldHash, oldHash)
+
+		markDatabaseASOReady(ctx, database)
+
+		newJob := waitForDebugAccessJob(db, oldJob.Name)
+		finishDebugAccessJob(db, newJob, oldHash)
+	})
+
+	It("runs a revocation Job and clears the provisioned marker when debugAccess is removed", func() {
+		db, job := startDebugAccess("my-app-db-debug-revoke")
+		finishDebugAccessJob(db, job, "")
+
+		revokeDebugAccess(db, job.Name)
+	})
+
+	It("runs a revocation Job when debugAccess is removed while the provisioning Job runs", func() {
+		db, job := startDebugAccess("my-app-db-debug-revoke-running")
+		Eventually(func(g Gomega) string {
+			return debugAccessStatus(g, db).DebugAccessProvisionedHash
+		}).WithTimeout(30 * time.Second).WithPolling(250 * time.Millisecond).
 			ShouldNot(BeEmpty())
 
-		Eventually(func(g Gomega) {
-			var fetched storagev1alpha1.DatabaseServer
-			g.Expect(k8sClient.Get(ctx, serverKey, &fetched)).To(Succeed())
-			fetched.Spec.DebugAccess = nil
-			g.Expect(k8sClient.Update(ctx, &fetched)).To(Succeed())
-		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
-			Should(Succeed())
-
-		var revocationJobName string
-		Eventually(func(g Gomega) {
-			var jobs batchv1.JobList
-			g.Expect(k8sClient.List(ctx, &jobs,
-				client.InNamespace(db.Namespace),
-				client.MatchingLabels(map[string]string{
-					databaseServerNameLabelKey:   db.Name,
-					debugAccessComponentLabelKey: debugAccessComponentLabelValue,
-					userProvisionLabelKey:        labelValueTrue,
-				}),
-			)).To(Succeed())
-			g.Expect(jobs.Items).To(HaveLen(1))
-
-			payload := ""
-			for _, env := range jobs.Items[0].Spec.Template.Spec.Containers[0].Env {
-				if env.Name == dbUtil.AccessPrincipalsEnv {
-					payload = env.Value
-				}
-			}
-			g.Expect(payload).To(ContainSubstring(`"principals":[]`))
-			revocationJobName = jobs.Items[0].Name
-		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
-			Should(Succeed())
-
-		Eventually(func(g Gomega) {
-			var job batchv1.Job
-			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      revocationJobName,
-				Namespace: db.Namespace,
-			}, &job)).To(Succeed())
-			now := metav1.Now()
-			job.Status.StartTime = &now
-			job.Status.CompletionTime = &now
-			job.Status.Succeeded = 1
-			job.Status.Conditions = []batchv1.JobCondition{
-				{Type: batchv1.JobSuccessCriteriaMet, Status: corev1.ConditionTrue, LastTransitionTime: now},
-				{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: now},
-			}
-			g.Expect(k8sClient.Status().Update(ctx, &job)).To(Succeed())
-		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
-			Should(Succeed())
-
-		Eventually(func(g Gomega) string {
-			var updated storagev1alpha1.DatabaseServer
-			g.Expect(k8sClient.Get(ctx, serverKey, &updated)).To(Succeed())
-			return updated.Status.DebugAccessProvisionedHash
-		}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).
-			Should(BeEmpty())
+		revokeDebugAccess(db, job.Name)
 	})
 
 	It("sets DatabaseServer Ready after ASO resources are ready", func() {
@@ -4379,6 +4497,76 @@ var _ = Describe("DatabaseServer controller", func() {
 			g.Expect(jobs[0].Name).NotTo(Equal(oldJob.Name))
 		}).WithTimeout(30 * time.Second).WithPolling(250 * time.Millisecond).
 			Should(Succeed())
+	})
+
+	It("runs the access Job again when another access Job exists beside it", func() {
+		db := newSharedDatabaseServer("shared-db-database-access-beside")
+		Expect(k8sClient.Create(ctx, db)).To(Succeed())
+		createApplicationIdentity(ctx, databaseAppIdentityRef, databaseAppManagedIdentity, databaseAppPrincipalID)
+
+		database := newDatabase("router-access-beside", db.Name)
+		Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+		Eventually(func(g Gomega) int {
+			return len(listDatabaseASOChildren(g, database.Name))
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Equal(1))
+
+		markDatabaseASOReady(ctx, database)
+		firstJob := waitForDatabaseAccessJob(ctx, database.Name, database.Namespace)
+
+		// Keep the deleted Jobs, as if their Pods still run.
+		holdJobDeletions.Store(true)
+		defer holdJobDeletions.Store(false)
+
+		// A second Job with another name, as a reconcile with a stale cache
+		// can create.
+		otherJob := batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "router-access-beside-other",
+				Namespace:       firstJob.Namespace,
+				Labels:          firstJob.Labels,
+				OwnerReferences: firstJob.OwnerReferences,
+			},
+			Spec: batchv1.JobSpec{
+				Template: corev1.PodTemplateSpec{Spec: firstJob.Spec.Template.Spec},
+			},
+		}
+		Expect(k8sClient.Create(ctx, &otherJob)).To(Succeed())
+
+		listAccessJobs := func(g Gomega) []batchv1.Job {
+			var jobs batchv1.JobList
+			g.Expect(k8sClient.List(ctx, &jobs,
+				client.InNamespace(database.Namespace),
+				client.MatchingLabels(map[string]string{databaseNameLabelKey: database.Name}),
+			)).To(Succeed())
+			return jobs.Items
+		}
+
+		// The operator deletes the two Jobs. It does not trust the first Job.
+		Eventually(func(g Gomega) {
+			jobs := listAccessJobs(g)
+			g.Expect(jobs).To(HaveLen(2))
+			for i := range jobs {
+				g.Expect(jobs[i].DeletionTimestamp.IsZero()).To(BeFalse())
+			}
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		holdJobDeletions.Store(false)
+
+		var newJob batchv1.Job
+		Eventually(func(g Gomega) {
+			jobs := listAccessJobs(g)
+			g.Expect(jobs).To(HaveLen(1))
+			g.Expect(jobs[0].Name).To(Equal(firstJob.Name))
+			g.Expect(jobs[0].UID).NotTo(Equal(firstJob.UID))
+			newJob = jobs[0]
+		}).WithTimeout(30 * time.Second).WithPolling(250 * time.Millisecond).
+			Should(Succeed())
+
+		completeDatabaseAccessJob(ctx, newJob)
+		waitForProvisionedAccessHash(ctx, database, "")
 	})
 
 	It("recreates the Database access provisioning Job when the current Job is failed", func() {
