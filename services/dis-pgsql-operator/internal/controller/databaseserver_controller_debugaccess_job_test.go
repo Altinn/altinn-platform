@@ -42,60 +42,70 @@ func TestDebugAccessProvisionJobNameDeterministicAndBounded(t *testing.T) {
 	principals := testDebugPrincipals()
 	builtin := []string{debugBuiltinRolePgMonitor, debugBuiltinRolePgReadAllData}
 
-	first := debugAccessProvisionJobName(db, admin, principals, builtin, nil)
-	second := debugAccessProvisionJobName(db, admin, principals, builtin, nil)
+	hash := debugAccessHash(db, "fs-uid-1", admin, principals, builtin, nil)
+	if hash != debugAccessHash(db, "fs-uid-1", admin, principals, builtin, nil) {
+		t.Fatalf("expected deterministic debug access hash")
+	}
+	if len(hash) != 64 {
+		t.Fatalf("expected a full SHA-256 hex hash, got %q", hash)
+	}
 
-	if first != second {
-		t.Fatalf("expected deterministic job name, got %q vs %q", first, second)
+	name := debugAccessProvisionJobName(db, hash)
+	if len(name) == 0 || len(name) > 63 {
+		t.Fatalf("expected non-empty name within 63 chars, got %q (len=%d)", name, len(name))
 	}
-	if len(first) == 0 || len(first) > 63 {
-		t.Fatalf("expected non-empty name within 63 chars, got %q (len=%d)", first, len(first))
+	if name[0] < 'a' || name[0] > 'z' {
+		t.Fatalf("expected name to start with a lowercase letter, got %q", name)
 	}
-	if first[0] < 'a' || first[0] > 'z' {
-		t.Fatalf("expected name to start with a lowercase letter, got %q", first)
-	}
-	if !strings.Contains(first, "debug-provision") {
-		t.Fatalf("expected name to contain \"debug-provision\", got %q", first)
+	if !strings.Contains(name, "debug-provision") || !strings.HasSuffix(name, "-"+hash[:8]) {
+		t.Fatalf("expected name with \"debug-provision\" and the hash suffix, got %q", name)
 	}
 }
 
-func TestDebugAccessProvisionJobNameChangesWithPrincipalSet(t *testing.T) {
+func TestDebugAccessHashChangesWithPrincipalSet(t *testing.T) {
 	db := testDebugJobServer()
 	admin := testDebugAdminIdentity()
 	builtin := []string{debugBuiltinRolePgMonitor, debugBuiltinRolePgReadAllData}
 
-	base := debugAccessProvisionJobName(db, admin, testDebugPrincipals(), builtin, nil)
+	base := debugAccessHash(db, "fs-uid-1", admin, testDebugPrincipals(), builtin, nil)
 
-	added := debugAccessProvisionJobName(db, admin, append(testDebugPrincipals(), dbUtil.AccessPrincipal{
+	added := debugAccessHash(db, "fs-uid-1", admin, append(testDebugPrincipals(), dbUtil.AccessPrincipal{
 		Name:          "another",
 		PrincipalID:   "22222222-2222-2222-2222-222222222222",
 		PrincipalType: dbUtil.PrincipalTypeService,
 	}), builtin, nil)
 
 	if base == added {
-		t.Fatalf("expected job name to change when a principal is added, got %q for both", base)
+		t.Fatalf("expected hash to change when a principal is added, got %q for both", base)
 	}
 }
 
-func TestDebugAccessProvisionJobNameChangesWithDatabaseList(t *testing.T) {
+func TestDebugAccessHashChangesWithTargets(t *testing.T) {
 	db := testDebugJobServer()
 	admin := testDebugAdminIdentity()
 	principals := testDebugPrincipals()
 	builtin := []string{debugBuiltinRolePgMonitor, debugBuiltinRolePgReadAllData}
 
-	base := debugAccessProvisionJobName(db, admin, principals, builtin, nil)
-	withDB := debugAccessProvisionJobName(db, admin, principals, builtin, []string{"router"})
-	withMoreDBs := debugAccessProvisionJobName(db, admin, principals, builtin, []string{"billing", "router"})
+	base := debugAccessHash(db, "fs-uid-1", admin, principals, builtin, nil)
+	withDB := debugAccessHash(db, "fs-uid-1", admin, principals, builtin, []string{"router/uid-1"})
+	recreatedDB := debugAccessHash(db, "fs-uid-1", admin, principals, builtin, []string{"router/uid-2"})
+	withMoreDBs := debugAccessHash(db, "fs-uid-1", admin, principals, builtin, []string{"billing/uid-3", "router/uid-2"})
 
-	if base == withDB || withDB == withMoreDBs {
-		t.Fatalf("expected job name to change when the database list changes, got %q / %q / %q", base, withDB, withMoreDBs)
+	if base == withDB || withDB == recreatedDB || recreatedDB == withMoreDBs {
+		t.Fatalf("expected hash to change when the database list changes, got %q / %q / %q / %q", base, withDB, recreatedDB, withMoreDBs)
+	}
+
+	recreatedServer := debugAccessHash(db, "fs-uid-2", admin, principals, builtin, nil)
+	if base == recreatedServer {
+		t.Fatalf("expected hash to change when the FlexibleServer is created again, got %q", base)
 	}
 }
 
 func TestDebugAccessProvisionJobNameLongServerFits(t *testing.T) {
 	db := testDebugJobServer()
 	db.Name = strings.Repeat("a", 200)
-	name := debugAccessProvisionJobName(db, testDebugAdminIdentity(), testDebugPrincipals(), []string{debugBuiltinRolePgMonitor}, nil)
+	hash := debugAccessHash(db, "fs-uid-1", testDebugAdminIdentity(), testDebugPrincipals(), []string{debugBuiltinRolePgMonitor}, nil)
+	name := debugAccessProvisionJobName(db, hash)
 	if len(name) > 63 {
 		t.Fatalf("expected name within 63 chars, got len=%d (%q)", len(name), name)
 	}
