@@ -11,10 +11,8 @@ import (
 	dbUtil "github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/database"
 	"github.com/Altinn/altinn-platform/services/dis-pgsql-operator/internal/naming"
 	dbforpostgresqlv1 "github.com/Azure/azure-service-operator/v2/api/dbforpostgresql/v20250801"
-	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -95,7 +93,7 @@ func (r *DatabaseReconciler) ensureDatabaseAccess(
 	}
 
 	jobName := databaseAccessProvisionJobName(database, wantedHash)
-	if err := r.ensureUserProvisionJobForTarget(ctx, userProvisionJobSpec{
+	complete, err := r.ensureUserProvisionJobForTarget(ctx, userProvisionJobSpec{
 		Owner:               database,
 		JobName:             jobName,
 		Labels:              databaseAccessJobLabels(serverName, database.Name),
@@ -108,11 +106,7 @@ func (r *DatabaseReconciler) ensureDatabaseAccess(
 		AccessPrincipals:    accessPrincipals,
 		RevokePublicConnect: true,
 		SearchPathScope:     searchPathScopeDatabase,
-	}); err != nil {
-		return false, "", "", err
-	}
-
-	complete, err := r.databaseAccessJobComplete(ctx, database, serverName, jobName)
+	})
 	if err != nil {
 		return false, "", "", err
 	}
@@ -269,34 +263,6 @@ func databaseAccessPayloadRole(role storagev1alpha1.DatabaseAccessRole) dbUtil.A
 	default:
 		return dbUtil.AccessRole(role)
 	}
-}
-
-// databaseAccessJobComplete reports if the wanted Job is complete and no other
-// access Job of the Database exists. Another Job, or a Job in deletion, can
-// have a Pod that still writes to the DIS DB server.
-func (r *DatabaseReconciler) databaseAccessJobComplete(
-	ctx context.Context,
-	database *storagev1alpha1.Database,
-	serverName string,
-	jobName string,
-) (bool, error) {
-	var jobs batchv1.JobList
-	if err := r.List(ctx, &jobs,
-		client.InNamespace(database.Namespace),
-		client.MatchingLabels(userProvisionJobLabels(databaseAccessJobLabels(serverName, database.Name))),
-	); err != nil {
-		return false, fmt.Errorf("list Database access Jobs for %s/%s: %w", database.Namespace, database.Name, err)
-	}
-
-	complete := false
-	for i := range jobs.Items {
-		job := &jobs.Items[i]
-		if job.Name != jobName || !job.DeletionTimestamp.IsZero() {
-			return false, nil
-		}
-		complete = jobConditionTrue(job, batchv1.JobComplete)
-	}
-	return complete, nil
 }
 
 // databaseAccessTargetUIDs holds the UIDs of the resources that an access Job

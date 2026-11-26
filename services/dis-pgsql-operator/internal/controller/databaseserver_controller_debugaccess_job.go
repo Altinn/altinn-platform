@@ -5,9 +5,9 @@ import (
 	"slices"
 	"strings"
 
-	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -126,13 +126,9 @@ func (r *DatabaseServerReconciler) ensureDebugAccessProvisioning(
 	}
 
 	jobName := debugAccessProvisionJobName(db, wantedHash)
-	if err := ensureUserProvisionJobForReconciler(
+	complete, err := ensureUserProvisionJobForReconciler(
 		ctx, r, debugAccessJobSpec(db, adminIdentity, jobName, accessPrincipals, builtinRoles),
-	); err != nil {
-		return err
-	}
-
-	complete, err := r.debugAccessJobComplete(ctx, db, jobName)
+	)
 	if err != nil || !complete {
 		return err
 	}
@@ -163,16 +159,14 @@ func (r *DatabaseServerReconciler) ensureDebugAccessRevocation(
 	// necessary for that.
 	jobName := debugAccessProvisionJobName(db, debugAccessHash(db, "", adminIdentity, nil, builtinRoles, nil))
 
-	complete, err := r.debugAccessJobComplete(ctx, db, jobName)
-	if err != nil {
+	complete, err := ensureUserProvisionJobForReconciler(
+		ctx, r, debugAccessJobSpec(db, adminIdentity, jobName, nil, builtinRoles),
+	)
+	if err != nil || !complete {
 		return err
 	}
-	if complete {
-		logger.Info("debug access revocation Job completed; clearing provisioned marker", "jobName", jobName)
-		return r.persistDebugAccessHashes(ctx, db, "", "")
-	}
-
-	return ensureUserProvisionJobForReconciler(ctx, r, debugAccessJobSpec(db, adminIdentity, jobName, nil, builtinRoles))
+	logger.Info("debug access revocation Job completed; clearing provisioned marker", "jobName", jobName)
+	return r.persistDebugAccessHashes(ctx, db, "", "")
 }
 
 // debugAccessJobSpec returns the spec of the server-debug Job. A nil principal
@@ -197,33 +191,6 @@ func debugAccessJobSpec(
 		ServerDebugAccess:  true,
 		DebugBuiltinRoles:  builtinRoles,
 	}
-}
-
-// debugAccessJobComplete reports if the wanted Job is complete and no other
-// debug access Job of the server exists. Another Job, or a Job in deletion,
-// can have a Pod that still writes to the DIS DB server.
-func (r *DatabaseServerReconciler) debugAccessJobComplete(
-	ctx context.Context,
-	db *storagev1alpha1.DatabaseServer,
-	jobName string,
-) (bool, error) {
-	var jobs batchv1.JobList
-	if err := r.List(ctx, &jobs,
-		client.InNamespace(db.Namespace),
-		client.MatchingLabels(userProvisionJobLabels(debugAccessProvisionJobLabels(db.Name))),
-	); err != nil {
-		return false, err
-	}
-
-	complete := false
-	for i := range jobs.Items {
-		job := &jobs.Items[i]
-		if job.Name != jobName || !job.DeletionTimestamp.IsZero() {
-			return false, nil
-		}
-		complete = jobConditionTrue(job, batchv1.JobComplete)
-	}
-	return complete, nil
 }
 
 // persistDebugAccessHashes updates status.debugAccessProvisionedHash and
@@ -277,6 +244,11 @@ func (r *DatabaseServerReconciler) serverReadyDatabases(
 				continue
 			}
 			return nil, err
+		}
+		// The condition of the Database can be old. A database resource that
+		// is created again is not ready, and its database does not exist yet.
+		if status, _, _, ok := readyConditionInfo(asoDatabase.Status.Conditions); !ok || status != metav1.ConditionTrue {
+			continue
 		}
 		entries = append(entries, name+"/"+string(asoDatabase.UID))
 	}

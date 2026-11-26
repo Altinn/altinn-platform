@@ -21,7 +21,7 @@ import (
 func (r *DatabaseReconciler) ensureUserProvisionJobForTarget(
 	ctx context.Context,
 	spec userProvisionJobSpec,
-) error {
+) (bool, error) {
 	return ensureUserProvisionJobForReconciler(ctx, r, spec)
 }
 
@@ -78,18 +78,23 @@ func (r *DatabaseReconciler) userProvisionJobUseAzFakes() bool {
 	return r.Config.UseAzFakes
 }
 
+// ensureUserProvisionJobForReconciler makes sure that the wanted Job exists
+// and that no outdated Job with the labels of the spec exists. It reports true
+// only when the wanted Job is complete and is the only Job with these labels.
+// The result comes from the one Job list that the function reads. A pass that
+// creates or deletes a Job thus always reports false.
 func ensureUserProvisionJobForReconciler(
 	ctx context.Context,
 	r userProvisionJobReconciler,
 	spec userProvisionJobSpec,
-) error {
+) (bool, error) {
 	logger := log.FromContext(ctx)
 	ns := spec.Owner.GetNamespace()
 	jobName := spec.JobName
 	useAzFakes := r.userProvisionJobUseAzFakes()
 
 	if err := validateUserProvisionJobSpec(spec, useAzFakes); err != nil {
-		return err
+		return false, err
 	}
 
 	ttlSeconds := int32(300)
@@ -98,13 +103,13 @@ func ensureUserProvisionJobForReconciler(
 	completions := int32(1)
 	image := strings.TrimSpace(r.userProvisionJobImage())
 	if image == "" {
-		return fmt.Errorf("user provision image is not configured")
+		return false, fmt.Errorf("user provision image is not configured")
 	}
 	labels := userProvisionJobLabels(spec.Labels)
 
 	var jobs batchv1.JobList
 	if err := r.List(ctx, &jobs, client.InNamespace(ns), client.MatchingLabels(labels)); err != nil {
-		return fmt.Errorf("list user provisioning jobs for %s/%s: %w", ns, spec.Owner.GetName(), err)
+		return false, fmt.Errorf("list user provisioning jobs for %s/%s: %w", ns, spec.Owner.GetName(), err)
 	}
 
 	var current *batchv1.Job
@@ -118,7 +123,7 @@ func ensureUserProvisionJobForReconciler(
 				if err := r.Delete(ctx, &job, &client.DeleteOptions{
 					PropagationPolicy: &policy,
 				}); err != nil && !apierrors.IsNotFound(err) {
-					return fmt.Errorf("delete failed user provisioning Job %s/%s: %w", job.Namespace, job.Name, err)
+					return false, fmt.Errorf("delete failed user provisioning Job %s/%s: %w", job.Namespace, job.Name, err)
 				}
 				logger.Info("deleting failed user provisioning Job for database access",
 					"jobName", job.Name,
@@ -141,7 +146,7 @@ func ensureUserProvisionJobForReconciler(
 		if err := r.Delete(ctx, &job, &client.DeleteOptions{
 			PropagationPolicy: &policy,
 		}); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("delete outdated user provisioning Job %s/%s: %w", job.Namespace, job.Name, err)
+			return false, fmt.Errorf("delete outdated user provisioning Job %s/%s: %w", job.Namespace, job.Name, err)
 		}
 	}
 
@@ -154,7 +159,7 @@ func ensureUserProvisionJobForReconciler(
 		if err := r.Delete(ctx, current, &client.DeleteOptions{
 			PropagationPolicy: &policy,
 		}); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("delete user provisioning Job %s/%s: %w", current.Namespace, current.Name, err)
+			return false, fmt.Errorf("delete user provisioning Job %s/%s: %w", current.Namespace, current.Name, err)
 		}
 		logger.Info("deleting user provisioning Job that ran beside an outdated Job",
 			"jobName", current.Name,
@@ -163,7 +168,11 @@ func ensureUserProvisionJobForReconciler(
 	}
 
 	if current != nil || deletedCurrent || hasOutdated {
-		return nil
+		// Only a current Job that is alone can show that its work is in place.
+		// Another Job, or a Job in deletion, can have a Pod that still writes
+		// to the DIS DB server.
+		alone := current != nil && !hasOutdated && current.DeletionTimestamp.IsZero()
+		return alone && jobConditionTrue(current, batchv1.JobComplete), nil
 	}
 
 	job := buildUserProvisionJob(ns, jobName, image, labels, spec, parallelism, completions, ttlSeconds)
@@ -201,7 +210,7 @@ func ensureUserProvisionJobForReconciler(
 	}
 
 	if err := controllerutil.SetControllerReference(spec.Owner, job, r.userProvisionJobScheme()); err != nil {
-		return fmt.Errorf("set controller reference on user provisioning Job: %w", err)
+		return false, fmt.Errorf("set controller reference on user provisioning Job: %w", err)
 	}
 
 	logger.Info("creating user provisioning Job for database access",
@@ -213,12 +222,12 @@ func ensureUserProvisionJobForReconciler(
 
 	if err := r.Create(ctx, job); err != nil {
 		if apierrors.IsAlreadyExists(err) {
-			return nil
+			return false, nil
 		}
-		return fmt.Errorf("create user provisioning Job %s/%s: %w", ns, jobName, err)
+		return false, fmt.Errorf("create user provisioning Job %s/%s: %w", ns, jobName, err)
 	}
 
-	return nil
+	return false, nil
 }
 
 func validateUserProvisionJobSpec(spec userProvisionJobSpec, useAzFakes bool) error {
