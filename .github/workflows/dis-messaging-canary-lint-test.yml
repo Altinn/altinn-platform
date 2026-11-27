@@ -1,0 +1,69 @@
+name: Dis Messaging Canary Lint and Test
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - services/dis-messaging-canary/**
+      - Makefile.common
+      - .github/workflows/dis-messaging-canary-lint-test.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - services/dis-messaging-canary/**
+      - Makefile.common
+      - .github/workflows/dis-messaging-canary-lint-test.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Run linter on Ubuntu
+    runs-on: self-hosted
+    defaults:
+      run:
+        working-directory: services/dis-messaging-canary
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: "services/dis-messaging-canary/go.mod"
+          cache-dependency-path: "services/dis-messaging-canary/go.sum"
+
+      - name: Run linter
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.15.0
+          working-directory: services/dis-messaging-canary
+  test:
+    name: Run tests on Ubuntu
+    runs-on: self-hosted
+    defaults:
+      run:
+        working-directory: services/dis-messaging-canary
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: "services/dis-messaging-canary/go.mod"
+          cache-dependency-path: "services/dis-messaging-canary/go.sum"
+
+      - name: Run tests
+        run: make test
