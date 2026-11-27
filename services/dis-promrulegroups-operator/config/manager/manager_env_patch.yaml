@@ -1,0 +1,22 @@
+# This patch adds the required env vars
+- op: add
+  path: /spec/template/spec/containers/0/env
+  value:
+    - name: AZ_SUBSCRIPTION_ID
+      value: "" # # TODO: Should be populated based on the output from Terraform
+    - name: AZ_RESOURCE_GROUP_NAME
+      value: "" # TODO: Should be populated based on the output from Terraform
+    - name: AZ_MONITOR_WORKSPACE_NAME
+      value: "" # TODO: Should be populated based on the output from Terraform
+    - name: AZ_RESOURCE_GROUP_LOCATION
+      value: "" # TODO: Should be populated based on the output from Terraform
+    - name: AZ_ACTION_GROUP_ID
+      value: "" # TODO: Should be configurable with information coming from the PrometheusRule CR
+    - name: AZ_AZURE_MONITOR_WORKSPACE
+      value: "" # TODO: Should be populated based on the output from Terraform
+    - name: AZ_CLUSTER_NAME
+      value: "" # TODO: Should be populated based on the output from Terraform
+    - name: NODE_PATH
+      value: /nodejs/bin/node # From the Dockerfile
+    - name: AZ_PROM_RULES_CONVERTER_PATH
+      value: /tool/node_modules/az-prom-rules-converter/dist/cli.js
