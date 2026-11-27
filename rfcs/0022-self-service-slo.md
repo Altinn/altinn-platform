@@ -1,7 +1,7 @@
 - Feature Name: self_service_slo
 - Title: Self-service SLOs
 - Start Date: 2026-11-26
-- RFC PR: [altinn/altinn-platform#0000](https://github.com/altinn/altinn-platform/pull/0000)
+- RFC PR: [altinn/altinn-platform#4517](https://github.com/Altinn/altinn-platform/pull/4517)
 - Github Issue: [altinn/altinn-platform#4495](https://github.com/Altinn/altinn-platform/issues/4495)
 - Product/Category: Observability
 - State: **REVIEW** (possible states are: **REVIEW**, **ACCEPTED** and **REJECTED**)
