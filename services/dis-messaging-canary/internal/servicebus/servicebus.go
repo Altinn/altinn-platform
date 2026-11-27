@@ -5,10 +5,12 @@ package servicebus
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/Altinn/altinn-platform/services/dis-messaging-canary/internal/probe"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
 )
 
@@ -16,6 +18,7 @@ import (
 // replace them.
 type sender interface {
 	SendMessage(ctx context.Context, message *azservicebus.Message, options *azservicebus.SendMessageOptions) error
+	Close(ctx context.Context) error
 }
 
 type receiver interface {
@@ -28,11 +31,44 @@ type receiver interface {
 // round trip. With this limit the left-over messages go away by themselves.
 const messageTTL = 10 * time.Minute
 
-// Messenger sends to one queue and receives from it.
+// tokenTimeout is the longest time for one token request, with the retries of
+// the identity library. When the limit cuts off its last retry, the next round
+// trip asks again.
+const tokenTimeout = 10 * time.Second
+
+// timedCredential gives every token request a time limit, and logs every token
+// error. The SDK asks for a token with a context that never ends. Without the
+// limit, a token endpoint that does not answer blocks a call for much longer
+// than its own context. Most token requests come from the claim refresh that the
+// SDK runs in the background. That refresh stops for good after a token error
+// and logs nothing, so this log line is the only trace of it.
+type timedCredential struct {
+	credential azcore.TokenCredential
+	timeout    time.Duration
+}
+
+func (c timedCredential) GetToken(ctx context.Context, options policy.TokenRequestOptions) (azcore.AccessToken, error) {
+	start := time.Now()
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+	token, err := c.credential.GetToken(ctx, options)
+	if err != nil && ctx.Err() != nil {
+		err = fmt.Errorf("the token request took longer than %s: %w", c.timeout, err)
+	}
+	if err != nil {
+		slog.Warn("the token request failed", "error", err, "took", time.Since(start).String())
+	}
+	return token, err
+}
+
+// Messenger sends to one queue and receives from it. It is for one caller at a
+// time.
 type Messenger struct {
-	client   *azservicebus.Client
-	sender   sender
-	receiver receiver
+	client *azservicebus.Client
+	sender sender
+	// newSender makes the sender that replaces sender after a failed send.
+	newSender func() (sender, error)
+	receiver  receiver
 	// emptyPause is the wait after a receive call that returns no message.
 	emptyPause time.Duration
 }
@@ -52,25 +88,53 @@ func New(endpoint, queue string, credential azcore.TokenCredential) (*Messenger,
 	options := &azservicebus.ClientOptions{RetryOptions: azservicebus.RetryOptions{
 		MaxRetries: 2, RetryDelay: time.Second, MaxRetryDelay: 2 * time.Second,
 	}}
-	client, err := azservicebus.NewClient(endpoint, credential, options)
+	client, err := azservicebus.NewClient(endpoint, timedCredential{credential, tokenTimeout}, options)
 	if err != nil {
 		return nil, fmt.Errorf("create the Azure Service Bus client: %w", err)
 	}
-	s, err := client.NewSender(queue, nil)
+	newSender := func() (sender, error) {
+		s, err := client.NewSender(queue, nil)
+		if err != nil {
+			return nil, fmt.Errorf("create the sender for queue %q: %w", queue, err)
+		}
+		return s, nil
+	}
+	s, err := newSender()
 	if err != nil {
-		return nil, fmt.Errorf("create the sender for queue %q: %w", queue, err)
+		return nil, err
 	}
 	r, err := client.NewReceiverForQueue(queue, &azservicebus.ReceiverOptions{ReceiveMode: azservicebus.ReceiveModePeekLock})
 	if err != nil {
 		return nil, fmt.Errorf("create the receiver for queue %q: %w", queue, err)
 	}
-	return &Messenger{client: client, sender: s, receiver: r, emptyPause: 100 * time.Millisecond}, nil
+	return &Messenger{client: client, sender: s, newSender: newSender, receiver: r, emptyPause: 100 * time.Millisecond}, nil
 }
 
 // Send puts one message with this body on the queue.
 func (m *Messenger) Send(ctx context.Context, body []byte) error {
 	ttl := messageTTL
-	return m.sender.SendMessage(ctx, &azservicebus.Message{Body: body, TimeToLive: &ttl}, nil)
+	err := m.sender.SendMessage(ctx, &azservicebus.Message{Body: body, TimeToLive: &ttl}, nil)
+	if err != nil && ctx.Err() == nil {
+		m.replaceSender(ctx)
+	}
+	return err
+}
+
+// replaceSender makes a new sender after a send that failed. The broker can
+// close the link of a sender with an error that the SDK does not recover from,
+// for example when the queue is deleted and made again. That sender then
+// returns the same error for every later send. A new sender opens a new link
+// on the next send.
+func (m *Messenger) replaceSender(ctx context.Context) {
+	fresh, err := m.newSender()
+	if err != nil {
+		slog.Error("cannot make a new sender, the canary keeps the old one", "error", err)
+		return
+	}
+	// The link of the old sender is often closed already. An error of Close
+	// says nothing new then.
+	_ = m.sender.Close(ctx)
+	m.sender = fresh
 }
 
 // Receive waits until one message arrives and returns it with its lock. It
