@@ -115,7 +115,7 @@ func (m *Messenger) Send(ctx context.Context, body []byte) error {
 	ttl := messageTTL
 	err := m.sender.SendMessage(ctx, &azservicebus.Message{Body: body, TimeToLive: &ttl}, nil)
 	if err != nil && ctx.Err() == nil {
-		m.replaceSender(ctx)
+		m.replaceSender()
 	}
 	return err
 }
@@ -125,16 +125,26 @@ func (m *Messenger) Send(ctx context.Context, body []byte) error {
 // for example when the queue is deleted and made again. That sender then
 // returns the same error for every later send. A new sender opens a new link
 // on the next send.
-func (m *Messenger) replaceSender(ctx context.Context) {
+//
+// The old sender closes in the background. Close waits for the claim refresh of
+// the sender, and that wait does not obey a context: with a token request in
+// progress it can take up to tokenTimeout. Until then the client still holds
+// the old sender, so Close of the client at shutdown closes it too.
+func (m *Messenger) replaceSender() {
 	fresh, err := m.newSender()
 	if err != nil {
 		slog.Error("cannot make a new sender, the canary keeps the old one", "error", err)
 		return
 	}
-	// The link of the old sender is often closed already. An error of Close
-	// says nothing new then.
-	_ = m.sender.Close(ctx)
+	old := m.sender
 	m.sender = fresh
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), tokenTimeout)
+		defer cancel()
+		// The link of the old sender is often closed already. An error of
+		// Close says nothing new then.
+		_ = old.Close(ctx)
+	}()
 }
 
 // Receive waits until one message arrives and returns it with its lock. It

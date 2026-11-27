@@ -17,7 +17,8 @@ import (
 type fakeLinks struct {
 	sent       []*azservicebus.Message
 	sendErr    error
-	closed     bool
+	closed     chan struct{}                     // closed by Close
+	release    chan struct{}                     // when set, Close waits until it is closed
 	maxAsked   int                               // the highest maxMessages of a call of ReceiveMessages
 	results    [][]*azservicebus.ReceivedMessage // one result per call of ReceiveMessages
 	receiveErr error                             // the result when results is empty
@@ -30,7 +31,10 @@ func (f *fakeLinks) SendMessage(_ context.Context, message *azservicebus.Message
 }
 
 func (f *fakeLinks) Close(context.Context) error {
-	f.closed = true
+	close(f.closed)
+	if f.release != nil {
+		<-f.release
+	}
 	return errors.New("the link is closed already")
 }
 
@@ -100,13 +104,31 @@ func TestSendReplacesTheSenderAfterAnError(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			old, fresh := &fakeLinks{sendErr: tt.sendErr}, &fakeLinks{}
+			// Close of the old sender hangs until the test ends: Send must not wait for it.
+			release := make(chan struct{})
+			defer close(release)
+			old := &fakeLinks{sendErr: tt.sendErr, closed: make(chan struct{}), release: release}
+			fresh := &fakeLinks{}
 			m := &Messenger{sender: old, newSender: func() (sender, error) { return fresh, tt.newSenderErr }}
 			if err := m.Send(tt.ctx, []byte("id-1")); !errors.Is(err, tt.sendErr) {
 				t.Fatalf("Send: got %v, want %v", err, tt.sendErr)
 			}
-			if replaced := m.sender == sender(fresh); replaced != tt.wantReplaced || old.closed != tt.wantReplaced {
-				t.Fatalf("got replaced %v and old sender closed %v, want both %v", replaced, old.closed, tt.wantReplaced)
+			if replaced := m.sender == sender(fresh); replaced != tt.wantReplaced {
+				t.Fatalf("got replaced %v, want %v", replaced, tt.wantReplaced)
+			}
+			wait := 100 * time.Millisecond // no Close is expected
+			if tt.wantReplaced {
+				wait = 5 * time.Second
+			}
+			select {
+			case <-old.closed:
+				if !tt.wantReplaced {
+					t.Fatal("the old sender was closed, but it was not replaced")
+				}
+			case <-time.After(wait):
+				if tt.wantReplaced {
+					t.Fatal("the old sender was not closed")
+				}
 			}
 			if err := m.Send(t.Context(), []byte("id-2")); tt.wantReplaced && (err != nil || len(fresh.sent) != 1) {
 				t.Fatalf("Send after the replacement: got %v and %d messages on the new sender, want 1", err, len(fresh.sent))
