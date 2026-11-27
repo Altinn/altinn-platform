@@ -16,6 +16,7 @@ shared `../../Makefile.common` and overrides the build and test wiring.
 - Vet: `make vet-cache`
 - Lint: `make lint-cache`
 - Unit tests: `make test-cache`
+- Build the binary: `make build-cache`
 
 The `*-cache` targets use a `GOCACHE` inside the repo. They are for local use.
 CI runs the bare targets.
@@ -33,7 +34,13 @@ you ran and their result. If you cannot run them, say so and say why.
 Do not claim checks passed unless you actually ran them.
 
 ## Layout
+- `cmd/main.go` — reads the settings, starts the loop, and serves `/metrics`
+  and `/healthz`.
+- `internal/config` — the settings from the environment: `ENDPOINT`, `QUEUE`,
+  `CANARY_INTERVAL`, `CANARY_TIMEOUT`, `CANARY_METRICS_ADDR`.
 - `internal/probe` — the round-trip loop behind the `Messenger` interface, and
   the metrics. The unit tests use a fake `Messenger`, so they need no Azure.
   All metric names are in `metrics.go`. Dashboards, alert rules and SLOs read
   them: do not rename a metric without a plan for its readers.
+- `internal/servicebus` — the `Messenger` for one queue in an Azure Service Bus
+  namespace. `cmd/main.go` gives it the workload identity of the pod.
