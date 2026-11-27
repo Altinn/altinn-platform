@@ -1,0 +1,35 @@
+name: Scan/Release dis-messaging-canary Image
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/dis-messaging-canary-release.yml
+      - services/dis-messaging-canary/**
+      - .github/workflows/reusable-image-scan-and-release-ghcr.yml
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/dis-messaging-canary-release.yml
+      - services/dis-messaging-canary/**
+      - .github/workflows/reusable-image-scan-and-release-ghcr.yml
+    tags:
+      - "dis-messaging-canary-v*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-release-image:
+    name: Build, scan and release
+    uses: ./.github/workflows/reusable-image-scan-and-release-ghcr.yml
+    with:
+      release_latest: true
+      image_name: dis-messaging-canary
+      tag_prefix: dis-messaging-canary-v
+      platforms: "linux/amd64"
+      workdir: ./services/dis-messaging-canary
