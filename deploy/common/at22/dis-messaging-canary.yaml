@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dis-messaging-canary
+  namespace: product-dis
+  labels:
+    app: dis-messaging-canary
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: dis-messaging-canary
+  template:
+    metadata:
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+      labels:
+        app: dis-messaging-canary
+        azure.workload.identity/use: "true"
+        dis.otel/scrape: "true"
+    spec:
+      serviceAccountName: dis-messaging-canary
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: dis-messaging-canary
+          image: altinncr.azurecr.io/ghcr.io/altinn/altinn-platform/dis-messaging-canary:v0.1.0
+          ports:
+            - name: metrics
+              containerPort: 8080
+          env:
+            - name: ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: dis-messaging
+                  key: endpoint
+            - name: QUEUE
+              valueFrom:
+                configMapKeyRef:
+                  name: dis-messaging
+                  key: queue.dis-messaging-canary
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL

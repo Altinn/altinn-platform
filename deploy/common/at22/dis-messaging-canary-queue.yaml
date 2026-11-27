@@ -1,0 +1,12 @@
+apiVersion: messaging.dis.altinn.cloud/v1alpha1
+kind: Queue
+metadata:
+  name: dis-messaging-canary
+  namespace: product-dis
+spec:
+  name: dis.messaging-canary
+  access:
+    principals:
+      - role: consumer
+        identityRef:
+          name: dis-messaging-canary
