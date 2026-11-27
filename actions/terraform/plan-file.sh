@@ -58,16 +58,34 @@ fetch() {
   echo "Downloaded the plan file ${location}. The checksum matches."
 }
 
-# Blob versioning is on. A delete turns the blob into an old version, so delete each version too.
-delete_all_versions() {
-  local url versions version
+delete_versions() {
+  local url versions version failed=0
   url=$(az_blob url --name "$blob" --output tsv) || return 1
-  az_blob delete --name "$blob" --output none || return 1
   versions=$(az_blob list --prefix "$blob" --include v --query '[].versionId' --output tsv) || return 1
   for version in $versions; do
     az rest --method delete --url "${url}?versionid=${version}" --resource https://storage.azure.com \
-      --headers x-ms-version=2023-11-03 --only-show-errors --output none || return 1
+      --headers x-ms-version=2023-11-03 --only-show-errors --output none || failed=1
   done
+  return "$failed"
+}
+
+# Blob versioning is on. A delete turns the blob into an old version, so delete each version too.
+# The delete of a version needs a right that the state backend does not need. Without it the old version stays.
+delete() {
+  local error code=unknown
+  local code_pattern='<Code>([A-Za-z0-9]+)</Code>|ErrorCode: ?([A-Za-z0-9]+)|(AADSTS[0-9]+)'
+  if ! az_blob delete --name "$blob" --output none; then
+    echo "::warning title=Terraform plan file not deleted::Could not delete the plan file ${location}. It stays in the storage account. Delete the blob and its versions by hand."
+  elif error=$(delete_versions 2>&1); then
+    echo "Deleted the plan file ${location}."
+  else
+    if [[ "$error" =~ $code_pattern ]]; then
+      code="${BASH_REMATCH[1]}${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
+    else
+      echo "$error"
+    fi
+    echo "Deleted the plan file ${location}. An old version of it stays in the storage account. Could not delete blob versions (error code: ${code})."
+  fi
 }
 
 [[ "$STORAGE_ACCOUNT" =~ ^[a-z0-9]{3,24}$ ]] || fail "The storage account name is not valid."
@@ -76,12 +94,6 @@ case "${1:-}" in
   checksum) checksum ;;
   store) store ;;
   fetch) fetch ;;
-  delete)
-    if delete_all_versions; then
-      echo "Deleted the plan file ${location}."
-    else
-      echo "::warning title=Terraform plan file not deleted::Could not delete ${location} or one of its versions. The apply did succeed. Delete the blob and its versions by hand."
-    fi
-    ;;
+  delete) delete ;;
   *) fail "Usage: plan-file.sh checksum|store|fetch|delete" ;;
 esac
