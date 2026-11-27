@@ -3,6 +3,7 @@ package servicebus
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +16,9 @@ import (
 // fakeLinks replaces the sender and the receiver of the SDK.
 type fakeLinks struct {
 	sent       []*azservicebus.Message
+	sendErr    error
+	closed     chan struct{}                     // closed by Close
+	release    chan struct{}                     // when set, Close waits until it is closed
 	maxAsked   int                               // the highest maxMessages of a call of ReceiveMessages
 	results    [][]*azservicebus.ReceivedMessage // one result per call of ReceiveMessages
 	receiveErr error                             // the result when results is empty
@@ -23,7 +27,15 @@ type fakeLinks struct {
 
 func (f *fakeLinks) SendMessage(_ context.Context, message *azservicebus.Message, _ *azservicebus.SendMessageOptions) error {
 	f.sent = append(f.sent, message)
-	return nil
+	return f.sendErr
+}
+
+func (f *fakeLinks) Close(context.Context) error {
+	close(f.closed)
+	if f.release != nil {
+		<-f.release
+	}
+	return errors.New("the link is closed already")
 }
 
 func (f *fakeLinks) ReceiveMessages(_ context.Context, maxMessages int, _ *azservicebus.ReceiveMessagesOptions) ([]*azservicebus.ReceivedMessage, error) {
@@ -46,6 +58,83 @@ type fakeCredential struct{ t *testing.T }
 func (c fakeCredential) GetToken(context.Context, policy.TokenRequestOptions) (azcore.AccessToken, error) {
 	c.t.Error("New asked for a token: it must not connect")
 	return azcore.AccessToken{}, nil
+}
+
+// slowCredential answers after delay, or when the context ends. Like the real
+// credential, its error then does not wrap the error of the context.
+type slowCredential struct{ delay time.Duration }
+
+func (c slowCredential) GetToken(ctx context.Context, _ policy.TokenRequestOptions) (azcore.AccessToken, error) {
+	select {
+	case <-ctx.Done():
+		return azcore.AccessToken{}, errors.New("unable to resolve an endpoint: " + ctx.Err().Error())
+	case <-time.After(c.delay):
+		return azcore.AccessToken{Token: "token-1"}, nil
+	}
+}
+
+func TestTimedCredential(t *testing.T) {
+	// The SDK asks for a token with a context that never ends.
+	ctx := context.Background()
+	token, err := timedCredential{slowCredential{0}, time.Hour}.GetToken(ctx, policy.TokenRequestOptions{})
+	if err != nil || token.Token != "token-1" {
+		t.Fatalf("a request in time: got %q, %v; want token-1", token.Token, err)
+	}
+	_, err = timedCredential{slowCredential{time.Hour}, time.Millisecond}.GetToken(ctx, policy.TokenRequestOptions{})
+	if err == nil || !strings.HasPrefix(err.Error(), "the token request took longer than 1ms") {
+		t.Fatalf("a request that hangs: got %v, want the time limit in the error", err)
+	}
+}
+
+func TestSendReplacesTheSenderAfterAnError(t *testing.T) {
+	unauthorized := &azservicebus.Error{Code: azservicebus.CodeUnauthorizedAccess}
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	tests := []struct {
+		name         string
+		ctx          context.Context
+		sendErr      error
+		newSenderErr error
+		wantReplaced bool
+	}{
+		{"an SDK error", t.Context(), unauthorized, nil, true},
+		{"no error", t.Context(), nil, nil, false},
+		{"the context ended", canceled, context.Canceled, nil, false},
+		{"no new sender", t.Context(), unauthorized, errors.New("the client is closed"), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Close of the old sender hangs until the test ends: Send must not wait for it.
+			release := make(chan struct{})
+			defer close(release)
+			old := &fakeLinks{sendErr: tt.sendErr, closed: make(chan struct{}), release: release}
+			fresh := &fakeLinks{}
+			m := &Messenger{sender: old, newSender: func() (sender, error) { return fresh, tt.newSenderErr }}
+			if err := m.Send(tt.ctx, []byte("id-1")); !errors.Is(err, tt.sendErr) {
+				t.Fatalf("Send: got %v, want %v", err, tt.sendErr)
+			}
+			if replaced := m.sender == sender(fresh); replaced != tt.wantReplaced {
+				t.Fatalf("got replaced %v, want %v", replaced, tt.wantReplaced)
+			}
+			wait := 100 * time.Millisecond // no Close is expected
+			if tt.wantReplaced {
+				wait = 5 * time.Second
+			}
+			select {
+			case <-old.closed:
+				if !tt.wantReplaced {
+					t.Fatal("the old sender was closed, but it was not replaced")
+				}
+			case <-time.After(wait):
+				if tt.wantReplaced {
+					t.Fatal("the old sender was not closed")
+				}
+			}
+			if err := m.Send(t.Context(), []byte("id-2")); tt.wantReplaced && (err != nil || len(fresh.sent) != 1) {
+				t.Fatalf("Send after the replacement: got %v and %d messages on the new sender, want 1", err, len(fresh.sent))
+			}
+		})
+	}
 }
 
 func TestNewDoesNotConnect(t *testing.T) {
