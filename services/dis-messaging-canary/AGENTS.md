@@ -17,9 +17,25 @@ shared `../../Makefile.common` and overrides the build and test wiring.
 - Lint: `make lint-cache`
 - Unit tests: `make test-cache`
 - Build the binary: `make build-cache`
+- Build the image: `make docker-build` (podman, image `localhost/dis-messaging-canary:local`)
 
 The `*-cache` targets use a `GOCACHE` inside the repo. They are for local use.
 CI runs the bare targets.
+
+## Image and release
+- `.github/workflows/dis-messaging-canary-release.yml` builds the image and
+  scans it with Trivy on each pull request that changes this folder. A finding
+  of severity HIGH or CRITICAL that has a fix fails the run.
+- Each merge to `main` that changes this folder pushes
+  `ghcr.io/altinn/altinn-platform/dis-messaging-canary:latest`.
+- release-please makes the release pull request, the tag
+  `dis-messaging-canary-v<version>` and the changelog. The release pushes the
+  image with the tag `v<version>`.
+- A manifest gets the image through the pull-through registry of the clusters:
+  `altinncr.azurecr.io/ghcr.io/altinn/altinn-platform/dis-messaging-canary:v<version>`.
+- The image has no shell and its user is `65532`. The canary writes no files:
+  run it with `runAsNonRoot`, a read-only root file system and no added
+  capabilities.
 
 ## Required verification for code changes
 If you change files under `cmd/**` or `internal/**`, you MUST run this before

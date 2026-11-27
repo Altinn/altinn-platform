@@ -53,6 +53,11 @@
         {"filename": "dis-messaging-release.yml"}
       ]
     },
+    "services/dis-messaging-canary": {
+      "dispatch-pipelines": [
+        {"filename": "dis-messaging-canary-release.yml"}
+      ]
+    },
     "services/lakmus": {
       "dispatch-pipelines": [
         {"filename": "lakmus-release.yml"}
