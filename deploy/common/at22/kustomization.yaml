@@ -8,6 +8,10 @@ resources:
   - dis-console-database.yaml
   - dis-console.yaml
   - dis-console-cache.yaml
+  - dis-messaging-canary-identity.yaml
+  - dis-messaging-canary-queue.yaml
+  - dis-messaging-canary.yaml
+  - dis-messaging-canary-mesh.yaml
 patches:
   - target:
       kind: Namespace
