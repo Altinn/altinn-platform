@@ -27,10 +27,10 @@ products:
     github:
       owner: Altinn
       repositories:
+        - altinn-auth
         - altinn-access-management
         - altinn-authentication
         - altinn-authorization
-        - altinn-authorization-tmp
         - altinn-access-management-frontend
 
   - name: Studio

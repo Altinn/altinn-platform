@@ -52,16 +52,6 @@ data "azurerm_role_definition" "user_access_administrator" {
   role_definition_id = "18d7d88d-d35e-4fb5-a5c3-7773c20a72d9"
 }
 
-# https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#containers
-data "azurerm_role_definition" "azure_kubernetes_service_cluster_user_role" {
-  role_definition_id = "4abbcc35-e782-43d8-92c5-2d3f1bd2253f"
-}
-
-# https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#containers
-data "azurerm_role_definition" "azure_kubernetes_service_cluster_admin_role" {
-  role_definition_id = "0ab0b1a8-8aac-4efd-b8c2-3ee1fb270be8"
-}
-
 # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/resources
 data "azurerm_resource_group" "tfstate" {
   name = var.arm_resource_group_name
@@ -148,116 +138,6 @@ resource "azurerm_storage_account" "backend" {
 resource "azurerm_storage_container" "container" {
   name               = "tfstates"
   storage_account_id = azurerm_storage_account.backend.id
-}
-
-# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/api_management_group
-resource "azurerm_management_group" "parent" {
-  name         = "ALP"
-  display_name = "Altinn-Products"
-}
-
-# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/api_management_group
-resource "azurerm_management_group" "management_groups" {
-  name                       = "${each.value.product.slug}-${title(each.value.workspace.name)}"
-  display_name               = "Altinn-${replace(each.value.product.name, " ", "-")}-${title(each.value.workspace.name)}"
-  parent_management_group_id = azurerm_management_group.parent.id
-
-  for_each = local.products
-}
-
-# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/management_group_subscription_association
-resource "azurerm_management_group_subscription_association" "subscriptions" {
-  management_group_id = azurerm_management_group.management_groups[each.key].id
-  subscription_id     = azurerm_subscription.subscriptions[each.key].id
-
-  for_each = { for key, value in local.products : key => value if var.arm_billing_account_name != null && var.arm_enrollment_account_scope != null }
-}
-
-# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
-resource "azurerm_role_assignment" "administrator_user_access_administrator" {
-  scope                            = azurerm_management_group.parent.id
-  principal_id                     = azuread_service_principal.administrator.object_id
-  role_definition_name             = data.azurerm_role_definition.user_access_administrator.name
-  skip_service_principal_aad_check = true
-}
-
-# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
-resource "azurerm_role_assignment" "administrator_contributor" {
-  scope                            = azurerm_management_group.parent.id
-  principal_id                     = azuread_service_principal.administrator.object_id
-  role_definition_name             = data.azurerm_role_definition.contributor.name
-  skip_service_principal_aad_check = true
-}
-
-# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
-resource "azurerm_role_assignment" "reader_reader" {
-  scope                            = azurerm_management_group.parent.id
-  principal_id                     = azuread_service_principal.reader.object_id
-  role_definition_name             = data.azurerm_role_definition.reader.name
-  skip_service_principal_aad_check = true
-}
-
-# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
-resource "azurerm_role_assignment" "reader_azure_kubernetes_service_cluster_user_role" {
-  scope                            = azurerm_management_group.parent.id
-  principal_id                     = azuread_service_principal.reader.object_id
-  role_definition_name             = data.azurerm_role_definition.azure_kubernetes_service_cluster_user_role.name
-  skip_service_principal_aad_check = true
-}
-
-# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
-resource "azurerm_role_assignment" "reader_azure_kubernetes_service_cluster_admin_role" {
-  scope                            = azurerm_management_group.parent.id
-  principal_id                     = azuread_service_principal.reader.object_id
-  role_definition_name             = data.azurerm_role_definition.azure_kubernetes_service_cluster_admin_role.name
-  skip_service_principal_aad_check = true
-}
-
-# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
-resource "azurerm_role_assignment" "apps_user_access_administrator" {
-  scope                            = azurerm_management_group.management_groups[each.value.product_slug].id
-  principal_id                     = azuread_service_principal.product[each.key].object_id
-  role_definition_name             = data.azurerm_role_definition.user_access_administrator.name
-  skip_service_principal_aad_check = true
-
-  for_each = local.app_reggs
-}
-
-# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
-resource "azurerm_role_assignment" "apps_contributor" {
-  scope                            = azurerm_management_group.management_groups[each.value.product_slug].id
-  principal_id                     = azuread_service_principal.product[each.key].object_id
-  role_definition_name             = data.azurerm_role_definition.contributor.name
-  skip_service_principal_aad_check = true
-
-  for_each = local.app_reggs
-}
-
-# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
-resource "azurerm_role_assignment" "readers" {
-  scope                = azurerm_management_group.management_groups[each.key].id
-  principal_id         = azuread_group.readers[each.key].object_id
-  role_definition_name = data.azurerm_role_definition.reader.name
-
-  for_each = local.products
-}
-
-# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
-resource "azurerm_role_assignment" "developers" {
-  scope                = azurerm_management_group.management_groups[each.key].id
-  principal_id         = azuread_group.developers[each.key].object_id
-  role_definition_name = data.azurerm_role_definition.contributor.name
-
-  for_each = local.products
-}
-
-# https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
-resource "azurerm_role_assignment" "admins" {
-  scope                = azurerm_management_group.management_groups[each.key].id
-  principal_id         = azuread_group.admins[each.key].object_id
-  role_definition_name = data.azurerm_role_definition.user_access_administrator.name
-
-  for_each = local.products
 }
 
 # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
