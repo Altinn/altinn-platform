@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.4](https://github.com/Altinn/altinn-platform/compare/k6-image-1.5.3...k6-image-1.5.4) (2026-11-27)
+
+
+### Dependency Updates
+
+* update grafana/k6:2.3.0 docker digest to 2dd4756 ([#4332](https://github.com/Altinn/altinn-platform/issues/4332)) ([620cc8b](https://github.com/Altinn/altinn-platform/commit/620cc8b358cd556ccbe2cd33b77fd7712f087777))
+
 ## [1.5.3](https://github.com/Altinn/altinn-platform/compare/k6-image-1.5.2...k6-image-1.5.3) (2026-10-22)
 
 
