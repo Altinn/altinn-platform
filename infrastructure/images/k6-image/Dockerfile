@@ -1,4 +1,4 @@
-FROM golang:1.26-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca AS builder
+FROM golang:1.27-alpine@sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280 AS builder
 RUN apk update && apk upgrade && apk add git
 
 RUN go install go.k6.io/xk6/cmd/xk6@latest
@@ -9,7 +9,7 @@ RUN xk6 build \
     --with github.com/phymbert/xk6-sse \
     --output /k6
 
-FROM grafana/k6:2.3.0@sha256:2dd4756ec6e14e62778916e1eb850108e4b499304c02df56760fa0bdb0fba0b8
+FROM grafana/k6:2.4.0@sha256:d41bb79cd8de5a7ad619b53570e3712633e8bff0937010a5c6c57a4747e7a276
 COPY --from=builder /k6 /usr/bin/k6
 
 USER root
